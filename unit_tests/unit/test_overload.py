@@ -276,3 +276,8 @@ def test_results_log_contains_the_goodput(tmp_path):
     )
     saved = json.loads((tmp_path / "result_gradual_increase.log").read_text(encoding="utf-8"))
     assert saved["goodput_under_overload"][0]["goodput_ratio"] == 0.94
+
+
+def test_latte_steps_scale_the_concurrency_and_keep_the_threads():
+    steps = OverloadConfig(factors=(1.3, 2)).steps(best_threads=32, best_throughput=800000, best_concurrency=65)
+    assert [(step.rate, step.threads, step.concurrency) for step in steps] == [(1040000, 32, 85), (1600000, 32, 130)]

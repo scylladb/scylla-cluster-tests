@@ -85,28 +85,36 @@ threshold YAML must use:
 - A name repeats -> suffixed with an occurrence counter (`unthrottled_1`, `unthrottled_2`).
 
 **Best-throughput search** (SCT-580). When `perf_best_throughput_search` is set for a sub-test, the
-sub-test ignores `perf_gradual_throttle_steps`/`perf_gradual_threads` and runs unthrottled steps whose
-thread count an adaptive search picks (`sdcm/utils/thread_search.py`):
+sub-test runs no step of `perf_gradual_throttle_steps`/`perf_gradual_threads`. It runs fixed-rate steps whose
+rate a search picks (`sdcm/utils/rate_search.py`):
 
-1. Start at `start_threads_per_shard` x the DB nodes' shard count, over all stress commands.
-2. Double the threads until a step's P99 is over `perf_gradual_latency_limit` (default 10 ms), throughput
-   grows less than `min_throughput_gain_pct`, or the threads reach `max_threads_per_command` (default 4096).
-   When the first step already fails, halve instead.
-3. Bisect between the last passing and the first failing thread count until they are within
-   `precision_pct` or `max_steps` (default 10) is used up. The budget never stops steps 1-2: the search ends
-   at the limit, at saturation, or at the thread cap. A cap stop means every step stayed within the limit, so
-   the best throughput is only a lower bound; the `Stop reason` column of `BestThroughputResult` says
-   `thread cap` then.
+1. Run `min_rate_per_shard` x the DB nodes' shard count (default 1000 per shard). It must pass, else the
+   search stops with `min rate fails` and the run reports an error.
+2. Bisect between the highest passing and the lowest failing rate on a log scale (the middle is
+   `sqrt(low x high)`) until they are within `precision_pct` (5), or `max_steps` (10, the bounds included)
+   is used up: 8 steps with the default bounds. Until a step fails, `max_rate_per_shard` x the shards (default
+   60000 per shard) counts as the lowest failing rate without being run: a step at it overloads the cluster
+   and, for mixed, leaves a compaction backlog for every later step.
+3. Run the maximum rate only when the search narrows up to it. It must fail there, which ends the search as
+   `narrowed`; else the search stops with `max rate passes`: the best throughput is only a lower bound, and the
+   run reports an error.
 
-A step that collected no results (e.g. a failed latency collection) runs once more at the same thread count,
-named `unthrottled_<threads>_threads_retry`, and counts as failed only if that has no results either; the
-rerun doesn't use the step budget.
+A step passes when the P99 of every operation is within `perf_gradual_latency_limit` (default 10 ms) and its
+HDR-measured throughput is at least `min_sent_ratio` (0.95) of its rate: a step the loaders held back shows a
+low P99 at a lower rate, and counts as failed. Each step gets `rate x P99 limit` requests in flight (Little's
+law), split over the commands: latte keeps the threads of the sub-test's first `perf_gradual_throttle_steps`
+entry and gets the rest as its concurrency; other tools get them as threads. The cache warmup uses the threads
+and concurrency of that first entry.
 
-Steps are named `unthrottled_<threads>_threads`; the best one is reported as `BestThroughputResult`.
-`configurations/performance/best-throughput/best_throughput.yaml` turns the search on for every
-sub-test with no per-step P99 limits (steps over the limit are expected). Read, mixed and read_disk_only
-steps last 15 minutes; a write step has no duration and writes its whole key range, as in the predefined-steps
-jobs, so every step inserts all the data.
+A step that collected no results (e.g. a failed latency collection) runs once more at the same rate, named
+`rate_<rate>_retry`, and counts as failed only if that has no results either; the rerun doesn't use the step
+budget.
+
+Steps are named `rate_<rate>`; the best passing one is reported as `BestThroughputResult`.
+`configurations/performance/best-throughput/best_throughput.yaml` turns the search on for every sub-test with
+no per-step P99 limits (steps over the limit are expected), and sets 10-minute steps for every workload. On the
+latte test-case, `latte_time_bound_write.yaml` makes the write steps time-bound too, so a step writes
+rate x duration rows instead of the whole 1.6B-row key range.
 
 **Goodput under overload** (`perf_overload_steps`, `sdcm/utils/overload.py`, SCYLLADB-3267). After the
 best step, one throttled step per factor (`overload_1.3x`, `overload_2x`) offers that multiple of the best
@@ -118,8 +126,10 @@ closed-loop tool can fall short of the target, and a step under 0.95 of it logs 
 **Dataset sizing** (`perf_dataset_sizing`, `sdcm/utils/dataset_sizing.py`). The predefined-steps
 test-case's stress commands are the dataset of a reference node: 128 GiB RAM and a 3750 GB data disk
 (i4i.4xlarge, i8g.4xlarge). With `perf_dataset_sizing` set, `setUp` reads the smallest DB node's
-`MemTotal` and `/var/lib/scylla` size and scales each command's `n=` and `-pop seq=` range by them,
-rounded to `scale_step` (0.25), so the reference instance types keep today's dataset exactly:
+`MemTotal` and `/var/lib/scylla` size and scales each command's dataset by them, rounded to `scale_step`
+(0.25), so the reference instance types keep today's dataset exactly. For cassandra-stress that is `n=` and
+the `-pop seq=` range; for latte, the `--start-cycle`/`--end-cycle` range, `-P row_count`, `-P offset` and a
+`--duration` given as a cycle count:
 
 | Commands | Scale | Why |
 |---|---|---|
@@ -127,20 +137,19 @@ rounded to `scale_step` (0.25), so the reference instance types keep today's dat
 | `prepare_write_cmd`, `stress_cmd_read_disk` | smaller of RAM and disk | Several times RAM so disk reads miss the cache, but never outgrowing the disk |
 | `stress_cmd_w` | disk | Leaves the same share of the disk free for compaction |
 
-The preload's literal `throttle=` and `threads=` scale with its rows, so it takes as long as on the
+The preload's literal `throttle=` and `threads=` (latte: `--rate` and `--threads`) scale with its rows, so it takes as long as on the
 reference node (~72 minutes) and fits `prepare_stress_duration` and the test's setup allowance on any
 node size; per DB shard it writes at about the reference rate, as i4i and i8g have the same RAM per vCPU.
 When the disk limits the preload below the RAM scale, the run logs a warning: disk-only reads then
 cover less data per GiB of RAM than on the reference node.
-`configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml` turns sizing on.
+`configurations/performance/best-throughput/sized_dataset.yaml` turns sizing on.
 
 **One command per loader** (`split_stress_commands`). The test-case's 4 commands of a workload split one
-key range for 4 loaders, and round-robin runs one command per loader. When the thread search runs on
+key range for 4 loaders, and round-robin runs one command per loader. When the rate search runs on
 another `n_loaders`, the workload's commands and its cache warmup are split again over the same range, one
-command per loader, so every loader generates load and a throttled step's rate, divided by the number of
-loaders, adds up to what it asks. Commands that differ in more than their range run as written, with a
-warning. Threads are per command, so a search on more loaders starts with fewer threads per command and
-the same total.
+command per loader, so every loader generates load and a step's rate, divided by the number of loaders, adds
+up to what it asks. A split latte command gets the offset and the cycle-count duration of its own range.
+Commands that differ in more than their range run as written, with a warning.
 
 ### `performance_regression_alternator_test.py`
 

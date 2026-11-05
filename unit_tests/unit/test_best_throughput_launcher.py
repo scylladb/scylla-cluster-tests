@@ -23,7 +23,7 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.wait import WaitForTimeoutError
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import get_sct_root_path
-from sdcm.utils.thread_search import ThreadSearchConfig
+from sdcm.utils.rate_search import RateSearchConfig
 
 LAUNCHER_GROOVY = get_sct_root_path() / "vars/bestThroughputRequestPipeline.groovy"
 GENERIC_JENKINSFILE = get_sct_root_path() / launcher.GENERIC_JENKINSFILE
@@ -91,13 +91,18 @@ def test_default_test_config_gets_every_overlay():
 
 
 def test_vnodes_and_request_overlays():
-    request = _request(tablets=False, test_config=[*DEFAULT_TEST_CONFIG, "configurations/c-s-driver-version-4.yaml"])
+    request = _request(
+        tablets=False,
+        test_config=[*DEFAULT_TEST_CONFIG, "configurations/network_config/test_communication_public.yaml"],
+    )
     test_config = request.final_test_config()
-    assert test_config.index("configurations/c-s-driver-version-4.yaml") < test_config.index(TABLETS_DISABLED)
+    assert test_config.index("configurations/network_config/test_communication_public.yaml") < test_config.index(
+        TABLETS_DISABLED
+    )
     assert test_config[-1] == BEST_THROUGHPUT_OVERLAY
 
 
-def test_other_test_case_gets_no_cassandra_stress_overlays():
+def test_other_test_case_gets_no_default_test_case_overlays():
     test_config = _request(test_config=[LWT_TEST_CASE]).final_test_config()
     assert test_config == [LWT_TEST_CASE, BEST_THROUGHPUT_OVERLAY]
 
@@ -123,7 +128,7 @@ def test_empty_environment_variables_are_ignored():
     assert parse_properties(request.final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
-        "SCT_TEST_DURATION": "2130",
+        "SCT_TEST_DURATION": "420",
     }
 
 
@@ -131,38 +136,36 @@ def test_environment_variables_minimal_request():
     assert parse_properties(_request().final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
-        "SCT_TEST_DURATION": "2130",
+        "SCT_TEST_DURATION": "420",
     }
 
 
 @pytest.mark.parametrize(
     "request_params, expected_minutes",
     [
-        # 180 for setup, preload and teardown, then (13 search steps: 1 thread to the 4096 cap, + 2 reruns)
-        # x (the step + 10 minutes of waits). A write step has no duration and is allowed 120 minutes.
-        pytest.param({}, 180 + 15 * 130, id="defaults"),
-        pytest.param({"sub_tests": READ_ONLY}, 180 + 15 * 25, id="timed_steps"),
-        pytest.param(
-            {"sub_tests": READ_ONLY, "max_search_steps": "20"}, 180 + 22 * 25, id="budget_above_the_doubling_steps"
-        ),
-        pytest.param({"sub_tests": READ_ONLY, "step_duration": "1h"}, 180 + 15 * 70, id="longer_steps"),
-        pytest.param({"step_duration": "3h"}, 180 + 15 * 190, id="timed_steps_longer_than_write"),
-        pytest.param({"sub_tests": READ_ONLY, "overload_factors": "1.3,2"}, 180 + 17 * 25, id="overload_steps"),
+        # 180 for setup, preload and teardown, then (10 search steps, the bounds included, + 2 reruns)
+        # x (the 10-minute step + 10 minutes of waits). Every step of the default test-case is time-bound.
+        pytest.param({}, 180 + 12 * 20, id="defaults"),
+        pytest.param({"sub_tests": READ_ONLY}, 180 + 12 * 20, id="one_workload"),
+        pytest.param({"sub_tests": READ_ONLY, "max_search_steps": "20"}, 180 + 22 * 20, id="larger_budget"),
+        pytest.param({"sub_tests": READ_ONLY, "step_duration": "1h"}, 180 + 12 * 70, id="longer_steps"),
+        pytest.param({"step_duration": "5m"}, 180 + 12 * 15, id="shorter_steps"),
+        pytest.param({"sub_tests": READ_ONLY, "overload_factors": "1.3,2"}, 180 + 14 * 20, id="overload_steps"),
         pytest.param(
             {
                 "sub_tests": '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load"]',
-                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}',
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_steps": 4}}',
             },
-            180 + 15 * 25,
+            180 + 12 * 20,
             id="the_longest_workload_counts",
         ),
         pytest.param(
             {
                 "sub_tests": READ_ONLY,
-                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}',
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_steps": 4}}',
             },
-            180 + 12 * 25,
-            id="lower_cap",
+            180 + 6 * 20,
+            id="lower_budget",
         ),
     ],
 )
@@ -185,7 +188,8 @@ def test_environment_variables_full_request():
         n_loaders="6",
         p99_limit_ms="15",
         step_duration="20m",
-        start_threads_per_shard="8",
+        min_rate_per_shard="500",
+        max_rate_per_shard="80000",
         max_search_steps="10",
     )
     variables = parse_properties(request.final_environment_variables())
@@ -196,12 +200,12 @@ def test_environment_variables_full_request():
     assert json.loads(variables["SCT_PERF_GRADUAL_LATENCY_LIMIT"]) == {"default": {"percentile_99": 15.0}}
     assert json.loads(variables["SCT_PERF_GRADUAL_STEP_DURATION"]) == {
         "read": "20m",
+        "write": "20m",
         "mixed": "20m",
         "read_disk_only": "20m",
-        "write": None,
     }
     assert json.loads(variables["SCT_PERF_BEST_THROUGHPUT_SEARCH"]) == {
-        "default": {"start_threads_per_shard": 8, "max_steps": 10}
+        "default": {"min_rate_per_shard": 500, "max_rate_per_shard": 80000, "max_steps": 10}
     }
 
 
@@ -280,6 +284,36 @@ def test_valid_request():
 def test_invalid_request(overrides, match):
     with pytest.raises(BestThroughputRequestError, match=match):
         _request(**overrides).validate()
+
+
+@pytest.mark.parametrize(
+    "test_config, job_name_suffix",
+    [
+        pytest.param(json.dumps(DEFAULT_TEST_CONFIG), "", id="default_list"),
+        pytest.param(json.dumps([*DEFAULT_TEST_CONFIG, BEST_THROUGHPUT_OVERLAY]), "", id="default_and_overlay"),
+        pytest.param("", "", id="empty"),
+        pytest.param(json.dumps([LWT_TEST_CASE]), "lwt", id="custom_with_suffix"),
+    ],
+)
+def test_test_config_and_job_name_suffix_accepted(test_config, job_name_suffix):
+    _request(test_config=test_config, job_name_suffix=job_name_suffix).validate()
+
+
+@pytest.mark.parametrize(
+    "test_config",
+    [
+        pytest.param([LWT_TEST_CASE], id="other_test_case"),
+        pytest.param(list(DEFAULT_TEST_CONFIG[:-1]), id="a_default_file_dropped"),
+        pytest.param(
+            [*DEFAULT_TEST_CONFIG, "configurations/network_config/test_communication_public.yaml"], id="extra_file"
+        ),
+    ],
+)
+def test_custom_test_config_needs_a_job_name_suffix(test_config):
+    with pytest.raises(
+        BestThroughputRequestError, match="test_config differs from the default, so set job_name_suffix"
+    ):
+        _request(test_config=json.dumps(test_config)).validate()
 
 
 @pytest.fixture
@@ -485,10 +519,9 @@ def test_generic_job_defaults_match_the_launcher_default_request():
 def test_sct_accepts_what_the_launcher_builds(monkeypatch):
     request = _request(
         tablets=False,
-        extra_environment_variables="SCT_C_S_DRIVER_VERSION=4",
         p99_limit_ms="15",
         step_duration="20m",
-        start_threads_per_shard="8",
+        min_rate_per_shard="500",
     )
     parameters = request.build_parameters()
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -507,13 +540,12 @@ def test_sct_accepts_what_the_launcher_builds(monkeypatch):
     assert config.get("perf_gradual_latency_limit") == {"default": {"percentile_99": 15.0}}
     assert config.get("perf_gradual_step_duration") == {
         "read": "20m",
+        "write": "20m",
         "mixed": "20m",
         "read_disk_only": "20m",
-        "write": None,
     }
-    assert (
-        ThreadSearchConfig.from_params(config.get("perf_best_throughput_search"), "read").start_threads_per_shard == 8
-    )
+    assert RateSearchConfig.from_params(config.get("perf_best_throughput_search"), "read").min_rate_per_shard == 500
+    assert all("latte run" in cmd for cmd in config.get("stress_cmd_w"))
     assert config.get("perf_dataset_sizing") is not None
 
 
@@ -533,4 +565,5 @@ def test_write_step_spelled_as_the_string_none_has_no_duration():
         sub_tests='["test_write_gradual_increase_load"]',
         extra_environment_variables='SCT_PERF_GRADUAL_STEP_DURATION={"read": "30m", "write": "None"}',
     )
-    assert int(parse_properties(request.final_environment_variables())["SCT_TEST_DURATION"]) == 180 + 15 * 130
+    # A write step without a duration is allowed 120 minutes.
+    assert int(parse_properties(request.final_environment_variables())["SCT_TEST_DURATION"]) == 180 + 12 * 130

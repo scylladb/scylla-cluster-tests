@@ -179,6 +179,8 @@ class BestThroughputStep:
     throughput: int
     p99: dict[str, float]
     threads: int | None = None
+    rate: int | None = None
+    concurrency: int | None = None
 
 
 def step_latency(name: str, step: dict[str, Any]) -> tuple[dict[str, float], int] | None:
@@ -213,17 +215,19 @@ def p99_violations(name: str, p99: dict[str, float], p99_limit_ms: float) -> dic
     return over_limit
 
 
-def find_best_throughput(total_summary: dict[str, Any], p99_limit_ms: float) -> BestThroughputStep | None:
+def find_best_throughput(
+    total_summary: dict[str, Any], p99_limit_ms: float, min_sent_ratio: float | None = None
+) -> BestThroughputStep | None:
     """Pick the gradual step with the highest measured throughput whose P99 is within the limit.
 
-    `total_summary` is the per-step summary of the gradual test, keyed by step name. The best-throughput
-    search runs unthrottled steps that differ by thread count, so a step passes on latency alone: the HDR
-    P99 of every operation, in every cycle that reported it, must be within `p99_limit_ms` (for mixed, both
-    read and write). Steps without HDR results are skipped.
+    `total_summary` is the per-step summary of the gradual test, keyed by step name. A step passes when the HDR
+    P99 of every operation, in every cycle that reported it, is within `p99_limit_ms` (for mixed, both read and
+    write). With `min_sent_ratio`, a step with a fixed 'rate' must also have measured at least that share of
+    it: the rate search counts a step the loaders held back as failed, so it can't be the best one either.
+    Steps without HDR results are skipped.
 
-    Passing steps are ranked by HDR-measured throughput, not by thread count: past saturation, more threads
-    add latency without adding throughput. The step's 'threads' entry, when present, is reported as is.
-    Returns None when no step passed.
+    Passing steps are ranked by HDR-measured throughput. The step's 'threads', 'rate' and 'concurrency' entries,
+    when present, are reported as is. Returns None when no step passed.
     """
     passed = []
     for name, step in total_summary.items():
@@ -232,6 +236,18 @@ def find_best_throughput(total_summary: dict[str, Any], p99_limit_ms: float) -> 
         p99, throughput = latency
         if p99_violations(name, p99, p99_limit_ms):
             continue
-        passed.append(BestThroughputStep(name=name, throughput=throughput, p99=p99, threads=step.get("threads")))
+        if min_sent_ratio and (rate := step.get("rate")) and throughput < rate * min_sent_ratio:
+            LOGGER.debug("Step %s: sent %s op/s, under %s of its %s op/s rate", name, throughput, min_sent_ratio, rate)
+            continue
+        passed.append(
+            BestThroughputStep(
+                name=name,
+                throughput=throughput,
+                p99=p99,
+                threads=step.get("threads"),
+                rate=step.get("rate"),
+                concurrency=step.get("concurrency"),
+            )
+        )
 
     return max(passed, key=lambda step: step.throughput, default=None)

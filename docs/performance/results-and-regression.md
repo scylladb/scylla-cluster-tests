@@ -198,23 +198,25 @@ After the steps loop, the gradual test sends one `BestThroughputResult` table pe
 | Column | Contents |
 |---|---|
 | `Throughput` | HDR-measured op/s of the best step (INTEGER, `higher_is_better=True`); `0` when no step passed |
-| `Threads` | Thread count of the best step |
+| `Rate` | Rate search runs only: the fixed rate of the best step |
+| `Threads` | Thread count of the best step (latte: threads per command) |
 | `P99 write`, `P99 read` | P99 at the best step, worst across HDR tags of the same operation (ms) |
 | `P99 limit` | The limit used, from `perf_gradual_latency_limit` |
 | `Step` | Step name, or `none passed` |
-| `Stop reason` | Thread search runs only: `narrowed`, `saturated`, `thread cap`, `budget` or `none passed`. `thread cap` means every step up to `max_threads_per_command` stayed within the limit, so `Throughput` is a lower bound, not the limit |
+| `Stop reason` | Rate search runs only: `narrowed`, `budget`, `min rate fails` or `max rate passes`. `max rate passes` means the maximum rate stayed within the limit, so `Throughput` is a lower bound, not the limit |
 
 `find_best_throughput` (`sdcm/utils/latency.py`) picks the step: P99 of every operation within the
 limit (for mixed, read and write both), ranked by `cycle_hdr_throughput`, not by thread count or
-rate. Steps without HDR results are skipped. The limit is `perf_gradual_latency_limit[<workload>]`,
+rate. After a rate search, a step that measured under `min_sent_ratio` of its rate is skipped too: the
+search counted it as failed. Steps without HDR results are skipped. The limit is `perf_gradual_latency_limit[<workload>]`,
 else its `default` entry (10 ms). The table carries no validation rules yet; it is there to build
 history across versions.
 
 ### Goodput under overload table
 
 With `perf_overload_steps` set, after the best step is found the gradual test runs one throttled step per
-factor (`overload_<factor>x`), offering `factor x` the best throughput with the best step's thread count times
-the factor. cassandra-stress commands get `-errors ignore` for these steps, so timeouts are counted instead of
+factor (`overload_<factor>x`), offering `factor x` the best throughput with the best step's requests in flight
+times the factor: its concurrency for latte (the threads stay), else its thread count. cassandra-stress commands get `-errors ignore` for these steps, so timeouts are counted instead of
 stopping the step; other tools run as they are. A stress command failing in these steps is reported as an
 error instead of stopping the test, since cassandra-stress logs every operation that fails all its retries as
 a CRITICAL `OperationOnKey` event. The results go to `<workload> - goodput under overload`

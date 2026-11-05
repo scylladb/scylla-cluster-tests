@@ -14,7 +14,7 @@
 """Goodput under overload (SCYLLADB-3267): offer more than the best throughput and measure what still succeeds.
 
 After the best throughput under the latency limit is found, each overload step offers `factor x best throughput`,
-throttled, with `factor x` the best step's threads.
+throttled, with `factor x` the best step's requests in flight: its concurrency for latte, else its threads.
 Goodput is the measured throughput of successful operations; it is expected to stay at `min_goodput_ratio` of the
 best throughput or above.
 
@@ -52,13 +52,19 @@ class OverloadConfig:
             settings["factors"] = tuple(settings["factors"])
         return cls(**settings)
 
-    def steps(self, best_threads: int, best_throughput: int) -> list["OverloadStep"]:
-        """One step per factor: its rate and its threads follow the run's own best step."""
+    def steps(
+        self, best_threads: int, best_throughput: int, best_concurrency: int | None = None
+    ) -> list["OverloadStep"]:
+        """One step per factor: its rate and its requests in flight follow the run's own best step.
+
+        With a concurrency (latte) the concurrency follows the factor and the threads stay; else the threads do.
+        """
         return [
             OverloadStep(
                 factor=factor,
                 rate=round(best_throughput * factor),
-                threads=math.ceil(best_threads * factor),
+                threads=best_threads if best_concurrency else math.ceil(best_threads * factor),
+                concurrency=math.ceil(best_concurrency * factor) if best_concurrency else None,
             )
             for factor in self.factors
         ]
@@ -69,6 +75,7 @@ class OverloadStep:
     factor: float
     rate: int
     threads: int
+    concurrency: int | None = None
 
     @property
     def name(self) -> str:

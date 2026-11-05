@@ -1,26 +1,26 @@
-# Best-throughput run (SCT-580): every step is unthrottled and an adaptive search picks its thread count,
-# looking for the highest throughput with P99 within perf_gradual_latency_limit (default 10 ms). The result is
-# the BestThroughputResult Argus table. Used on top of a predefined-steps test-case; any
-# perf_gradual_throttle_steps/perf_gradual_threads in the other files are ignored while the search is set.
+# Best-throughput run (SCT-580): every step runs at a fixed rate that a search picks, looking for the highest
+# rate with P99 within perf_gradual_latency_limit (default 10 ms). The result is the BestThroughputResult Argus
+# table. Used on top of a predefined-steps test-case; its perf_gradual_throttle_steps only give each workload's
+# latte threads, and perf_gradual_threads are ignored while the search is set.
 
-# start_threads_per_shard is a first guess, to calibrate on i4i.4xlarge and i8g.4xlarge: on today's
-# predefined-steps jobs, i8g read passes at ~59 threads per shard, and read_disk_only and mixed fail at their
-# thread counts on both instance types. Doubling from 16 reaches 64 in three steps.
+# The bounds are per DB shard, so they fit any cluster size: 3 x i8g.4xlarge (~42 shards) searches 42k-2.5M op/s.
+# They are a first guess, to check on i4i, i8g and z4d: the minimum must pass, and the maximum, run only when the
+# search narrows up to it, must fail.
 perf_best_throughput_search:
   default:
-    start_threads_per_shard: 16
-    max_steps: 10
+    min_rate_per_shard: 1000
+    max_rate_per_shard: 60000
     precision_pct: 5
-    min_throughput_gain_pct: 5
-    max_threads_per_command: 4096
+    max_steps: 10
+    min_sent_ratio: 0.95
 
-# Read and mixed steps are 15 minutes, half the predefined-steps jobs' 30, since a search runs up to ~10 steps.
-# A write step has no duration: like in the predefined-steps jobs, it runs until its commands have written their
-# whole key range, so every step inserts all the data.
-perf_gradual_step_duration: {"read": '15m', "write": null, "mixed": '15m', "read_disk_only": '15m'}
+# 10 minutes for every workload, a third of the predefined-steps jobs' 30, since a search runs up to 10 steps.
+# A first value: the shortest duration that still gives a stable result is to be measured on i8g.
+perf_gradual_step_duration: {"read": '10m', "write": '10m', "mixed": '10m', "read_disk_only": '10m'}
 
 # Steps over the latency limit are expected here: they bound the search. Drop the per-step P99 limits of
-# test_default.yaml so they don't fail the run.
+# test_default.yaml so they don't fail the run. The search uses perf_gradual_latency_limit (default 10 ms)
+# instead, so only one limit applies.
 latency_decorator_error_thresholds:
   write:
     default:

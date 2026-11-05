@@ -10,6 +10,11 @@ import yaml
 import performance_regression_gradual_grow_throughput as gradual_grow_module
 from sdcm.utils.dataset_sizing import (
     GIB,
+    LATTE_CYCLES,
+    LATTE_END,
+    LATTE_OFFSET,
+    LATTE_ROW_COUNT,
+    LATTE_START,
     SEQ_RANGE,
     DatasetScale,
     DatasetSizingConfig,
@@ -269,3 +274,102 @@ def test_test_class_keeps_commands_it_cant_split(caplog):
     assert workload.cs_cmd_tmpl == commands
     assert workload.cs_cmd_warm_up is None
     assert "Can't split" in caplog.text
+
+
+LATTE_TEST_CASE = "test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml"
+LATTE_TIME_BOUND_WRITE = "configurations/performance/best-throughput/latte_time_bound_write.yaml"
+
+
+def _latte_params():
+    with open(LATTE_TEST_CASE, encoding="utf-8") as test_case:
+        params = yaml.safe_load(test_case)
+    with open(LATTE_TIME_BOUND_WRITE, encoding="utf-8") as overlay:
+        return params | {"stress_cmd_w_time_bound": yaml.safe_load(overlay)["stress_cmd_w"]}
+
+
+def _latte_values(cmd):
+    return {
+        name: int(match.group(1)) if (match := pattern.search(cmd)) else None
+        for name, pattern in (
+            ("start", LATTE_START),
+            ("end", LATTE_END),
+            ("row_count", LATTE_ROW_COUNT),
+            ("offset", LATTE_OFFSET),
+            ("cycles", LATTE_CYCLES),
+        )
+    }
+
+
+LATTE_PARAMS = [
+    "prepare_write_cmd",
+    "stress_cmd_w",
+    "stress_cmd_w_time_bound",
+    "stress_cmd_r",
+    "stress_cmd_m",
+    "stress_cmd_cache_warmup",
+    "stress_cmd_read_disk",
+]
+
+
+def test_latte_reference_instance_keeps_the_test_case_dataset_exactly():
+    params = _latte_params()
+    scaled = scale_dataset_params(params, dataset_scale(*I4I_4XLARGE, config=CONFIG))
+    assert all(scaled[param] == params[param] for param in scaled)
+
+
+@pytest.mark.parametrize("factor", [Fraction(1, 2), Fraction(5, 4), 2])
+@pytest.mark.parametrize("param", LATTE_PARAMS)
+def test_latte_ranges_offsets_and_row_counts_scale_together(param, factor):
+    commands = _latte_params()[param]
+    original = [_latte_values(cmd) for cmd in commands]
+    scaled = [_latte_values(scale_stress_command(cmd, factor)) for cmd in commands]
+
+    assert scaled[0]["start"] == 1
+    assert all(after["start"] == before["end"] + 1 for before, after in zip(scaled, scaled[1:]))
+    assert scaled[-1]["end"] == int(original[-1]["end"] * factor)
+    for before, after in zip(original, scaled):
+        assert after["offset"] == after["start"] - 1, "the offset is still the first cycle minus 1"
+        assert after["row_count"] == int(before["row_count"] * factor)
+        if before["cycles"] is not None:
+            assert after["cycles"] == after["end"] - after["start"] + 1, "a whole-range duration follows the range"
+
+
+def test_latte_time_bound_commands_keep_their_duration():
+    (cmd, *_) = _latte_params()["stress_cmd_r"]
+    scaled = scale_stress_command(cmd, Fraction(1, 2))
+    assert "--duration $duration" in scaled
+    assert "--threads $threads --concurrency $concurrency $throttle" in scaled
+
+
+@pytest.mark.parametrize("factor, threads, rate", [(Fraction(1, 2), 30, 46875), (2, 120, 187500)])
+def test_latte_preload_rate_scales_with_its_rows(factor, threads, rate):
+    (cmd, *_) = _latte_params()["prepare_write_cmd"]
+    scaled = scale_stress_rate(cmd, factor)
+    assert f"--threads {threads} " in scaled
+    assert f"--rate {rate}" in scaled
+    assert "--concurrency 15" in scaled
+
+
+@pytest.mark.parametrize("parts", [2, 3, 8])
+@pytest.mark.parametrize("param", ["stress_cmd_w", "stress_cmd_w_time_bound", "stress_cmd_r", "stress_cmd_read_disk"])
+def test_latte_split_commands_cover_the_same_range_in_equal_parts(param, parts):
+    commands = _latte_params()[param]
+    split = split_stress_commands(commands, parts)
+
+    values = [_latte_values(cmd) for cmd in split]
+    assert len(split) == parts
+    assert values[0]["start"] == _latte_values(commands[0])["start"]
+    assert values[-1]["end"] == _latte_values(commands[-1])["end"]
+    assert all(after["start"] == before["end"] + 1 for before, after in zip(values, values[1:]))
+    assert max(v["end"] - v["start"] for v in values) - min(v["end"] - v["start"] for v in values) <= 1
+    for value in values:
+        assert value["offset"] == value["start"] - 1
+        assert value["row_count"] == _latte_values(commands[0])["row_count"]
+        if value["cycles"] is not None:
+            assert value["cycles"] == value["end"] - value["start"] + 1
+
+
+def test_latte_commands_with_another_offset_cant_be_split():
+    commands = _latte_params()["stress_cmd_r"]
+    shifted = [commands[0].replace("-P offset=0", "-P offset=7"), *commands[1:]]
+    assert split_stress_commands(shifted, 2) is None

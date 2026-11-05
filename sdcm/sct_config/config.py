@@ -2225,8 +2225,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if not (search := self.get("perf_best_throughput_search")):
             return
 
-        positive_ints = {"start_threads_per_shard", "max_steps", "max_threads_per_command"}
-        positive_numbers = {"precision_pct", "min_throughput_gain_pct"}
+        positive_ints = {"min_rate_per_shard", "max_rate_per_shard", "max_steps"}
+        positive_numbers = {"precision_pct", "min_sent_ratio"}
         for workload, settings in search.items():
             if not isinstance(settings, dict) or set(settings) - positive_ints - positive_numbers:
                 raise ValueError(
@@ -2242,6 +2242,18 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     )
             if settings.get("max_steps", 2) < 2:
                 raise ValueError(f"perf_best_throughput_search for {workload}: 'max_steps' should be at least 2")
+            if settings.get("min_sent_ratio", 1) > 1:
+                raise ValueError(f"perf_best_throughput_search for {workload}: 'min_sent_ratio' should be at most 1")
+        # A sub-test's entry overrides 'default' key by key, so the bounds are checked on the merged settings.
+        default = search.get("default") or {}
+        for workload, settings in search.items():
+            merged = default | settings
+            min_rate, max_rate = merged.get("min_rate_per_shard", 1000), merged.get("max_rate_per_shard", 60000)
+            if min_rate >= max_rate:
+                raise ValueError(
+                    f"perf_best_throughput_search for {workload}: 'min_rate_per_shard' ({min_rate}) should be "
+                    f"below 'max_rate_per_shard' ({max_rate})"
+                )
 
     def _validate_perf_gradual_latency_limit(self):
         """Validate perf_gradual_latency_limit: {<sub-test or 'default'>: {'percentile_99': <ms>}}."""

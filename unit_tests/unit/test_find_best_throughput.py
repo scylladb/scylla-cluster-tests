@@ -119,3 +119,19 @@ def test_operation_reported_only_by_a_later_cycle_is_checked():
 
     step["cycles"][1]["hdr_summary"]["WRITE"]["percentile_99"] = 5.0
     assert find_best_throughput({"unthrottled_100_threads": step}, P99_LIMIT_MS).p99 == {"READ": 3.0, "WRITE": 5.0}
+
+
+def _rate_step(rate, throughput, p99):
+    return _step(32, throughput, READ=p99) | {"rate": rate, "concurrency": 65}
+
+
+def test_rate_step_that_did_not_send_its_rate_is_not_the_best():
+    summary = {
+        "rate_400000": _rate_step(400000, 399000, 3.0),
+        # Within the limit, but the loaders sent only 87% of the rate: the search counted it as failed.
+        "rate_600000": _rate_step(600000, 520000, 4.0),
+    }
+    assert find_best_throughput(summary, P99_LIMIT_MS, min_sent_ratio=0.95) == BestThroughputStep(
+        name="rate_400000", throughput=399000, p99={"READ": 3.0}, threads=32, rate=400000, concurrency=65
+    )
+    assert find_best_throughput(summary, P99_LIMIT_MS).name == "rate_600000", "no sent-rate rule without the ratio"

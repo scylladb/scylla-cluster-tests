@@ -230,12 +230,13 @@ def test_best_throughput_search_valid():
     config.update(
         {
             "perf_best_throughput_search": {
-                "default": {"start_threads_per_shard": 16, "max_steps": 8, "precision_pct": 5},
-                "read_disk_only": {
-                    "start_threads_per_shard": 4,
-                    "min_throughput_gain_pct": 2.5,
-                    "max_threads_per_command": 2048,
+                "default": {
+                    "min_rate_per_shard": 1000,
+                    "max_rate_per_shard": 60000,
+                    "max_steps": 8,
+                    "precision_pct": 5,
                 },
+                "read_disk_only": {"max_rate_per_shard": 20000, "min_sent_ratio": 0.9},
             }
         }
     )
@@ -247,13 +248,19 @@ def test_best_throughput_search_valid():
     [
         pytest.param({"default": 16}, "should be a dict with keys from", id="not_a_dict"),
         pytest.param({"default": {"threads": 16}}, "should be a dict with keys from", id="unknown_key"),
-        pytest.param({"default": {"start_threads_per_shard": 0}}, "positive integer", id="zero_start"),
-        pytest.param({"default": {"start_threads_per_shard": 1.5}}, "positive integer", id="float_start"),
+        pytest.param({"default": {"min_rate_per_shard": 0}}, "positive integer", id="zero_min_rate"),
+        pytest.param({"default": {"max_rate_per_shard": 1.5}}, "positive integer", id="float_max_rate"),
         pytest.param({"default": {"max_steps": True}}, "positive integer", id="bool_steps"),
         pytest.param({"default": {"max_steps": 1}}, "at least 2", id="one_step"),
-        pytest.param({"default": {"max_threads_per_command": 0}}, "positive integer", id="zero_thread_cap"),
         pytest.param({"default": {"precision_pct": -5}}, "positive number", id="negative_precision"),
-        pytest.param({"read": {"min_throughput_gain_pct": "5"}}, "positive number", id="string_gain"),
+        pytest.param({"read": {"min_sent_ratio": "0.9"}}, "positive number", id="string_sent_ratio"),
+        pytest.param({"read": {"min_sent_ratio": 1.5}}, "at most 1", id="sent_ratio_above_one"),
+        pytest.param({"default": {"min_rate_per_shard": 60000}}, "should be below", id="min_not_below_default_max"),
+        pytest.param(
+            {"default": {"max_rate_per_shard": 5000}, "read": {"min_rate_per_shard": 5000}},
+            "for read: 'min_rate_per_shard'",
+            id="merged_bounds_of_a_workload",
+        ),
     ],
 )
 def test_invalid_best_throughput_search(search, match):

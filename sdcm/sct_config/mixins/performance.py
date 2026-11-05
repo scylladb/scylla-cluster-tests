@@ -45,18 +45,22 @@ class PerformanceConfigMixin(BaseModel):
         description="Number of threads which should be added on per step",
     )
     perf_best_throughput_search: DictOrStr = SctField(
-        description="Adaptive thread search of the gradual performance test, which looks for the best throughput "
-        "within perf_gradual_latency_limit. When set, the sub-test runs unthrottled steps whose thread count the "
-        "search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Keyed by sub-test, with "
-        "'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: "
-        "start_threads_per_shard (threads of the first step per DB shard, over all stress commands), "
-        "max_steps (step budget per sub-test; it only limits the bisection once the latency limit is found), "
-        "precision_pct (stop when the passing and failing thread counts are this close), "
-        "min_throughput_gain_pct (stop doubling when throughput grows less than this), "
-        "max_threads_per_command (stop doubling at this many threads per stress command). "
-        "A step that collected no results is run once more before it counts as failed. "
-        "Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, "
-        "'min_throughput_gain_pct': 5, 'max_threads_per_command': 4096}}",
+        description="Rate search of the gradual performance test, which looks for the best throughput within "
+        "perf_gradual_latency_limit. When set, the sub-test runs fixed-rate steps whose rate the search picks, "
+        "instead of perf_gradual_throttle_steps/perf_gradual_threads. Each step gets rate x the P99 limit "
+        "requests in flight: latte keeps the threads of the sub-test's first perf_gradual_throttle_steps entry "
+        "and gets them as its concurrency, other tools as threads. Keyed by sub-test, with 'default' used for "
+        "sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: "
+        "min_rate_per_shard and max_rate_per_shard (the bounds, times the DB shards; the minimum runs first and "
+        "must pass, the maximum runs only when the search narrows up to it and must fail there, else the run "
+        "reports an error), "
+        "precision_pct (stop when the passing and failing rates are this close), "
+        "max_steps (step budget per sub-test, the bounds included), "
+        "min_sent_ratio (a step passes only when it measured at least this share of its rate). "
+        "The search bisects the rate on a log scale. A step that collected no results is run once more before "
+        "it counts as failed. "
+        "Example: {'default': {'min_rate_per_shard': 1000, 'max_rate_per_shard': 60000, 'precision_pct': 5, "
+        "'max_steps': 10, 'min_sent_ratio': 0.95}}",
     )
     perf_dataset_sizing: DictOrStr = SctField(
         description="Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The "
@@ -69,9 +73,12 @@ class PerformanceConfigMixin(BaseModel):
         "Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}",
     )
     perf_gradual_latency_limit: DictOrStr = SctField(
-        description="Latency limit, in ms, that a gradual performance test step must stay within to count as "
-        "passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests "
-        "not listed. Only 'percentile_99' is supported. "
+        description="P99 latency limit of the best-throughput search, in ms under the 'percentile_99' key: a "
+        "gradual performance test step must stay within it to count as passing when looking for the best "
+        "throughput. Keyed by sub-test, with 'default' used for sub-tests not listed. Only 'percentile_99' is "
+        "supported. It is the search's limit only: the best-throughput overlay sets the P99 fixed_limit of "
+        "latency_decorator_error_thresholds to null, because a search always has steps over the limit and those "
+        "must not fail the run. "
         "Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}",
     )
     perf_gradual_step_duration: DictOrStr = SctField(
@@ -100,7 +107,7 @@ class PerformanceConfigMixin(BaseModel):
     perf_overload_steps: DictOrStr = SctField(
         description="Goodput under overload, run after the gradual performance test found its best throughput "
         "within perf_gradual_latency_limit. One throttled step per factor offers factor x the best throughput, "
-        "with the best step's thread count times the factor; the "
+        "with the best step's requests in flight times the factor (its concurrency for latte, else its threads); the "
         "goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a "
         "ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not "
         "listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. "

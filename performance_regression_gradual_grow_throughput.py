@@ -1,3 +1,4 @@
+import math
 import pathlib
 import time
 from enum import Enum
@@ -40,7 +41,7 @@ from sdcm.utils.latency import (
     step_latency,
 )
 from sdcm.utils.overload import MIN_ATTEMPTED_RATIO, GoodputResult, OverloadConfig, goodput_result
-from sdcm.utils.thread_search import ThreadSearch, ThreadSearchConfig
+from sdcm.utils.rate_search import BOUND_ERRORS, RateSearch, RateSearchConfig, in_flight_for
 
 
 class CSPopulateDistribution(Enum):
@@ -151,8 +152,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return int(node.remoter.run(f"df -B1 --output=size {SCYLLA_DIR} | tail -1").stdout.strip())
 
     def throttle_steps(self, workload_type):
-        if self.thread_search_config(workload_type):
-            # The thread search picks every step at run time.
+        if self.rate_search_config(workload_type):
+            # The rate search picks every step at run time.
             return []
         throttle_steps = self.params["perf_gradual_throttle_steps"]
         if workload_type not in throttle_steps:
@@ -177,8 +178,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         Returns:
             List of thread counts or single thread count
         """
-        if self.thread_search_config(workload_type):
-            # The thread search picks every step's thread count at run time.
+        if self.rate_search_config(workload_type):
+            # The rate search picks every step's threads at run time.
             return []
         throttle_steps = self.throttle_steps(workload_type)
 
@@ -362,7 +363,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def _base_test_workflow(self, workload: Workload, test_name):
         stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)
-        if self.thread_search_config(workload.workload_type):
+        if self.rate_search_config(workload.workload_type):
             workload = self.split_commands_per_loader(workload=workload, num_loaders=num_loaders)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
@@ -730,25 +731,21 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):
         workload = self.update_num_threads_for_steps(workload=workload)
-        search_config = self.thread_search_config(workload.workload_type)
-        search_start_threads = (
-            search_config.start_threads(
-                total_shards=sum(node.scylla_shards for node in self.db_cluster.data_nodes),
-                num_stress_commands=len(workload.cs_cmd_tmpl),
-            )
-            if search_config
-            else None
-        )
+        search_config = self.rate_search_config(workload.workload_type)
 
         if workload.cs_cmd_warm_up is not None:
-            # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
-            # Build warmup params dict
-            max_threads = search_start_threads or max(workload.num_threads)
-            warmup_params = {"threads": max_threads}
-            # If any throttle step has concurrency, use max for warmup
-            concurrency_values = [step.get("concurrency") for step in workload.throttle_steps if "concurrency" in step]
-            if concurrency_values:
-                warmup_params["concurrency"] = max(concurrency_values)
+            if search_config:
+                # The search has no step list: warm up with the threads and concurrency the test-case configures.
+                warmup_params = self.configured_step_params(workload.workload_type)
+            else:
+                # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
+                warmup_params = {"threads": max(workload.num_threads)}
+                # If any throttle step has concurrency, use max for warmup
+                concurrency_values = [
+                    step.get("concurrency") for step in workload.throttle_steps if "concurrency" in step
+                ]
+                if concurrency_values:
+                    warmup_params["concurrency"] = max(concurrency_values)
             self.warmup_cache(workload.cs_cmd_warm_up, warmup_params)
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
@@ -756,8 +753,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total_summary = {}
         search = None
         if search_config:
-            search = ThreadSearch(start_threads=search_start_threads, config=search_config)
-            self.run_thread_search(
+            search = RateSearch(
+                config=search_config, shards=sum(node.scylla_shards for node in self.db_cluster.data_nodes)
+            )
+            self.run_rate_search(
                 workload=workload,
                 search=search,
                 total_summary=total_summary,
@@ -780,7 +779,11 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                     )
                 )
 
-        best_step = self.find_best_step(workload=workload, total_summary=total_summary)
+        best_step = self.find_best_step(
+            workload=workload,
+            total_summary=total_summary,
+            min_sent_ratio=search_config.min_sent_ratio if search_config else None,
+        )
         # The results log is written before each Argus send, so the run's results survive a failed send.
         self.save_total_summary_in_file(total_summary, best_step=best_step)
         self.report_best_throughput(
@@ -829,18 +832,24 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         overload_workload = replace(workload, cs_cmd_tmpl=stress_cmds)
 
         results = []
-        for step in overload_config.steps(best_threads=best_step.threads, best_throughput=best_step.throughput):
+        for step in overload_config.steps(
+            best_threads=best_step.threads,
+            best_throughput=best_step.throughput,
+            best_concurrency=best_step.concurrency,
+        ):
             self.log.info(
-                "Overload step %s: offering %s op/s (%s x best %s op/s) with %s threads",
+                "Overload step %s: offering %s op/s (%s x best %s op/s) with %s threads, concurrency %s",
                 step.name,
                 step.rate,
                 step.factor,
                 best_step.throughput,
                 step.threads,
+                step.concurrency,
             )
             step_summary = self.run_gradual_step(
                 workload=overload_workload,
-                throttle_step_dict={"rate": str(step.rate)},
+                throttle_step_dict={"rate": str(step.rate)}
+                | ({"concurrency": step.concurrency} if step.concurrency else {}),
                 num_threads=step.threads,
                 step_name=step.name,
                 stress_num=stress_num,
@@ -899,20 +908,46 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         except ArgusClientError, requests.RequestException:
             self.log.warning("Could not send %s to Argus", what, exc_info=True)
 
-    def thread_search_config(self, workload_type: str) -> ThreadSearchConfig | None:
-        """The workload's adaptive thread search settings, or None when it runs its fixed steps."""
-        return ThreadSearchConfig.from_params(self.params.get("perf_best_throughput_search"), workload_type)
+    def rate_search_config(self, workload_type: str) -> RateSearchConfig | None:
+        """The workload's rate search settings, or None when it runs its fixed steps."""
+        return RateSearchConfig.from_params(self.params.get("perf_best_throughput_search"), workload_type)
 
-    def run_thread_search(self, workload: Workload, search: ThreadSearch, total_summary: dict, stress_num, num_loaders):
-        """Run unthrottled steps at the thread counts the search picks, until it stops."""
+    def configured_step_params(self, workload_type: str) -> dict:
+        """The threads, and for latte the concurrency, of the test-case's first step of the workload.
+
+        The search starts from the test-case's configuration: it keeps the configured latte threads and sets
+        each step's concurrency from its rate. With rate-only steps, the threads come from perf_gradual_threads.
+        """
+        steps = (self.params.get("perf_gradual_throttle_steps") or {}).get(workload_type) or []
+        step = next((step for step in steps if isinstance(step, dict)), {})
+        params = {key: step[key] for key in ("threads", "concurrency") if key in step}
+        if "threads" not in params and (threads := (self.params.get("perf_gradual_threads") or {}).get(workload_type)):
+            params["threads"] = threads[0] if isinstance(threads, list) else threads
+        return params
+
+    def search_step_params(self, workload: Workload, rate: int, p99_limit_ms: float) -> dict:
+        """A search step: its rate, and enough requests in flight on every command that they never limit it.
+
+        latte keeps the configured threads and gets the in-flight requests as its concurrency; cassandra-stress
+        and the other tools have one request in flight per thread.
+        """
+        in_flight = math.ceil(in_flight_for(rate, p99_limit_ms) / max(1, len(workload.cs_cmd_tmpl)))
+        if is_latte_command(workload.cs_cmd_tmpl):
+            threads = min(self.configured_step_params(workload.workload_type).get("threads", 1), in_flight)
+            return {"rate": str(rate), "threads": threads, "concurrency": math.ceil(in_flight / threads)}
+        return {"rate": str(rate), "threads": in_flight}
+
+    def run_rate_search(self, workload: Workload, search: RateSearch, total_summary: dict, stress_num, num_loaders):
+        """Run fixed-rate steps at the rates the search picks, until it stops."""
         p99_limit_ms = self.p99_limit_ms(workload)
-        while (threads := search.next_threads()) is not None:
+        while (rate := search.next_rate()) is not None:
             # A rerun of a step that collected no results gets its own name, so its results stand alone.
-            step_name = f"unthrottled_{threads}_threads{'_retry' if search.is_retry else ''}"
+            step_name = f"rate_{rate}{'_retry' if search.is_retry else ''}"
+            step_params = self.search_step_params(workload=workload, rate=rate, p99_limit_ms=p99_limit_ms)
             step_summary = self.run_gradual_step(
                 workload=workload,
-                throttle_step_dict={"rate": "unthrottled"},
-                num_threads=threads,
+                throttle_step_dict=step_params,
+                num_threads=step_params["threads"],
                 step_name=step_name,
                 stress_num=stress_num,
                 num_loaders=num_loaders,
@@ -922,17 +957,39 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 passed, throughput = False, None
             else:
                 p99, throughput = latency
-                passed = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
+                within_limit = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
+                # A step that couldn't send its rate shows a low P99 at a lower rate: it doesn't pass.
+                sent_rate = throughput >= rate * search.config.min_sent_ratio
+                if not sent_rate:
+                    self.log.warning(
+                        "Rate search step %s sent %s op/s, under %s of its rate: the loaders limit it, not the "
+                        "cluster. Raise n_loaders, or the threads of the stress commands",
+                        step_name,
+                        throughput,
+                        search.config.min_sent_ratio,
+                    )
+                passed = within_limit and sent_rate
             self.log.info(
-                "Thread search step %s: %s op/s, P99 within %s ms: %s", step_name, throughput, p99_limit_ms, passed
+                "Rate search step %s: %s op/s of %s, P99 within %s ms and rate sent: %s",
+                step_name,
+                throughput,
+                rate,
+                p99_limit_ms,
+                passed,
             )
-            search.record(threads=threads, passed=passed, throughput=throughput)
+            search.record(rate=rate, passed=passed, throughput=throughput)
         self.log.info(
-            "Thread search for '%s' ran %s steps and stopped: %s",
+            "Rate search for '%s' ran %s steps and stopped: %s",
             workload.workload_type,
             len(search.steps),
             search.stop_reason,
         )
+        if search.stop_kind in BOUND_ERRORS:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Rate search for '{workload.workload_type}': {search.stop_reason}",
+                severity=Severity.ERROR,
+            ).publish()
 
     def run_gradual_step(  # noqa: PLR0913
         self,
@@ -961,7 +1018,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         step_duration = throttle_step_dict.get("duration", workload.step_duration)
 
         self.log.info(
-            "Run cs command with rate: %s Kops; threads: %s; step name: %s; duration: %s",
+            "Run cs command with rate: %s op/s; threads: %s; step name: %s; duration: %s",
             throttle_step_dict.get("rate", "unthrottled"),
             step_params["threads"],
             step_name,
@@ -983,6 +1040,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             {
                 "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
                 "threads": step_params["threads"],
+                "concurrency": step_params.get("concurrency"),
+                "rate": None
+                if (step_rate := throttle_step_dict.get("rate", "unthrottled")) == "unthrottled"
+                else int(step_rate),
                 "failed_ops": self._failed_ops(results),
                 "operation_time_s": self._operation_time_s(results),
             }
@@ -1013,17 +1074,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload.workload_type, latency_limit.get("default", LATENCY_ERROR_THRESHOLDS["default"])
         )["percentile_99"]
 
-    def find_best_step(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
-        """Find the step with the highest throughput within the P99 limit."""
+    def find_best_step(
+        self, workload: Workload, total_summary: dict, min_sent_ratio: float | None = None
+    ) -> BestThroughputStep | None:
+        """Find the step with the highest throughput within the P99 limit, and that sent its rate when searched."""
         p99_limit_ms = self.p99_limit_ms(workload)
-        best_step = find_best_throughput(total_summary=total_summary, p99_limit_ms=p99_limit_ms)
+        best_step = find_best_throughput(
+            total_summary=total_summary, p99_limit_ms=p99_limit_ms, min_sent_ratio=min_sent_ratio
+        )
         if best_step:
             self.log.info(
-                "Best throughput for '%s' with P99 within %s ms: %s op/s at step %s (threads: %s, P99: %s)",
+                "Best throughput for '%s' with P99 within %s ms: %s op/s at step %s (rate: %s, threads: %s, P99: %s)",
                 workload.workload_type,
                 p99_limit_ms,
                 best_step.throughput,
                 best_step.name,
+                best_step.rate,
                 best_step.threads,
                 best_step.p99,
             )
@@ -1034,7 +1100,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def report_best_throughput(
         self, workload: Workload, best_step: BestThroughputStep | None, stop_reason: str | None = None
     ) -> None:
-        """Send the best step, or "none passed", to Argus, with why the thread search stopped when one ran."""
+        """Send the best step, or "none passed", to Argus, with why the rate search stopped when one ran."""
         self.send_to_argus(
             f"the '{workload.workload_type}' best throughput",
             send_best_throughput_result_to_argus,

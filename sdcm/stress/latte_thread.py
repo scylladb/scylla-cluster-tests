@@ -244,11 +244,21 @@ class LatteStressThread(DockerBasedStressThread):
         latency_mean_regex = re.compile(
             r"\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)"
         )
+        # Reported under cassandra-stress's names, so the overload steps can count failed operations per second.
+        errors_regex = re.compile(r"\s*Errors\s*\[op\]\s*(?P<errors>\d+)\s")
+        elapsed_regex = re.compile(r"\s*Elapsed time\s*\[s\]\s*(?P<elapsed>\d+(?:\.\d+)?)\s")
 
         output = {"latency 99th percentile": 0, "latency mean": 0, "op rate": 0}
         for line in result.stdout.split("SUMMARY STATS")[-1].splitlines():
             if match := ops_regex.match(line):
                 output["op rate"] = match.groupdict()["op_rate"]
+                continue
+            if match := errors_regex.match(line):
+                output["total errors"] = match.groupdict()["errors"]
+                continue
+            if match := elapsed_regex.match(line):
+                hours, seconds = divmod(round(float(match.groupdict()["elapsed"])), 3600)
+                output["total operation time"] = f"{hours:02}:{seconds // 60:02}:{seconds % 60:02}"
                 continue
             if match := latency_99_regex.match(line):
                 output["latency 99th percentile"] = float(match.groupdict()["latency_99th_percentile"])

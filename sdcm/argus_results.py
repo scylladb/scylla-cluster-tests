@@ -120,13 +120,15 @@ class BestThroughputResult(StaticGenericResultTable):
         description = ""
         Columns = [
             ColumnMetadata(name="Throughput", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            # The fixed rate of the best step; the throughput is what it measured.
+            ColumnMetadata(name="Rate", unit="op/s", type=ResultType.INTEGER),
             ColumnMetadata(name="Threads", unit="", type=ResultType.INTEGER),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 limit", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="Step", unit="", type=ResultType.TEXT),
-            # Why the thread search stopped (sdcm.utils.thread_search.STOP_KINDS); empty for the fixed steps.
-            # "thread cap" means the limit is above the cap, so the throughput is a lower bound.
+            # Why the rate search stopped (sdcm.utils.rate_search.STOP_KINDS); empty for the fixed steps.
+            # "max rate passes" means the limit is above the maximum rate, so the throughput is a lower bound.
             ColumnMetadata(name="Stop reason", unit="", type=ResultType.TEXT),
         ]
 
@@ -506,6 +508,8 @@ def send_best_throughput_result_to_argus(
 
     result_table.add_result(column="Throughput", row=row, value=best_step.throughput, status=Status.UNSET)
     result_table.add_result(column="Step", row=row, value=best_step.name, status=Status.UNSET)
+    if best_step.rate is not None:
+        result_table.add_result(column="Rate", row=row, value=best_step.rate, status=Status.UNSET)
     if best_step.threads is not None:
         result_table.add_result(column="Threads", row=row, value=best_step.threads, status=Status.UNSET)
     for operation, p99 in worst_p99_per_operation(best_step.p99).items():

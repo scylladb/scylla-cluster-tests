@@ -59,6 +59,16 @@ ROW_COUNT = re.compile(r"(?<![\w-])n=(\d+)(?![\w(])")
 THROTTLE = re.compile(r"(?<![\w$])throttle=(\d+)/s")
 THREADS = re.compile(r"(?<![\w$])threads=(\d+)\b")
 
+# latte: the cycle range of a command, the rune script's key space (row_count) and its start (offset), and a
+# --duration given as a cycle count rather than a time. Literal values only, not the '$...' placeholders.
+LATTE_START = re.compile(r"--start-cycle[ =](\d+)\b")
+LATTE_END = re.compile(r"--end-cycle[ =](\d+)\b")
+LATTE_ROW_COUNT = re.compile(r"-P row_count=(\d+)\b")
+LATTE_OFFSET = re.compile(r"-P offset=(\d+)\b")
+LATTE_CYCLES = re.compile(r"--duration[ =](\d+)(?![\w.])")
+LATTE_RATE = re.compile(r"--rate[ =](\d+)\b")
+LATTE_THREADS = re.compile(r"--threads[ =](\d+)\b")
+
 
 @dataclass(frozen=True)
 class DatasetSizingConfig:
@@ -97,6 +107,47 @@ def dataset_scale(ram_bytes: int, disk_bytes: int, config: DatasetSizingConfig) 
     return DatasetScale(ram=ram, disk=disk, preload=min(ram, disk))
 
 
+def _scaled_range(start: int, end: int, scale: Fraction) -> tuple[int, int]:
+    """Scale a range so that ranges contiguous across commands stay contiguous."""
+    scaled_start, scaled_end = math.floor((start - 1) * scale) + 1, max(1, math.floor(end * scale))
+    return scaled_start, max(scaled_end, scaled_start)
+
+
+def _sub_value(pattern: re.Pattern, value: int, stress_cmd: str) -> str:
+    """Replace the number of the pattern's first match, keeping the rest of the match as is."""
+    return pattern.sub(lambda match: match.group(0).replace(match.group(1), str(value)), stress_cmd, count=1)
+
+
+def scale_latte_command(stress_cmd: str, scale: Fraction) -> str:
+    """Scale a latte command's cycle range, its row_count and offset, and a --duration given in cycles.
+
+    The cycle range scales like a cassandra-stress range. row_count and offset scale by the same factor, so the
+    keys the rune script derives from them keep their place in the scaled dataset. A cycle-count duration that
+    covers the whole range follows the scaled range; another one scales on its own.
+    """
+    start, end = LATTE_START.search(stress_cmd), LATTE_END.search(stress_cmd)
+    if start and end:
+        old_length = int(end.group(1)) - int(start.group(1)) + 1
+        scaled_start, scaled_end = _scaled_range(int(start.group(1)), int(end.group(1)), scale)
+        stress_cmd = _sub_value(LATTE_END, scaled_end, _sub_value(LATTE_START, scaled_start, stress_cmd))
+        if cycles := LATTE_CYCLES.search(stress_cmd):
+            new_cycles = (
+                scaled_end - scaled_start + 1
+                if int(cycles.group(1)) == old_length
+                else max(1, math.floor(int(cycles.group(1)) * scale))
+            )
+            stress_cmd = _sub_value(LATTE_CYCLES, new_cycles, stress_cmd)
+    if row_count := LATTE_ROW_COUNT.search(stress_cmd):
+        stress_cmd = _sub_value(LATTE_ROW_COUNT, max(1, math.floor(int(row_count.group(1)) * scale)), stress_cmd)
+    if offset := LATTE_OFFSET.search(stress_cmd):
+        stress_cmd = _sub_value(LATTE_OFFSET, math.floor(int(offset.group(1)) * scale), stress_cmd)
+    return stress_cmd
+
+
+def is_latte(stress_cmd: str) -> bool:
+    return stress_cmd.lstrip().startswith("latte ")
+
+
 def scale_stress_command(stress_cmd: str, scale: Fraction) -> str:
     """Scale a stress command's key range and row count.
 
@@ -106,11 +157,11 @@ def scale_stress_command(stress_cmd: str, scale: Fraction) -> str:
     """
     if scale == 1:
         return stress_cmd
+    if is_latte(stress_cmd):
+        return scale_latte_command(stress_cmd, scale)
     scaled_range = None
     if seq_range := SEQ_RANGE.search(stress_cmd):
-        start, end = int(seq_range.group(1)), int(seq_range.group(2))
-        scaled_start, scaled_end = math.floor((start - 1) * scale) + 1, max(1, math.floor(end * scale))
-        scaled_end = max(scaled_end, scaled_start)
+        scaled_start, scaled_end = _scaled_range(int(seq_range.group(1)), int(seq_range.group(2)), scale)
         scaled_range = scaled_end - scaled_start + 1
         stress_cmd = SEQ_RANGE.sub(f"seq={scaled_start}..{scaled_end}", stress_cmd, count=1)
     if row_count := ROW_COUNT.search(stress_cmd):
@@ -123,6 +174,17 @@ def scale_stress_rate(stress_cmd: str, scale: Fraction) -> str:
     """Scale a stress command's literal throttle and thread count, so it writes its scaled rows in the same time."""
     if scale == 1:
         return stress_cmd
+    if is_latte(stress_cmd):
+        stress_cmd = LATTE_RATE.sub(
+            lambda rate: rate.group(0).replace(rate.group(1), str(max(1, round(int(rate.group(1)) * scale)))),
+            stress_cmd,
+        )
+        return LATTE_THREADS.sub(
+            lambda threads: threads.group(0).replace(
+                threads.group(1), str(max(1, math.ceil(int(threads.group(1)) * scale)))
+            ),
+            stress_cmd,
+        )
     stress_cmd = THROTTLE.sub(lambda rate: f"throttle={max(1, round(int(rate.group(1)) * scale))}/s", stress_cmd)
     return THREADS.sub(lambda threads: f"threads={max(1, math.ceil(int(threads.group(1)) * scale))}", stress_cmd)
 
@@ -155,6 +217,8 @@ def split_stress_commands(stress_cmds: list[str], parts: int) -> list[str] | Non
     """
     if len(stress_cmds) == parts:
         return list(stress_cmds)
+    if all(is_latte(stress_cmd) for stress_cmd in stress_cmds):
+        return split_latte_commands(stress_cmds, parts)
     ranges = []
     templates = set()
     for stress_cmd in stress_cmds:
@@ -175,3 +239,50 @@ def split_stress_commands(stress_cmds: list[str], parts: int) -> list[str] | Non
         start, end = first + length * part // parts, first + length * (part + 1) // parts - 1
         split.append(template.replace("seq=$range", f"seq={start}..{end}").replace("n=$rows", f"n={end - start + 1}"))
     return split
+
+
+def _split_ranges(ranges: list[tuple[int, int]], parts: int) -> list[tuple[int, int]] | None:
+    """Cut contiguous ranges into `parts` contiguous ranges of (nearly) equal length; None when they have a gap."""
+    ranges = sorted(ranges)
+    if any(start != end + 1 for (_, end), (start, _) in zip(ranges, ranges[1:])):
+        return None
+    first, last = ranges[0][0], ranges[-1][1]
+    length = last - first + 1
+    if parts < 1 or parts > length:
+        return None
+    return [(first + length * part // parts, first + length * (part + 1) // parts - 1) for part in range(parts)]
+
+
+def split_latte_commands(stress_cmds: list[str], parts: int) -> list[str] | None:
+    """Split latte commands that differ only in their contiguous cycle ranges into `parts` commands.
+
+    Each command's offset must be its first cycle minus 1, as in the test-cases, so a split command gets the
+    offset of its own range. A --duration in cycles must cover its command's range; it then follows the split
+    range. row_count is the same in every command and stays. Returns None when the commands can't be split.
+    """
+    ranges = []
+    templates = set()
+    for stress_cmd in stress_cmds:
+        start, end = LATTE_START.search(stress_cmd), LATTE_END.search(stress_cmd)
+        if not (start and end):
+            return None
+        first, last = int(start.group(1)), int(end.group(1))
+        if (offset := LATTE_OFFSET.search(stress_cmd)) and int(offset.group(1)) != first - 1:
+            return None
+        if (cycles := LATTE_CYCLES.search(stress_cmd)) and int(cycles.group(1)) != last - first + 1:
+            return None
+        ranges.append((first, last))
+        template = LATTE_START.sub("--start-cycle $start", stress_cmd, count=1)
+        template = LATTE_END.sub("--end-cycle $end", template, count=1)
+        template = LATTE_OFFSET.sub("-P offset=$offset", template, count=1)
+        templates.add(LATTE_CYCLES.sub("--duration $cycles", template, count=1))
+    if len(templates) != 1 or (split_ranges := _split_ranges(ranges, parts)) is None:
+        return None
+    template = templates.pop()
+    return [
+        template.replace("--start-cycle $start", f"--start-cycle {start}")
+        .replace("--end-cycle $end", f"--end-cycle {end}")
+        .replace("-P offset=$offset", f"-P offset={start - 1}")
+        .replace("--duration $cycles", f"--duration {end - start + 1}")
+        for start, end in split_ranges
+    ]

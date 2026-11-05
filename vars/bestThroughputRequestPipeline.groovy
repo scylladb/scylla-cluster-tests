@@ -32,10 +32,11 @@ def call(Map pipelineParams = [:]) {
             booleanParam(name: 'tablets', defaultValue: true,
                    description: 'Tablets keyspaces; unchecked runs vnodes (adds configurations/tablets_disabled.yaml)')
             string(name: 'job_name_suffix', defaultValue: '',
-                   description: 'Optional. Gives an experiment its own job and history: <backend>-<instance>-<n>n-<tablets|vnodes>-<suffix>')
+                   description: 'Gives an experiment its own job and history: <backend>-<instance>-<n>n-<tablets|vnodes>-<suffix>. Required when test_config differs from its default')
 
             separator(name: 'SETUP', sectionHeader: 'Setup')
-            text(name: 'test_config', defaultValue: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/cassandra_stress_gradual_load_steps_i8g.yaml", "configurations/c-s-driver-version-4.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml"]''')
+            text(name: 'test_config', defaultValue: '''["test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml", "configurations/performance/latte_gradual_load_steps_enterprise.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml"]''',
+                 description: "JSON list of SCT config files. A list other than the default needs job_name_suffix: the job's Argus history is for one test configuration")
             text(name: 'extra_environment_variables', defaultValue: '',
                  description: '''KEY=VALUE lines passed to SCT, e.g. SCT_C_S_DRIVER_VERSION=4. A variable left empty is ignored.
 The launcher appends the variables of the parameters on this page; on a shared variable the parameter wins.
@@ -59,13 +60,15 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
             string(name: 'p99_limit_ms', defaultValue: '',
                    description: 'P99 limit a step must stay within. Empty: 10')
             string(name: 'step_duration', defaultValue: '',
-                   description: 'Duration of every read, mixed and read_disk_only step, e.g. 15m. Empty: 15m. A write step runs until all its rows are written')
-            string(name: 'start_threads_per_shard', defaultValue: '',
-                   description: 'Threads of the first step per DB shard, over all stress commands. Empty: 16')
+                   description: 'Duration of every step, e.g. 5m. Empty: 10m')
+            string(name: 'min_rate_per_shard', defaultValue: '',
+                   description: 'Lowest rate of the search per DB shard, in op/s; it must stay within the P99 limit. Empty: 1000')
+            string(name: 'max_rate_per_shard', defaultValue: '',
+                   description: 'Highest rate of the search per DB shard, in op/s; it runs only when the search narrows up to it, and must go over the P99 limit there. Empty: 60000')
             string(name: 'max_search_steps', defaultValue: '',
-                   description: 'Step budget per workload; it only limits the bisection once the P99 limit is found. Empty: 10')
+                   description: 'Step budget per workload, the bounds included. Empty: 10')
             string(name: 'search_precision_pct', defaultValue: '',
-                   description: 'Stop when the passing and failing thread counts are this close, in %. Empty: 5')
+                   description: 'Stop when the passing and failing rates are this close, in %. Empty: 5')
             string(name: 'overload_factors', defaultValue: '',
                    description: 'Goodput under overload (SCYLLADB-3267): comma-separated factors of the best throughput to offer after the search, e.g. 1.3,2. Goodput under 0.9 of the best throughput fails the run. Empty: no overload steps')
 
@@ -117,7 +120,7 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
                             'backend', 'instance_type_db', 'n_db_nodes', 'tablets', 'job_name_suffix',
                             'test_config', 'extra_environment_variables', 'region', 'instance_type_loader',
                             'n_loaders', 'sub_tests', 'provision_type', 'use_job_throttling', 'job_throttle_category',
-                            'p99_limit_ms', 'step_duration', 'start_threads_per_shard', 'max_search_steps',
+                            'p99_limit_ms', 'step_duration', 'min_rate_per_shard', 'max_rate_per_shard', 'max_search_steps',
                             'search_precision_pct', 'overload_factors',
                             'scylla_version', 'scylla_ami_id', 'gce_image_db', 'azure_image_db', 'scylla_repo',
                             'new_scylla_repo', 'update_db_packages', 'requested_by_user', 'email_recipients',

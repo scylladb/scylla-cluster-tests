@@ -1,0 +1,34 @@
+# Time-bound write steps for the best-throughput run (SCT-580), on top of
+# test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml. The test-case's write
+# commands run until they have written their whole key range (1.6B rows): at the search's minimum rate that takes
+# hours. Here every write step runs for perf_gradual_step_duration, like the other workloads, over the same key
+# ranges, so a step writes rate x duration rows. Each step still starts on a new schema.
+stress_cmd_w:
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 402653184
+    -P row_count=1610612736 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 402653185 --end-cycle 805306368
+    -P row_count=1610612736 -P offset=402653184
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 805306369 --end-cycle 1207959552
+    -P row_count=1610612736 -P offset=805306368
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1207959553 --end-cycle 1610612736
+    -P row_count=1610612736 -P offset=1207959552
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn

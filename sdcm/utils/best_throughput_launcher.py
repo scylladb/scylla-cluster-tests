@@ -26,7 +26,6 @@ hasn't scanned yet can't report results, so the first request for a configuratio
 
 import json
 import logging
-import math
 import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -40,7 +39,7 @@ from sdcm.utils.aws_utils import aws_check_instance_type_supported
 from sdcm.utils.common import get_sct_root_path, time_period_str_to_seconds
 from sdcm.utils.overload import OverloadConfig
 from sdcm.utils.session import create_retry_session
-from sdcm.utils.thread_search import ThreadSearchConfig
+from sdcm.utils.rate_search import RateSearchConfig
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.wait import WaitForTimeoutError, wait_for
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -56,27 +55,30 @@ GENERIC_JENKINSFILE = (
 # Argus scans Jenkins for new jobs every 5 minutes; this leaves room for a few slow or failed scans.
 ARGUS_TEST_TIMEOUT = 1800
 
-DEFAULT_TEST_CASE = "test-cases/performance/perf-regression-predefined-throughput-steps.yaml"
-# Based on the test_config of the i8g tablets predefined-steps job. Its step grid is inert here: the search ignores it.
+DEFAULT_TEST_CASE = "test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml"
+# Based on the test_config of the latte tablets predefined-steps job. The search runs no step of its grid: it
+# takes the latte threads of each workload's first step, and sets the rate and the concurrency itself.
 DEFAULT_TEST_CONFIG = (
     DEFAULT_TEST_CASE,
-    "configurations/performance/cassandra_stress_gradual_load_steps_i8g.yaml",
-    "configurations/c-s-driver-version-4.yaml",
+    "configurations/performance/latte_gradual_load_steps_enterprise.yaml",
     "configurations/disable_kms.yaml",
     "configurations/disable_speculative_retry.yaml",
 )
 TABLETS_DISABLED = "configurations/tablets_disabled.yaml"
 BEST_THROUGHPUT_OVERLAY = "configurations/performance/best-throughput/best_throughput.yaml"
-# It rewrites the stress commands of the default test-case, so it only goes with it.
-DEFAULT_TEST_CASE_OVERLAYS = ("configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml",)
+# They size and rewrite the stress commands of the default test-case, so they only go with it.
+DEFAULT_TEST_CASE_OVERLAYS = (
+    "configurations/performance/best-throughput/sized_dataset.yaml",
+    "configurations/performance/best-throughput/latte_time_bound_write.yaml",
+)
 
 # test_duration allowances, in minutes: setup, preload and teardown; the waits after every step for compactions
 # (at least 3 minutes) and tablet splits (up to 6); and reruns of steps that collected no results.
 SETUP_PRELOAD_TEARDOWN_MINUTES = 180
 STEP_WAIT_MINUTES = 10
 RERUN_STEPS = 2
-# A write step has no duration: it writes its whole key range, so its length follows its throughput. 1.6B rows
-# take ~40 minutes at the highest i8g.4xlarge write rate (~690k op/s); this allows for steps at a third of it.
+# A step without a duration, such as a write step of a custom test_config that writes its whole key range,
+# takes as long as its rows need at its rate. 1.6B rows take ~40 minutes at ~690k op/s.
 UNTIMED_STEP_MINUTES = 120
 
 ALL_SUB_TESTS = (
@@ -86,8 +88,6 @@ ALL_SUB_TESTS = (
     "test_write_gradual_increase_load",
 )
 SEARCH_WORKLOADS = ("read", "write", "mixed", "read_disk_only")
-# Workloads whose steps run for `step_duration`; a write step runs until all its rows are written.
-TIMED_WORKLOADS = ("read", "mixed", "read_disk_only")
 
 # Backends the launcher supports, with their default region and the SCT variables of their instance types.
 BACKENDS = {
@@ -151,7 +151,8 @@ class BestThroughputRequest:
     # Search and result.
     p99_limit_ms: float | None = None
     step_duration: str = ""
-    start_threads_per_shard: int | None = None
+    min_rate_per_shard: int | None = None
+    max_rate_per_shard: int | None = None
     max_search_steps: int | None = None
     search_precision_pct: float | None = None
     overload_factors: str = ""
@@ -180,7 +181,7 @@ class BestThroughputRequest:
                     continue
             values[name] = value
         try:
-            for name in ("n_db_nodes", "n_loaders", "start_threads_per_shard", "max_search_steps"):
+            for name in ("n_db_nodes", "n_loaders", "min_rate_per_shard", "max_rate_per_shard", "max_search_steps"):
                 if name in values:
                     values[name] = int(values[name])
             for name in ("p99_limit_ms", "search_precision_pct"):
@@ -234,6 +235,13 @@ class BestThroughputRequest:
                 raise ValueError
         except ValueError:
             errors.append(f"overload_factors should be comma-separated numbers above 1, got '{self.overload_factors}'")
+        # The job name doesn't hold the test configuration, so another configuration needs a name of its own.
+        requested_test_config = self.requested_test_config()
+        if requested_test_config and requested_test_config != list(DEFAULT_TEST_CONFIG) and not self.job_name_suffix:
+            errors.append(
+                "test_config differs from the default, so set job_name_suffix: the job's Argus history is for one "
+                "test configuration"
+            )
         sct_root = sct_root or get_sct_root_path()
         if missing := [config for config in self.final_test_config() if not (sct_root / config).is_file()]:
             errors.append(f"test_config files not found: {missing}")
@@ -248,10 +256,14 @@ class BestThroughputRequest:
         if errors:
             raise BestThroughputRequestError("Invalid best-throughput request:\n  - " + "\n  - ".join(errors))
 
+    def requested_test_config(self) -> list[str]:
+        """The request's configs without the launcher's overlays, which `final_test_config()` adds itself."""
+        launcher_overlays = {TABLETS_DISABLED, *DEFAULT_TEST_CASE_OVERLAYS, BEST_THROUGHPUT_OVERLAY}
+        return list(dict.fromkeys(config for config in self.test_config if config not in launcher_overlays))
+
     def final_test_config(self) -> list[str]:
         """The request's configs (the predefined-steps base when empty), then the launcher's overlays."""
-        launcher_overlays = {TABLETS_DISABLED, *DEFAULT_TEST_CASE_OVERLAYS, BEST_THROUGHPUT_OVERLAY}
-        test_config = [config for config in self.test_config or DEFAULT_TEST_CONFIG if config not in launcher_overlays]
+        test_config = self.requested_test_config() or list(DEFAULT_TEST_CONFIG)
         if not self.tablets:
             test_config.append(TABLETS_DISABLED)
         if test_config and test_config[0] == DEFAULT_TEST_CASE:
@@ -286,12 +298,13 @@ class BestThroughputRequest:
             variables["SCT_PERF_GRADUAL_LATENCY_LIMIT"] = json.dumps({"default": {"percentile_99": self.p99_limit_ms}})
         if self.step_duration:
             variables["SCT_PERF_GRADUAL_STEP_DURATION"] = json.dumps(
-                dict.fromkeys(TIMED_WORKLOADS, self.step_duration) | {"write": None}
+                dict.fromkeys(SEARCH_WORKLOADS, self.step_duration)
             )
         search = {
             key: value
             for key, value in (
-                ("start_threads_per_shard", self.start_threads_per_shard),
+                ("min_rate_per_shard", self.min_rate_per_shard),
+                ("max_rate_per_shard", self.max_rate_per_shard),
                 ("max_steps", self.max_search_steps),
                 ("precision_pct", self.search_precision_pct),
             )
@@ -317,9 +330,8 @@ class BestThroughputRequest:
     def test_duration_minutes(self, variables: dict[str, str], sct_root: Path | None = None) -> int:
         """Minutes for the longest run these settings allow, so the test timeout can't end it before it reports.
 
-        The step budget doesn't stop doubling or halving, so a search runs up to max(max_steps, the steps from
-        one thread to the cap) steps, plus reruns of steps without results, then one step per overload factor.
-        A step without a duration (write) is allowed `UNTIMED_STEP_MINUTES`.
+        A search runs up to max_steps steps, the bounds included, plus reruns of steps without results, then
+        one step per overload factor. A step without a duration is allowed `UNTIMED_STEP_MINUTES`.
         `variables` are the run's SCT variables; a setting they don't hold comes from the best-throughput overlay.
         """
         overlay = yaml.safe_load(((sct_root or get_sct_root_path()) / BEST_THROUGHPUT_OVERLAY).read_text())
@@ -335,10 +347,9 @@ class BestThroughputRequest:
         step_durations = setting("SCT_PERF_GRADUAL_STEP_DURATION", "perf_gradual_step_duration") or {}
         steps_minutes = 0
         for workload in workloads:
-            search = ThreadSearchConfig.from_params(search_params, workload) or ThreadSearchConfig()
+            search = RateSearchConfig.from_params(search_params, workload) or RateSearchConfig()
             overload = OverloadConfig.from_params(overload_params, workload)
-            search_steps = max(search.max_steps, math.ceil(math.log2(search.max_threads_per_command)) + 1)
-            steps = search_steps + RERUN_STEPS + (len(overload.factors) if overload else 0)
+            steps = search.max_steps + RERUN_STEPS + (len(overload.factors) if overload else 0)
             # The predefined-steps configs spell "no duration" as the string None.
             step_duration = step_durations.get(workload)
             step_minutes = (

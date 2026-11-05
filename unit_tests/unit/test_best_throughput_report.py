@@ -69,10 +69,30 @@ def test_nothing_passed_is_sent_as_zero_throughput():
     assert _cells(table) == {"P99 limit": 10, "Throughput": 0, "Step": "none passed"}
 
 
-@pytest.mark.parametrize("stop_reason", ["narrowed", "thread cap"])
+def test_rate_search_step_is_sent_with_its_rate():
+    client = FakeArgusClient()
+    best_step = BestThroughputStep(
+        name="rate_831000", throughput=829500, p99={"READ--fn--read": 8.1}, threads=32, rate=831000, concurrency=65
+    )
+    send_best_throughput_result_to_argus(
+        client, workload="read", best_step=best_step, p99_limit_ms=10, stop_reason="narrowed"
+    )
+
+    assert _cells(client.tables[0]) == {
+        "P99 limit": 10,
+        "Stop reason": "narrowed",
+        "Throughput": 829500,
+        "Step": "rate_831000",
+        "Rate": 831000,
+        "Threads": 32,
+        "P99 read": 8.1,
+    }
+
+
+@pytest.mark.parametrize("stop_reason", ["narrowed", "max rate passes"])
 def test_search_stop_reason_is_sent(stop_reason):
     client = FakeArgusClient()
-    best_step = BestThroughputStep(name="unthrottled_4096_threads", throughput=900000, p99={}, threads=4096)
+    best_step = BestThroughputStep(name="rate_2520000", throughput=2500000, p99={}, rate=2520000)
     send_best_throughput_result_to_argus(
         client, workload="read", best_step=best_step, p99_limit_ms=10, stop_reason=stop_reason
     )
@@ -178,7 +198,14 @@ def test_argus_failure_does_not_fail_the_test(error, caplog):
             BestThroughputStep(
                 name="unthrottled_100_threads", throughput=300000, p99={"READ--READ-st": 4.0}, threads=100
             ),
-            {"name": "unthrottled_100_threads", "throughput": 300000, "p99": {"READ--READ-st": 4.0}, "threads": 100},
+            {
+                "name": "unthrottled_100_threads",
+                "throughput": 300000,
+                "p99": {"READ--READ-st": 4.0},
+                "threads": 100,
+                "rate": None,
+                "concurrency": None,
+            },
             id="best_step",
         ),
         pytest.param(None, None, id="nothing_passed"),
