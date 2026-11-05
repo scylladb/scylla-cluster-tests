@@ -8,7 +8,7 @@ from sdcm.utils.common import all_aws_regions
 
 
 def test_all_aws_regions_uses_static_list_when_minicloud_active(monkeypatch):
-    """minicloud has no DescribeRegions, so the API must not be called at all."""
+    """Minicloud has no DescribeRegions, so the API must not be called at all."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     with patch("sdcm.utils.common.boto3") as boto3_mock:
         regions = all_aws_regions()

@@ -65,7 +65,8 @@ def _destroy(node):
 )
 def test_is_node_destroyed_detects_either_half_of_destroy(destroyed, has_remoter, expected):
     """``BaseNode.destroy()`` drops the remoter and raises the ``destroyed`` flag in two
-    separate statements, so a reader can observe either one first. Both must count."""
+    separate statements, so a reader can observe either one first. Both must count.
+    """
     node = make_mock_node("node1")
     node.destroyed = destroyed
     node.remoter = MagicMock() if has_remoter else None
@@ -80,7 +81,8 @@ def test_is_node_destroyed_detects_either_half_of_destroy(destroyed, has_remoter
 
 def test_block_loaders_payload_live_node_removes_every_rule(scylla_node, loader_nodes):
     """The happy path: every CQL port is DROPped for the loader IPs on enter and the
-    matching rule is deleted on exit, after which the iptables service is stopped."""
+    matching rule is deleted on exit, after which the iptables service is stopped.
+    """
     remoter = scylla_node.remoter
 
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
@@ -100,7 +102,8 @@ def test_block_loaders_payload_live_node_removes_every_rule(scylla_node, loader_
 def test_block_loaders_payload_kill_nemesis_still_removes_rules(scylla_node, loader_nodes):
     """SCT-933: ``KillNemesis`` (a ``BaseException``, delivered into the nemesis thread at
     teardown) thrown into the context manager at the ``yield`` must still run the cleanup
-    that removes every DROP rule, then propagate uncaught."""
+    that removes every DROP rule, then propagate uncaught.
+    """
     remoter = scylla_node.remoter
     expected_rules = 2 * len(CQL_PORTS)  # iptables + ip6tables
 
@@ -120,7 +123,8 @@ def test_block_loaders_payload_kill_nemesis_still_removes_rules(scylla_node, loa
 def test_block_loaders_payload_destroyed_node_skips_cleanup(scylla_node, loader_nodes):
     """SCT-920: the node may be removed from the cluster and terminated inside the ``with``
     block. Cleanup must then skip rather than raise ``AttributeError: 'NoneType' object has
-    no attribute 'is_up'`` on the dropped remoter."""
+    no attribute 'is_up'`` on the dropped remoter.
+    """
     remoter = scylla_node.remoter
 
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
@@ -134,7 +138,8 @@ def test_block_loaders_payload_destroyed_node_skips_cleanup(scylla_node, loader_
 
 def test_block_loaders_payload_destroy_flag_only_skips_cleanup(scylla_node, loader_nodes):
     """``destroyed`` alone is enough to skip: the instance is gone, so its iptables rules
-    went with it even if the remoter object happens to still be around."""
+    went with it even if the remoter object happens to still be around.
+    """
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
         scylla_node.destroyed = True
 
@@ -145,7 +150,8 @@ def test_block_loaders_payload_destroy_flag_only_skips_cleanup(scylla_node, load
 
 def test_block_loaders_payload_unreachable_node_skips_cleanup(scylla_node, loader_nodes):
     """Pre-existing behaviour, kept intact by the SCT-920 guard: a node that still has a
-    remoter but is not reachable gets no cleanup commands either."""
+    remoter but is not reachable gets no cleanup commands either.
+    """
     scylla_node.remoter.is_up.return_value = False
 
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
@@ -162,7 +168,8 @@ def test_block_loaders_payload_unreachable_node_skips_cleanup(scylla_node, loade
 
 def test_block_scylla_ports_live_node_removes_every_rule(scylla_node):
     """Every requested port is DROPped in both directions and both IP families on enter,
-    and each rule is deleted again on exit."""
+    and each rule is deleted again on exit.
+    """
     remoter = scylla_node.remoter
 
     with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
@@ -179,7 +186,8 @@ def test_block_scylla_ports_live_node_removes_every_rule(scylla_node):
 
 def test_block_scylla_ports_kill_nemesis_still_removes_every_rule(scylla_node):
     """SCT-933: ``KillNemesis`` thrown into the context manager at the ``yield`` must still
-    remove every DROP rule it added, then propagate uncaught."""
+    remove every DROP rule it added, then propagate uncaught.
+    """
     remoter = scylla_node.remoter
     expected_rules = len(GOSSIP_PORTS) * 2 * 2  # ports x (INPUT/OUTPUT) x (iptables/ip6tables)
 
@@ -198,7 +206,8 @@ def test_block_scylla_ports_kill_nemesis_still_removes_every_rule(scylla_node):
 
 def test_block_scylla_ports_destroyed_node_skips_cleanup(scylla_node):
     """Hardening against the SCT-920 failure mode: a caller that removes and terminates the
-    node it just blocked must not make the unblock step raise on the dropped remoter."""
+    node it just blocked must not make the unblock step raise on the dropped remoter.
+    """
     remoter = scylla_node.remoter
 
     with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
@@ -228,7 +237,8 @@ def test_pause_scylla_with_sigstop_kill_nemesis_still_sends_sigcont(scylla_node)
     """SCT-933: ``KillNemesis`` (a ``BaseException``, delivered into the nemesis thread at
     teardown) thrown into the context manager at the ``yield`` must still resume the paused
     scylla process, then propagate uncaught. Before the ``try``/``finally`` fix, SIGCONT was
-    skipped entirely because the exception propagated straight out of the generator frame."""
+    skipped entirely because the exception propagated straight out of the generator frame.
+    """
     remoter = scylla_node.remoter
 
     with pytest.raises(KillNemesis):
@@ -244,7 +254,8 @@ def test_pause_scylla_with_sigstop_kill_nemesis_still_sends_sigcont(scylla_node)
 
 def test_pause_scylla_with_sigstop_destroyed_node_skips_sigcont(scylla_node):
     """Hardening against the SCT-920 failure mode: there is no process left to resume once
-    the instance has been terminated."""
+    the instance has been terminated.
+    """
     remoter = scylla_node.remoter
 
     with pause_scylla_with_sigstop(scylla_node):

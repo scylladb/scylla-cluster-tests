@@ -97,7 +97,6 @@ class DbLogReader(Process):
         1. backtrace_stall_decoding=False and event is REACTOR_STALLED
         2. backtrace_decoding_disable_regex matches the event type
         """
-
         # Check if reactor stall decoding is disabled
         if not self._backtrace_stall_decoding and event.type == "REACTOR_STALLED":
             LOGGER.debug("Skipping backtrace decoding for reactor stall event (backtrace_stall_decoding=False)")
@@ -114,7 +113,6 @@ class DbLogReader(Process):
 
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
-
         backtraces = []
         index = 0
 
@@ -239,9 +237,7 @@ class DbLogReader(Process):
 
     @raise_event_on_failure
     def run(self):
-        """
-        Keep reporting new events from db log, every 30 seconds.
-        """
+        """Keep reporting new events from db log, every 30 seconds."""
         LOGGER.debug(
             "Logging for node %s is started with following configuration:\nsystem_log=%s"
             "\nlog_lines=%s\ndecoding_queue=%s",

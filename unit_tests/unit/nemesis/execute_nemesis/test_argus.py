@@ -1,6 +1,4 @@
-"""
-Unit tests for Argus submission in NemesisRunner.execute_nemesis
-"""
+"""Unit tests for Argus submission in NemesisRunner.execute_nemesis"""
 
 from unittest.mock import MagicMock, ANY
 
@@ -80,7 +78,6 @@ def test_argus_submit_on_failure(failing_nemesis, nemesis_runner):
 
 def test_argus_submit_on_skip(argus_mock, skipping_nemesis, nemesis_runner):
     """Test that skipped nemesis submits skip reason to Argus."""
-
     with pytest.raises(UnsupportedNemesis):
         nemesis_runner.execute_nemesis(skipping_nemesis)
 

@@ -233,7 +233,7 @@ class LatteStressThread(DockerBasedStressThread):
     @staticmethod
     def parse_final_output(result):
         """
-        parse latte final results to match what we get out of cassandra-stress
+        Parse latte final results to match what we get out of cassandra-stress
         latencies returned in milliseconds
 
         :param result: output of latte stats
@@ -381,7 +381,6 @@ class LatteStressThread(DockerBasedStressThread):
 
 def format_stress_cmd_error(exc: Exception) -> str:
     """Format nicely the exception from a stress command failure."""
-
     if hasattr(exc, "result") and exc.result.failed:
         # NOTE: print only last 2 lines in common case or whole 'panic' message
         last_n_lines, line_index = exc.result.stderr.splitlines()[-30:], -2

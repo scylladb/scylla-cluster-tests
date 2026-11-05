@@ -112,7 +112,8 @@ class IpAddressProvider:
     @staticmethod
     def _get_ip_name(name: str, version: str, index: int = 0):
         """Name of the Public IP resource of a NIC: '<vm>-ipv4' for the primary one,
-        '<vm>-nic<index>-ipv4' for the rest."""
+        '<vm>-nic<index>-ipv4' for the rest.
+        """
         if index:
             return f"{name}-nic{index}-{version.lower()}"
         return f"{name}-{version.lower()}"

@@ -231,7 +231,8 @@ def _get_cleanup_timeout(node_info_service, timeout=None):
 class Operations(Enum):
     """Available operations for adaptive timeouts. Each operation maps to a function to calculate timeout based on node load info.
 
-    maps to (function, (required arguments))"""
+    maps to (function, (required arguments))
+    """
 
     DECOMMISSION = ("decommission", _get_decommission_timeout, ())
     NEW_NODE = ("new_node", _get_new_node_timeout, ("timeout",))
@@ -271,9 +272,7 @@ class TestInfoServices:
 
 
 class TimeoutMonitor:
-    """
-    Monitors an operation and publishes error or critical event, when soft or hard timeouts is reached, correspondingly
-    """
+    """Monitors an operation and publishes error or critical event, when soft or hard timeouts is reached, correspondingly"""
 
     def __init__(
         self,

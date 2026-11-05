@@ -147,8 +147,7 @@ class ScyllaCloudAPIClient:
     def get_instance_types(
         self, *, cloud_provider_id: int, region_id: int, defaults: bool = False, target: str | None = None
     ) -> dict[str, Any]:
-        """
-        Get instance types available for a given cloud provider and region"""
+        """Get instance types available for a given cloud provider and region"""
         params = {}
         if defaults:
             params["defaults"] = "true"
@@ -258,7 +257,7 @@ class ScyllaCloudAPIClient:
 
     ### Cluster related APIs ###
     def get_cluster_requests(self, *, account_id: int, cluster_id: int) -> list[dict[str, Any]]:
-        """list of cluster requests created in the context of a given account"""
+        """List of cluster requests created in the context of a given account"""
         return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/request")
 
     def get_cluster_request_details(self, *, account_id: int, request_id: int) -> dict[str, Any]:
@@ -417,10 +416,7 @@ class ScyllaCloudAPIClient:
         return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/dcs", params=params)["dataCenters"]
 
     def get_cluster_promproxy_config(self, *, account_id: int, cluster_id: int) -> str:
-        """
-        Get the Prometheus proxy configuration for a cluster.
-        """
-
+        """Get the Prometheus proxy configuration for a cluster."""
         url = f"/account/{account_id}/cluster/{cluster_id}/promproxy/config"
         url = urljoin(self.api_url, url.lstrip("/"))
 

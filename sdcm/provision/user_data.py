@@ -73,7 +73,8 @@ class UserDataObject(abc.ABC):
     def is_applicable(self) -> bool:
         """Defines if given user data is applicable in given context.
 
-        E.g. workaround for ipv6 only when is AWS and ipv6 configured"""
+        E.g. workaround for ipv6 only when is AWS and ipv6 configured
+        """
         return True
 
     @property

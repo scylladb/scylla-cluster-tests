@@ -93,9 +93,7 @@ def gce_instance_node_index(instance: compute_v1.Instance) -> int:
 
 
 class GCENode(cluster.BaseNode):
-    """
-    Wraps GCE instances, so that we can also control the instance through SSH.
-    """
+    """Wraps GCE instances, so that we can also control the instance through SSH."""
 
     METADATA_BASE_URL = "http://metadata.google.internal/computeMetadata/v1/"
 
@@ -426,9 +424,7 @@ class GCENode(cluster.BaseNode):
 
 
 class GCECluster(cluster.BaseCluster):
-    """
-    Cluster of Node objects, started on GCE (Google Compute Engine).
-    """
+    """Cluster of Node objects, started on GCE (Google Compute Engine)."""
 
     _gce_service: compute_v1.InstancesClient
 
