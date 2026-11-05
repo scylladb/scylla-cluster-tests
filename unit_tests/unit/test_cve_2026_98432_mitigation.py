@@ -42,7 +42,8 @@ def test_the_rule_is_exactly_the_red_hat_one_and_reloads_idempotently():
 
 def test_the_unit_runs_before_sysinit_so_cloud_init_cant_deadlock_on_it():
     """With default dependencies the unit waits for sysinit.target, which waits for cloud-init's network stage,
-    which waits for networkd, which waits for network-pre.target, which waits for the unit: OCI hung at boot."""
+    which waits for networkd, which waits for network-pre.target, which waits for the unit: OCI hung at boot.
+    """
     assert "DefaultDependencies=no" in apply_cve_2026_98432_mitigation()
 
 
