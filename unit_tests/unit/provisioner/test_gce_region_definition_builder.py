@@ -80,6 +80,21 @@ def test_root_disk_type_flows_into_instance_definition(
         )
 
 
+@pytest.mark.parametrize(
+    "ip_type,expected_public_ip",
+    [("private", False), ("public", True), ("ipv6", True)],
+)
+def test_monitor_public_ip_follows_ssh_connection_ip_type(make_config, build_region_defs, ip_type, expected_public_ip):
+    """A monitor gets a public IP only when the run asks for public connections."""
+    config, test_config = make_config()
+    with patch("sdcm.sct_provision.region_definition_builder.ssh_connection_ip_type", return_value=ip_type):
+        region_defs = build_region_defs(config, test_config)
+
+    monitors = [d for d in region_defs[0].definitions if d.tags.get("NodeType") == "monitor"]
+    assert monitors
+    assert all(d.use_public_ip is expected_public_ip for d in monitors)
+
+
 def test_oracle_db_instance_definition(make_config):
     """oracle-db must use oracle GCE params and the oracle-specific node name prefix."""
     config, test_config = make_config(
