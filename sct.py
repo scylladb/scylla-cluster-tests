@@ -87,6 +87,7 @@ lazy from sdcm.utils.argus import (
 )
 lazy from sdcm.utils.aws_kms import AwsKms
 lazy from sdcm.utils.azure_region import AzureRegion
+lazy from sdcm.utils.builder_access import get_builder_ssh_sources
 lazy from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 lazy from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 lazy from sdcm.utils.lint.env_builder import build_env
@@ -2828,6 +2829,8 @@ def configure_jenkins_throttle(username, password, dry_run, suffix):
 def prepare_regions(cloud_provider, regions):
     add_file_logger()
     regions = regions or get_all_regions(cloud_provider)
+    if cloud_provider in ("aws", "gce", "oci"):
+        get_builder_ssh_sources()
 
     for region in regions:
         if cloud_provider == "aws":
@@ -3048,11 +3051,15 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
 def configure_jenkins_builders(cloud_provider, regions):
     add_file_logger()
     logging.basicConfig(level=logging.INFO)
+    if cloud_provider in ("aws", "gce", "oci"):
+        get_builder_ssh_sources()
 
     match cloud_provider:
         case "aws":
-            AwsCiBuilder(AwsRegion("eu-west-1")).configure_auto_scaling_group()
-            AwsFipsCiBuilder(AwsRegion("us-east-1")).configure_auto_scaling_group()
+            if not regions or "eu-west-1" in regions:
+                AwsCiBuilder(AwsRegion("eu-west-1")).configure_auto_scaling_group()
+            if not regions or "us-east-1" in regions:
+                AwsFipsCiBuilder(AwsRegion("us-east-1")).configure_auto_scaling_group()
             AwsBuilder.configure_in_all_region(regions=regions)
         case "gce":
             GceBuilder.configure_in_all_region(regions=regions)
