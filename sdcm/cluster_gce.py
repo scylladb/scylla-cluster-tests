@@ -536,7 +536,7 @@ class GCECluster(cluster.BaseCluster):
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
+        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type}, running=True)
         region = self._gce_zone_names[dc_idx][:-2]
         ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
 

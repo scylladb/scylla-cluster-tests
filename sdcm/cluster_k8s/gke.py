@@ -651,7 +651,9 @@ class MonitorSetGKE(MonitorSetGCE):
     def _get_instances(self, dc_idx):
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
-        instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
+        instances_by_nodetype = list_instances_gce(
+            tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type}, running=True
+        )
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
         ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
