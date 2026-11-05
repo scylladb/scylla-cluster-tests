@@ -40,6 +40,12 @@ def test_the_rule_is_exactly_the_red_hat_one_and_reloads_idempotently():
     assert "systemctl enable --now sct-cve-2026-98432.service" in script
 
 
+def test_the_unit_runs_before_sysinit_so_cloud_init_cant_deadlock_on_it():
+    """With default dependencies the unit waits for sysinit.target, which waits for cloud-init's network stage,
+    which waits for networkd, which waits for network-pre.target, which waits for the unit: OCI hung at boot."""
+    assert "DefaultDependencies=no" in apply_cve_2026_98432_mitigation()
+
+
 @pytest.mark.parametrize("disable_guest_firewall", [True, False])
 def test_every_boot_script_installs_it_before_the_rerun_exit(disable_guest_firewall):
     """A node configured before the runner reruns the script and exits early: the rule must come first.
