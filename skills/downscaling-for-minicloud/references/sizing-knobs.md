@@ -77,7 +77,7 @@ artifacts that read as findings. See
 | `n_db_nodes` | 3 | RF=3 keeps quorum with one node down; below that a nemesis or a rolling restart breaks the cluster |
 | `n_loaders` | 1 | No loader, no workload |
 | `n_monitor_nodes` | 1 when the test reads Prometheus | `test_rolling_upgrade` gates on `metric_has_data()`; `GrowClusterTest` reconfigures monitoring per added node |
-| `minicloud_lightweight_memory` | ~3 GiB | Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard; below this it fails to boot with "memory per shard too low" |
+| `minicloud_lightweight_memory` | ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` (~3 GiB at 1 vCPU) | Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard; below this it fails to boot with "memory per shard too low" |
 | `gce_n_local_ssd_disk_db` | 1 on GCE | Guests get qcow2-backed disks, no NVMe passthrough; the `gce_config.yaml` default of 4 cannot be served |
 | guest architecture | x86_64, **every role** | minicloud does not support arm64 guests. The loader is the trap: its catalog default is `arch: arm64` by construction, so a test-case pinning only the db role resolves `c7g.xlarge` (AWS) or `n4a-highcpu-4` (GCE). Pin each role to an x86_64 type; the image follows, because SCT derives the arch from the instance type |
 
@@ -91,7 +91,7 @@ it to a lab host rather than dropping below a floor.
 | Param | Default | Effect |
 |---|---|---|
 | `minicloud_lightweight` | `true` | Every guest gets the fixed vCPU/RAM below, **ignoring the instance type the test asked for** |
-| `minicloud_lightweight_memory` | `4GiB` | Per db guest (zero-token, oracle and vector-store included). Floor ~3 GiB: Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
+| `minicloud_lightweight_memory` | `4GiB` | Per db guest (zero-token, oracle and vector-store included). Floor ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` (~3 GiB at 1 vCPU): Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
 | `minicloud_lightweight_vcpus` | `1` | Per db guest. One Scylla shard per vCPU. Multiplies across every db guest; raise only on a host with cores to spare |
 | `minicloud_lightweight_memory_loader` / `_monitor` | `2GiB` | Per loader / monitor, matched on the guest's `NodeType` tag. Empty means the db size. A minicloud image without tag-matched ceilings rejects these at start (`unknown instance type 'NodeType'`); set all four empty to run one. With `use_mgmt` on, the monitor gets the db size: Scylla Manager local Scylla does not start in 2GiB |
 | `minicloud_lightweight_vcpus_loader` / `_monitor` | `1` | The same for vCPUs. A loader running full-size stress commands may want 2; vCPUs cost no host memory |
@@ -238,16 +238,12 @@ and a second place to update when the emulator grows the missing feature:
 
 `enterprise_disable_kms`, `enable_kms_key_rotation`, `instance_provision`,
 `ip_ssh_connections`, `force_run_iotune`, `fallback_to_next_availability_zone`,
-`fallback_to_next_region`, `enable_kernel_panic_checker`, `append_scylla_yaml: {developer_mode: true}`.
+`fallback_to_next_region`, `enable_kernel_panic_checker`, `scylla_d_overrides_files`.
 
 Lists replace rather than merge, so `scylla_d_overrides_files` set in a shrink overlay or the
 test-case is lost to the one in `configurations/minicloud.yaml`. A run that needs its own
 `scylla.d` files sets the list in a layer after `configurations/minicloud.yaml` and also lists
 `configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`.
-
-Note that `append_scylla_yaml` **merges** with the default dict rather than replacing it, so
-an overlay adding its own keys there does not lose `developer_mode`.
-
 ---
 
 ## CI Only — Irrelevant to a Local Run

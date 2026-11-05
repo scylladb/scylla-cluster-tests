@@ -75,7 +75,8 @@ def test_minicloud_lightweight_memory_default_can_start_scylla():
     """Scylla terminates below 1 GiB/shard, and the guest OS eats ~1.7 GiB of the VM.
 
     A default that cannot boot scylla-server is a silent trap: the image starts scylla on
-    first boot, long before SCT could apply append_scylla_args or developer_mode.
+    first boot, long before SCT could apply append_scylla_args, and minicloud runs Scylla in
+    production mode, where the check is fatal.
     """
     gib = float(MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT.removesuffix("GiB"))
     assert gib >= 3.0, f"{MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT} leaves under 1 GiB/shard for scylla"

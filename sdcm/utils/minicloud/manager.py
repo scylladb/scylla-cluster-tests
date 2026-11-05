@@ -685,7 +685,7 @@ class MinicloudManager:
         """Point the cloud SDKs at this manager's endpoint.
 
         Endpoint variables only. Everything else a minicloud run needs
-        (instance_provision, ip_ssh_connections, KMS off, iotune off, developer_mode)
+        (instance_provision, ip_ssh_connections, KMS off, iotune off)
         is delivered by the configurations/minicloud.yaml overlay: SCT_* param exports
         made here run after SCTConfiguration is already built, so they never reach
         params — validate_minicloud_params() enforces that the overlay was applied.

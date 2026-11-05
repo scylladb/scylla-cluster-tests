@@ -32,8 +32,7 @@ def default_minicloud_image() -> str:
 # instance type the test asked for (loaders and monitors get their own, smaller sizes). Scylla
 # refuses to start below 1 GiB per shard, and it reserves ~1.7 GiB of the guest for the OS before
 # splitting the rest across shards - so a 2.5 GiB VM leaves only 826 MiB and dies with "memory
-# per shard too low" on first boot, before SCT gets a chance to apply append_scylla_args or
-# developer_mode. 4 GiB leaves ~2.2 GiB for the single shard. Raising this multiplies across
+# per shard too low". Each extra vCPU needs another 1 GiB. 4 GiB leaves ~2.2 GiB for the single shard. Raising this multiplies across
 # every db VM in the test, so the sct-runner has to be sized for the db node count times this,
 # plus the loader and monitor sizes.
 MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT = "4GiB"

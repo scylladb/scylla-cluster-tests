@@ -109,8 +109,9 @@ Layer order matters, and `configurations/minicloud.yaml` goes **last**:
 ```
 
 - `configurations/minicloud.yaml` is **mandatory**: KMS off, `on_demand`, private SSH, shipped
-  IO properties instead of iotune, no AZ/region fallback, no kernel-panic checker, and
-  `developer_mode`. `validate_minicloud_params()` refuses the run without it.
+  IO properties instead of iotune, no AZ/region fallback, no kernel-panic checker.
+  `validate_minicloud_params()` refuses the run without it. Scylla runs in production mode,
+  so a node below 1 GiB per shard or without IO properties fails to start.
   Do not re-set any of it in your overlay.
 - Later files win. `SCT_*` env vars are applied after the merge and win over all of them, but
   **cannot substitute for the overlay** — the emulator reads those params from the built config.
