@@ -257,7 +257,6 @@ def test_peak_work_dir_size_bounded_to_single_chunk(tmp_path, large_log_file):
     wrote all split chunks to WORK_DIR before compressing (peak = full file size),
     while the new --filter approach pipes directly (peak ~ 0).
     """
-
     file_size = os.path.getsize(large_log_file)
     chunk_size = file_size // 4
 

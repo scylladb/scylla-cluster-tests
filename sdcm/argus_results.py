@@ -557,9 +557,7 @@ class PeriodicDiskUsageToArgus:
         self.thread.join()
 
     def _unbalanced_status(self):
-        """
-        Return ERROR if balance enforcement is enabled, WARNING otherwise.
-        """
+        """Return ERROR if balance enforcement is enabled, WARNING otherwise."""
         if hasattr(self.cluster, "_enforce_balance") and self.cluster._enforce_balance:
             return Status.ERROR
         return Status.WARNING

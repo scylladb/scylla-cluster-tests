@@ -49,7 +49,8 @@ def _failing_docker_cp(tempfile_path):
 
 def _cleanup_commands(remote_docker):
     """The 'rm -f' commands the container host was asked to run, with the 'sudo_needed' padding
-    normalized away."""
+    normalized away.
+    """
     return [
         " ".join(call.args[0].split())
         for call in remote_docker.node.remoter.run.call_args_list
@@ -224,7 +225,8 @@ def test_kill_runs_docker_rm_with_a_bounded_timeout(remote_docker):
 )
 def test_kill_swallows_a_stuck_teardown_and_logs_a_warning(remote_docker, stuck_teardown_exc):
     """A 'docker rm -f' that hangs in the SSH transport (SCT-546) must resolve within the bounded
-    timeout instead of blocking the caller until the global stress timeout fires."""
+    timeout instead of blocking the caller until the global stress timeout fires.
+    """
     remote_docker.node.remoter.run.side_effect = stuck_teardown_exc
 
     result = remote_docker.kill()

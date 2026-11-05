@@ -1,6 +1,4 @@
-"""
-Simple git wrappers that provide useful information about current repository
-"""
+"""Simple git wrappers that provide useful information about current repository"""
 
 import subprocess
 import logging

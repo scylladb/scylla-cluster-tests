@@ -66,7 +66,8 @@ POOL_LABEL_NAME = "minimal-k8s-nodepool"
 
 def scylla_worker_reserved_cpus(index: int, workers: int, host_cpus: int) -> str | None:
     """Reserved CPUs for the index-th Scylla kind worker, so the static CPU managers of the workers pin their
-    1 CPU Scylla pods to different host CPUs (index + 1) instead of all to the lowest free one (CPU 1)."""
+    1 CPU Scylla pods to different host CPUs (index + 1) instead of all to the lowest free one (CPU 1).
+    """
     if workers >= host_cpus:
         return None  # ponytail: too few host CPUs, the workers share CPUs
     return "0" if index == 0 else f"0-{index}"
@@ -330,46 +331,32 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def host_node(self) -> "BaseNode":  # noqa: F821
-        """
-        Host where kind/k3d/minikube is running
-        """
+        """Host where kind/k3d/minikube is running"""
 
     @property
     @abc.abstractmethod
     def is_k8s_software_installed(self) -> bool:
-        """
-        Is kind/k3d/minikube installed ?
-        """
+        """Is kind/k3d/minikube installed ?"""
 
     @property
     @abc.abstractmethod
     def is_k8s_software_running(self) -> bool:
-        """
-        Is kind/k3d/minikube running ?
-        """
+        """Is kind/k3d/minikube running ?"""
 
     @abc.abstractmethod
     def setup_k8s_software(self):
-        """
-        install kind/k3d/minikube
-        """
+        """Install kind/k3d/minikube"""
 
     @abc.abstractmethod
     def start_k8s_software(self):
-        """
-        Start kind/k3d/minikube
-        """
+        """Start kind/k3d/minikube"""
 
     @abc.abstractmethod
     def stop_k8s_software(self):
-        """
-        Stop kind/k3d/minikube
-        """
+        """Stop kind/k3d/minikube"""
 
     def on_deploy_completed(self):
-        """
-        Hook that is executed just before completing deployment
-        """
+        """Hook that is executed just before completing deployment"""
 
     @cached_property
     def static_local_volume_provisioner_image(self):

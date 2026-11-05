@@ -198,10 +198,12 @@ class ScyllaBenchThread(DockerBasedStressThread):
         should be targeted by the stress tool. It appends node IPs and, if applicable, rack and datacenter
         information to the command. The adjustments depend on the loader's region, rack, and the test
         configuration parameters.
+
         Args:
             stress_cmd (str): The initial stress command to be adjusted.
             loader: The loader node object for which the command is being constructed.
             cmd_runner: The object used to run commands on the loader.
+
         Returns:
             str: The adjusted stress command string with node and rack options appended as needed.
         """

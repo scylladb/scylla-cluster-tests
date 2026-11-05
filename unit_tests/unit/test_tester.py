@@ -1030,7 +1030,8 @@ def _fake_latte_tester():
 
 def test_run_latte_thread_forwards_the_files_to_stage():
     """A caller with per-invocation data -- a dataset shard -- reaches the thread through here, so
-    it does not have to reimplement this helper's timeout resolution and loader fan-out."""
+    it does not have to reimplement this helper's timeout resolution and loader fan-out.
+    """
     files = [("/local/documents_000.tsv", "/tmp/fts/ds/documents_000.tsv")]
     with (
         patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,

@@ -42,9 +42,7 @@ class ScaleUpTest(ClusterTester):
         self.log.info("Rebuild finished with time: %s", rebuild_duration)
 
     def destroy_node_data(self, node: BaseNode):
-        """
-        Destroy data on node
-        """
+        """Destroy data on node"""
         self.log.info("Destroy all data for keyspace1 on node %s", node)
         node.stop_scylla_server()
         node.remoter.sudo("find /var/lib/scylla/data/keyspace1/standard1-* -type f | sudo xargs rm -f")
