@@ -130,3 +130,37 @@ def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
             ]
         },
     )
+
+
+def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region):
+    group = MagicMock(ip_permissions=[])
+    aws_region._mock_ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-builder"}]}
+    aws_region.resource.SecurityGroup.return_value = group
+
+    aws_region.ensure_builder_security_group({"jenkins": ["192.0.2.10/32"]})
+    assert {"Key": "keep", "Value": "alive"} in group.create_tags.call_args.kwargs["Tags"]
+
+
+def test_configure_skips_builder_group_under_minicloud(aws_region, monkeypatch):
+    aws_region._is_minicloud = True
+    for name in (
+        "update_sct_key_pair",
+        "create_sct_vpc",
+        "create_sct_internet_gateway",
+        "configure_sct_route_table",
+        "create_sct_subnets",
+        "create_sct_security_group",
+        "create_sct_ssh_security_group",
+        "configure_backup_storage",
+        "configure_ssm",
+    ):
+        monkeypatch.setattr(aws_region, name, MagicMock())
+    loader = MagicMock(side_effect=AssertionError("keystore must not be read under minicloud"))
+    monkeypatch.setattr("sdcm.utils.aws_region.get_builder_ssh_sources", loader)
+    ensure = MagicMock()
+    monkeypatch.setattr(aws_region, "ensure_builder_security_group", ensure)
+
+    aws_region.configure()
+
+    loader.assert_not_called()
+    ensure.assert_not_called()

@@ -11,6 +11,11 @@ hydra configure-aws-peering [-r <region_name> -r <region_name>]
 hydra configure-jenkins-builders [-r <region_name> -r <region_name>]
 ```
 
+The builders get the `SCT-builder-sg` security group, which allows SSH only from the
+sources in the `builder_ssh_sources.json` keystore entry and all traffic from the SCT
+VPCs (`10.0.0.0/8`). See
+[Jenkins builders: network access](jenkins-builders.md).
+
 ## Creating new sct-runner images
 
 SCT can run locally and on remote Runner instance.

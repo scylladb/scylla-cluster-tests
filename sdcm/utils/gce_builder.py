@@ -24,8 +24,9 @@ from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_runner import GceSctRunner
+from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.context_managers import environment
-from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_region import BUILDER_NETWORK_TAG, GceRegion
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS
 
 LOGGER = logging.getLogger(__name__)
@@ -226,6 +227,7 @@ class GceBuilder:
             "keep": "alive",
             "billing_project": "sct-runners",
         }
+        template.properties.tags = compute_v1.Tags(items=[BUILDER_NETWORK_TAG])
 
         template_client = compute_v1.InstanceTemplatesClient(credentials=self.credentials)
         try:
@@ -240,6 +242,7 @@ class GceBuilder:
         return template_client.get(project=self.region.project, instance_template=self.name)
 
     def configure(self):
+        self.region.configure_builder_firewall(get_builder_ssh_sources())
         self._create_launch_template()
         self._add_cloud_configuration_to_jenkins()
 
