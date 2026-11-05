@@ -656,7 +656,9 @@ class MonitorSetGKE(MonitorSetGCE):
         # always confined to a single zone, so there is nothing to filter by rack.
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
-        instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
+        instances_by_nodetype = list_instances_gce(
+            tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type}, running=True
+        )
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
         # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
