@@ -638,7 +638,7 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
 # NOTE: version limitation is caused by the following:
 #       - https://github.com/scylladb/scylla-enterprise/issues/3211
 #       - https://github.com/scylladb/scylladb/issues/14184
-@pytest.mark.requires_scylla_versions(("5.2.7", None), ("2023.1.1", None))
+@pytest.mark.requires_scylla_versions(("2023.1.1", None))
 def test_orphaned_services_multi_rack(db_cluster):
     """Issue https://github.com/scylladb/scylla-operator/issues/514"""
     if tablets_keyspaces := get_tablets_keyspaces(db_cluster):

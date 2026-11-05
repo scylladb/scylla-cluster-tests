@@ -32,7 +32,6 @@ class FakeNode:
         self.name = "test-node"
         self.is_nonroot_install = False
         self.public_dns_name = "test-node.local"
-        self.is_enterprise = False
         self.distro = MagicMock()
         self.parent_cluster = FakeParentCluster()
         self.remoter = MagicMock()

@@ -32,7 +32,6 @@ SSTABLE = "/var/lib/scylla/data/keyspace1/standard1-abcd/me-1-big-Data.db"
 def node():
     """A mock DB node good enough for SstableUtils statistics dumping."""
     db_node = MagicMock()
-    db_node.is_enterprise = True
     db_node.scylla_version = "2026.0.0"
     db_node.add_install_prefix.side_effect = lambda path: path
     return db_node

@@ -1017,18 +1017,12 @@ class AWSNode(cluster.BaseNode):
                 ):
                     stack.enter_context(db_filter)
 
-                if self.is_replacement_by_host_id_supported:
-                    replace_option_name = "replace_node_first_boot"
-                    replace_option_value = self.host_id
-                else:
-                    replace_option_name = "replace_address_first_boot"
-                    replace_option_value = self.ip_address
                 self.remoter.sudo(
                     shell_script_cmd(f"""\
                     sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                     sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
-                    if ! grep ^{replace_option_name}: /etc/scylla/scylla.yaml; then
-                        echo '{replace_option_name}: {replace_option_value}' | \
+                    if ! grep ^replace_node_first_boot: /etc/scylla/scylla.yaml; then
+                        echo 'replace_node_first_boot: {self.host_id}' | \
                             tee --append /etc/scylla/scylla.yaml
                     fi
                 """)
@@ -1070,7 +1064,6 @@ class AWSNode(cluster.BaseNode):
                 self.remoter.sudo(
                     shell_script_cmd("""\
                     sed -e '/auto_bootstrap:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
-                    sed -e 's/^replace_address_first_boot:/# replace_address_first_boot:/g' -i /etc/scylla/scylla.yaml
                     sed -e 's/^replace_node_first_boot:/# replace_node_first_boot:/g' -i /etc/scylla/scylla.yaml
                 """)
                 )

@@ -422,7 +422,6 @@ class TestBaseNodeGetScyllaVersion:
         assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_enterprise(self):
-        self.node.is_enterprise = True
         self.node.remoter = VersionDummyRemote(
             self,
             (
@@ -434,7 +433,6 @@ class TestBaseNodeGetScyllaVersion:
         assert "2019.1.4-0.20191217.b59e92dbd with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_enterprise_no_scylla_binary(self):
-        self.node.is_enterprise = True
         self.node.is_product_enterprise = True
         self.node.remoter = VersionDummyRemote(
             self,

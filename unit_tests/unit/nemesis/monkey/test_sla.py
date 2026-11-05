@@ -50,7 +50,6 @@ def runner(base_runner):
         "authenticator": "PasswordAuthenticator",
     }.get(key)
     base_runner.cluster.nodes = base_runner.cluster.data_nodes
-    base_runner.cluster.nodes[0].is_enterprise = True
 
     # tester.params is None by default in TestRunner — replace with a MagicMock
     base_runner.tester.params = MagicMock()
@@ -96,15 +95,6 @@ def test_precheck_skips_when_sla_disabled(runner, monkey_cls):
     runner.cluster.params.get.side_effect = lambda key, **kw: {"sla": False, "authenticator": "Password"}.get(key)
 
     assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == "SLA nemesis can be run during SLA test only"
-
-
-@pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
-def test_precheck_skips_when_not_enterprise(runner, monkey_cls):
-    """precheck() skips when the representative node is not Scylla Enterprise."""
-    node = runner.cluster.nodes[0]
-    node.is_enterprise = False
-
-    assert monkey_cls(runner).precheck(node=node) == "SLA feature is only supported by Scylla Enterprise"
 
 
 @pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)

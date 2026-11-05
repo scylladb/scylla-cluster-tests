@@ -394,7 +394,7 @@ Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo 
 **type:** str
 
 **backend overrides:**
-- `6.2.3`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
+- `2026.1.15`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
 
 
 <a id="server_encrypt"></a>

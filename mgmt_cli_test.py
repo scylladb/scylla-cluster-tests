@@ -1146,7 +1146,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             "duration": int(backup_task.duration.total_seconds()),
             "locations": ",".join(location_list),
             "ks_name": ks_name,
-            "scylla_version": self.params.get_version_based_on_conf()[0],
+            "scylla_version": self.params.get_version_based_on_conf(),
             "cluster_id": cluster_id,
             "ear_key_id": key_id,
             "manager_cluster_id": manager_cluster_id,

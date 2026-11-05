@@ -25,7 +25,6 @@ from sdcm.utils.scylla_sha import scylla_version_matches_sha, sha_selector
 from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     ComparableScyllaVersion,
-    is_enterprise,
     parse_scylla_version_tag,
 )
 from sdcm.utils.vm_arch import VmArch
@@ -231,7 +230,7 @@ def get_released_scylla_images(
     if arch != VmArch.X86:
         LOGGER.warning("--arch option not implemented currently for Azure machine images.")
     branch_version = ".".join(scylla_version.split(".")[:2])
-    if is_enterprise(branch_version) and ComparableScyllaVersion(branch_version) < "2025.1.0":
+    if ComparableScyllaVersion(branch_version) < "2025.1.0":
         gallery_image_name = f"scylla-enterprise-{branch_version}"
     else:
         gallery_image_name = f"scylla-{branch_version}"

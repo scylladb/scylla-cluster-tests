@@ -19,7 +19,7 @@ eks_admin_arn:
 # NOTE: https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html
 eks_vpc_cni_version: 'v1.19.2-eksbuild.5'
 
-scylla_version: '6.2.3'
+scylla_version: '2026.1.15'
 k8s_cert_manager_version: '1.19.1'
 
 k8s_deploy_monitoring: false

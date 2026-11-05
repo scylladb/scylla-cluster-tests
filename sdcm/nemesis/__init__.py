@@ -116,7 +116,6 @@ from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import (
     clean_enospc_on_node,
-    get_views_of_base_table,
     parse_nodetool_listsnapshots,
     reach_enospc_on_node,
     update_authenticator,
@@ -159,7 +158,7 @@ from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.tablets.common import temporarily_disable_auto_repair, wait_tablets_balanced
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
-from sdcm.utils.version_utils import ComparableScyllaVersion, MethodVersionNotFound, scylla_versions
+from sdcm.utils.version_utils import ComparableScyllaVersion, MethodVersionNotFound
 from sdcm.wait import wait_for
 from test_lib.compaction import (
     CompactionStrategy,
@@ -238,7 +237,7 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
         Use ONLY for conditions that do not change during the test run:
           - Test config, backend, or product edition
-            (e.g. cluster.params.get(...), _is_it_on_kubernetes(), node.is_enterprise)
+            (e.g. cluster.params.get(...), _is_it_on_kubernetes())
           - Scylla version, feature flags, or cluster-uniform node attributes
             (e.g. ComparableScyllaVersion checks, is_tablets_feature_enabled(), node.distro)
 
@@ -839,8 +838,6 @@ class NemesisRunner:
         """
         if not self.cluster.params.get("prepare_saslauthd"):
             raise UnsupportedNemesis("SaslauthdAuthenticator can't work without saslauthd environment")
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SaslauthdAuthenticator is only supported by Scylla Enterprise")
 
         with self.target_node.remote_scylla_yaml() as scylla_yml:
             orig_auth = scylla_yml.authenticator
@@ -1045,8 +1042,6 @@ class NemesisRunner:
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Cluster is not enterprise. LDAP is supported only for enterprise. Skipping")
         if not self.cluster.params.get("ldap_server_type") == LdapServerType.OPENLDAP:
             raise UnsupportedNemesis("This nemesis is supported only for open-Ldap. Skipping")
 
@@ -1060,8 +1055,6 @@ class NemesisRunner:
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Cluster is not enterprise. LDAP is supported only for enterprise. Skipping")
 
         ldap_config = {
             "role_manager": "",
@@ -1108,13 +1101,12 @@ class NemesisRunner:
 
     def _replace_cluster_node(
         self,
-        old_node_ip: str | None = None,
         host_id: str | None = None,
         timeout: int | float = MAX_TIME_WAIT_FOR_NEW_NODE_UP,
         rack=0,
         is_zero_node: bool = False,
     ) -> BaseNode:
-        """When old_node_ip or host_id are not None then replacement node procedure is initiated"""
+        """When host_id is not None then replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
         #       as 'NotReady' and will fail the pod waiter function.
@@ -1132,9 +1124,8 @@ class NemesisRunner:
             new_node = critical_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
 
-        # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
-        # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
-        # it should be up and with scylla executable available
+        # the new node isn't started yet and the target node may be terminated, so read the RBNO setting
+        # from an alive node without nemesis
         verification_node = random.choice(
             [
                 node
@@ -1143,10 +1134,7 @@ class NemesisRunner:
             ]
         )
 
-        if verification_node.is_replacement_by_host_id_supported:
-            new_node.replacement_host_id = host_id
-        else:
-            new_node.replacement_node_ip = old_node_ip
+        new_node.replacement_host_id = host_id
         # With RBNO, the new node will also stream data during init
         if verification_node.get_scylla_config_param("enable_repair_based_node_ops") == "false":
             operation = Operations.NEW_NODE
@@ -1289,8 +1277,8 @@ class NemesisRunner:
         self._terminate_cluster_node(target_node)
 
     @latency_calculator_decorator(legend="Replace a node in cluster with new one")
-    def replace_node(self, old_node_ip: str, host_id: str, rack: int = 0, is_zero_node: bool = False) -> BaseNode:
-        return self._replace_cluster_node(old_node_ip, host_id, rack=rack, is_zero_node=is_zero_node)
+    def replace_node(self, host_id: str, rack: int = 0, is_zero_node: bool = False) -> BaseNode:
+        return self._replace_cluster_node(host_id, rack=rack, is_zero_node=is_zero_node)
 
     def _verify_resharding_on_k8s(self, cpus, dc_idx):
         nodes_data = []
@@ -1548,7 +1536,7 @@ class NemesisRunner:
             assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
             InfoEvent(message="FinishEvent - target_node was terminated").publish()
             new_node = self.replace_node(
-                old_node_ip, host_id, rack=self.target_node.rack, is_zero_node=self.target_node._is_zero_token_node
+                host_id, rack=self.target_node.rack, is_zero_node=self.target_node._is_zero_token_node
             )
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == "false":
@@ -2454,20 +2442,9 @@ class NemesisRunner:
         """
         snapshot_params = nodetool_cmd.split()
 
-        def is_virtual_tables_get_snapshot():
-            """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
-            has stopped creating snapshots for virtual tables.
-            hence we need to filter them out when compare tables to snapshot content.
-            """
-            if self.target_node.is_enterprise:
-                return ComparableScyllaVersion(self.target_node.scylla_version) >= "2024.3.0-dev"
-            else:
-                return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
-
-        filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
+        # scylla doesn't snapshot virtual tables (scylladb/scylladb@24589cf00cf8), filter them out
         ks_cf = self.cluster.get_any_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
+            db_node=self.target_node, filter_empty_tables=False, filter_func=self.cluster.is_table_has_no_sstables
         )
         # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
         ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
@@ -2480,16 +2457,7 @@ class NemesisRunner:
             else:
                 # Example: snapshot cqlstress_lwt_example -cf blogposts_update_one_column_lwt_indicator_expect,blogposts
                 keyspace = snapshot_params[1]
-                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
-                    for cf in snapshot_params[3].split(","):
-                        keyspace_table.extend([[keyspace, cf]])
-                        # Stop taking snapshots of MVs when snapshotting a base table - presented in
-                        # https://github.com/scylladb/scylladb/pull/21433/commits/9645a0414dbf4f41e0ce612b485b09c16a408f42
-                        if ComparableScyllaVersion(self.target_node.scylla_version) <= "2024.2":
-                            for view in get_views_of_base_table(
-                                keyspace_name=keyspace, base_table_name=cf, session=session
-                            ):
-                                keyspace_table.extend([[keyspace, view]])
+                keyspace_table.extend([[keyspace, cf] for cf in snapshot_params[3].split(",")])
         else:
             # Example: snapshot
             keyspace_table.extend([k_c.split(".") for k_c in ks_cf])
@@ -2623,28 +2591,12 @@ class NemesisRunner:
 
         self.clear_snapshots()
 
-    # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
-    @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
     def disrupt_show_toppartitions(self):
-        # NOTE: new API is supported only starting with Scylla 4.6
-        #       In Scylla 4.5 it exists but disabled.
-        return self._disrupt_show_toppartitions(allow_new_api=True)
-
-    @scylla_versions(("4.3.rc1", "4.5"), ("2020.1.rc0", "2022.1"))
-    def disrupt_show_toppartitions(self):
-        return self._disrupt_show_toppartitions(allow_new_api=False)
-
-    def _disrupt_show_toppartitions(self, allow_new_api: bool):
-        self.log.debug(
-            "Running 'disrupt_show_toppartitions' method using %s API.", "new and old" if allow_new_api else "old"
-        )
         ks_cf_list = self.cluster.get_any_ks_cf_list(self.target_node)
         if not ks_cf_list:
             raise UnsupportedNemesis("User-defined Keyspace and ColumnFamily are not found.")
 
-        top_partition_api_cmds = [OldApiTopPartitionCmd]
-        if allow_new_api:
-            top_partition_api_cmds.append(NewApiTopPartitionCmd)
+        top_partition_api_cmds = [OldApiTopPartitionCmd, NewApiTopPartitionCmd]
         for top_partition_api_cmd in top_partition_api_cmds:
             top_partition_api = top_partition_api_cmd(ks_cf_list)
             # workaround for issue #4519
@@ -3345,9 +3297,6 @@ class NemesisRunner:
         reduce categories by excluding DML and QUERY,
         verify DDL are logged in audit log correctly. Leaves audit log enabled this way.
         """
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
-
         if store == "syslog" and self._is_it_on_kubernetes():
             # generally syslog is not supported on K8S because of different log line format
             raise UnsupportedNemesis("syslog store is not supported on Kubernetes scylladb/scylla-operator#1299")

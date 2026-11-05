@@ -234,7 +234,6 @@ from sdcm.utils.version_utils import (
     assume_version,
     get_gemini_version,
     get_systemd_version,
-    is_enterprise,
 )
 from sdcm.wait import wait_for_log_lines
 
@@ -533,8 +532,7 @@ class BaseNode(AutoSshContainerMixin):
         # enable bootstrap.
         self.enable_auto_bootstrap = True
 
-        # If a node is a replacement for a dead node, store a dead node's private ip/host id here
-        self.replacement_node_ip = None
+        # If a node is a replacement for a dead node, store a dead node's host id here
         self.replacement_host_id = None
 
         self._kernel_version = None
@@ -951,8 +949,6 @@ class BaseNode(AutoSshContainerMixin):
         scylla_yml = ScyllaYaml(**self._proposed_scylla_yaml_properties)
         if self.enable_auto_bootstrap is not None:
             scylla_yml.auto_bootstrap = self.enable_auto_bootstrap
-        if self.replacement_node_ip:
-            scylla_yml.replace_address_first_boot = self.replacement_node_ip
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
         if self._is_zero_token_node:
@@ -1376,10 +1372,6 @@ class BaseNode(AutoSshContainerMixin):
         # assumes the image ships tc out of the box (true for SMI-based AMIs/GCE
         # images); the caller nemesis skips when this returns False
         return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
-
-    @property
-    def is_enterprise(self) -> bool:
-        return is_enterprise(self.scylla_version)
 
     @optional_cached_property
     def is_product_enterprise(self) -> bool | None:
@@ -3332,7 +3324,6 @@ class BaseNode(AutoSshContainerMixin):
     def forget_scylla_version(self) -> None:
         self.__dict__.pop("scylla_version_detailed", None)
         self.__dict__.pop("scylla_version", None)
-        self.__dict__.pop("is_enterprise", None)
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -4112,10 +4103,6 @@ class BaseNode(AutoSshContainerMixin):
             return ""
 
         return f" ({node.running_nemesis} nemesis target node)" if node.running_nemesis else " (not target node)"
-
-    @property
-    def is_replacement_by_host_id_supported(self):
-        return ComparableScyllaVersion(self.scylla_version) > "5.2.0~dev"
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, connect_timeout):
         """cqlsh [options] [host [port]]"""
@@ -6009,20 +5996,8 @@ class BaseScyllaCluster:
 
     @cached_property
     def parallel_startup(self):
-        parallel_startup = False
-        if self.parallel_node_operations:
-            node = self.nodes[0]
-            if node.is_enterprise:
-                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "2024.2.0~dev"
-            else:
-                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "6.0.0"
-        if parallel_startup:
-            LOGGER.info("Starting nodes in parallel")
-        else:
-            LOGGER.info("Starting nodes sequentially")
-            self.parallel_node_operations = False  # disable parallel operations regardless of test config
-
-        return parallel_startup
+        LOGGER.info("Starting nodes %s", "in parallel" if self.parallel_node_operations else "sequentially")
+        return self.parallel_node_operations
 
     @cached_property
     def proposed_scylla_yaml(self) -> ScyllaYaml:
@@ -7041,12 +7016,6 @@ class BaseScyllaCluster:
     def clean_replacement_node_options(node):
         # NOTE: If this is a replacement node then we need to set back the configuration
         #       for case when scylla-server process gets restarted.
-        if node.replacement_node_ip:
-            node.replacement_node_ip = None
-            node.remoter.run(
-                f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" '
-                f"{node.add_install_prefix(SCYLLA_YAML_PATH)}"
-            )
         if node.replacement_host_id:
             node.replacement_host_id = None
             node.remoter.run(

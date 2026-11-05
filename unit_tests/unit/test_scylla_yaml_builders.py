@@ -427,7 +427,6 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):
 
 class DummyNode(BaseNode):
     _system_log = None
-    is_enterprise = False
     distro = Distro.CENTOS7
 
     def __init__(self, node_num: int, parent_cluster, base_logdir: str):

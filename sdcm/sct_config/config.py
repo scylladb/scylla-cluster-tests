@@ -111,7 +111,6 @@ from sdcm.utils.version_utils import (
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
     get_specific_tag_of_docker_image,
-    is_enterprise,
     latest_unified_package,
     parse_scylla_version_tag,
     resolve_latest_repo_symlink,
@@ -491,7 +490,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
     # computed values, user can't fill those from configuration,
     # see `update_config_based_on_version` for more information
     artifact_scylla_version: str | None = Field(default=None, exclude=True)
-    is_enterprise: bool = Field(default=False, exclude=True)
     scylla_version_upgrade_target: str | None = Field(default=None, exclude=True)
 
     target_db_image_ids: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
@@ -2619,20 +2617,19 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def get_version_based_on_conf(self):
         """
-        figure out which version and if it's enterprise version
+        figure out which version
         base on configuration only, before nodes are up and running
         so test configuration can set up things which need to happen
         before nodes are up
 
         this is information is cached on the SCTConfiguration object
-        :return: tuple - (scylla_version, is_enterprise)
+        :return: scylla_version
         """
         backend = self.get("cluster_backend")
         scylla_version = None
-        _is_enterprise = False
 
         if self.get("db_type") in ("cassandra",):
-            return scylla_version, _is_enterprise
+            return scylla_version
 
         if unified_package := self.get("unified_package"):
             with tempfile.TemporaryDirectory() as tmpdirname:
@@ -2652,14 +2649,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     ) from exc
 
                 scylla_version = next(pathlib.Path(tmpdirname).glob("**/SCYLLA-VERSION-FILE")).read_text()
-                scylla_product = next(pathlib.Path(tmpdirname).glob("**/SCYLLA-PRODUCT-FILE")).read_text()
-                _is_enterprise = scylla_product == "scylla-enterprise"
         elif not self.get("use_preinstalled_scylla"):
             scylla_repo = self.get("scylla_repo")
             scylla_version = get_branch_version(scylla_repo, full_version=True)
-            _is_enterprise = is_enterprise(scylla_version)
         elif self.get("db_type") == "cloud_scylla":
-            _is_enterprise = True
+            pass  # no image to read the version from
         elif backend == "aws":
             amis = self.get("ami_id_db_scylla").split()
             region_name = self.region_names[0]
@@ -2673,7 +2667,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 resource_type="AMI",
                 resource_id_label="AMI ID",
             )
-            _is_enterprise = is_enterprise(scylla_version)
         elif backend == "gce":
             images = self.get("gce_image_db").split()
             tags = get_gce_image_tags(images[0])
@@ -2685,7 +2678,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 resource_type="image",
                 resource_id_label="image name",
             ).replace("-", ".")
-            _is_enterprise = is_enterprise(scylla_version)
         elif backend == "azure":
             images = self.get("azure_image_db").split()
             tags = azure_utils.get_image_tags(images[0])
@@ -2697,7 +2689,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 resource_type="image",
                 resource_id_label="image name",
             )
-            _is_enterprise = is_enterprise(scylla_version)
         elif backend == "oci":
             images = self.get("oci_image_db").split()
             oci_region_names = self.get("oci_region_name") or []
@@ -2712,22 +2703,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 resource_type="image",
                 resource_id_label="image name",
             )
-            _is_enterprise = True
         elif "k8s" in backend:
             scylla_version = self.get("scylla_version")
-            _is_enterprise = is_enterprise(scylla_version)
         elif backend == "docker":
-            docker_repo = self.get("docker_image")
             scylla_version = self.get("scylla_version")
-            _is_enterprise = "enterprise" in docker_repo
         elif backend == "xcloud":
             scylla_version = self.get("scylla_version")
-            _is_enterprise = is_enterprise(scylla_version)
         self.artifact_scylla_version = scylla_version
-        self.is_enterprise = _is_enterprise
         self.update_argus_with_version(scylla_version, "scylla-server-target")
 
-        return scylla_version, _is_enterprise
+        return scylla_version
 
     @staticmethod
     def _require_scylla_version_tag(
@@ -2773,9 +2758,12 @@ class SCTConfiguration(*CONFIG_GROUPS):
             self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
 
     def update_config_based_on_version(self):
-        if self.is_enterprise and ComparableScyllaVersion(self.artifact_scylla_version) >= "2025.1.0~dev":
-            if "views-with-tablets" not in self.get("experimental_features"):
-                self.experimental_features.append("views-with-tablets")
+        try:
+            supports_views_with_tablets = ComparableScyllaVersion(self.artifact_scylla_version) >= "2025.1.0~dev"
+        except ValueError:  # no version (cassandra, cloud) or unparsable, e.g. docker "latest"
+            supports_views_with_tablets = False
+        if supports_views_with_tablets and "views-with-tablets" not in self.get("experimental_features"):
+            self.experimental_features.append("views-with-tablets")
 
     def dump_config(self):
         """

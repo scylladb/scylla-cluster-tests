@@ -78,7 +78,7 @@ class TombstoneGcVerificationThread:
                 "No sstable with a creation time of last %s minutes found, aborting.", delta_repair_date_minutes
             )
             return
-        self.log.debug("Starting sstabledump to verify correctness of tombstones for %s sstables", len(sstables))
+        self.log.debug("Starting sstable dump to verify correctness of tombstones for %s sstables", len(sstables))
         if max_sstable_num < len(sstables):
             sstables = sstables[:max_sstable_num]
         for sstable in sstables:
