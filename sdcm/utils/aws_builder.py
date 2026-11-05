@@ -234,17 +234,6 @@ class AwsBuilder:
             },
         }
 
-    @property
-    def auto_scaling_group_tags(self) -> list[dict]:
-        return [
-            {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
-            {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
-            {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
-            {"Key": "billing_project", "Value": "sct-builders", "PropagateAtLaunch": True},
-            {"Key": "keep", "Value": BUILDER_KEEP_HOURS, "PropagateAtLaunch": True},
-            {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
-        ]
-
     def create_auto_scaling_group(self):
         click.secho(f"{self.region.region_name}: create_auto_scaling_group")
         try:
@@ -257,7 +246,14 @@ class AwsBuilder:
                 AvailabilityZones=self.region.availability_zones,
                 VPCZoneIdentifier=",".join(subnet_ids),
                 MixedInstancesPolicy=self.mixed_instances_policy,
-                Tags=self.auto_scaling_group_tags,
+                Tags=[
+                    {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
+                    {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
+                    {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
+                    {"Key": "billing_project", "Value": "sct-builders", "PropagateAtLaunch": True},
+                    {"Key": "keep", "Value": BUILDER_KEEP_HOURS, "PropagateAtLaunch": True},
+                    {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
+                ],
             )
 
         except botocore.exceptions.ClientError as error:

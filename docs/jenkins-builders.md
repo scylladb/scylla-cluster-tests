@@ -75,8 +75,8 @@ a new `team=qa` tag.
 
 1. In `sdcm/utils/aws_builder.py`:
    - set `NUM_CPUS = 4` and `MemoryMiB` to 16384 in `mixed_instances_policy`;
-   - add `{"Key": "team", "Value": "qa", "PropagateAtLaunch": True}` to
-     `auto_scaling_group_tags`;
+   - add `{"Key": "team", "Value": "qa", "PropagateAtLaunch": True}` to the `Tags` list in
+     `create_auto_scaling_group`;
    - bump `VERSION` from `v5` to `v6`.
 
    The same change elsewhere: GCE sets `machine_type` and `labels` in
