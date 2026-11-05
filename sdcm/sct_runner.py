@@ -1104,7 +1104,8 @@ class GceSctRunner(SctRunner):
         return instance
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
-        self.instances_client.stop(instance=instance.name, project=self.project_name, zone=self.zone)
+        operation = self.instances_client.stop(instance=instance.name, project=self.project_name, zone=self.zone)
+        wait_for_extended_operation(operation, "Wait for the image builder instance to stop")
 
     def _terminate_image_builder_instance(self, instance: Any) -> None:
         self.instances_client.delete(instance=instance.name, project=self.project_name, zone=self.zone)
