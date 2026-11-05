@@ -99,6 +99,7 @@ from sdcm.prometheus import AlertSilencer, PrometheusAlertManagerListener, start
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.provision.common.utils import (
+    CVE_2026_98432_NFT_TABLE,
     configure_vector_target_script,
     disable_daily_apt_triggers,
 )
@@ -4551,6 +4552,9 @@ class BaseNode(AutoSshContainerMixin):
         After `disable_firewall()` has run an input chain has no such rule left, so anything
         found here is a ruleset which came back, or was never taken down.
 
+        The table of the CVE-2026-98432 mitigation (`apply_cve_2026_98432_mitigation()`) is left
+        out: its one rule drops only IPv4 TCP packets with IP options, which SCT never sends.
+
         Args:
             rules: the dumps `get_firewall_rules()` returns, headers included.
 
@@ -4560,11 +4564,19 @@ class BaseNode(AutoSshContainerMixin):
         blocking = []
         depth = 0
         input_chain_depth = None
+        skipped_table_depth = None
         for dumped in rules.splitlines():
             rule = dumped.strip()
             if rule.startswith("#"):
                 # the header of the next dump: nothing of the previous one is still open
-                depth, input_chain_depth = 0, None
+                depth, input_chain_depth, skipped_table_depth = 0, None, None
+                continue
+            if skipped_table_depth is None and re.match(rf"table\s+inet\s+{CVE_2026_98432_NFT_TABLE}\b", rule):
+                skipped_table_depth = depth
+            if skipped_table_depth is not None:
+                depth += rule.count("{") - rule.count("}")
+                if depth <= skipped_table_depth:
+                    skipped_table_depth = None
                 continue
             if re.match(r"-A INPUT .*-j\s+(REJECT|DROP)", rule) or re.match(r":INPUT\s+(DROP|REJECT)", rule):
                 blocking.append(rule)
