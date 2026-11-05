@@ -61,6 +61,7 @@ except ImportError:
 
 from sct_ssh import ssh_run_cmd
 from sdcm.keystore import KeyStore, materialize_ssh_key
+from sdcm.provision.common.utils import apply_cve_2026_98432_mitigation
 from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
@@ -181,7 +182,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.17"  # Version of the Image
+    VERSION = "1.20"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -298,6 +299,7 @@ class SctRunner(ABC):
         """)
         sync_script_b64 = base64.b64encode(_sync_script.encode()).decode()
         unit_file_b64 = base64.b64encode(_unit_file.encode()).decode()
+        cve_mitigation_b64 = base64.b64encode(apply_cve_2026_98432_mitigation().encode()).decode()
 
         docker_gpg_curl = curl_with_retry(
             "https://download.docker.com/linux/ubuntu/gpg",
@@ -368,6 +370,9 @@ class SctRunner(ABC):
 
             # disable unattended-upgrades
             sudo systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
+
+            # CVE-2026-98432 / RHSB-2026-016: drop IPv4 TCP with IP options, runners and builders (SCT-1425)
+            printf %s {cve_mitigation_b64} | base64 -d | bash
 
             # Install Docker.
             apt-get -qq install --no-install-recommends \
