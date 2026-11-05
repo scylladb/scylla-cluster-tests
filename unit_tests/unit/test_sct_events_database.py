@@ -297,7 +297,8 @@ def test_mutation_write_exception_line_is_paxos_timeout():
 
 def test_backtrace_frame_with_mutation_write_type_name_is_not_paxos_timeout():
     """A frame of a decoded task backtrace, e.g. of a "topology version N held for X s past expiry" warning,
-    names the exception type in a template argument list: that's not a write timeout and must not raise an event."""
+    names the exception type in a template argument list: that's not a write timeout and must not raise an event.
+    """
     line = (
         "seastar::internal::coroutine_traits_base<boost::outcome_v2::basic_result<"
         "service::storage_proxy_coordinator_query_result, utils::exception_container<"
