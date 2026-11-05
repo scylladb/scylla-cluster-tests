@@ -17,6 +17,7 @@ from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
+    apply_cve_2026_98432_mitigation,
     configure_sshd_script,
     disable_firewall,
     restart_sshd_service,
@@ -126,6 +127,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             # first thing on the node: an image whose firewall accepts nothing but SSH looks
             # exactly like a broken network to everything that comes after (SCT-479)
             script += disable_firewall()
+        # after the firewall is down, and before the re-run exits below: it has to run on every boot path
+        script += apply_cve_2026_98432_mitigation()
 
         script += configure_backoff_timeout()
         if self.logs_transport == "syslog-ng":
