@@ -93,7 +93,9 @@ class DefinitionBuilder(abc.ABC):
         }
         user_data = self._get_user_data_objects(node_type=node_type, instance_name=name)
         mapper = self.SCT_PARAM_MAPPER[node_type]
-        use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
+        # monitors follow ip_ssh_connections too (SCT-1420): no public IP on Azure and OCI; on GCE the
+        # node keeps its external NAT IP, but without `sct-allow-public` only Grafana (3000) is open
+        use_public_ip = ssh_connection_ip_type(self.params) == "public"
         return InstanceDefinition(
             name=name,
             image_id=self.params.get(mapper.image_id),
