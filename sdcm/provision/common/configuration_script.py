@@ -17,6 +17,7 @@ from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
+    apply_cve_2026_98432_mitigation,
     configure_sshd_script,
     restart_sshd_service,
     configure_backoff_timeout,
@@ -117,6 +118,9 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ""
+
+        # before the re-run exits below: it has to run on every boot path
+        script += apply_cve_2026_98432_mitigation()
 
         script += configure_backoff_timeout()
         if self.logs_transport == "syslog-ng":
