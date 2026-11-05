@@ -345,6 +345,31 @@ def test_a_bad_memory_value_names_the_option_that_holds_it(params, expected_opti
         check_scylla_memory_budget(params)
 
 
+@pytest.mark.parametrize(
+    ("guest", "vcpus", "fits"),
+    [
+        ("4GiB", 1, True),
+        ("3GiB", 1, True),
+        ("2.5GiB", 1, False),
+        ("3GiB", 2, False),
+        ("3.6GiB", 2, False),
+        ("4GiB", 2, True),
+    ],
+)
+def test_memory_per_shard_floor_follows_the_vcpus(guest, vcpus, fits):
+    """Production mode refuses to start below 1 GiB per shard, so 3GiB fits 1 vCPU but not 2."""
+    params = _reserve_params(reserve="", guest=guest, vcpus=vcpus)
+    if fits:
+        check_scylla_memory_budget(params)
+    else:
+        with pytest.raises(MinicloudError, match="below 1GiB per shard"):
+            check_scylla_memory_budget(params)
+
+
+def test_memory_per_shard_skipped_outside_lightweight_mode():
+    check_scylla_memory_budget(_reserve_params(reserve="", guest="1GiB", vcpus=4, minicloud_lightweight=False))
+
+
 def test_preflight_check_rejects_an_impossible_request(tmp_path):
     # the other half of the contract above: unhonourable is fatal before anything is provisioned,
     # and going through preflight_check also proves the gate is actually wired in

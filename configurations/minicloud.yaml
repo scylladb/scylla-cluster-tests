@@ -39,13 +39,6 @@ fallback_to_next_region: false
 # once the container stops before the checker threads do — off from the start instead.
 enable_kernel_panic_checker: false
 
-# Lightweight db guests get minicloud_lightweight_vcpus / minicloud_lightweight_memory regardless
-# of the requested instance type; developer_mode keeps Scylla booting inside that budget.
-# (anyconfig MS_DICTS merge: this key merges with the test_default.yaml dict, it does
-# not replace it.)
-append_scylla_yaml:
-  developer_mode: true
-
 # minicloud runs with --cross-arch=fail: an aarch64 type on the x86-64 hosts fails at launch
 # instead of crawling under TCG. Pin sizing to x86_64 so full-size test-cases, whose sizing
 # constraints resolve to Graviton on AWS, still launch. Merges with any sizing the test-case

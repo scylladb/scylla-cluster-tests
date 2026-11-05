@@ -56,6 +56,9 @@ def parse_memory_gib(value: str, param_name: str = "") -> float:
 #   max(1.5GiB, 7% of RAM) + 50MiB per shard
 SCYLLA_DEFAULT_RESERVE_FLOOR_GIB = 1.5
 SCYLLA_DEFAULT_RESERVE_FRACTION = 0.07
+SCYLLA_DEFAULT_RESERVE_PER_SHARD_GIB = 50 / 1024
+# The guest kernel keeps ~0.2GiB of the VM's RAM before Scylla sees it; 0.3GiB leaves headroom
+GUEST_KERNEL_RESERVE_GIB = 0.3
 # What Scylla itself has to keep
 SCYLLA_MIN_MEMORY_GIB = 2.0
 SCYLLA_MIN_MEMORY_PER_SHARD_GIB = 1.0
@@ -108,8 +111,31 @@ def scylla_reserve_memory(params) -> str | None:
     return value
 
 
+def _check_memory_per_shard(params) -> None:
+    """Fail when Scylla's default OS reservation leaves a shard under 1 GiB: production mode refuses to start."""
+    if params.get("minicloud_lightweight") is False or (params.get("minicloud_scylla_reserve_memory") or "").strip():
+        return
+    guest = params.get("minicloud_lightweight_memory") or MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
+    visible_gib = parse_memory_gib(guest, "minicloud_lightweight_memory") - GUEST_KERNEL_RESERVE_GIB
+    vcpus = int(params.get("minicloud_lightweight_vcpus") or MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT)
+    reserve_gib = (
+        max(SCYLLA_DEFAULT_RESERVE_FLOOR_GIB, SCYLLA_DEFAULT_RESERVE_FRACTION * visible_gib)
+        + SCYLLA_DEFAULT_RESERVE_PER_SHARD_GIB * vcpus
+    )
+    per_shard_gib = (visible_gib - reserve_gib) / vcpus
+    if per_shard_gib < SCYLLA_MIN_MEMORY_PER_SHARD_GIB:
+        floor_gib = GUEST_KERNEL_RESERVE_GIB + reserve_gib + SCYLLA_MIN_MEMORY_PER_SHARD_GIB * vcpus
+        raise MinicloudError(
+            f"minicloud_lightweight_memory={guest} with minicloud_lightweight_vcpus={vcpus} leaves "
+            f"{per_shard_gib * 1024:.0f}MiB per shard after Scylla reserves {reserve_gib:.2f}GiB for the OS; "
+            f"Scylla refuses to start below 1GiB per shard.\nRaise minicloud_lightweight_memory to at least "
+            f"{floor_gib:.1f}GiB or lower minicloud_lightweight_vcpus."
+        )
+
+
 def check_scylla_memory_budget(params) -> None:
-    """Fail early when the requested reserve-memory cannot be honored."""
+    """Fail early when Scylla cannot start in the db guest, or the requested reserve-memory cannot be honored."""
+    _check_memory_per_shard(params)
     value, complaint = _resolve_scylla_reserve_memory(params)
     if complaint:
         if value is None:

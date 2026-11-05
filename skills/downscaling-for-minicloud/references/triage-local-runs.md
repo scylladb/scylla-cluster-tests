@@ -24,8 +24,8 @@ logdir. Read them before theorising about SCT.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| "memory per shard too low" in a guest's Scylla log; the node never comes up | `minicloud_lightweight_memory` below ~3 GiB | Raise it to at least 3 GiB. Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard |
-| Scylla refuses to start on emulated storage | `developer_mode` missing | `configurations/minicloud.yaml` carries it — it is not layered, or not layered last |
+| "memory per shard too low" in a guest's Scylla log; the node never comes up | `minicloud_lightweight_memory` too low for the shard count | Give each shard 1 GiB: memory ≥ ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus`. Scylla reserves ~1.7 GiB for the guest OS |
+| Scylla refuses to start: "I/O Scheduler is not properly configured" | `scylla_d_overrides_files` lost the shipped `io.conf`/`io_properties.yaml` (lists replace, not merge) | List both files again in your layer after `configurations/minicloud.yaml` |
 | cassandra-stress reports client-side timeouts and near-zero throughput | `threads=` far above what 1 vCPU can serve | Cut to ~10 threads. More threads do not produce more load here |
 | The run is dominated by `iotune` or repo installation | a nonroot install or an extra data volume (`data_volume_disk_num`, `gce_pd_standard_disk_size_db`) still runs iotune; `use_preinstalled_scylla: false` installs from the repo | SCT skips iotune on minicloud guests and the overlay ships `io_properties.yaml`; drop the extra data volume, and set `use_preinstalled_scylla: true` where the flow allows it |
 

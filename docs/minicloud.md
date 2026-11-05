@@ -43,8 +43,11 @@ are separate hydra invocations that all need to reach the same live endpoint.
 test-case yaml. It is the single delivery mechanism for the params the emulator requires:
 KMS off (minicloud implements no KMS endpoint), `instance_provision: on_demand` (no spot
 market), `ip_ssh_connections: private` (guests live on the host's userspace switch),
-shipped IO properties instead of iotune, AZ/region fallbacks off, kernel-panic checker off, and
-`developer_mode: true` via `append_scylla_yaml`. `preflight_check()` fails fast with the exact
+shipped IO properties instead of iotune, AZ/region fallbacks off, and kernel-panic checker off.
+Scylla runs in production mode: the shipped IO properties satisfy its IO check, and each shard
+needs at least 1 GiB: (`minicloud_lightweight_memory` - ~1.7 GiB) / `minicloud_lightweight_vcpus`.
+The preflight refuses a db guest below that.
+`preflight_check()` fails fast with the exact
 missing values when the overlay is not in the config list. Env exports cannot substitute for
 it: `SCT_*` variables set after `SCTConfiguration` is built never reach params.
 
@@ -70,8 +73,9 @@ Params (defaults in `defaults/test_default.yaml`, reference in
   of RAM for its role (db, loader or monitor), ignoring the instance type the test asked for. SCT still validates and reports the requested
   type, so keep it realistic in the yaml.
 - `minicloud_lightweight_memory` (default `4GiB`) - RAM per db guest (zero-token, oracle and
-  vector-store guests included). Scylla needs >1 GiB per shard on top of the ~1.7 GiB it reserves
-  for the guest OS, so anything under ~3 GiB fails to boot with "memory per shard too low".
+  vector-store guests included). Scylla needs 1 GiB per shard on top of the ~1.7 GiB it reserves
+  for the guest OS, so anything under ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` (~3 GiB at
+  the default 1 vCPU) fails to boot with "memory per shard too low".
 - `minicloud_lightweight_memory_loader` / `_monitor` (default `2GiB`) and
   `minicloud_lightweight_vcpus_loader` / `_monitor` (default `1`) - loader and monitor sizes.
   Empty means the db size (`minicloud_lightweight_memory` / `minicloud_lightweight_vcpus`).
@@ -389,7 +393,7 @@ credential only for the image download, SCT only for the runner itself.
 | `InvalidAMIID.NotFound` on launch | AMI not cached and the container's `--aws-region` differs from where the AMI lives - or the AMI id is wrong |
 | `SnapshotNotFound` from `ListSnapshotBlocks` | dev AMI whose snapshot is not shared with the QA account - use a released version |
 | `AccessDeniedException` from `ListSnapshotBlocks`, and SCT then waits for nodes that never boot | the IAM identity has no EBS direct API permission at all - a different cause from `SnapshotNotFound` above. Grant `ebs:ListSnapshotBlocks` and `ebs:GetSnapshotBlock`. Note SCT's own log shows nothing useful here: only `minicloud.log` carries `failed to resolve image` / `background VM launch failed` |
-| "memory per shard too low" in a guest's Scylla log | `minicloud_lightweight_memory` set below ~3 GiB |
+| "memory per shard too low" in a guest's Scylla log | `minicloud_lightweight_memory` below ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` |
 | start aborts with "could not extract minicloud-setup.sh" or "minicloud-setup.sh failed" | host networking could not be configured - pre-create the `minicloud0` device or grant passwordless sudo |
 | guests boot and get DHCP, but SSH fails with `AuthenticationError` until the timeout | the host firewall blocks the guests' IMDS requests, so no SSH key was injected - on firewalld hosts `scripts/minicloud-firewalld-zone.sh` moves `minicloud0` into the `trusted` zone at every start and fails the build when it cannot, so either the script never ran - check that the *Start Minicloud* stage called it, or run it by hand on the host - or the block comes from a non-firewalld firewall (ufw, plain nftables), which the script deliberately leaves alone |
 | `clean-resources` refuses to run: "minicloud is not reachable" | the container died; collect its logs (`docker logs minicloud`) - cleanup against a fresh emulator would only pretend to succeed |
@@ -534,7 +538,7 @@ picks one of two consistent setups:
 
 On, a host that cannot fit the guests fails at instance launch. Off, the guests can still be
 swapped out, but they hold far less memory: with `--lock-memory` Seastar prefaults all of Scylla's
-memory. `developer_mode` does not control that lock - only `memory.conf` does. Switching modes
+memory. Only `memory.conf` controls that lock. Switching modes
 restarts a reused container. Off also pairs well with aggressive KSM scanning on the host
 (`/sys/kernel/mm/ksm/pages_to_scan`, `sleep_millisecs`).
 
