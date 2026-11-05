@@ -318,6 +318,7 @@ To write a new one, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md)
 ## 10. Maintainer reference
 
 - [KeyStore credential management](docs/keystore-secrets-manager.md) · [credential rotation](docs/keystore-credential-rotation.md) · [SSH key rotation](docs/ssh-key-rotation.md)
+- [Jenkins builders: network access](docs/jenkins-builders.md)
 - [Updating monitoring images](docs/monitoring-images.md)
 - [Building a new loader AMI](docs/new_loader_ami.md)
 - [Creating an ES index](docs/hydra-create-es-index.md)

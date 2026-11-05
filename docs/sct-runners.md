@@ -56,5 +56,6 @@ the first node is created.
     ./sct.py configure-jenkins-builders -c gce
     ./sct.py configure-jenkins-builders -c aws
     ```
+    This also applies the builder network access rules, see [Jenkins builders: network access](jenkins-builders.md).
 
 5. update `vars/getJenkinsLabels.groovy` with the new labels created in step 1
