@@ -98,7 +98,7 @@ jenkins.save()
 class AwsBuilder:
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v4"
+    VERSION = "v5"
 
     def __init__(self, region: AwsRegion, params=None, number=1):
         self.region = region
@@ -313,7 +313,7 @@ class AwsCiBuilder(AwsBuilder):
 class AwsFipsCiBuilder(AwsBuilder):
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v4-fibs"
+    VERSION = "v5-fibs"
 
     @cached_property
     def name(self):
