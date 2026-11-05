@@ -350,7 +350,6 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     aws_vms = []
     gce_vms = []
     azure_vms = []
-    oci_vms = []
 
     if "aws" in backends:
         aws_vms = list_instances_aws(tags, running=True, region_name=region)
@@ -361,13 +360,10 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     if "azure" in backends:
         azure_vms = list_instances_azure(tags, running=True, verbose=False)
 
-    if "oci" in backends:
-        oci_vms = list_instances_oci(tags, running=True, verbose=False)
+    if len(aws_vms + gce_vms + azure_vms) == 1:
+        return aws_vms + gce_vms + azure_vms
 
-    if len(aws_vms + gce_vms + azure_vms + oci_vms) == 1:
-        return aws_vms + gce_vms + azure_vms + oci_vms
-
-    if not aws_vms and not gce_vms and not azure_vms and not oci_vms:
+    if not aws_vms and not gce_vms and not azure_vms:
         click.echo(click.style("Found no matching instances", fg="red"))
         return []
 
@@ -393,7 +389,6 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
             )
             for vm in azure_vms
         ]
-        + [oci_choice(vm) for vm in oci_vms]
     )
     # create the question object
     question = questionary.checkbox(
