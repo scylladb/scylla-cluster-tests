@@ -11,23 +11,20 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Tests for .github/scripts/issues_cache.py, the referenced-only issue cache (SCT-1172)."""
+"""Tests for utils/issues_cache, the referenced-only issue cache (SCT-1172)."""
 
-import importlib.util
 import json
 import subprocess
-import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from sdcm.utils.issues import CachedGitHubIssues
-
-SCRIPT_PATH = Path(__file__).parents[2] / ".github" / "scripts" / "issues_cache.py"
-_spec = importlib.util.spec_from_file_location("issues_cache", SCRIPT_PATH)
-issues_cache = importlib.util.module_from_spec(_spec)
-sys.modules["issues_cache"] = issues_cache
-_spec.loader.exec_module(issues_cache)
+from utils.issues_cache import github
+from utils.issues_cache.__main__ import main
+from utils.issues_cache.github import MARKER, Reconciler, check_guards, gh_api, write_csvs
+from utils.issues_cache.refs import SCT_CALLS, extract_python, extract_yaml, normalize
 
 
 @pytest.mark.parametrize(
@@ -47,7 +44,7 @@ _spec.loader.exec_module(issues_cache)
     ],
 )
 def test_normalize(value, short_forms, expected):
-    assert issues_cache.normalize(value, short_forms=short_forms) == expected
+    assert normalize(value, short_forms=short_forms) == expected
 
 
 def test_extract_python_full_forms_anywhere_short_forms_only_in_calls():
@@ -61,7 +58,7 @@ def f(params):
     other_call("1234")
     x = "jira:SCT-7"
 """
-    assert issues_cache.extract_python(source, issues_cache.SCT_CALLS) == {
+    assert extract_python(source, SCT_CALLS) == {
         "scylladb/scylla-manager#3829",
         "scylladb/scylladb#18180",
         "scylladb/scylla-enterprise#9",
@@ -70,7 +67,7 @@ def f(params):
 
 
 def test_extract_python_ignores_syntax_errors():
-    assert issues_cache.extract_python("def (:", issues_cache.SCT_CALLS) == set()
+    assert extract_python("def (:", SCT_CALLS) == set()
 
 
 def test_extract_yaml():
@@ -81,7 +78,7 @@ reactor_stall:
   - keyword: bar
     issue: 'jira:SCYLLADB-1'
 """
-    assert issues_cache.extract_yaml(source) == {"scylladb/scylladb#14582", "jira:SCYLLADB-1"}
+    assert extract_yaml(source) == {"scylladb/scylladb#14582", "jira:SCYLLADB-1"}
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -103,7 +100,7 @@ def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
     _git(repo, "update-ref", "refs/remotes/origin/feature-x", "HEAD")
     out = tmp_path / "refs" / "sct.json"
 
-    issues_cache.main(["scan", "--repo-dir", str(repo), "--out", str(out)])
+    main(["scan", "--repo-dir", str(repo), "--out", str(out)])
 
     manifest = json.loads(out.read_text())
     assert set(manifest) == {"version", "repo", "label", "label_description", "generated_at", "refs"}
@@ -115,14 +112,10 @@ def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
 
 def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
     states = {
-        "scylladb/contract-repo#5": {
-            "state": "open",
-            "labels": ["sct-2026.1-skip", "P1"],
-            "title": "a, b",
-        },
+        "scylladb/contract-repo#5": {"state": "open", "labels": ["sct-2026.1-skip", "P1"], "title": "a, b"},
         "scylladb/contract-repo#3": {"state": "merged", "labels": [], "title": 'say "hi"'},
     }
-    issues_cache.write_csvs(tmp_path, states)
+    write_csvs(tmp_path, states)
 
     def get_file_contents(key):
         return (tmp_path / key.removeprefix("issues/")).read_bytes()
@@ -144,31 +137,59 @@ def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
 )
 def test_guards(union, previous, failed, ok):
     if ok:
-        issues_cache.check_guards(union, previous, failed)
+        check_guards(union, previous, failed)
     else:
         with pytest.raises(SystemExit):
-            issues_cache.check_guards(union, previous, failed)
+            check_guards(union, previous, failed)
 
 
 def test_accept_shrink_skips_only_the_shrink_guard():
-    issues_cache.check_guards(40, 100, 0, accept_shrink=True)
+    check_guards(40, 100, 0, accept_shrink=True)
     with pytest.raises(SystemExit):
-        issues_cache.check_guards(40, 100, 20, accept_shrink=True)
+        check_guards(40, 100, 20, accept_shrink=True)
+
+
+@pytest.mark.parametrize(
+    "returncode,stdout,stderr,paginate,expected",
+    [
+        (0, '{"state": "open"}', "", False, (200, {"state": "open"})),
+        (0, "", "", False, (200, None)),  # e.g. DELETE with an empty reply
+        (0, '[[{"id": 1}], [{"id": 2}]]', "", True, (200, [{"id": 1}, {"id": 2}])),  # --slurp pages
+        (1, "", "gh: Not Found (HTTP 404)", False, (404, None)),
+        (1, "", "error connecting to api.github.com", False, (0, None)),
+    ],
+)
+def test_gh_api_reads_status_and_flattens_pages(monkeypatch, returncode, stdout, stderr, paginate, expected):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs.get("input")))
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+    monkeypatch.setattr(github.subprocess, "run", fake_run)
+
+    assert gh_api("POST", "/repos/o/r/issues/1/labels", {"labels": ["x"]}, paginate=paginate) == expected
+    cmd, stdin = calls[0]
+    assert cmd[:5] == ["gh", "api", "--method", "POST", "/repos/o/r/issues/1/labels"]
+    assert ("--paginate" in cmd) is paginate
+    assert json.loads(stdin) == {"labels": ["x"]}
 
 
 class FakeGitHub:
+    """Stands in for `gh_api`: answers the reads, records the writes."""
+
     def __init__(self, can_label: bool, comments: list | None = None, write_status: int = 201):
         self.can_label, self.comments, self.write_status = can_label, comments or [], write_status
         self.writes: list[tuple] = []
 
-    def request(self, method, path, body=None):
+    def __call__(self, method, path, body=None, paginate=False):
         if method == "GET" and path.startswith("/repos/") and path.count("/") == 3:
             return 200, {"permissions": {"triage": self.can_label}}
         if method == "GET" and path == "/user":
             return 200, {"login": "bot"}
-        if method == "GET" and "/comments" in path:
-            page = int(path.rsplit("page=", 1)[1])
-            return 200, self.comments[(page - 1) * 100 : page * 100]
+        if method == "GET" and path.endswith("/comments"):
+            assert paginate, "comments must be read with --paginate"
+            return 200, self.comments
         self.writes.append((method, path, body))
         return self.write_status, {"id": 77}
 
@@ -181,7 +202,7 @@ LABEL_META = {
 
 def test_reconcile_labels_add_and_remove_only_managed_labels():
     gh = FakeGitHub(can_label=True)
-    rec = issues_cache.Reconciler(gh, "on", LABEL_META, {})
+    rec = Reconciler(gh, "on", LABEL_META, {})
 
     rec.reconcile("scylladb/scylladb#1", {"used-by-sct": ["master"]}, ["used-by-dtest", "P1"])
 
@@ -194,7 +215,7 @@ def test_reconcile_labels_add_and_remove_only_managed_labels():
 
 def test_reconcile_dry_run_writes_nothing():
     gh = FakeGitHub(can_label=False)
-    rec = issues_cache.Reconciler(gh, "dry-run", LABEL_META, {})
+    rec = Reconciler(gh, "dry-run", LABEL_META, {})
 
     rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
 
@@ -206,7 +227,7 @@ def test_reconcile_dry_run_writes_nothing():
 def test_reconcile_one_comment_edited_in_place():
     gh = FakeGitHub(can_label=False)
     state = {}
-    rec = issues_cache.Reconciler(gh, "on", LABEL_META, state)
+    rec = Reconciler(gh, "on", LABEL_META, state)
 
     rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
     rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])  # unchanged: no write
@@ -220,23 +241,45 @@ def test_reconcile_one_comment_edited_in_place():
     ]
     assert "used-by-dtest" in gh.writes[1][2]["body"]
     assert "No longer used" in gh.writes[2][2]["body"]
-    assert all(issues_cache.MARKER in body["body"] for _, _, body in gh.writes)
+    assert all(MARKER in body["body"] for _, _, body in gh.writes)
 
 
 def test_reconcile_reuses_existing_marker_comment_when_state_is_lost():
-    gh = FakeGitHub(
-        can_label=False, comments=[{"id": 5, "body": f"{issues_cache.MARKER}\nold", "user": {"login": "bot"}}]
+    comments = [{"id": i, "body": "chatter", "user": {"login": "someone"}} for i in range(150)]
+    comments.append({"id": 999, "body": f"{MARKER}\nold", "user": {"login": "bot"}})
+    gh = FakeGitHub(can_label=False, comments=comments)
+
+    Reconciler(gh, "on", LABEL_META, {}).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+
+    assert [(m, p) for m, p, _ in gh.writes] == [("PATCH", "/repos/scylladb/siren/issues/comments/999")]
+
+
+def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
+    gh = FakeGitHub(can_label=True)
+    meta = {"used-by-sct": LABEL_META["used-by-sct"]}  # dtest's manifest is gone
+    rec = Reconciler(gh, "on", meta, {}, managed={"used-by-dtest"})
+
+    rec.reconcile("scylladb/scylladb#1", {}, ["used-by-dtest", "P1"])
+
+    assert gh.writes == [("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None)]
+
+
+def test_reconcile_failed_comment_is_retried_next_run():
+    state = {}
+    Reconciler(FakeGitHub(can_label=False, write_status=403), "on", LABEL_META, state).reconcile(
+        "scylladb/siren#1", {"used-by-sct": ["master"]}, []
     )
-    rec = issues_cache.Reconciler(gh, "on", LABEL_META, {})
+    assert state == {}
 
-    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-
-    assert [(m, p) for m, p, _ in gh.writes] == [("PATCH", "/repos/scylladb/siren/issues/comments/5")]
+    gh = FakeGitHub(can_label=False)
+    Reconciler(gh, "on", LABEL_META, state).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+    assert [(m, p) for m, p, _ in gh.writes] == [("POST", "/repos/scylladb/siren/issues/1/comments")]
+    assert state["scylladb/siren#1"]["comment_id"] == 77
 
 
 def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
     new, old = tmp_path / "new", tmp_path / "old"
-    issues_cache.write_csvs(
+    write_csvs(
         new,
         {
             "scylladb/r#1": {"state": "open", "labels": ["a"], "title": "t"},
@@ -249,41 +292,8 @@ def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
     (old / "pull-requests" / "scylladb_r.csv").write_text("")
 
     with caplog.at_level("INFO"):
-        issues_cache.main(["compare", "--new-dir", str(new), "--old-dir", str(old)])
+        main(["compare", "--new-dir", str(new), "--old-dir", str(old)])
 
     assert "1 rows match the old cache" in caplog.text
     assert "scylladb_r#2: old ('open', set()) != new ('closed', set())" in caplog.text
     assert "scylladb_r#3: not in the old cache" in caplog.text
-
-
-def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
-    gh = FakeGitHub(can_label=True)
-    meta = {"used-by-sct": LABEL_META["used-by-sct"]}  # dtest's manifest is gone
-    rec = issues_cache.Reconciler(gh, "on", meta, {}, managed={"used-by-dtest"})
-
-    rec.reconcile("scylladb/scylladb#1", {}, ["used-by-dtest", "P1"])
-
-    assert gh.writes == [("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None)]
-
-
-def test_reconcile_failed_comment_is_retried_next_run():
-    state = {}
-    issues_cache.Reconciler(FakeGitHub(can_label=False, write_status=403), "on", LABEL_META, state).reconcile(
-        "scylladb/siren#1", {"used-by-sct": ["master"]}, []
-    )
-    assert state == {}
-
-    gh = FakeGitHub(can_label=False)
-    issues_cache.Reconciler(gh, "on", LABEL_META, state).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-    assert [(m, p) for m, p, _ in gh.writes] == [("POST", "/repos/scylladb/siren/issues/1/comments")]
-    assert state["scylladb/siren#1"]["comment_id"] == 77
-
-
-def test_reconcile_finds_marker_comment_past_the_first_page():
-    comments = [{"id": i, "body": "chatter", "user": {"login": "someone"}} for i in range(150)]
-    comments.append({"id": 999, "body": f"{issues_cache.MARKER}\nold", "user": {"login": "bot"}})
-    gh = FakeGitHub(can_label=False, comments=comments)
-
-    issues_cache.Reconciler(gh, "on", LABEL_META, {}).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-
-    assert [(m, p) for m, p, _ in gh.writes] == [("PATCH", "/repos/scylladb/siren/issues/comments/999")]

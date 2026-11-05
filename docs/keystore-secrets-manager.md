@@ -90,7 +90,8 @@ deliberately **not** mirrored:
 with a cache of only the issues test code references (QAINFRA-104). It keeps the
 same file names and CSV format. While it runs in shadow mode it writes
 `issues-v2/`. Each consumer repo publishes the refs it uses to
-`issues/refs/<repo>.json`, and the GitHub refresh reads the union of those files.
+`issues/refs/<repo>.json` (SCT's from `scan-issue-refs.yaml`), and the GitHub
+refresh reads the union of those files. The code is in `utils/issues_cache/`.
 
 `CachedJiraIssues` and `CachedGitHubIssues` therefore construct
 `KeyStore(backend="s3")` explicitly and ignore `keystore_backend`. Without that
