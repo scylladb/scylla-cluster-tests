@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 import logging
 import datetime
 import yaml
@@ -282,6 +282,12 @@ class ObjectStorageUploadMode(str, Enum):
     AUTO = "auto"
     RCLONE = "rclone"
     NATIVE = "native"
+
+
+class RepairIncrementalMode(StrEnum):
+    INCREMENTAL = "incremental"
+    FULL = "full"
+    DISABLED = "disabled"
 
 
 def parse_bandwidth_value(bandwidth_str: str) -> float | None:
