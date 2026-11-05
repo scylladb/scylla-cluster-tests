@@ -371,6 +371,63 @@ def disable_daily_apt_triggers():
     """)
 
 
+CVE_2026_98432_NFT_TABLE = "cve_2026_98432"
+
+
+def apply_cve_2026_98432_mitigation() -> str:
+    """Drop incoming IPv4 TCP packets with IP options, the RHSB-2026-016 mitigation for CVE-2026-98432.
+
+    Until Ubuntu ships a fixed kernel (SCT-1412). The rule matches only packets whose IP header
+    carries options. TCP options (MSS, SACK, timestamps, window scaling) are in the TCP header and
+    pass, so SSH and every other connection SCT makes keep working.
+
+    The rule lives in its own table, loaded by its own systemd unit, so it survives a reboot and
+    `disable_firewall()`, which disables `nftables.service` and flushes the iptables tables. The
+    file deletes the table before it adds it, so running the script again doesn't duplicate the rule.
+
+    Remove it with `systemctl disable --now sct-cve-2026-98432` once the fixed kernel is in.
+
+    Returns:
+        The shell script which installs and starts the mitigation. It does nothing on a host without `nft`.
+    """
+    table = CVE_2026_98432_NFT_TABLE
+    return dedent(f"""\
+    if ! command -v nft >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+        apt-get -o DPkg::Lock::Timeout=300 install -y -qq nftables || true
+    fi
+    if command -v nft >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    mkdir -p /etc/sct
+    cat > /etc/sct/{table}.nft <<'SCT_CVE_EOF'
+    table inet {table}
+    delete table inet {table}
+    table inet {table} {{
+        chain input {{
+            type filter hook input priority -310; policy accept;
+            ip protocol tcp ip hdrlength > 5 counter drop
+        }}
+    }}
+    SCT_CVE_EOF
+    cat > /etc/systemd/system/sct-cve-2026-98432.service <<'SCT_CVE_EOF'
+    [Unit]
+    Description=RHSB-2026-016 mitigation for CVE-2026-98432 (drop IPv4 TCP with IP options)
+    Before=network-pre.target
+    Wants=network-pre.target
+
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    ExecStart=nft -f /etc/sct/{table}.nft
+    ExecStop=-nft delete table inet {table}
+
+    [Install]
+    WantedBy=multi-user.target
+    SCT_CVE_EOF
+    systemctl daemon-reload || true
+    systemctl enable --now sct-cve-2026-98432.service || true
+    fi
+    """)
+
+
 def configure_syslogng_destination_conf(host: str, port: int, throttle_per_second: int) -> str:
     return dedent("""
         write_syslog_ng_destination() {{
