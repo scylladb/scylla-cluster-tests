@@ -409,6 +409,11 @@ def apply_cve_2026_98432_mitigation() -> str:
     anything that disables `nftables.service` or flushes the iptables tables. The
     file deletes the table before it adds it, so running the script again doesn't duplicate the rule.
 
+    The unit sets `DefaultDependencies=no`, like Debian's `nftables.service`. Without it the unit is
+    ordered after `sysinit.target`, while cloud-init's network stage runs before `sysinit.target` and
+    starts `systemd-networkd-wait-online`, which waits on `network-pre.target`, which waits on this
+    unit: the boot hangs on clouds where cloud-init waits for the network (OCI).
+
     Remove it with `systemctl disable --now sct-cve-2026-98432` once the fixed kernel is in.
 
     Returns:
@@ -434,8 +439,10 @@ def apply_cve_2026_98432_mitigation() -> str:
     cat > /etc/systemd/system/sct-cve-2026-98432.service <<'SCT_CVE_EOF'
     [Unit]
     Description=RHSB-2026-016 mitigation for CVE-2026-98432 (drop IPv4 TCP with IP options)
-    Before=network-pre.target
+    DefaultDependencies=no
+    Before=network-pre.target shutdown.target
     Wants=network-pre.target
+    Conflicts=shutdown.target
 
     [Service]
     Type=oneshot
