@@ -15,7 +15,8 @@
 
 Policy, as opposed to the parsing in `versions` and the raw lookups in `images`: this is where
 the per-backend, common and aws-strict strategies live. Cloud lookups are reached through the
-`images` module object so a single patch of that module covers every call site here."""
+`images` module object so a single patch of that module covers every call site here.
+"""
 
 import logging
 import re

@@ -126,9 +126,7 @@ class Failure(Exception):
         return self._repr()
 
     def _repr(self, **kwargs) -> str:
-        """
-        Return ``__repr__``-like value from inner result + any kwargs.
-        """
+        """Return ``__repr__``-like value from inner result + any kwargs."""
         # TODO: expand?
         # TODO: truncate command?
         template = "<{}: cmd={!r}{}>"

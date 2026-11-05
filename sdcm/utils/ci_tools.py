@@ -1,6 +1,4 @@
-"""
-Functions related to CI pipelines (Jenkins/GH Actions)
-"""
+"""Functions related to CI pipelines (Jenkins/GH Actions)"""
 
 import logging
 import os

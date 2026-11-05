@@ -107,7 +107,8 @@ def test_wait_for_vector_store_serving_raises_when_it_never_serves():
 
 def test_a_relative_path_resolves_from_the_sct_root():
     """The plan is named the way every other file a test case points at is -- repo-relative -- so
-    a plan outside the workload's own data directory needs no new param."""
+    a plan outside the workload's own data directory needs no new param.
+    """
     resolved = resolve_test_config_path("data_dir/latte/search_bench/local_config.yaml")
     assert resolved.endswith(os.path.join("data_dir", "latte", "search_bench", "local_config.yaml"))
     assert os.path.isabs(resolved)
@@ -142,7 +143,8 @@ def test_shard_spec_normalizes_ints_and_ranges(spec, expected):
 @pytest.mark.parametrize("spec", (["0-2"], ["0..a"], ["..2"], ["3..1"], [1.5], [None], [{"from": 0}], [True]))
 def test_shard_spec_rejects_unrecognised_entries(spec):
     """Dropping these silently would load a smaller corpus than the plan asked for, and the run
-    would then report plausible numbers against the wrong record count."""
+    would then report plausible numbers against the wrong record count.
+    """
     with pytest.raises(ValueError):
         _parse_shard_spec(spec)
 
@@ -155,7 +157,8 @@ def test_shard_spec_rejects_unrecognised_entries(spec):
 def test_shard_spec_rejects_duplicates(spec):
     """Loading a shard twice inflates the record count, and the throughput derived from it, while
     the table itself gains nothing -- the same silent misreport as an under-load, in the other
-    direction."""
+    direction.
+    """
     with pytest.raises(ValueError, match="appear more than once"):
         _parse_shard_spec(spec)
 
@@ -347,7 +350,8 @@ def test_a_plan_runs_its_datasets_in_order(tmp_path):
 def test_repeated_dataset_names_are_rejected(tmp_path):
     """An index is named after its dataset and step, and its build time is read from the first
     matching 'full scan' pair in the log -- so a repeated name would silently re-report the first
-    dataset's build times against the second one's record counts."""
+    dataset's build times against the second one's record counts.
+    """
     with pytest.raises(ValueError, match="Duplicate dataset names.*same"):
         _run_plan(tmp_path, "datasets:\n  - name: same\n  - name: other\n  - name: same\n")
 
@@ -363,7 +367,8 @@ def test_repeated_dataset_names_are_rejected(tmp_path):
 )
 def test_a_plan_that_would_run_nothing_is_rejected(tmp_path, plan, expected):
     """Such a run loads nothing, reports nothing and still finishes green, which reads as a passing
-    benchmark rather than as the misconfiguration it is."""
+    benchmark rather than as the misconfiguration it is.
+    """
     with pytest.raises(ValueError, match=expected):
         _run_plan(tmp_path, plan)
 
@@ -383,7 +388,8 @@ def test_a_missing_plan_file_is_rejected(tmp_path):
 
 def test_a_dataset_with_no_local_corpus_says_which_directory_is_missing():
     """The corpora are generated, not tracked, so a fresh clone that skipped the generator has to
-    hear which directory to produce rather than an open() failure on a shard inside it."""
+    hear which directory to produce rather than an open() failure on a shard inside it.
+    """
     tester = _PlanTester("unused")
     with pytest.raises(FileNotFoundError, match="no local directory"):
         search_perf_test.SearchPerformanceTest._run_dataset(
@@ -393,7 +399,8 @@ def test_a_dataset_with_no_local_corpus_says_which_directory_is_missing():
 
 def test_a_dataset_with_no_steps_is_rejected():
     """It would drop and recreate the table, build nothing and report nothing, so the run would
-    pass while measuring an index it never built."""
+    pass while measuring an index it never built.
+    """
     tester = _PlanTester("unused")
     with pytest.raises(ValueError, match="no steps to run"):
         search_perf_test.SearchPerformanceTest._run_dataset(tester, {"name": "local_tiny", "steps": []})

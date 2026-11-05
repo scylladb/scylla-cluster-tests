@@ -86,7 +86,7 @@ def test_oci_lookup_maps_empty_region_to_none():
 
 
 def test_backend_without_an_image_lookup_is_always_available():
-    """docker builds from a repo, so there is no image to look up — never block it."""
+    """Docker builds from a repo, so there is no image to look up — never block it."""
     assert _version_exists_in_region(VERSION, "docker", "", "x86_64") is True
 
 

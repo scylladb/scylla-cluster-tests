@@ -12,9 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-"""
-Module containing logic for running disruptions on a test cluster
-"""
+"""Module containing logic for running disruptions on a test cluster"""
 
 import contextlib
 import datetime
@@ -252,9 +250,7 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
     @abstractmethod
     def disrupt(self):
-        """
-        Runs the actual disruption
-        """
+        """Runs the actual disruption"""
 
     @classmethod
     def description(cls) -> str:
@@ -1006,7 +1002,7 @@ class NemesisRunner:
         return self.__class__.__name__.replace("Monkey", "")
 
     def disrupt_destroy_data_then_repair(self):
-        """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
+        """Repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
         self.run_repair()
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following repair would then propagate the resurrected data to the other replicas.
@@ -1708,7 +1704,6 @@ class NemesisRunner:
 
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
-
         if SkipPerIssues("https://scylladb.atlassian.net/browse/SCT-1265", params=self.tester.params):
             raise UnsupportedNemesis("Fake ENOSPC on K8S is broken, see https://scylladb.atlassian.net/browse/SCT-1265")
 
@@ -2231,9 +2226,7 @@ class NemesisRunner:
         self.target_node.run_cqlsh(cmd)
 
     def toggle_table_ics(self):
-        """
-        Alters a non-system table compaction strategy from ICS to any-other and vise versa.
-        """
+        """Alters a non-system table compaction strategy from ICS to any-other and vise versa."""
         if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
             raise UnsupportedNemesis("Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082")
 
@@ -2287,9 +2280,7 @@ class NemesisRunner:
         self.toggle_table_gc_mode()
 
     def disrupt_abort_repair(self):
-        """
-        Start repair target_node in background, then try to abort the repair streaming.
-        """
+        """Start repair target_node in background, then try to abort the repair streaming."""
         self.log.debug("Start repair target_node in background")
 
         @raise_event_on_failure
@@ -2436,7 +2427,7 @@ class NemesisRunner:
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """
@@ -2969,10 +2960,7 @@ class NemesisRunner:
             self.start_and_interrupt_decommission_streaming()
 
     def disrupt_rebuild_streaming_err(self):
-        """
-        Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
-        """
-
+        """Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node."""
         if is_tablets_feature_enabled(self.target_node):
             raise UnsupportedNemesis(
                 "Rebuild is not supported with tablets. Skipping nemesis (scylladb/scylladb#17575)"
