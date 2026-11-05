@@ -13,10 +13,10 @@
 
 """Tests for GCE cluster multi-AZ node placement."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from google.cloud.compute_v1.types import Items, Metadata
+from google.cloud.compute_v1.types import Instance, Items, Metadata, NetworkInterface
 
 from sdcm.cluster_gce import GCECluster, gce_instance_node_index
 
@@ -174,3 +174,30 @@ def test_instance_without_usable_node_index_sorts_first(node_index):
     numbered = _instance_with_index("db-1", "1")
 
     assert sorted([numbered, broken], key=gce_instance_node_index) == [broken, numbered]
+
+
+def test_get_instances_skips_a_stopped_vm():
+    """A preempted VM keeps its internal IP, but must not be adopted as a node, or setup waits on SSH."""
+    tags = Metadata(items=[Items(key="TestId", value="t1"), Items(key="NodeType", value="scylla-db")])
+    instances = [
+        Instance(
+            name=name,
+            status=status,
+            zone="projects/p/zones/us-east1-b",
+            metadata=tags,
+            network_interfaces=[NetworkInterface(network_i_p="10.0.0.1")],
+        )
+        for name, status in [("db-running", "RUNNING"), ("db-preempted", "TERMINATED")]
+    ]
+    client = MagicMock()
+    client.aggregated_list.return_value = [("zones/us-east1-b", MagicMock(instances=instances))]
+    cluster = _cluster(["b"])
+    cluster.test_config.test_id.return_value = "t1"
+    cluster.node_type = "scylla-db"
+    cluster.nodes = []
+    cluster._node_public_ips = []
+
+    with patch("sdcm.utils.common.get_gce_compute_instances_client", return_value=(client, {"project_id": "p"})):
+        found = GCECluster._get_instances(cluster, dc_idx=0)
+
+    assert [i.name for i in found] == ["db-running"]
