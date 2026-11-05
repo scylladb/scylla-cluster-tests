@@ -88,6 +88,25 @@ def test_create_collecting_nodes_deduplicates_overlapping_provisioners(test_id, 
     assert collected == expected
 
 
+def test_create_collecting_nodes_without_public_ip_uses_private_ip(tmp_path_factory):
+    """Monitors on GCE, Azure and OCI have no public IP; Grafana must be reached on the private one."""
+    test_id = str(uuid.uuid4())
+    test_dir = tmp_path_factory.mktemp("log-collector-private-ip")
+    prepare_fake_region(test_id, "region_1", n_db_nodes=1, n_loaders=1, n_monitor_nodes=1)
+    collector = Collector(
+        test_id=test_id, test_dir=test_dir, params={"cluster_backend": "fake", "use_cloud_manager": False}
+    )
+    provisioner = provisioner_factory.discover_provisioners(backend="fake", test_id=test_id)[0]
+    for v_m in provisioner.list_instances():
+        v_m.public_ip_address = None
+
+    collector.create_collecting_nodes()
+
+    assert collector.monitor_set
+    for node in collector.monitor_set:
+        assert node.grafana_address == node.ssh_login_info["hostname"] == "10.10.10.10"
+
+
 def test_base_sct_log_collector_raises_when_no_local_files(tmp_path):
     """Test that BaseSCTLogCollector raises FileNotFoundError when no local files are found."""
     test_id = str(uuid.uuid4())
