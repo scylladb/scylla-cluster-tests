@@ -63,7 +63,7 @@ class ArgusEventCollector(EventsProcessPipe[Tuple[str, Any], SCTArgusEvent]):
                         "severity": event.severity.name,
                         "ts": event.timestamp,
                         "duration": getattr(event, "duration", None),
-                        "event_id": getattr(event, "event_id", None),
+                        "event_id": event.argus_aggregation_id(),
                         "event_type": event_class,
                         "message": str(event),
                         "known_issue": getattr(event, "known_issue", None),

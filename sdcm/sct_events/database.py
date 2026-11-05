@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
+import hashlib
 import logging
 from functools import partial
 from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
@@ -69,6 +70,20 @@ class DatabaseLogEvent(LogEvent, abstract=True):
 MILLI_RE = re.compile(r"(\d+) ms")
 
 
+class BacktraceAggregationMixin(Generic[T_log_event]):
+    """Aggregate LogEvents in Argus by a hash of their decoded backtrace (raw when undecoded).
+
+    Equal backtraces share one id. Typing `self` as a `LogEvent` ties the mixin to the `backtrace` and
+    `raw_backtrace` attributes that `LogEvent.__init__` sets.
+    """
+
+    def argus_aggregation_id(self: T_log_event) -> str:
+        backtrace = self.backtrace or self.raw_backtrace
+        if not backtrace:
+            return super().argus_aggregation_id()
+        return hashlib.sha256(backtrace.encode()).hexdigest()
+
+
 class ReactorStalledMixin(Generic[T_log_event]):
     tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
 
@@ -87,7 +102,10 @@ class ReactorStalledMixin(Generic[T_log_event]):
 
 # cause this is warning level, it's need to be before WARNING being suppressed
 DatabaseLogEvent.add_subevent_type(
-    "OVERSIZED_ALLOCATION", severity=Severity.ERROR, regex="seastar_memory - oversized allocation:"
+    "OVERSIZED_ALLOCATION",
+    mixin=BacktraceAggregationMixin,
+    severity=Severity.ERROR,
+    regex="seastar_memory - oversized allocation:",
 )
 DatabaseLogEvent.add_subevent_type(
     "WARNING", severity=Severity.SUPPRESS, regex=r"(^WARN(ING)?|!\s*?WARN(ING)?).*\[shard.*\]"
