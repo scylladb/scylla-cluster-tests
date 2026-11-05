@@ -8,3 +8,7 @@ e298929269e4a73a270ad453820c1325c2b04b07
 
 # PR #13547: Enable ruff f-string modernization rules and apply auto-fixes
 65378b079b26ab2d42d7a41e586ccf9289b4da9e # format(lint): apply ruff f-string auto-fixes (UP032, FLY002, RUF010)
+
+# PR #16668: Apply ruff pydocstyle auto-fixes
+e00ff676ebef530137d728fd282fddde82ae9852 # style(docstrings): apply ruff pydocstyle auto-fixes
+cd049dd8c040aab5eab484a83c4dc78c35847988 # style(docstrings): fix pydocstyle violations from branch-2026.4
