@@ -216,6 +216,7 @@ from sdcm.utils.ldap import (
     LDAP_USERS,
 )
 from sdcm.utils.minicloud.endpoint import MINICLOUD_GUEST_CA_URL, is_minicloud_active
+from sdcm.utils.minicloud.io_properties import override_content
 from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
@@ -6666,11 +6667,20 @@ class BaseScyllaCluster:
     def _deploy_scylla_d_overrides(self, node: BaseNode) -> None:
         for config_file_path in self.params.get("scylla_d_overrides_files"):
             config_file = Path(get_sct_root_path()) / config_file_path
+            text = config_file.read_text()
+            content = override_content(config_file, text, self.params)
+            if content != text:
+                self.log.info(
+                    "minicloud: %s for %s is the host figure scaled per db guest:\n%s",
+                    config_file.name,
+                    node.name,
+                    content,
+                )
             remote_path = f"/etc/scylla.d/{config_file.name}"
             node.remoter.sudo(f"sh -c 'test -e {remote_path} || install -m 0644 /dev/null {remote_path}'")
             with remote_file(remoter=node.remoter, remote_path=remote_path, sudo=True) as fobj:
                 fobj.truncate(0)  # first clear the file
-                fobj.write(config_file.read_text())
+                fobj.write(content)
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

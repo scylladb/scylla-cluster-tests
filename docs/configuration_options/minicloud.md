@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
 the local minicloud service.
 
-**22 options.**
+**23 options.**
 
 
 <a id="minicloud_azure_scratch_resource_group"></a>
@@ -84,6 +84,17 @@ GCS bucket for minicloud GCE image staging. Empty means derive <project>-miniclo
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="minicloud_io_properties_margin"></a>
+
+## **minicloud_io_properties_margin** / SCT_MINICLOUD_IO_PROPERTIES_MARGIN
+
+Share of the host disk figure in configurations/minicloud/scylla.d/io_properties.yaml held back for the loader, the monitor and the host itself before the rest is divided between the db guests of the run (a fraction, 0.05 = 5%)
+
+**default:** 0.05
+
+**type:** float
 
 
 <a id="minicloud_keep_alive"></a>
