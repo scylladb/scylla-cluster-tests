@@ -118,6 +118,23 @@ ssh -i ~/.ssh/scylla_test_id_ed25519 ubuntu@44.192.58.53
 # keep in mind the user name and key, can be different between backend or between tests
 ```
 
+## How can I open Grafana of a running test ?
+
+On GCE, Azure and OCI, monitor nodes are reachable only through the SCT network (CVE-2026-98432, SCT-1412).
+On GCE a monitor keeps its external IP, but the firewall opens only port 3000 on it.
+Reach Grafana and Prometheus with an SSH tunnel through the bastion or the SCT runner:
+
+```bash
+# Grafana, prints the local URL to open (http://127.0.0.1:<local port>)
+hydra tunnel --test-id <test_id> --port 3000 <monitor node name>
+
+# Prometheus
+hydra tunnel --test-id <test_id> --port 9090 <monitor node name>
+```
+
+`hydra tunnel` supports AWS, GCE and Azure. For a test that already finished, use
+`hydra investigate show-monitor <test_id>`.
+
 ## How can I clear monitoring stack create by `hydra investigate show-monitor`
 
 ```bash
