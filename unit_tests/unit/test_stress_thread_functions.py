@@ -254,7 +254,8 @@ def test_user_profile_hdr_tag_classified_by_workload_type(hdr_tag, expected_work
 
 def test_user_profile_hdr_tag_unrecognized_op_name_raises():
     """Op names with no write/read keyword are no longer coerced into a 'mixed' guess -
-    they now raise, since the tag must be classifiable on its own."""
+    they now raise, since the tag must be classifiable on its own.
+    """
     builder = _HdrRangeHistogramBuilder(hdr_tags=["simple1-st"], stress_operation="user", start_time=0, end_time=0)
     with pytest.raises(ValueError, match="Failed to detect the workload type"):
         builder._get_workload_type_by_hdr_tag("simple1-st")

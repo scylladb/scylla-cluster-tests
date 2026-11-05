@@ -35,7 +35,8 @@ class TabletsConfiguration:
 def wait_tablets_balanced(node, timeout: int = 3600):
     """
     Wait for tablets to be balanced, no more pending splits/merges and no ongoing tablets topology operations using REST API.
-    A single request is enough as it is submitted as a global topology request and completes only after fresh tablet load stats produce an empty balance plan and tablets are idle."""
+    A single request is enough as it is submitted as a global topology request and completes only after fresh tablet load stats produce an empty balance plan and tablets are idle.
+    """
     if not is_tablets_feature_enabled(node):
         LOGGER.info("Tablets are disabled, skipping wait for balance")
         return

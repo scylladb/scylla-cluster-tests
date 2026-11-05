@@ -14,7 +14,8 @@
 """The trigger matrix entry point.
 
 `trigger_matrix()` and `trigger_matrix_versions()` are the only place the loading, filtering, version resolution, parameter
-building, triggering and reporting layers meet."""
+building, triggering and reporting layers meet.
+"""
 
 import logging
 import os

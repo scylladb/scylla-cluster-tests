@@ -283,9 +283,7 @@ def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
 
 @pytest.mark.integration
 def test_is_table_has_no_sstables(docker_scylla, params, events):
-    """
-    test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis
-    """
+    """Test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis"""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
@@ -306,7 +304,7 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """

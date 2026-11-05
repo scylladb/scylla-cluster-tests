@@ -228,7 +228,8 @@ def test_guard_refuses_arm_clients_before_activation(fresh_azure_service, monkey
 
 def test_real_cloud_service_ignores_minicloud(fresh_azure_service, monkeypatch):
     """Runner management from a redirected process needs real Azure: a separate, cached instance
-    that neither the guard nor the endpoint redirect applies to."""
+    that neither the guard nor the endpoint redirect applies to.
+    """
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     real = AzureService.real_cloud()

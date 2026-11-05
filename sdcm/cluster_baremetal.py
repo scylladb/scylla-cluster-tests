@@ -164,7 +164,8 @@ class PhysicalHostCleanup:
 
     def _baseline_exists(self, baseline: str) -> bool:
         """Whether the host has `baseline`. One older than BASELINE_MAX_AGE_DAYS is removed instead: restoring it would
-        undo every change made to the host since, by its admins too."""
+        undo every change made to the host since, by its admins too.
+        """
         # With sudo, as root wrote it: the user SSH logs in as may not be able to read it
         if not self.remoter.sudo(f"test -s {baseline}", ignore_status=True).ok:
             return False

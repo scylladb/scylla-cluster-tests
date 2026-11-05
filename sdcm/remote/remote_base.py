@@ -124,9 +124,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         return cls.exception_retryable
 
     def get_init_arguments(self) -> dict:
-        """
-        Return instance parameters required to rebuild instance
-        """
+        """Return instance parameters required to rebuild instance"""
         return {
             "hostname": self.hostname,
             "user": self.user,
@@ -146,9 +144,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
 
     @classmethod
     def create_remoter(cls, *args, **kwargs) -> "RemoteCmdRunnerBase":
-        """
-        Use this function to create remote runner of the default type
-        """
+        """Use this function to create remote runner of the default type"""
         if cls.default_remoter_class is None:
             raise RuntimeError("Can't create remoter, no default remoter class found")
         return cls.default_remoter_class(*args, **kwargs)
@@ -389,7 +385,6 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed
         """
-
         self.log.debug("<%s>: Send files (src) %s -> (dst) %s", self.hostname, src, dst)
         # Start a master SSH connection if necessary.
         source_is_dir = False
@@ -492,9 +487,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         return self._use_rsync
 
     def _check_rsync(self) -> bool:
-        """
-        Check if rsync is available on the remote host.
-        """
+        """Check if rsync is available on the remote host."""
         result = self.run("/usr/bin/rsync --version", ignore_status=True)
         return result.ok
 
@@ -561,7 +554,6 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         :param is_local: Whether the paths should be interpreted as local or
             remote paths.
         """
-
         # non-trailing slash paths should just work
         if not pth or pth[-1] != "/":
             return [pth]
@@ -606,7 +598,6 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         Given a destination file/dir (recursively) set the permissions on
         all the files and directories to the max allowed by running umask.
         """
-
         # now this looks strange but I haven't found a way in Python to _just_
         # get the umask, apparently the only option is to try to set it
         umask = os.umask(0)
@@ -781,7 +772,6 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         :param timestamp_logs: If True, log entries will be timestamped
         :return:
         """
-
         watchers = self._setup_watchers(
             verbose=verbose, log_file=log_file, additional_watchers=watchers, timestamp_logs=timestamp_logs
         )

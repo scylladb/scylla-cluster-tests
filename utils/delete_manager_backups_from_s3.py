@@ -276,7 +276,7 @@ def main(bucket_name: str, cluster_ids_file: str, snapshot_tags_file: str, dry_r
 
     The backup structure is:
 
-    \b
+    \\b
     bucket_name/
       backup/
         meta/cluster/cluster_id/
@@ -284,15 +284,14 @@ def main(bucket_name: str, cluster_ids_file: str, snapshot_tags_file: str, dry_r
         sst/cluster/cluster_id/
 
     Examples:
-
-    \b
+    \\b
         # Delete all backups for specific cluster IDs (dry run)
         python delete_manager_backups_from_s3.py \\
             --bucket-name my-backup-bucket \\
             --cluster-ids-file cluster_ids_to_delete.txt \\
             --dry-run
 
-    \b
+    \\b
         # Find clusters with specific snapshots and delete ALL their backups
         python delete_manager_backups_from_s3.py \\
             --bucket-name my-backup-bucket \\

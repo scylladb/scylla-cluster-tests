@@ -176,7 +176,7 @@ class NodetoolDummyNode(BaseNode):
         return Result(exited=0, stderr="", stdout=self.resp)
 
     def db_up(self):
-        """return True if the database is up
+        """Return True if the database is up
         Couldn't be a property, because BaseNode.db_up is a method
         """
         return self._db_up
@@ -194,6 +194,6 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
         self.log = logging.getLogger(self.name)
 
     def get_ip_to_node_map(self, nodes=None):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        """Returns {ip: node} map for all nodes in cluster to get node by ip"""
         source = nodes if nodes is not None else self.nodes
         return {node.myname: node for node in source}

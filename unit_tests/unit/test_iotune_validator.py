@@ -73,7 +73,8 @@ def submit_deviation_table(backend: str, instance_type: str):
 )
 def test_iotune_validator_sends_absolute_deviation_with_backend_limit(backend, limit_pct):
     """Argus fails the run when a deviation is at or above the limit, so a preset too high or too low must give a
-    positive deviation, and each deviation cell must be UNSET under a column with the backend limit."""
+    positive deviation, and each deviation cell must be UNSET under a column with the backend limit.
+    """
     table = submit_deviation_table(backend, instance_type="test-instance-type")
 
     assert {cell.column: cell.value for cell in table.results} == pytest.approx(EXPECTED_DEVIATION_PCT)
@@ -85,7 +86,8 @@ def test_iotune_validator_sends_absolute_deviation_with_backend_limit(backend, l
 
 def test_iotune_validator_uses_one_table_per_backend_and_instance_type():
     """Argus keeps a history of the rules of a table, so each backend limit and each instance type must go to a table
-    of its own."""
+    of its own.
+    """
     runs = [("aws", "i4i.large"), ("aws", "i4i.xlarge"), ("gce", "n2-highmem-8"), ("azure", "Standard_L8s_v4")]
 
     tables = [submit_deviation_table(backend, instance_type) for backend, instance_type in runs]

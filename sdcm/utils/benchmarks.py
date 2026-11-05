@@ -128,7 +128,6 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
         Collect the results from ScyllaClusterBenchmarkRunner
         instances and post them to Elasticsearch.
         """
-
         for runner in self._benchmark_runners:
             if runner.benchmark_results:
                 results = {

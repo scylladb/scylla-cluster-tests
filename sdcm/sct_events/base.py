@@ -300,9 +300,7 @@ class SctEvent:
 
     @cached_property
     def subcontext_fields(self) -> list:
-        """
-        List of event fields that will be saved in raw_event.log for subcontext event
-        """
+        """List of event fields that will be saved in raw_event.log for subcontext event"""
         return []
 
     def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
@@ -488,7 +486,6 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
 
         Set `self._ready_to_publish' flag and return self.
         """
-
         try:
             splitted_line = line.split()
             if "T" in splitted_line[0]:

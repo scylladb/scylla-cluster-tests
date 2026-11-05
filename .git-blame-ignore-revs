@@ -11,3 +11,6 @@ e298929269e4a73a270ad453820c1325c2b04b07
 
 # PR #16739: Enable the ruff isort rules and sort the imports
 d636d64c05250d2a27af4165e52eaf29897ccc8c # improvement(ruff): check the import order with the isort rules
+
+# PR #16668: Apply ruff pydocstyle auto-fixes
+5c8d2e2bea1c1e5ae52e2e214ac8fced95f2f3ca # style(docstrings): apply ruff pydocstyle auto-fixes

@@ -50,7 +50,7 @@ def get_repo_urls(start_date: datetime, end_date: datetime, is_enterprise: bool 
 
 def bisect_test(test_func):
     """
-    decorator for bisecting tests.
+    Decorator for bisecting tests.
 
     Wrap a test function with this decorator and supply `bisect_start_date` and `bisect_end_date` to sct_config class to bisect it.
     Before bisecting, test function will be called once with the initial binaries and must set the reference value

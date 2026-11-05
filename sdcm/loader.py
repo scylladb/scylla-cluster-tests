@@ -395,7 +395,7 @@ class CqlStressCassandraStressExporter(StressExporter):
 
     def metrics_position_in_log(self) -> MetricsPosition:
         """
-        total ops ,    op/s,    mean,     med,     .95,     .99,    .999,     max,   time, errors
+        Total ops ,    op/s,    mean,     med,     .95,     .99,    .999,     max,   time, errors
             30645,   30602,     0.3,     0.2,     0.7,     1.1,     1.7,     2.4,    1.0,      0
             62965,   32336,     0.3,     0.3,     0.6,     0.7,     0.9,     1.3,    2.0,      0
             99175,   36203,     0.3,     0.2,     0.5,     0.7,     0.9,     1.2,    3.0,      0

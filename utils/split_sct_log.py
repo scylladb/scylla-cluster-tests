@@ -26,7 +26,8 @@ from pathlib import Path
 
 def get_time(line_content):
     """Gets time from log line. Example line:
-    < t:2022-02-11 20:21:40,987 f:nemesis.py      l:1216 c:sdcm.nemesis   [...]"""
+    < t:2022-02-11 20:21:40,987 f:nemesis.py      l:1216 c:sdcm.nemesis   [...]
+    """
     return "_".join(line_content.split(" ")[2:3]).split(",", maxsplit=1)[0]
 
 

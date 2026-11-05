@@ -34,9 +34,7 @@ class FakeRole(FakeUserRoleBase, Role):
         return self
 
     def attach_service_level(self, service_level: ServiceLevel):
-        """
-        :param service_level: service level object
-        """
+        """:param service_level: service level object"""
         self._attached_service_level = service_level
         self._attached_service_level_name = service_level.name
         self._attached_service_level_shares = service_level.shares

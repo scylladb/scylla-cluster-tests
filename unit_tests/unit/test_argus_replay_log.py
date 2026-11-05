@@ -108,7 +108,8 @@ class TestReplayLog:
 
     def test_write_is_synchronous(self, log_dir):
         """write() has no background writer thread or queue - by the time it returns, the
-        record is already flushed to disk, with no delay needed before reading it back."""
+        record is already flushed to disk, with no delay needed before reading it back.
+        """
         replay_log = ReplayLog(log_dir=log_dir, run_id="sync-test", test_type="scylla-cluster-tests")
         try:
             replay_log.write("POST", "/testrun/$type/submit", {"type": "sct"}, None, {"run_id": "x"}, success=True)
@@ -177,7 +178,8 @@ class TestReplayLog:
 
     def test_write_after_close_is_dropped_not_raised(self, log_dir):
         """A write() racing (or simply arriving after) close() must never raise - the
-        record for that one call is just dropped, not worth blocking shutdown to drain."""
+        record for that one call is just dropped, not worth blocking shutdown to drain.
+        """
         replay_log = ReplayLog(log_dir=log_dir, run_id="post-close-test", test_type="scylla-cluster-tests")
         replay_log.close()
 
@@ -188,7 +190,8 @@ class TestReplayLog:
     def test_write_when_log_dir_unwritable_is_dropped_not_raised(self, tmp_path):
         """If the log file can't be opened (e.g. bad log_dir), the instance still constructs
         successfully and write()/close() are silent no-ops - a broken replay log must never
-        prevent the real Argus client from being created or making its real HTTP calls."""
+        prevent the real Argus client from being created or making its real HTTP calls.
+        """
         blocking_file = tmp_path / "not_a_directory"
         blocking_file.write_text("")  # a plain file, so mkdir() underneath it must fail
 
