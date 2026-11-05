@@ -202,12 +202,15 @@ class AwsBuilder:
         click.secho(f"{self.region.region_name}: create_auto_scaling_group")
         try:
             asg_client = boto3.client("autoscaling", region_name=self.region.region_name)
-            subnet_ids = [self.region.sct_subnet(region_az=az).subnet_id for az in self.region.availability_zones]
+            # AWS adds zones to a region (eu-west-2d) before SCT has a subnet there: use only zones with one
+            subnets = {az: self.region.sct_subnet(region_az=az) for az in self.region.availability_zones}
+            subnets = {az: subnet for az, subnet in subnets.items() if subnet}
+            subnet_ids = [subnet.subnet_id for subnet in subnets.values()]
             asg_client.create_auto_scaling_group(
                 AutoScalingGroupName=self.name,
                 MinSize=0,
                 MaxSize=200,
-                AvailabilityZones=self.region.availability_zones,
+                AvailabilityZones=list(subnets),
                 VPCZoneIdentifier=",".join(subnet_ids),
                 MixedInstancesPolicy={
                     "LaunchTemplate": {
