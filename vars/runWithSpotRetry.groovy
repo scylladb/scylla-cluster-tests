@@ -5,7 +5,8 @@ import org.jenkinsci.plugins.workflow.steps.FlowInterruptedException
 // Re-run a test inside this build when an attempt is lost to a spot reclaim (SCT-707).
 //
 // `attemptBody(provisionType)` runs one full attempt - Argus run, test, logs, cleanup, Argus finish - and
-// returns `[error: <the test's error, or null when it passed>, retryable: <false for a real abort>]`. It must
+// returns `[error: <the test's error, or null when it passed>, retryable: <false after a real abort, in the
+// test or in a cleanup step>]`. It must
 // not mark the build failed itself: a build result can only get worse, so a reclaimed attempt that is retried
 // would leave the build red. Only the error of the last attempt is recorded, which gives the same build
 // result as before (FAILURE, or ABORTED for a timeout or an abort).
@@ -66,8 +67,10 @@ boolean isAbort(Throwable error) {
 // A failure marks the stage, and sets the build to `buildResult`. A fired timeout counts as a failure too:
 // left alone, its interruption sets the build ABORTED whatever `buildResult` says, so a retry that passes
 // could not make the build green again. Log collection from a reclaimed node can easily use up its timeout.
-// A real abort still aborts the build.
-void cleanupStep(String buildResult, int minutes, Closure body) {
+// A real abort still aborts the build, and returns true: catchError swallows the interruption so the
+// remaining cleanup steps run, so the caller must not retry the attempt after it.
+boolean cleanupStep(String buildResult, int minutes, Closure body) {
+    def aborted = false
     catchError(buildResult: buildResult, stageResult: 'FAILURE') {
         def startedMs = currentBuild.duration
         try {
@@ -76,9 +79,11 @@ void cleanupStep(String buildResult, int minutes, Closure body) {
             }
         } catch (FlowInterruptedException interruption) {
             if (currentBuild.duration - startedMs < minutes * 60000) {
+                aborted = true
                 throw interruption
             }
             error("Timed out after ${minutes} minutes")
         }
     }
+    return aborted
 }

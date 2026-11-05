@@ -471,8 +471,10 @@ def call(Map pipelineParams) {
                                             // After a failed test (a reclaimed node is usually gone), a failing cleanup stage only marks itself:
                                             // the test error decides the build result, and a retry that passes must leave the build green.
                                             def cleanupBuildResult = testError == null ? 'FAILURE' : 'SUCCESS'
+                                            // An abort caught by a cleanup step lets the rest of the cleanup run, but ends the retries.
+                                            def abortedInCleanup = false
                                             stage("Collect log data (${instance_type})") {
-                                                runWithSpotRetry.cleanupStep(cleanupBuildResult, 30) {
+                                                abortedInCleanup |= runWithSpotRetry.cleanupStep(cleanupBuildResult, 30) {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
                                                             runCollectLogs(params, builder.region)
@@ -481,7 +483,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                             stage("Clean resources (${instance_type})") {
-                                                runWithSpotRetry.cleanupStep(cleanupBuildResult, 10) {
+                                                abortedInCleanup |= runWithSpotRetry.cleanupStep(cleanupBuildResult, 10) {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
                                                             runCleanupResource(params, builder.region)
@@ -490,7 +492,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                             stage('Finish Argus Test Run') {
-                                                runWithSpotRetry.cleanupStep(cleanupBuildResult, 5) {
+                                                abortedInCleanup |= runWithSpotRetry.cleanupStep(cleanupBuildResult, 5) {
                                                     script {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
@@ -502,7 +504,7 @@ def call(Map pipelineParams) {
                                                     }
                                                 }
                                             }
-                                            return [error: testError, retryable: retryable]
+                                            return [error: testError, retryable: retryable && !abortedInCleanup]
                                         }
                                         stage("Send email with result ${instance_type}") {
                                             catchError(stageResult: 'FAILURE') {
