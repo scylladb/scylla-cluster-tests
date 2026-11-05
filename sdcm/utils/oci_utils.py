@@ -382,7 +382,8 @@ def get_oci_instance_ips(instance: Instance) -> tuple[str | None, str]:
     ).data
     network_client = OciService().get_network_client(region=region)
     vnics = [network_client.get_vnic(a.vnic_id).data for a in attachments if a.lifecycle_state == "ATTACHED"]
-    vnic = next(v for v in vnics if v.is_primary)
+    if not (vnic := next((v for v in vnics if v.is_primary), None)):
+        raise ValueError(f"No attached primary VNIC on OCI instance {instance.display_name}")
     return vnic.public_ip, vnic.private_ip
 
 
