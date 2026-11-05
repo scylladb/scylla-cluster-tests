@@ -89,16 +89,21 @@ arch: x86            # force x86_64 (shorthand accepted)
 
 ### Spot Runs Prefer Less-Interrupted Types
 
-When `instance_provision` is `spot` (or `spot_fleet`), candidates are sorted by vCPU count first, then by
-their spot interruption bucket in the test's first region, then by the order above. Size always wins, so
-a bucket-0 24xlarge never beats a bucket-4 xlarge; the bucket only chooses between candidates of the
-closest size, for example `i8ge.xlarge` over `i8g.xlarge`. On-demand runs are unaffected.
+When `instance_provision` is `spot` (or `spot_fleet`) on AWS, candidates are sorted by vCPU count first,
+then by their spot interruption bucket in the test's first region, then by the order above. Size always
+wins, so a bucket-0 24xlarge never beats a bucket-4 xlarge; the bucket only chooses between candidates of
+the closest size, for example `i8ge.xlarge` over `i8g.xlarge`. Because size comes first, a `>=` vCPU
+constraint can also land on a smaller type than on-demand picks. On-demand runs are unaffected.
+
+The bucket comes from the region configured at sizing time. If the provisioner later moves the run to
+another region (spot region relocation or region fallback), the type was ranked for the first region.
 
 Buckets follow the AWS Spot Instance Advisor ranges (0 = <5%, 1 = 5-10%, 2 = 10-15%, 3 = 15-20%,
 4 = >20% interrupted per month) and live in `data/instance_catalog/interruption.yaml`, so sizing makes no
 network calls. Refresh the file with `sct.py sizing update-interruption`. Only AWS has data: Azure's
 `SpotResources` eviction-rate table returns nothing to the SCT service principal, and GCE and OCI publish
-no per-type signal. Types without a bucket keep their normal order.
+no per-type signal. When no candidate has a bucket in the region, the normal order applies unchanged;
+when only some do, the types without one sort after them.
 
 ### Preferred Families
 

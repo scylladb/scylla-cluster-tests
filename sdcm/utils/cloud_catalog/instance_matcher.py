@@ -489,7 +489,7 @@ def _build_sort_key(
     if spot_region:
         # Closest size first, then the less-interrupted candidate of that size, then the configured order.
         # Size must stay first: a bucket-0 24xlarge must never win over a bucket-4 xlarge. An unknown bucket
-        # sorts after every known one, so clouds with no interruption data (GCE, OCI) keep their order.
+        # sorts after every known one. select_instance passes no spot_region when no candidate has a bucket.
         active[:0] = [
             field_getters["vcpus"],
             lambda inst: _UNKNOWN_BUCKET if (b := inst.get_interruption_bucket(spot_region)) is None else b,
@@ -521,8 +521,8 @@ def select_instance(
        ``local_disk_gb`` or ``local_disk_count``.
     5. Filter all cloud instances by the full constraint set.
     6. Narrow to preferred-family candidates when available.
-    7. Sort: preferred family order → price ascending → vcpus ascending. For spot, fewest vcpus and
-       then lowest interruption bucket come first.
+    7. Sort: preferred family order → price ascending → vcpus ascending. For spot, when any candidate
+       has interruption data in *spot_region*, fewest vcpus and then lowest interruption bucket come first.
     8. Return the first (best) match.
 
     Args:
@@ -591,6 +591,10 @@ def select_instance(
         if preferred_candidates:
             candidates = preferred_candidates
 
+    # Without interruption data (GCE, Azure, OCI, or a region the file doesn't cover), sorting by size first
+    # would only override the family order, e.g. GCE `n2-highmem-2` over `z3-highmem-8-highlssd`.
+    if not any(inst.get_interruption_bucket(spot_region) is not None for inst in candidates):
+        spot_region = None
     candidates.sort(
         key=_build_sort_key(
             sort_order=sizing.sort_order if sizing else None,

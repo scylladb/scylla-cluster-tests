@@ -61,6 +61,16 @@ def test_region_without_data_keeps_the_family_order(catalog):
     assert select_instance(catalog, "db", "aws", {"vcpu": 4}, spot_region="ap-south-1").instance_type == "i8g.xlarge"
 
 
+def test_no_data_does_not_trade_the_family_order_for_size(catalog):
+    """Like GCE: no buckets at all, so the first family wins even though a later family has a smaller type."""
+    catalog.preferred_families = {"db": {"aws": ["i8g", "i8ge"]}}
+    catalog.instances = [_inst("i8g.2xlarge", "i8g", 8, 0.69), _inst("i8ge.large", "i8ge", 2, 0.23)]
+
+    result = select_instance(catalog, "db", "aws", {"vcpu": ">=2"}, spot_region="us-east-1")
+
+    assert result.instance_type == "i8g.2xlarge"
+
+
 def test_from_directory_attaches_buckets_and_skips_the_file_as_a_catalog(tmp_path):
     (tmp_path / "aws.yaml").write_text(
         yaml.safe_dump(
