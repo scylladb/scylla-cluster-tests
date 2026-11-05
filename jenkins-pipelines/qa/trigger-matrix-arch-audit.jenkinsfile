@@ -12,7 +12,7 @@ def cronSpec = env.JOB_NAME?.startsWith('scylla-staging/') ? '' : 'H 06 * * 1'
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v3-CI"
+            label "aws-sct-builders-eu-west-1-v5-CI"
         }
     }
     environment {
