@@ -39,13 +39,17 @@ def base_node_init(
     self.log = Mock()
 
 
-def make_oci_node_mock(private_ip=None, public_ip=None, ipv6_ip=None, rpc_address=None, broadcast_rpc_address=None):
-    """Create a lightweight MagicMock(spec=OciNode) for testing get_all_ip_addresses and IP mapping."""
-    node = MagicMock(spec=OciNode)
+def make_node_mock(spec, private_ip=None, public_ip=None, ipv6_ip=None, network_interfaces=()):
+    """Create a lightweight MagicMock(spec=spec) node for testing get_all_ip_addresses and IP mapping."""
+    node = MagicMock(spec=spec)
     type(node).private_ip_address = PropertyMock(return_value=private_ip)
     type(node).public_ip_address = PropertyMock(return_value=public_ip)
     type(node).ipv6_ip_address = PropertyMock(return_value=ipv6_ip)
     node.scylla_network_configuration = MagicMock()
-    node.scylla_network_configuration.rpc_address = rpc_address
-    node.scylla_network_configuration.broadcast_rpc_address = broadcast_rpc_address
+    node.scylla_network_configuration.network_interfaces = list(network_interfaces)
     return node
+
+
+def make_oci_node_mock(private_ip=None, public_ip=None, ipv6_ip=None, network_interfaces=()):
+    """Create a lightweight MagicMock(spec=OciNode) for testing get_all_ip_addresses and IP mapping."""
+    return make_node_mock(OciNode, private_ip, public_ip, ipv6_ip, network_interfaces)
