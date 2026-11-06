@@ -118,9 +118,7 @@ class ManagerTask:
 
     @property
     def history(self):
-        """
-        Gets the task's history table
-        """
+        """Gets the task's history table"""
         # ╭──────────────────────────────────────┬────────────────────────┬────────────────────────┬──────────┬───────╮
         # │ id                                   │ start time             │ end time               │ duration │ status│
         # ├──────────────────────────────────────┼────────────────────────┼────────────────────────┼──────────┼───────┤
@@ -162,9 +160,7 @@ class ManagerTask:
 
     @property
     def next_run(self):
-        """
-        Gets the task's next run value
-        """
+        """Gets the task's next run value"""
         # ╭──────────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                             │ next run                      │ ret. │ properties │ status │
         # ├──────────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
@@ -185,9 +181,7 @@ class ManagerTask:
 
     @staticmethod
     def get_max_date(date_list):
-        """
-        Receives a list of date strings and returns the string of the latest date string
-        """
+        """Receives a list of date strings and returns the string of the latest date string"""
         time_format = "%d %b %y %H:%M:%S"
         converted_max_date = datetime.datetime(1970, 1, 3, 0, 0, 0)
         timezone = date_list[0][date_list[0].rindex(" ") + 1 :]
@@ -198,9 +192,7 @@ class ManagerTask:
 
     @property
     def status(self) -> str:
-        """
-        Gets the task's status
-        """
+        """Gets the task's status"""
         cmd = "tasks -c {}".format(self.cluster_id)
         # expecting output of:
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
@@ -221,9 +213,7 @@ class ManagerTask:
 
     @property
     def arguments(self) -> str:
-        """
-        Gets the task's arguments
-        """
+        """Gets the task's arguments"""
         res = self.progress_string()
 
         arguments_string = ""  # If arguments parameter doesn't exist, there were no arguments in this task
@@ -281,9 +271,7 @@ class ManagerTask:
 
     @property
     def progress(self) -> str:
-        """
-        Gets the repair task's progress
-        """
+        """Gets the repair task's progress"""
         if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
             return " 0%"
         res = self.progress_string()
@@ -871,10 +859,7 @@ class ManagerCluster(ScyllaManagerBase):
         return per_node_keyspaces_and_tables_backup_files
 
     def delete(self):
-        """
-        $ sctool cluster delete
-        """
-
+        """$ sctool cluster delete"""
         cmd = "cluster delete -c {}".format(self.id)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
@@ -917,17 +902,13 @@ class ManagerCluster(ScyllaManagerBase):
 
     @property
     def _cluster_list(self):
-        """
-        Gets the Manager's Cluster list
-        """
+        """Gets the Manager's Cluster list"""
         cmd = "cluster list"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     @property
     def name(self):
-        """
-        Gets the Cluster name as represented in Manager
-        """
+        """Gets the Cluster name as represented in Manager"""
         # expecting output of:
         # ╭──────────────────────────────────────┬──────┬─────────────╮
         # │ cluster id                           │ name │ host        │
@@ -941,9 +922,7 @@ class ManagerCluster(ScyllaManagerBase):
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     def _get_task_list_filtered(self, prefix, task_class):
-        """
-        Gets the Cluster's  Task list
-        """
+        """Gets the Cluster's  Task list"""
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                        │ next run                      │ ret. │ properties │ status │
         # ├─────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
@@ -975,10 +954,7 @@ class ManagerCluster(ScyllaManagerBase):
         )  # return the manager's health-check-task object with the found id
 
     def get_hosts_health(self):  # noqa: PLR0914
-        """
-        Gets the Manager's Cluster Nodes status
-        """
-
+        """Gets the Manager's Cluster Nodes status"""
         # $ sctool status -c bla
         # Datacenter: dc1
         # ╭────┬─────────────────────────┬───────────┬────────────────┬──────────────────────────────────────╮
@@ -1117,16 +1093,12 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     @property
     def cluster_list(self):
-        """
-        Gets the Manager's Cluster list
-        """
+        """Gets the Manager's Cluster list"""
         cmd = "cluster list"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     def get_cluster(self, cluster_name):
-        """
-        Returns Manager Cluster object by a given name if exist, else returns none.
-        """
+        """Returns Manager Cluster object by a given name if exist, else returns none."""
         # ╭──────────────────────────────────────┬──────────╮
         # │ cluster id                           │ name     │
         # ├──────────────────────────────────────┼──────────┤
@@ -1182,7 +1154,6 @@ class ScyllaManagerTool(ScyllaManagerBase):
           https://manager.docs.scylladb.com/stable/add-a-cluster.html
           https://manager.docs.scylladb.com/stable/sctool#cluster-add
         """
-
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
 
@@ -1448,7 +1419,6 @@ class SCTool:
         :param identifier:
         :return:
         """
-
         # example expected parsed_table input is:
         # [['Host', 'Status', 'RTT'],
         #  ['18.234.77.216', 'UP', '0.92761'],

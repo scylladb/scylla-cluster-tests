@@ -107,7 +107,6 @@ _OVERRIDE_PAIRS = [
 )
 def test_k8s_override_signature_compatible_with_parent(child_cls, parent_cls, method_name):
     """Child K8s class override must accept every parameter its cloud-provider parent accepts."""
-
     assert hasattr(child_cls, method_name), f"{child_cls.__name__} does not have method '{method_name}'"
     assert hasattr(parent_cls, method_name), f"{parent_cls.__name__} does not have method '{method_name}'"
 

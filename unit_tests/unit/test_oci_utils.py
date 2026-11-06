@@ -314,7 +314,6 @@ def test_wait_for_instance_state_unexpected_termination():
 @patch("sdcm.utils.oci_utils.KeyStore")
 def test_oci_service_compartment_id(mock_keystore_class):
     """Test getting compartment_id."""
-
     # Clear singleton cache
     OciService._instances = {}
 

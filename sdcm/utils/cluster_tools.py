@@ -35,9 +35,7 @@ def group_nodes_by_dc_idx(nodes: list[BaseNode]) -> dict[int, list[BaseNode]]:  
 
 
 def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
-    """
-    Check if the cluster layout is balanced according to the initial configuration.
-    """
+    """Check if the cluster layout is balanced according to the initial configuration."""
     nodes_by_dc_idx = group_nodes_by_dc_idx(db_cluster.nodes)
     capacity_errors_check_mode = db_cluster.params.get("capacity_errors_check_mode") or "per-initial_config"
 

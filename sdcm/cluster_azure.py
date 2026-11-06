@@ -34,9 +34,7 @@ class CreateAzureNodeError(Exception):
 
 
 class AzureNode(cluster.BaseNode):
-    """
-    Wraps Azure instances, so that we can also control the instance through SSH.
-    """
+    """Wraps Azure instances, so that we can also control the instance through SSH."""
 
     METADATA_BASE_URL = "http://169.254.169.254/metadata/instance/"
 

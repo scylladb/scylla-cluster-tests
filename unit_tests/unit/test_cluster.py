@@ -441,9 +441,7 @@ class TestBaseMonitorSet:
         self.monitor_cluster.log = logging
 
     def test_monitoring_version(self):
-        """
-        verify that dev version are mapped to monitor master version
-        """
+        """Verify that dev version are mapped to monitor master version"""
         self.node.remoter = VersionDummyRemote(
             self,
             (
@@ -494,7 +492,7 @@ class TestNodetoolStatus:
         }
 
     def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
-        """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
+        """Case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
         resp = "\n".join(
             [
                 "Datacenter: datacenter1",
@@ -988,7 +986,7 @@ def test_secondary_network_interface_is_never_the_one_used_for_ssh():
 
 
 def test_traffic_control_targets_the_secondary_interface():
-    """tc commands must shape nic 1, resolved the same way the interface nemesis resolves it."""
+    """Tc commands must shape nic 1, resolved the same way the interface nemesis resolves it."""
     node = unittest.mock.MagicMock()
     node.scylla_network_configuration = _network_config_with_broadcast_on_primary()
     node._secondary_network_interface_name = BaseNode._secondary_network_interface_name.__get__(node)

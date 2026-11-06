@@ -24,9 +24,7 @@ from sdcm.utils.features import is_tablets_feature_enabled
 
 
 class SlaPerUserTest(LongevityTest):
-    """
-    Test SLA per user feature using cassandra-stress.
-    """
+    """Test SLA per user feature using cassandra-stress."""
 
     STRESS_WRITE_CMD = (
         "cassandra-stress write cl=QUORUM n={n} -schema"
@@ -335,7 +333,6 @@ class SlaPerUserTest(LongevityTest):
 
         Load from cache
         """
-
         # In ideal expected ratio between two users is 5.0.
         # Based on reality change it to 3.5
         # https://github.com/scylladb/scylla-cluster-tests/pull/4943#issuecomment-1168507500
@@ -689,7 +686,6 @@ class SlaPerUserTest(LongevityTest):
         - Expect OPS ratio between two loads is 1:5 (e.g. 190:950)
         - Expect scheduler run time between two loads is 1:5 (e.g. 190:950)
         """
-
         stress_duration = 5  # minutes
 
         # Select part of the record to warm the cache (all this data will be in the cache).

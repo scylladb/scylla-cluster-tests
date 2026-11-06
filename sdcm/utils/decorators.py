@@ -43,9 +43,7 @@ class Retry(Exception):
 
 
 class retrying:
-    """
-    Used as a decorator to retry function run that can possibly fail with allowed exceptions list
-    """
+    """Used as a decorator to retry function run that can possibly fail with allowed exceptions list"""
 
     def __init__(
         self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message="", timeout=0, raise_on_exceeded=True
@@ -143,7 +141,6 @@ def measure_time(func):
     For an input given function, it returns a wrapper function that returns how long it takes to execute, and the function's result.
 
     Example:
-
     @measure_time
     def _run_repair(self, node):
         result = node.run_nodetool(sub_cmd='repair')

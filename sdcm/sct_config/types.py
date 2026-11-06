@@ -84,7 +84,6 @@ ExistingFile = Annotated[str, BeforeValidator(_file)]
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
     """Convert an environment variable into a Python's list."""
-
     if value is None:
         return None
     if isinstance(value, str):
