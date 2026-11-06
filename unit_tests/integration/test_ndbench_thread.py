@@ -29,9 +29,7 @@ def test_01_cql_api(request, docker_scylla, params):
 
 
 def test_02_cql_kill(request, docker_scylla, params):
-    """
-    verifies that kill command on the NdBenchStressThread is working
-    """
+    """Verifies that kill command on the NdBenchStressThread is working"""
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=1000 ; "
@@ -51,10 +49,7 @@ def test_02_cql_kill(request, docker_scylla, params):
 
 
 def test_03_dynamodb_api(request, docker_scylla, events, params):
-    """
-    this test isn't working yet, since we didn't figure out a way to use ndbench with dynamodb
-    """
-
+    """This test isn't working yet, since we didn't figure out a way to use ndbench with dynamodb"""
     # start a command that would yield errors
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (

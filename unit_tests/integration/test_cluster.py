@@ -302,7 +302,7 @@ def test_get_tables_with_sstable_folder(docker_scylla, params, events):
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """

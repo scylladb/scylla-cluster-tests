@@ -98,7 +98,6 @@ def test_cloud_instances_azure_failure_continues_with_other_clouds():
 )
 def test_azure_resource_graph_query_rate_limiting_retry(side_effect, expected_call_count, expected_sleep_calls):
     """Test that Azure resource graph query retries with exponential backoff on rate limiting."""
-
     with patch("sdcm.utils.azure_utils.time.sleep") as mock_sleep:
         # Create mock resource graph client
         mock_resource_graph = Mock()
