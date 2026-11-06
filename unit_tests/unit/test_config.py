@@ -19,10 +19,32 @@ from collections import namedtuple
 import pytest
 import yaml
 
+<<<<<<< HEAD
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.keystore import KeyStore
+from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.provision.provisioner import VmArch
+=======
+from sdcm.keystore import KeyStore
+from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
+<<<<<<< HEAD
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
+
+LOGGER = logging.getLogger(__name__)
+=======
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
+from sdcm.utils.vm_arch import VmArch
+
+LOGGER = logging.getLogger(__name__)
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 
 def _get_latest_scylla_release(product="scylla"):

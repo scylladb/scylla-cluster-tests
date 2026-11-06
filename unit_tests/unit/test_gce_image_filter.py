@@ -15,7 +15,15 @@
 
 import pytest
 
+<<<<<<< HEAD
 from sdcm.utils.version_utils import parse_scylla_version_tag
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.provision.provisioner import VmArch
+from sdcm.utils.common import build_gce_image_filter, gce_image_version_label
+=======
+from sdcm.utils.common import build_gce_image_filter, gce_image_version_label
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 
 def build_gce_filter(version: str = None) -> str:

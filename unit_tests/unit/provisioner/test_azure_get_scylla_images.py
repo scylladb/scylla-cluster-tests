@@ -17,8 +17,26 @@ import logging
 
 import pytest
 
+<<<<<<< HEAD
 from sdcm.provision.azure.utils import get_scylla_images
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.provision.azure.utils import (
+    get_arch_from_azure_instance_type,
+    get_image_tags,
+    get_scylla_images,
+    get_scylla_images_private_galleries,
+)
+from sdcm.provision.provisioner import VmArch
+=======
+from sdcm.provision.azure.utils import (
+    get_arch_from_azure_instance_type,
+    get_image_tags,
+    get_scylla_images,
+    get_scylla_images_private_galleries,
+)
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.vm_arch import VmArch
 from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
 

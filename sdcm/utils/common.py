@@ -63,7 +63,20 @@ from packaging.version import Version
 from rich.console import Console
 from rich.table import Table
 
+<<<<<<< HEAD
 from sdcm.provision.provisioner import VmArch
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+import docker
+from sdcm import wait
+from sdcm.keystore import KeyStore
+from sdcm.provision.provisioner import VmArch
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
+=======
+import docker
+from sdcm import wait
+from sdcm.keystore import KeyStore
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import create_proxy_argus_s3_url
@@ -86,6 +99,7 @@ from sdcm.utils.gce_utils import (
     gce_public_addresses,
     vmarch_to_gcp,
 )
+<<<<<<< HEAD
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import (
@@ -96,6 +110,18 @@ from sdcm.utils.gce_utils import (
     get_gce_storage_client,
 )
 from sdcm.utils.version_utils import parse_scylla_version_tag
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
+from sdcm.utils.version_utils import RC_VERSION_TAG_RE, parse_scylla_version_tag
+=======
+from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
+from sdcm.utils.version_utils import RC_VERSION_TAG_RE, parse_scylla_version_tag
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

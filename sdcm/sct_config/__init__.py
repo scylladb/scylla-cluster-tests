@@ -25,16 +25,26 @@ even for names defined in ``types`` or ``helpers``: ``from .types import f`` bin
 ``config``'s namespace, so patching ``sdcm.sct_config.types.f`` leaves every call site untouched.
 """
 
-from sdcm.sct_config.config import (
+lazy from sdcm.sct_config.config import (
     SCTConfiguration,
     backend_to_cloud,
     init_and_verify_sct_config,
     is_arm_instance_type,
     substitute_arch_markers,
 )
+<<<<<<< HEAD
 from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, available_backends
 from sdcm.sct_config.helpers import simulated_racks_enabled
 from sdcm.sct_config.types import (
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
+from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
+from sdcm.sct_config.types import (
+=======
+lazy from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
+lazy from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
+lazy from sdcm.sct_config.types import (
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     AdaptiveTimeoutMultipliers,
     IntOrList,
     SctField,
