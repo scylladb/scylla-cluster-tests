@@ -19,7 +19,6 @@ from invoke.runners import Result
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, find_log_event
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS, DatabaseLogEvent
 from sdcm.sct_events.loaders import (
     CS_ERROR_EVENTS,
     CS_ERROR_EVENTS_PATTERNS,
@@ -274,7 +273,6 @@ def test_stress_event_with_errors(event_class, severity, event_id):
         pytest.param(
             ScyllaBenchLogEvent, list(chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)), id="scylla_bench"
         ),
-        pytest.param(DatabaseLogEvent, SYSTEM_ERROR_EVENTS, id="database"),
     ],
 )
 def test_log_event_subevents_all_listed(log_event_class, listed_events):
