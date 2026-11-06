@@ -26,9 +26,25 @@ from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.literals import ArchitectureTypeType
 
+<<<<<<< HEAD
 from sdcm.provision.network_configuration import ssh_connection_ip_type, network_interfaces_count
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.keystore import KeyStore
+from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
+from sdcm.provision.provisioner import VmArch
+from sdcm.test_config import TestConfig
+=======
+from sdcm.keystore import KeyStore
+from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
+from sdcm.test_config import TestConfig
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.utils.decorators import retrying
+<<<<<<< HEAD
 
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+=======
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore

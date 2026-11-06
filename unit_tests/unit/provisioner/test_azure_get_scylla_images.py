@@ -22,8 +22,8 @@ from sdcm.provision.azure.utils import (
     get_scylla_images,
     get_scylla_images_private_galleries,
 )
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.vm_arch import VmArch
 from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
 
