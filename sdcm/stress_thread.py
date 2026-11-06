@@ -204,7 +204,10 @@ class CassandraStressThread(DockerBasedStressThread):
                     if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
                         stress_cmd += f"rack={loader_rack} "
                         node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(db_nodes=self.node_list).get(
-                            (str(loader.region), str(loader.rack))
+                            (
+                                str(loader.region),
+                                str(loader.rack),
+                            )
                         )
 
             node_ip_list = [n.cql_address for n in node_list]
@@ -261,9 +264,7 @@ class CassandraStressThread(DockerBasedStressThread):
 
     @staticmethod
     def _add_errors_option(stress_cmd: str, to_add: list) -> str:
-        """
-        Add suboption to -errors option, if such suboption is there, does not add or change it
-        """
+        """Add suboption to -errors option, if such suboption is there, does not add or change it"""
         to_add = list(to_add)
         current_error_option = next((option for option in stress_cmd.split(" -") if option.startswith("errors ")), None)
         if current_error_option is None:

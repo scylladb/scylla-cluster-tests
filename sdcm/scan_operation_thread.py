@@ -86,7 +86,11 @@ class ScanOperationThread(OperationThread):
         self.operation_instance_map = {
             "table_and_aggregate": lambda: self.generator.choice([full_scan_operation, full_scan_aggregates_operation]),
             "random": lambda: self.generator.choice(
-                [full_scan_operation, full_scan_aggregates_operation, full_partition_scan_operation]
+                [
+                    full_scan_operation,
+                    full_scan_aggregates_operation,
+                    full_partition_scan_operation,
+                ]
             ),
             "table": lambda: full_scan_operation,
             "partition": lambda: full_partition_scan_operation,
@@ -105,9 +109,7 @@ class FullscanOperationBase:
         | Type[FullPartitionScanReversedOrderEvent]
         | Type[FullScanAggregateEvent],
     ):
-        """
-        Base class for performing fullscan operations.
-        """
+        """Base class for performing fullscan operations."""
         self.log = logging.getLogger(self.__class__.__name__)
         self.log.info("FullscanOperationBase starts")
         self.fullscan_params = thread_params

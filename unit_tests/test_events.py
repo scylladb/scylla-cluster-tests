@@ -277,9 +277,7 @@ class SctEventsTests(BaseEventsTest):
         self.assertIn("critical that should not be lowered #3", crit_log_content)
 
     def test_severity_changer_db_log(self):
-        """
-        See https://github.com/scylladb/scylla-cluster-tests/issues/2115
-        """
+        """See https://github.com/scylladb/scylla-cluster-tests/issues/2115"""
         extra_time_to_expiration = 2
         # 1) Lower DatabaseLogEvent to WARNING for 1 sec.
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
@@ -492,7 +490,6 @@ class SctEventsTests(BaseEventsTest):
     @pytest.mark.integration
     def test_default_filters_non_gce_backend_keeps_bind_race_as_error(self):
         """The GCE-specific first-boot bind-race filter must not apply on other backends."""
-
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
@@ -912,7 +909,8 @@ class SctEventsGceBindRaceFilterTests(BaseEventsTest):
     @pytest.mark.integration
     def test_default_filters_gce_first_boot_bind_race(self):
         """SCT-545/SCT-411: on the GCE backend, first-boot posix_listen EADDRNOTAVAIL races should
-        be downgraded to WARNING, so they don't fail otherwise-passing runs."""
+        be downgraded to WARNING, so they don't fail otherwise-passing runs.
+        """
         with environment(SCT_CLUSTER_BACKEND="gce"):
             enable_default_filters(SCTConfiguration())
 

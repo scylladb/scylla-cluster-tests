@@ -287,9 +287,7 @@ class ProcessProfile(ProfileBase):
         self._queue.put(stats)
 
     def get_stats_holders(self) -> List[StatsHolder]:
-        """
-        Get slave's stats via queue, make list of StatsHolder of them and return it.
-        """
+        """Get slave's stats via queue, make list of StatsHolder of them and return it."""
         output = []
         while not self._queue.empty():
             stats = self._queue.get(block=False)

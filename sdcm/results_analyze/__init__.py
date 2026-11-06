@@ -61,9 +61,7 @@ class BaseResultsAnalyzer:
         self._events = events
 
     def get_all(self):
-        """
-        Get all the test results in json format
-        """
+        """Get all the test results in json format"""
         return self._es.search(index=self._es_index, size=self._limit)
 
     def get_test_by_id(self, test_id):
@@ -257,9 +255,7 @@ class BaseResultsAnalyzer:
 
 
 class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
-    """
-    Get latency during operations performance analyzer
-    """
+    """Get latency during operations performance analyzer"""
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
         super().__init__(
@@ -349,7 +345,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
 
             def sort_results_by_versions(results: list[Any]):
-                """filter not relevant results and build dict for sorting
+                """Filter not relevant results and build dict for sorting
 
                 Filter out from search results any document, which doesn't have
                 relevant data: version info, statistics for steady state,
@@ -407,7 +403,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             return {}
 
     def _compare_current_best_results_average(self, current_result, best_result):
-        """compare results between current and best results
+        """Compare results between current and best results
 
         Calculate difference in percentage between current test
         and best per version for each nemesis nemesis and
@@ -575,9 +571,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
 
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
-    """
-    Get specified performance test results from elasticsearch DB and analyze it to find a regression
-    """
+    """Get specified performance test results from elasticsearch DB and analyze it to find a regression"""
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
         super().__init__(
@@ -713,9 +707,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
 
 
 class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
-    """
-    Get performance test results from elasticsearch DB and analyze it to find a regression
-    """
+    """Get performance test results from elasticsearch DB and analyze it to find a regression"""
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
@@ -834,7 +826,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
@@ -1024,7 +1015,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-
         doc = self.get_test_by_id(test_id)
         if not doc:
             raise ValueError(f"Cannot find test by id: {test_id}")
@@ -1610,9 +1600,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
 
 class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
-    """
-    Performance Analyzer for results with throughput and latency of gradual payload increase
-    """
+    """Performance Analyzer for results with throughput and latency of gradual payload increase"""
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, email_recipients=email_recipients, logger=logger, events=events)
@@ -1672,9 +1660,7 @@ class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceA
 
 
 class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
-    """
-    Get latency during operations performance analyzer
-    """
+    """Get latency during operations performance analyzer"""
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
         super().__init__(

@@ -309,7 +309,8 @@ def test_oversized_allocation_filter_for_one_node(node, symbol, expected):
 
 def test_upgrade_oversized_rpc_whole_run_filter(events_function_scope):  # noqa: ARG001
     """SCT-1048: the decoder writes the symbol into `event.backtrace` and leaves `event.line`
-    as the raw log line, so a filter on `event.line` never matches the symbol."""
+    as the raw log line, so a filter on `event.line` never matches the symbol.
+    """
     upgrade_test_stub = unittest.mock.MagicMock()
     upgrade_test_stub.params.scylla_version_upgrade_target = "2026.2.0"
 

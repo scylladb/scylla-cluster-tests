@@ -98,9 +98,7 @@ class K8sSetMonkey(NemesisRunner):
 
 
 class ScyllaOperatorBasicOperationsMonkey(NemesisRunner):
-    """
-    Selected number of nemesis that is focused on scylla-operator functionality
-    """
+    """Selected number of nemesis that is focused on scylla-operator functionality"""
 
     disruptive = True
 
@@ -278,6 +276,10 @@ class MdcChaosMonkey(NemesisRunner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name(
-            ["CorruptThenRepairMonkey", "NoCorruptRepairMonkey", "DecommissionMonkey"]
+            [
+                "CorruptThenRepairMonkey",
+                "NoCorruptRepairMonkey",
+                "DecommissionMonkey",
+            ]
         )
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
