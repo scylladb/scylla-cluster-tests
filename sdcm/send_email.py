@@ -50,9 +50,7 @@ class BodySizeExceeded(Exception):
 
 
 class Email:
-    """
-    Responsible for sending emails
-    """
+    """Responsible for sending emails"""
 
     _attachments_size_limit = 10485760  # 10Mb = 20 * 1024 * 1024
     _body_size_limit = 26214400  # 25Mb = 20 * 1024 * 1024
@@ -720,7 +718,7 @@ def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir,
 
 
 def read_email_data_from_file(filename):
-    """read email data from file
+    """Read email data from file
 
     During teardown ClusterTester wrote email data
     to file email_data.json

@@ -5,9 +5,7 @@ from sdcm.results_analyze import BaseResultsAnalyzer, collections, TestConfig
 
 
 def keys_exists(element, *keys):
-    """
-    Check if *keys (nested) exists in `element` (dict).
-    """
+    """Check if *keys (nested) exists in `element` (dict)."""
     if len(keys) == 0:
         raise AttributeError("keys_exists() expects at least two arguments, one given.")
 

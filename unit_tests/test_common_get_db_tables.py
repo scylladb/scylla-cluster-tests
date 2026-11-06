@@ -1,6 +1,4 @@
-"""
-Tests for get_db_tables function in sdcm.utils.common
-"""
+"""Tests for get_db_tables function in sdcm.utils.common"""
 
 import pytest
 from unittest.mock import MagicMock
@@ -37,7 +35,10 @@ def mock_node():
                 return MockResult([MockRow(table_name="standard1", flags={"compound"})])
             if "feeds" in query:
                 return MockResult(
-                    [MockRow(table_name="table0", flags={"dense"}), MockRow(table_name="table1", flags={"compound"})]
+                    [
+                        MockRow(table_name="table0", flags={"dense"}),
+                        MockRow(table_name="table1", flags={"compound"}),
+                    ]
                 )
 
         return MockResult([])

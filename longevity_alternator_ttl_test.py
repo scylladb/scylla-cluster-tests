@@ -56,7 +56,6 @@ class AlternatorTtlLongevityTest(LongevityTest):
         Wait for node's compactions to finish.
         count and print number of sstables, partitions and sizes.
         """
-
         # Run the stress_cmd and wait for complete.
         self.test_custom_time()
         # Wait for all data to be expired.
@@ -80,7 +79,6 @@ class AlternatorTtlLongevityTest(LongevityTest):
         An example for a relevant scenario for that is for Alternator TTL that requires overwriting existing TTL data
         after a while, where some items are already expired and/or scanned.
         """
-
         # Run the stress_cmd a first time
         self.test_custom_time()
 
@@ -104,7 +102,6 @@ class AlternatorTtlLongevityTest(LongevityTest):
         4. Wait for TTL-scan intervals to run
         5. Run a background read stress while data is being expired.
         """
-
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
         stress_queue = []
         # prepare write workload
@@ -156,7 +153,6 @@ class AlternatorTtlLongevityTest(LongevityTest):
         Then after finished it run a table full scan.
         It validates only the data of longest TTL stress (10 days) exist.
         """
-
         # Run the stress_cmd and wait for finish
         self.test_custom_time()
 

@@ -293,9 +293,7 @@ def _create_mismatched_details_error_message(previous_task_details, current_task
 
 
 def validate_previous_task_details(task, previous_task_details):
-    """
-    Compares the details of the task next run and history to the previously extracted next run and history
-    """
+    """Compares the details of the task next run and history to the previously extracted next run and history"""
     mismatched_details_name_list = []
     current_task_details = wait_until_task_finishes_return_details(task, wait=False)
     for detail_name, current_value in current_task_details.items():

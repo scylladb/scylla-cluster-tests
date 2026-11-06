@@ -38,7 +38,8 @@ from sdcm.test_config import TestConfig
 class RegionDefinition:
     """List of InstancesDefinitions and Provisioner creation attributes.
 
-    Contains complete information needed to create instances for given region and test id"""
+    Contains complete information needed to create instances for given region and test id
+    """
 
     backend: str
     test_id: str
@@ -218,10 +219,11 @@ class DefinitionBuilder(abc.ABC):
         return KeyStore().get_ssh_key_pair(name=Path(self.params.get("user_credentials_path")).name)
 
     def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
-        """generates node count for each region from configuration parameter string (e.g. n_db_nodes).
+        """Generates node count for each region from configuration parameter string (e.g. n_db_nodes).
         When parameter string has less regions defined than regions, fills with zero for each missing region.
 
-        E.g. regions: 'eastus westus centralus' and n_db_nodes: '2 1' - will generate [2, 1, 0] list"""
+        E.g. regions: 'eastus westus centralus' and n_db_nodes: '2 1' - will generate [2, 1, 0] list
+        """
         regions = self.params.get(self.REGION_MAP)
         region_count = len(regions)
         return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
@@ -249,7 +251,8 @@ class DefinitionBuilder(abc.ABC):
 class RegionDefinitionBuilder:
     """Entry point for creation all needed information to create Provisioners and instances, based on SCT Configuration.
 
-    Each backend must register own callable (e.g. function) which will be used when given backend is used."""
+    Each backend must register own callable (e.g. function) which will be used when given backend is used.
+    """
 
     def __init__(self) -> None:
         self._builder_classes = {}
@@ -257,12 +260,14 @@ class RegionDefinitionBuilder:
     def register_builder(self, backend: str, builder_class: Type[DefinitionBuilder]) -> None:
         """Registers builder for given backend
 
-        Must be used before calling RegionDefinitionBuilder for given backend."""
+        Must be used before calling RegionDefinitionBuilder for given backend.
+        """
         self._builder_classes[backend] = builder_class
 
     def get_builder(self, params: SCTConfiguration, test_config: TestConfig) -> DefinitionBuilder:
         """Creates RegionDefinition for each region based on SCTConfiguration.
 
-        Prior use, must register builder for given backend."""
+        Prior use, must register builder for given backend.
+        """
         backend = params.get("cluster_backend")
         return self._builder_classes[backend](params, test_config)

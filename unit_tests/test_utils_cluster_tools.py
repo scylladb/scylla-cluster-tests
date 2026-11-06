@@ -47,7 +47,6 @@ def test_check_cluster_layout_on_two_dcs():
 
 def test_check_cluster_layout_unbalanced_racks():
     """Test that a cluster that does match configuration returns True. even if racks are unbalanced."""
-
     db_cluster = MagicMock(
         nodes=[
             MagicMock(dc_idx=0, rack="rack1"),

@@ -43,9 +43,7 @@ class TestRunner:
 
 
 class TestBaseClass(ABC):
-    """
-    For tests purposes TestBaseClass is also a flag class
-    """
+    """For tests purposes TestBaseClass is also a flag class"""
 
     flag_a = False
     flag_b = False

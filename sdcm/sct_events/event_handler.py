@@ -35,7 +35,8 @@ class TestFailure(Exception):
 class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
     """Runs handlers for events (according to EventsHandler.handlers mapping dict).
 
-    Handlers are created to gather additional information for issue investigation purposes."""
+    Handlers are created to gather additional information for issue investigation purposes.
+    """
 
     handlers = {
         "CassandraStressLogEvent.SchemaDisagreement": SchemaDisagreementHandler(),

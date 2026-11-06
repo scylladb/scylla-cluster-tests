@@ -80,9 +80,7 @@ def test_closed_pull_request(params):
     ],
 )
 def test_jira_issues(params, issue, opened):
-    """
-    Test that JIRA issues are correctly identified as closed or open based on their state.
-    """
+    """Test that JIRA issues are correctly identified as closed or open based on their state."""
     result = SkipPerIssues([issue], params)
 
     assert bool(result) == opened, (

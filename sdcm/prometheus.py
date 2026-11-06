@@ -194,7 +194,11 @@ class PrometheusAlertManagerListener(threading.Thread):
             node = labels.get("instance", "N/A")
 
             continuous_hash = PrometheusAlertManagerEvent.get_continuous_hash_from_dict(
-                {"node": node, "starts_at": alert.get("startsAt"), "alert_name": alert_name}
+                {
+                    "node": node,
+                    "starts_at": alert.get("startsAt"),
+                    "alert_name": alert_name,
+                }
             )
 
             if begin_event := self.event_registry.find_continuous_events_by_hash(continuous_hash):
@@ -250,7 +254,6 @@ class PrometheusAlertManagerListener(threading.Thread):
         :param end: if None, will be calculated by duration
         :return: silenceID
         """
-
         assert duration or (start and end), "should define duration or (start and end)"
         if not start:
             start = datetime.datetime.now(datetime.timezone.utc)
@@ -270,7 +273,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def delete_silence(self, silence_id: str) -> None:
         """
-        delete a alert silence
+        Delete a alert silence
 
         :param silence_id: silence id returned from `silence()` api call
         :return:

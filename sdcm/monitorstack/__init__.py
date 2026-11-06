@@ -583,7 +583,6 @@ def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT
     :returns: True if request is successful, False otherwise
     :rtype: {bool}
     """
-
     time_end = time.time()
     time_start = time_end - 600
     try:
