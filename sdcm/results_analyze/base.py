@@ -6,9 +6,7 @@ class __DEFAULT__:
 
 
 class ClassBase:
-    """
-    This class that is meant to be used as base for class that could be stored or loaded (in ES or any other backend)
-    """
+    """This class that is meant to be used as base for class that could be stored or loaded (in ES or any other backend)"""
 
     _es_data_mapping = {}
     _data_type = None
@@ -37,9 +35,7 @@ class ClassBase:
             )
 
     def load_from_es_data(self, es_data):
-        """
-        Fills instance data with data from ES
-        """
+        """Fills instance data with data from ES"""
         if not isinstance(es_data, dict):
             raise ValueError(f"Class {self.__class__.__name__} can be loaded only from dict")
         data_mapping = self._es_data_mapping
@@ -56,9 +52,7 @@ class ClassBase:
             self._apply_data(data_name, data_type, value)
 
     def save_to_es_data(self):
-        """
-        Represents contents of the instance as ES data according to _es_data_mappings
-        """
+        """Represents contents of the instance as ES data according to _es_data_mappings"""
         output = {}
 
         def data_cb(data_instance, current_instance, data_path, es_data_path, is_edge):
@@ -88,10 +82,7 @@ class ClassBase:
 
     @classmethod
     def _get_all_es_data_mapping(cls, max_level=10) -> dict:
-        """
-        Returns dictionary where keys are all possible class data paths and values are related ES data paths
-        """
-
+        """Returns dictionary where keys are all possible class data paths and values are related ES data paths"""
         if max_level == 0:
             return {}
         output = {}
@@ -119,9 +110,7 @@ class ClassBase:
         return output
 
     def _iterate_data(self, callback, data_path=None, es_data_path=None):
-        """
-        Iterate all data in the instance by calling callback function
-        """
+        """Iterate all data in the instance by calling callback function"""
         if data_path is None:
             data_path = []
         if es_data_path is None:

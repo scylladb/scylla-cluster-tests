@@ -28,10 +28,7 @@ BILLION = THOUSAND**3
 
 
 class PerformanceRegressionRowLevelRepairTest(ClusterTester):
-    """
-    Test Scylla row-level-repair performance regression with cassandra-stress/scylla-bench.
-
-    """
+    """Test Scylla row-level-repair performance regression with cassandra-stress/scylla-bench."""
 
     # Util functions ===============================================================================================
 
@@ -45,7 +42,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
         """
-
         self.log.debug("Pre Creating Schema for c-s with {} keyspaces".format(keyspace_num))
         for i in range(1, keyspace_num + 1):
             keyspace_name = "keyspace{}".format(i)
@@ -310,7 +306,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-
         assert self.params.get("stress_cmd").startswith("scylla-bench"), "This test supports only scylla-bench"
 
         node3 = self.db_cluster.nodes[-1]

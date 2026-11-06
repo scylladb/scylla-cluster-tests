@@ -54,7 +54,7 @@ def configure_logging():
 @click.argument("new_job_name", type=str)
 def update_value(index_name, test_id, new_job_name):
     """
-    helper script to move results in index to a different job
+    Helper script to move results in index to a different job
     as needed
 
     for example, we had a bad run that we want to exclude and move to different job-name:

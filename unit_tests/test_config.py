@@ -477,7 +477,6 @@ def test_conf_check_required_files_negative(monkeypatch):
 def test_config_dupes():
     def get_dupes(c):
         """sort/tee/izip"""
-
         a, b = itertools.tee(sorted(c))
         next(b, None)
         r = None

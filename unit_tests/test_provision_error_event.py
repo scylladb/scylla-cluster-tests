@@ -22,7 +22,6 @@ from click.testing import CliRunner
 
 def test_provision_resources_sends_error_event_to_argus():
     """Test that provision_resources sends error event to Argus on failure."""
-
     # Mock the necessary components
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
@@ -102,7 +101,6 @@ def test_provision_resources_reports_config_init_failure_to_argus(use_ssh_tunnel
     'SCT_ARGUS_USE_SSH_TUNNEL' env var - omitting it raises a TypeError that
     the surrounding except block swallows, losing the error report.
     """
-
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,
@@ -172,7 +170,6 @@ def test_provision_resources_reports_config_init_failure_to_argus(use_ssh_tunnel
 
 def test_provision_resources_no_argus_report_without_test_id():
     """Test that Argus reporting is skipped when no test_id is available."""
-
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,

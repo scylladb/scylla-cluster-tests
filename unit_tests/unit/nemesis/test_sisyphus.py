@@ -303,7 +303,8 @@ def test_build_disruptions_by_name(disruptions, expected_error):
 def test_build_disruptions_by_name_selector_excludes_one():
     """A name that exists but is filtered out by the active nemesis_selector is skipped
     with a warning, not raised as an error -- distinct from a name that matches no class
-    at all."""
+    at all.
+    """
     tester = FakeTester()
     # flag_a only matches CustomNemesisA, so CustomNemesisB is excluded by the selector.
     nemesis = CustomNemesisByName(
@@ -314,7 +315,8 @@ def test_build_disruptions_by_name_selector_excludes_one():
 
 def test_build_disruptions_by_name_selector_excludes_all():
     """When the active selector excludes every requested name, construction raises instead
-    of silently leaving an empty disruptions_list for call_next_nemesis to assert on later."""
+    of silently leaving an empty disruptions_list for call_next_nemesis to assert on later.
+    """
     tester = FakeTester()
     with pytest.raises(ValueError, match="No nemesis left"):
         CustomNemesisByName(tester, None, disruptions=["CustomNemesisA", "CustomNemesisB"], nemesis_selector="flag_d")

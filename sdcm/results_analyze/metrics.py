@@ -208,25 +208,19 @@ class WriteLatency99StdevScyllaMetric(LatencyMetricBase):
 
 
 class Latency99CassandraStressMetric(LatencyMetricBase):
-    """
-    Metric read from cassandra stress command results
-    """
+    """Metric read from cassandra stress command results"""
 
     name = "c-s latency 99%"
 
 
 class LatencyMeanCassandraStressMetric(LatencyMetricBase):
-    """
-    Metric read from cassandra stress command results
-    """
+    """Metric read from cassandra stress command results"""
 
     name = "c-s latency mean"
 
 
 class ThroughputCassandraStressMetric(ThroughputMetricBase):
-    """
-    Metric read from cassandra stress command results
-    """
+    """Metric read from cassandra stress command results"""
 
     name = "c-s throughput"
 
