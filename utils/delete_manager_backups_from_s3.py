@@ -284,7 +284,6 @@ def main(bucket_name: str, cluster_ids_file: str, snapshot_tags_file: str, dry_r
         sst/cluster/cluster_id/
 
     Examples:
-
     \b
         # Delete all backups for specific cluster IDs (dry run)
         python delete_manager_backups_from_s3.py \\

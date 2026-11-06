@@ -197,7 +197,8 @@ class ChaosMeshExperiment:
     def wait_until_finished(self):
         """Waits given timeout seconds for experiment to finish.
 
-        In case of experiment status being an error or timeout occurred, raises an exception."""
+        In case of experiment status being an error or timeout occurred, raises an exception.
+        """
         self.log.debug("waiting until '%s' experiment ends...", self._name)
         assert self._end_time, "Experiment was not started. Use 'start()' method before waiting."
         while time.time() < self._end_time:
@@ -246,9 +247,7 @@ class PodFailureExperiment(ChaosMeshExperiment):
 
 
 class MemoryStressExperiment(ChaosMeshExperiment):
-    """
-    This experiment uses memStress https://github.com/chaos-mesh/memStress for stressing memory in provided scylla pod.
-    """
+    """This experiment uses memStress https://github.com/chaos-mesh/memStress for stressing memory in provided scylla pod."""
 
     CHAOS_KIND = "StressChaos"
 
@@ -400,9 +399,7 @@ class IOFaultChaosExperiment(ChaosMeshExperiment):
 
 
 class NetworkPacketLossExperiment(ChaosMeshExperiment):
-    """
-    Simulates packet loss in the network by randomly dropping a specified percentage of packets.
-    """
+    """Simulates packet loss in the network by randomly dropping a specified percentage of packets."""
 
     CHAOS_KIND = "NetworkChaos"
 
@@ -439,9 +436,7 @@ class NetworkPacketLossExperiment(ChaosMeshExperiment):
 
 
 class NetworkCorruptExperiment(ChaosMeshExperiment):
-    """
-    Simulates network packet corruption by altering a specified percentage of packets.
-    """
+    """Simulates network packet corruption by altering a specified percentage of packets."""
 
     CHAOS_KIND = "NetworkChaos"
 
@@ -478,9 +473,7 @@ class NetworkCorruptExperiment(ChaosMeshExperiment):
 
 
 class NetworkDelayExperiment(ChaosMeshExperiment):
-    """
-    Introduces latency in network communication by adding a specified delay to packet transmission.
-    """
+    """Introduces latency in network communication by adding a specified delay to packet transmission."""
 
     CHAOS_KIND = "NetworkChaos"
 
@@ -522,9 +515,7 @@ class NetworkDelayExperiment(ChaosMeshExperiment):
 
 
 class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
-    """
-    Limits the network bandwidth by throttling the data transfer rate to a specified value.
-    """
+    """Limits the network bandwidth by throttling the data transfer rate to a specified value."""
 
     CHAOS_KIND = "NetworkChaos"
 

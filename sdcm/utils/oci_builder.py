@@ -324,7 +324,6 @@ class OciBuilder:
         Args:
             regions: List of region names to configure. If None, uses all supported OCI regions.
         """
-
         regions = regions or get_all_regions(cloud_provider="oci")
         for region_name in regions:
             try:

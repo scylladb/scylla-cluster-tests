@@ -26,7 +26,7 @@ CDC_SETTINGS_REGEXP = [CDC_ENABLED_REGEXP, CDC_DELTA_REGEXP, CDC_PREIMAGE_REGEXP
 
 
 def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
-    """parse blob object with cdc setttings
+    """Parse blob object with cdc setttings
 
     cdc settings stored in MetaTableData as blob.
     b'\x05\x00\x00\x00\x05\x00\x00\x00delta\x04\x00\x00\x00full
@@ -81,7 +81,6 @@ def get_table_cdc_properties(session, ks_name: str, table_name: str) -> Dict[str
     :returns: [description]
     :rtype: {Dict[str, str]}
     """
-
     session.cluster.refresh_schema_metadata()
     # For some reason, `refresh_schema_metadata` doesn't refresh immediatelly...
     time.sleep(10)
