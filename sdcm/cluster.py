@@ -84,7 +84,6 @@ from sdcm.provision.helpers.certificate import (
     TLSAssets,
 )
 from sdcm.provision.network_configuration import (
-    NetworkInterfaceNotFound,
     ScyllaNetworkConfiguration,
     network_interfaces_count,
 )
@@ -1396,22 +1395,18 @@ class BaseNode(AutoSshContainerMixin):
     def get_all_ip_addresses(self):
         ips = [ip for ip in (self.private_ip_address, self.public_ip_address, self.ipv6_ip_address) if ip]
         if self.scylla_network_configuration:
-            for address_getter in (
-                lambda: self.scylla_network_configuration.rpc_address,
-                lambda: self.scylla_network_configuration.broadcast_rpc_address,
-            ):
-                try:
-                    extra_address = address_getter()
-                except NetworkInterfaceNotFound, AttributeError:
-                    continue
-                if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
-                    continue
-                try:
-                    ipaddress.ip_address(extra_address)
-                except ValueError:
-                    continue
-                if extra_address not in ips:
-                    ips.append(extra_address)
+            # NOTE: Scylla may advertise an address of any NIC ('broadcast_address' and 'broadcast_rpc_address'
+            #       on a secondary NIC in split-network setups), and with 'use_dns_names' the configuration gives
+            #       DNS names instead of IPs for some of them. So take the IPs of every NIC of the node instead.
+            for interface in self.scylla_network_configuration.network_interfaces:
+                for ip in (
+                    interface.ipv4_public_address,
+                    *interface.ipv4_private_addresses,
+                    interface.ipv6_private_address,
+                    *interface.ipv6_public_addresses,
+                ):
+                    if ip and (ip := to_inet_ntop_format(ip)) not in ips:
+                        ips.append(ip)
         return ips
 
     def _wait_public_ip(self):
