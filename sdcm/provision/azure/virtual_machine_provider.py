@@ -212,7 +212,8 @@ class VirtualMachineProvider:
     @staticmethod
     def _get_scylla_storage_profile(image_id: str, name: str, disk_size: Optional[int] = None) -> Dict[str, Any]:
         """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
-        (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
+        (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)
+        """
         storage_profile = {
             "storage_profile": {
                 "os_disk": {

@@ -150,7 +150,8 @@ class TestEventsSeverityChangerFilter(unittest.TestCase):
 def test_events_severity_changer_filter_gce_first_boot_bind_race():
     """SCT-545/SCT-411: GCE first-boot posix_listen EADDRNOTAVAIL races (e.g. transient
     Prometheus API server bind failures) should be downgraded to WARNING by the filters
-    published from `enable_default_filters()` for the "gce" backend."""
+    published from `enable_default_filters()` for the "gce" backend.
+    """
     startup_failed_filter = EventsSeverityChangerFilter(
         new_severity=Severity.WARNING,
         event_class=DatabaseLogEvent,

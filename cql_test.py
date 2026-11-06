@@ -19,14 +19,10 @@ from sdcm.tester import ClusterTester
 
 
 class CQLExampleTest(ClusterTester):
-    """
-    Example test of how to establish CQL connections and run commands on them.
-    """
+    """Example test of how to establish CQL connections and run commands on them."""
 
     def test_cql_example(self):
-        """
-        Create a table, run a few sql statements
-        """
+        """Create a table, run a few sql statements"""
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
             self.create_keyspace(keyspace_name="ks", replication_factor=1)

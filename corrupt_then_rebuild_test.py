@@ -18,9 +18,7 @@ from sdcm import nemesis
 
 
 class CorruptThenRebuildTest(ClusterTester):
-    """
-    Corrupt the data file and rebuild
-    """
+    """Corrupt the data file and rebuild"""
 
     def test_corrupt_then_rebuild_nodes(self):
         # populates 100GB

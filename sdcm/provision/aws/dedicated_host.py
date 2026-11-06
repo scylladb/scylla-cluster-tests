@@ -148,7 +148,7 @@ class SCTDedicatedHosts:
 
     @classmethod
     def release(cls, params) -> None:
-        """release all dedicated hosts."""
+        """Release all dedicated hosts."""
         if not cls.hosts:
             LOGGER.info("No dedicated hosts to release.")
             return
@@ -199,7 +199,6 @@ class SCTDedicatedHosts:
     @classmethod
     def release_by_tags(cls, tags_dict: dict, regions=None, dry_run=False) -> None:
         """Cancel all dedicated hosts with specific tags in AWS."""
-
         local_tags_dict = {k: v for k, v in tags_dict.items() if k != "NodeType"}
         assert local_tags_dict, "tags_dict not provided (can't clean all hosts)"
         if regions:

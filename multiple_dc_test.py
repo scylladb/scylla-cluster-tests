@@ -20,9 +20,7 @@ from sdcm.tester import ClusterTester
 
 
 class MultipleDcTest(ClusterTester):
-    """
-    Test with multiple DataCenters
-    """
+    """Test with multiple DataCenters"""
 
     def stop_scylla(self, node):
         node.stop_scylla(verify_up=True, verify_down=True)
@@ -31,10 +29,7 @@ class MultipleDcTest(ClusterTester):
         node.start_scylla(verify_up=True, verify_down=True)
 
     def test_shutdown(self):
-        """
-        https://github.com/scylladb/scylla-enterprise/issues/228
-        """
-
+        """https://github.com/scylladb/scylla-enterprise/issues/228"""
         # run a background workload
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), stress_num=2, keyspace_num=1)
         nodes = self.db_cluster.nodes

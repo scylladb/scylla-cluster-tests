@@ -131,7 +131,7 @@ class SstableLoadUtils:
     def run_load_and_stream(
         cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1", start_timeout=60, end_timeout=300
     ):
-        """runs load and stream using API request and waits for it to finish"""
+        """Runs load and stream using API request and waits for it to finish"""
         with wait_for_log_lines(
             node,
             start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],
