@@ -1,5 +1,6 @@
 """Tests for MinicloudManager lifecycle: start/stop/reuse, env overrides, region prep,
-gce/azure gap detection and the container death watch."""
+gce/azure gap detection and the container death watch.
+"""
 
 import os
 import stat
@@ -78,7 +79,7 @@ def test_start_passes_lightweight_vcpus(tmp_path):
 
 
 def test_start_locks_guest_memory_by_default(tmp_path):
-    """minicloud locks guest RAM, and QEMU can only mlockall() with a memlock rlimit and IPC_LOCK."""
+    """Minicloud locks guest RAM, and QEMU can only mlockall() with a memlock rlimit and IPC_LOCK."""
     cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
     assert cmd[cmd.index("--ulimit") + 1] == "memlock=-1:-1"
     assert "IPC_LOCK" in cmd
@@ -109,7 +110,8 @@ def test_start_passes_intercept_s3(tmp_path):
 
 def test_start_sizes_container_to_host_memory_by_default(tmp_path):
     """Unset caps keep the container bounded only by the host, but still without swap:
-    docker needs --memory alongside --memory-swap, so the host's total RAM stands in."""
+    docker needs --memory alongside --memory-swap, so the host's total RAM stands in.
+    """
     with patch.object(MinicloudManager, "_container_memory_gib", return_value=62.5):
         cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
     assert cmd[cmd.index("--memory") + 1] == "62.5g"
@@ -139,7 +141,7 @@ def test_container_memory_gib_unset_without_guest_locking(tmp_path):
 
 
 def test_start_applies_container_limits(tmp_path):
-    """docker --memory speaks b/k/m/g, so the GiB config form has to be converted."""
+    """Docker --memory speaks b/k/m/g, so the GiB config form has to be converted."""
     cmd = _started_docker_cmd(
         MinicloudConfig(
             state_dir=str(tmp_path),
@@ -673,7 +675,8 @@ def test_is_running_false_when_container_not_running(tmp_path):
 
 def test_death_watch_reports_even_with_keep_alive(tmp_path):
     """keep_alive controls teardown, not death reporting — CI (which always sets it) is
-    exactly where a mid-test container death must still produce the event."""
+    exactly where a mid-test container death must still produce the event.
+    """
     config = MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
     manager.keep_alive = True

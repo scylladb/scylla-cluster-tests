@@ -34,7 +34,6 @@ def mock_keystore():
 @pytest.fixture(autouse=True)
 def fast_retry(monkeypatch):
     """Override S3Storage.download_file to use minimal retry times for tests."""
-
     # Get the original undecorated method
     original_download = (
         S3Storage.download_file.__wrapped__

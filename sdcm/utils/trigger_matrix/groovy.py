@@ -19,7 +19,8 @@ Builds are scheduled through /scriptText rather than the REST build API, which o
 The script text is an f-string with literal Groovy braces doubled, and job names and parameter
 values are interpolated into single-quoted Groovy literals -- see `_escape_groovy_string`.
 Jenkins is the only thing that parses the result, so `unit_tests/trigger_matrix/test_groovy.py`
-covers the escaping, both cause branches, both output branches and brace balance."""
+covers the escaping, both cause branches, both output branches and brace balance.
+"""
 
 import logging
 import os

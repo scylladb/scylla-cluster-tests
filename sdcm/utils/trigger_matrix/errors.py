@@ -14,7 +14,8 @@
 """Exception hierarchy for the trigger matrix.
 
 Kept in its own leaf module so that every other submodule -- including `jenkins_client`,
-which must not pull in the pydantic models -- can raise without creating an import cycle."""
+which must not pull in the pydantic models -- can raise without creating an import cycle.
+"""
 
 
 class TriggerMatrixError(Exception):

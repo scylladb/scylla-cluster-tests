@@ -36,9 +36,7 @@ from sdcm.provision.scylla_yaml.auxiliaries import (
 
 
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
-    """
-    Builds scylla yaml attributes regarding encryption
-    """
+    """Builds scylla yaml attributes regarding encryption"""
 
     node: Any = Field(exclude=True)
 

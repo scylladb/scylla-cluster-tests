@@ -111,6 +111,9 @@ lint.select = [
     "FLY002",  # Replace static join with f-string
     "RUF010",  # Use f-string conversion flags (!s, !r, !a)
     "LOG",  # flake8-logging rules
+    "D200", "D202", "D209", "D300", "D402", "D403",  # docstring formatting
+    "D405", "D410", "D411", "D412", "D416",  # docstring sections
+    "D101", "D102", "D103",  # missing docstrings, enforced only under sdcm/nemesis
 ]
 lint.ignore = ["E501", "PLR2004", "PLR0917"]
 
@@ -123,6 +126,12 @@ target-version = "py315"
 force-exclude = true
 line-length = 120
 respect-gitignore = true
+
+[tool.ruff.lint.per-file-ignores]
+"!sdcm/nemesis/**" = ["D101", "D102", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.pylint]
 max-args = 12

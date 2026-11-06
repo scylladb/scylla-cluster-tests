@@ -62,7 +62,8 @@ def test_get_index_status_or_none_reraises_non_404_http_errors():
 
 def test_get_index_status_or_none_reraises_when_response_is_missing():
     """An HTTPError with no attached response (e.g. a connection-level failure) must not be
-    mistaken for 'not discovered yet'."""
+    mistaken for 'not discovered yet'.
+    """
     client = VectorStoreClient(base_url="http://vs.example")
     error = requests.exceptions.HTTPError("no response")
     error.response = None

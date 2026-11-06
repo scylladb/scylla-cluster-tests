@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-"""
-Unit tests for AWS cluster functionality.
-"""
+"""Unit tests for AWS cluster functionality."""
 
 import pytest
 from unittest.mock import Mock, patch

@@ -215,9 +215,7 @@ class LongevityDataValidator:
 
     @property
     def view_names_for_updated_data(self):
-        """
-        Get MV name that holds rows which are expected to be updated
-        """
+        """Get MV name that holds rows which are expected to be updated"""
         if not self._mvs_for_updated_data:
             mvs_names = self.get_view_name_from_profile(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, all_entries=True)
             self._mvs_for_updated_data = [
@@ -227,9 +225,7 @@ class LongevityDataValidator:
 
     @property
     def view_names_after_updated_data(self):
-        """
-        Get MV name that holds rows which were updated
-        """
+        """Get MV name that holds rows which were updated"""
         if not self._mvs_after_updated_data:
             self._mvs_after_updated_data = self.get_view_name_from_profile(
                 self.SUFFIX_FOR_VIEW_AFTER_UPDATE, all_entries=True
@@ -240,9 +236,7 @@ class LongevityDataValidator:
 
     @property
     def view_name_for_not_updated_data(self):
-        """
-        Get MV name that holds rows which are expected to stay intact
-        """
+        """Get MV name that holds rows which are expected to stay intact"""
         if not self._mv_for_not_updated_data:
             mv_for_not_updated_data = self.get_view_name_from_profile(self.SUBSTRING_NOT_UPDATED)
 
@@ -253,9 +247,7 @@ class LongevityDataValidator:
 
     @property
     def view_name_for_deletion_data(self):
-        """
-        Get MV name that holds rows which may be deleted
-        """
+        """Get MV name that holds rows which may be deleted"""
         if not self._mv_for_deletions:
             mv_for_deletions = self.get_view_name_from_profile(self.SUBSTRING_DELETION)
 
@@ -434,7 +426,6 @@ class LongevityDataValidator:
         When updates will be finished this function verifies that data in "not_updated" MV and expected result table
         is same
         """
-
         if not (
             self._validate_not_updated_data and self.view_name_for_not_updated_data and self.expected_data_table_name
         ):

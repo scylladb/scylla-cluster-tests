@@ -11,9 +11,7 @@ LOGGER = logging.getLogger("utils")
 
 
 class ParallelObject:
-    """
-    Run function in with supplied args in parallel using thread.
-    """
+    """Run function in with supplied args in parallel using thread."""
 
     def __init__(self, objects: Iterable, timeout: int = 6, num_workers: int = None, disable_logging: bool = False):
         """Constructor for ParallelObject
@@ -146,7 +144,6 @@ class ParallelObject:
         - timeout is set and timeout was reached
 
         Example:
-
         Given:
         tasks = {
             "trigger": partial(time.sleep, 10))

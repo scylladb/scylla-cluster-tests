@@ -56,7 +56,8 @@ class AuditLogTestFailure(Exception):
 
 class BootstrapStreamErrorFailure(Exception):
     """raised if node was not boostrapped after bootstrap
-    streaming was aborted"""
+    streaming was aborted
+    """
 
 
 class KillNemesis(BaseException):
@@ -104,9 +105,7 @@ class DatacenterNotResolvedError(Exception):
 
 
 class TestFailedByEvents(Exception):
-    """
-    Exception raised when a test fails due to events.
-    """
+    """Exception raised when a test fails due to events."""
 
 
 class FirewallNotDisabled(Exception):

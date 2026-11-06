@@ -121,5 +121,6 @@ def _record(
 
 def _message(event: SpotProvisionOutcomeEvent) -> str:
     """The field text only - `str(event)` already carries an event-type/severity prefix, and `sct.py` adds its
-    own when building the Argus payload, so passing the full rendering double-prefixes it."""
+    own when building the Argus payload, so passing the full rendering double-prefixes it.
+    """
     return event.msgfmt.format(event).split(": ", 1)[-1]
