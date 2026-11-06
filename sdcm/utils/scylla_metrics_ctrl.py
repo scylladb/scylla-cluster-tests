@@ -6,7 +6,8 @@ from sdcm.utils.curl import curl_with_retry
 
 class ScyllaMetricsController:
     """Class to control Scylla metrics using API. Ref: https://github.com/scylladb/scylladb/pull/12670
-    issue about missing docs: https://github.com/scylladb/scylla-monitoring/issues/2196"""
+    issue about missing docs: https://github.com/scylladb/scylla-monitoring/issues/2196
+    """
 
     endpoint = "http://localhost:10000/v2/metrics-config/"
 
@@ -19,7 +20,8 @@ class ScyllaMetricsController:
         regex: str = ".*",
     ) -> None:
         """Disables/Enables metrics based on the action provided.
-        When specifying regex, first part of metric 'scylla_' is ignored, so e.g. use 'transport_.*' to keep/drop transport metrics."""
+        When specifying regex, first part of metric 'scylla_' is ignored, so e.g. use 'transport_.*' to keep/drop transport metrics.
+        """
         payload = f'[{{"source_labels": ["__name__"], "action": "{action}", "target_label": "{target_label}", "regex": "{regex}"}}]'
         for node in nodes:
             node.remoter.run(

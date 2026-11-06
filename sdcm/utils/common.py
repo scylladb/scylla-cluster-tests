@@ -266,9 +266,7 @@ def get_sct_root_path() -> Path:
 
 
 def find_file_under_sct_dir(filename: str, sub_folder: str = None):
-    """
-    Find file under scylla_cluster_test where sub_folder is part of the file path (optional)
-    """
+    """Find file under scylla_cluster_test where sub_folder is part of the file path (optional)"""
     sct_path = Path(get_sct_root_path())
     profile_file_full_path = sct_path.rglob(filename)
     for profile_file_path in profile_file_full_path:
@@ -387,7 +385,6 @@ class S3Storage:
         Raises:
             RuntimeError: If the file download fails after retries
         """
-
         if not self.s3_host_name_regex.match(link):
             # get the actual s3 link from Argus first
             # we pick unknown, since we always want to reach here via cloudflare
@@ -632,7 +629,7 @@ def list_instances_aws(
     tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None
 ):
     """
-    list all instances with specific tags AWS
+    List all instances with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
@@ -725,7 +722,7 @@ def list_instances_aws(
 
 def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
     """
-    list all elastic ips with specific tags AWS
+    List all elastic ips with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
@@ -767,7 +764,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
 
 def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
     """
-    list all security groups with specific tags AWS
+    List all security groups with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
@@ -810,7 +807,7 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
 
 def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):
     """
-    list all load balancers with specific tags AWS
+    List all load balancers with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param regions: list of the AWS regions to consider
@@ -856,7 +853,7 @@ def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False,
 
 def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):
     """
-    list all cloudformation stacks with specific tags AWS
+    List all cloudformation stacks with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param regions: list of the AWS regions to consider
@@ -1096,7 +1093,6 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
-
     version_filter = "*"
 
     if version and version != "all":
@@ -1206,10 +1202,7 @@ ScyllaProduct = Literal["scylla", "scylla-enterprise"]
 
 
 def get_latest_scylla_ami_release(region: str = "eu-west-1", product: ScyllaProduct = "scylla") -> str:
-    """
-    Get the latest release, base on the formal AMIs published
-    """
-
+    """Get the latest release, base on the formal AMIs published"""
     if product == "scylla-enterprise":
         filter_regex = re.compile(r"(rc|dev)", flags=re.IGNORECASE)
         version_regex = re.compile(r"enterprise\s*(\d*\.\d*\.\d*)", flags=re.IGNORECASE)
@@ -1226,10 +1219,7 @@ def get_latest_scylla_ami_release(region: str = "eu-west-1", product: ScyllaProd
 
 @lru_cache
 def get_latest_scylla_release(product: Literal["scylla", "scylla-enterprise"], verify: bool = True) -> str:
-    """
-    get latest advertised scylla version from the same service scylla_setup is getting it
-    """
-
+    """Get latest advertised scylla version from the same service scylla_setup is getting it"""
     product = product.lstrip("scylla-")
     url = "https://repositories.scylladb.com/scylla/check_version?system={}"
     version = requests.get(url.format(product), verify=verify).json()
@@ -1506,7 +1496,7 @@ def convert_name_to_ami_if_needed(
     region_names: list[str],
 ) -> str:
     """
-    convert image name in ami_id param to ami_ids
+    Convert image name in ami_id param to ami_ids
     Firstly trying to find name in 'tag:Name' - for ScyllaDB images case
     then in 'name' - for ScyllaDB images case for public images like Ubuntu
 
@@ -1740,6 +1730,7 @@ def get_ami_tags(ami_id, region_name):
 def get_db_tables(keyspace_name, node, with_compact_storage=None):
     """
     Return tables from keyspace based on their compact storage feature.
+
     Arguments:
         keyspace_name -- Keyspace name
         node -- Node to run CQL queries
@@ -1843,7 +1834,6 @@ def s3_download_dir(bucket, path, target):
     :param path: The S3 directory to download.
     :param target: the local directory to download the files to.
     """
-
     client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
 
     # Handle missing / at end of prefix
@@ -1873,7 +1863,6 @@ def gce_download_dir(bucket, path, target):
     :param path: The google storage directory to download.
     :param target: the local directory to download the files to.
     """
-
     storage_client, _ = get_gce_storage_client()
 
     if not path.endswith("/"):
@@ -1896,7 +1885,7 @@ def gce_download_dir(bucket, path, target):
 
 def download_dir_from_cloud(url):
     """
-    download a directory from AWS S3 or from google storage
+    Download a directory from AWS S3 or from google storage
 
     :param url: a url that starts with `s3://` or `gs://`
     :return: the temp directory create with the downloaded content
@@ -2187,9 +2176,7 @@ def get_testrun_status(test_id=None, logdir=None, only_critical=False):
 
 
 def download_encrypt_keys():
-    """
-    Download certificate files of encryption at-rest from S3 KeyStore
-    """
+    """Download certificate files of encryption at-rest from S3 KeyStore"""
     ks = KeyStore()
     for pem_file in ["CA.pem", "SCYLLADB.pem", "hytrust-kmip-cacert.pem", "hytrust-kmip-scylla.pem"]:
         if not os.path.exists("./data_dir/encrypt_conf/%s" % pem_file):
@@ -2197,7 +2184,7 @@ def download_encrypt_keys():
 
 
 def normalize_ipv6_url(ip_address):
-    """adds square brackets on the IPv6 address in the URL"""
+    """Adds square brackets on the IPv6 address in the URL"""
     if ":" in ip_address:  # IPv6
         return "[%s]" % ip_address
     return ip_address
@@ -2339,9 +2326,7 @@ class PageFetcher:
         return len(self.pages)
 
     def num_results(self, page_num):
-        """
-        Returns the number of results found at page_num
-        """
+        """Returns the number of results found at page_num"""
         return len(self.pages[page_num - 1].data)
 
     def num_results_all(self):
@@ -2369,9 +2354,7 @@ class PageFetcher:
 
     @property  # make property to match python driver api
     def has_more_pages(self):
-        """
-        Returns bool indicating if there are any pages not retrieved.
-        """
+        """Returns bool indicating if there are any pages not retrieved."""
         return self.future.has_more_pages
 
 
@@ -2412,7 +2395,7 @@ def clean_enospc_on_node(target_node, sleep_time):
 
 def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
     """
-    listsnapshots output:
+    Listsnapshots output:
 
         Snapshot Details:
         Snapshot name Keyspace name Column family name True size Size on disk
@@ -2540,9 +2523,7 @@ def shorten_cluster_name(name: str, max_string_len: int):
 
 
 def download_from_github(repo: str, tag: str, dst_dir: str):
-    """
-    Downloads files from github via http to the dst_dir directory
-    """
+    """Downloads files from github via http to the dst_dir directory"""
     url = f"https://github.com/{repo}/archive/{tag}.zip"
     resp = requests.get(url, allow_redirects=True)
     if not resp.ok:
@@ -2594,9 +2575,7 @@ def walk_thru_data(data, path: str, separator: str = "/") -> Any:
 
 
 def update_authenticator(nodes, authenticator="AllowAllAuthenticator", restart=True):
-    """
-    Update the authenticator of nodes, restart the nodes to make the change effective
-    """
+    """Update the authenticator of nodes, restart the nodes to make the change effective"""
     for node in nodes:
         with node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.authenticator = authenticator
@@ -2610,9 +2589,7 @@ def update_authenticator(nodes, authenticator="AllowAllAuthenticator", restart=T
 
 
 def prepare_and_start_saslauthd_service(node):
-    """
-    Install and setup saslauthd service.
-    """
+    """Install and setup saslauthd service."""
     if node.distro.is_rhel_like:
         setup_script = dedent("""
             sudo yum install -y cyrus-sasl
@@ -2781,7 +2758,7 @@ def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[Bas
 
 def list_placement_groups_aws(tags_dict=None, region_name=None, available=False, group_as_region=False, verbose=False):
     """
-    list all placement groups with specific tags AWS
+    List all placement groups with specific tags AWS
 
     :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list

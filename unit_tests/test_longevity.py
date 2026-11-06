@@ -4,7 +4,6 @@ def test_test_user_batch_custom_time(params, pytester):
 
     test is using pytester plugin, so all the pytest fixtures logic would be operational
     """
-
     # remove HOME and USERPROFILE environment variables, so we can get actual user configuration
     # the test depends on some part of the user configuration, for running the test locally
     pytester._monkeypatch.delenv("HOME")

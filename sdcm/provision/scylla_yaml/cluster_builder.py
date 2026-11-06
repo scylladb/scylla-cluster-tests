@@ -21,9 +21,7 @@ from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LdapServerType
 
 
 class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
-    """
-    Builds scylla yaml attributes that stays persistent across the cluster
-    """
+    """Builds scylla yaml attributes that stays persistent across the cluster"""
 
     cluster_name: str
     test_config: Any = Field(exclude=True)
@@ -91,9 +89,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     @computed_field
     @property
     def endpoint_snitch(self) -> Optional[str]:
-        """
-        Comes from get_endpoint_snitch
-        """
+        """Comes from get_endpoint_snitch"""
         if snitch := self.params.get("endpoint_snitch"):
             return snitch
         if self._multi_region:

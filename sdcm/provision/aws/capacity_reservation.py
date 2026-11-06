@@ -31,7 +31,8 @@ LOGGER = logging.getLogger(__name__)
 class SCTCapacityReservation:
     """Class for managing capacity reservations for AWS instances.
 
-    Serves namespacing for capacity reservations and provides methods for creating and cancelling reservations."""
+    Serves namespacing for capacity reservations and provides methods for creating and cancelling reservations.
+    """
 
     reservations: Dict[str, Dict[str, str]] = {}
 

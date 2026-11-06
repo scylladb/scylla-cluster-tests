@@ -12,9 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-"""
-Classes that introduce disruption in clusters.
-"""
+"""Classes that introduce disruption in clusters."""
 
 import contextlib
 import copy
@@ -1118,7 +1116,7 @@ class Nemesis(NemesisFlags):
         self.current_disruption = label
 
     def disrupt_destroy_data_then_repair(self):
-        """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
+        """Repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
         self.run_repair_on_nodes(self.cluster.data_nodes)
         self._destroy_data_and_restart_scylla()
         # try to save the node
@@ -1811,7 +1809,6 @@ class Nemesis(NemesisFlags):
 
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
-
         if SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/6327", params=self.tester.params):
             raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
 
@@ -2229,6 +2226,7 @@ class Nemesis(NemesisFlags):
         """
         Return all tables with no "COMPACT STORAGE" in table code
         :param tables_to_skip: Dict of keyspaces/tables to be excluded from results.
+
             Examples:
                 {'ks': 'table'} - will skip ks.table
                 {'ks': '*'} - will skip any tables from keyspace "ks"
@@ -2630,9 +2628,7 @@ class Nemesis(NemesisFlags):
         return list(partitions_for_delete.keys()) + partitions_for_exclude
 
     def disrupt_delete_10_full_partitions(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
+        """Delete few partitions in the table with large partitions"""
         self.verify_initial_inputs_for_delete_nemesis()
 
         ks_cf = "scylla_bench.test"
@@ -2649,9 +2645,7 @@ class Nemesis(NemesisFlags):
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
     def disrupt_delete_overlapping_row_ranges(self):
-        """
-        Delete several overlapping row ranges in the table with large partitions.
-        """
+        """Delete several overlapping row ranges in the table with large partitions."""
         self.verify_initial_inputs_for_delete_nemesis()
         ks_cf = "scylla_bench.test"
         partitions_for_delete = self.choose_partitions_for_delete(
@@ -2676,9 +2670,7 @@ class Nemesis(NemesisFlags):
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
     def disrupt_delete_by_rows_range(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
+        """Delete few partitions in the table with large partitions"""
         self.verify_initial_inputs_for_delete_nemesis()
 
         ks_cf = "scylla_bench.test"
@@ -2787,9 +2779,7 @@ class Nemesis(NemesisFlags):
         self.target_node.run_cqlsh(cmd)
 
     def toggle_table_ics(self):
-        """
-        Alters a non-system table compaction strategy from ICS to any-other and vise versa.
-        """
+        """Alters a non-system table compaction strategy from ICS to any-other and vise versa."""
         if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
             raise UnsupportedNemesis("Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082")
 
@@ -2903,9 +2893,7 @@ class Nemesis(NemesisFlags):
         self._modify_table_property(name="compression", val=str(prop_val))
 
     def modify_table_crc_check_chance(self):
-        """
-        default: crc_check_chance = 1.0
-        """
+        """default: crc_check_chance = 1.0"""
         self._modify_table_property(name="crc_check_chance", val=random.random())
 
     def modify_table_dclocal_read_repair_chance(self):
@@ -3193,11 +3181,11 @@ class Nemesis(NemesisFlags):
         """
         Perform a Manager backup as a nemesis.
         Deletes created snapshot at end.
+
         Args:
             object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
             label: Label for reporting to Argus.
         """
-
         time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
         label_with_time = f"{label}{time_postfix}"
         task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
@@ -3488,9 +3476,7 @@ class Nemesis(NemesisFlags):
         self.log.info("Task: {} is done.".format(mgr_task.id))
 
     def disrupt_abort_repair(self):
-        """
-        Start repair target_node in background, then try to abort the repair streaming.
-        """
+        """Start repair target_node in background, then try to abort the repair streaming."""
         self.log.debug("Start repair target_node in background")
 
         @raise_event_on_failure
@@ -3618,7 +3604,7 @@ class Nemesis(NemesisFlags):
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """
@@ -4148,10 +4134,7 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_network_reject_inter_node_communication(self):
-        """
-        Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
-        """
-
+        """Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001"""
         # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
         if SkipPerIssues("https://github.com/scylladb/scylladb/issues/6522", self.tester.params):
             raise UnsupportedNemesis("https://github.com/scylladb/scylladb/issues/6522")
@@ -4188,9 +4171,7 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_network_reject_node_exporter(self):
-        """
-        Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
-        """
+        """Generates random firewall rule to drop/reject packets for node exporter connections, port 9100"""
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = "RejectNodeExporterNetwork"
@@ -4216,9 +4197,7 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_network_reject_thrift(self):
-        """
-        Generates random firewall rule to drop/reject packets for thrift connections, port 9100
-        """
+        """Generates random firewall rule to drop/reject packets for thrift connections, port 9100"""
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = "RejectThriftNetwork"
@@ -4248,9 +4227,7 @@ class Nemesis(NemesisFlags):
 
     @staticmethod
     def _iptables_randomly_get_random_matching_rule():
-        """
-        Randomly generates iptables matching rule to match packets in random manner
-        """
+        """Randomly generates iptables matching rule to match packets in random manner"""
         match_type = random.choice(
             ["statistic", "statistic", "statistic", "limit", "limit", "limit", ""]
             #  Make no matching rule less probable
@@ -4284,9 +4261,7 @@ class Nemesis(NemesisFlags):
 
     @staticmethod
     def _iptables_randomly_get_disrupting_target():
-        """
-        Randomly generates iptables target that can cause disruption
-        """
+        """Randomly generates iptables target that can cause disruption"""
         target_type = random.choice(["REJECT", "DROP"])
         if target_type == "REJECT":
             reject_with = random.choice(
@@ -4592,9 +4567,7 @@ class Nemesis(NemesisFlags):
             self.start_and_interrupt_decommission_streaming()
 
     def disrupt_rebuild_streaming_err(self):
-        """
-        Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
-        """
+        """Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node."""
         with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_rebuild_streaming()
 
@@ -5680,7 +5653,6 @@ class Nemesis(NemesisFlags):
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
-
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
             if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
@@ -7275,9 +7247,7 @@ class StopStartInterfacesNetworkMonkey(Nemesis):
 
 
 class ScyllaOperatorBasicOperationsMonkey(Nemesis):
-    """
-    Selected number of nemesis that is focused on scylla-operator functionality
-    """
+    """Selected number of nemesis that is focused on scylla-operator functionality"""
 
     disruptive = True
 

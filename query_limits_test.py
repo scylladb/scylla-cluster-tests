@@ -20,9 +20,7 @@ from sdcm.tester import teardown_on_exception
 
 
 class QueryLimitsTest(ClusterTester):
-    """
-    Test scylla cluster growth (adding nodes after an initial cluster size).
-    """
+    """Test scylla cluster growth (adding nodes after an initial cluster size)."""
 
     @teardown_on_exception
     def setUp(self):
