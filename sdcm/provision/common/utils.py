@@ -120,7 +120,7 @@ sinks:
     sct-runner:
         type: vector
         inputs: [filter_suppress_warnings]
-        address: {host}:{port}
+        address: http://{host}:{port}
         healthcheck: false
     prometheus:
         type: prometheus_exporter
