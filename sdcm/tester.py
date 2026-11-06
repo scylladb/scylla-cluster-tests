@@ -577,9 +577,7 @@ class ClusterTester(unittest.TestCase):
         return versions
 
     def generate_scylla_server_package(self) -> Package:
-        """
-        Used for offline tests for tracking scylla versions in Argus.
-        """
+        """Used for offline tests for tracking scylla versions in Argus."""
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
 
         expr_with_build_id = re.compile(
@@ -3487,7 +3485,6 @@ class ClusterTester(unittest.TestCase):
         e.g.
         {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
         """
-
         execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(execution_node) as session:
             if isinstance(replication_factor, int):
@@ -4175,9 +4172,7 @@ class ClusterTester(unittest.TestCase):
         self.log.info("Failure statistics collection completed")
 
     def save_schema(self):
-        """
-        Saves the node's schema including internal metadata.
-        """
+        """Saves the node's schema including internal metadata."""
         if self.db_cluster is None:
             self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
@@ -4392,9 +4387,7 @@ class ClusterTester(unittest.TestCase):
 
     @pytest.fixture(autouse=True, name="argus_finalize")
     def fixture_argus_finalize(self):
-        """
-        Fixture to handle Argus cleanup operations after test completion.
-        """
+        """Fixture to handle Argus cleanup operations after test completion."""
         yield
         self.argus_finalize_test_run()
         if hasattr(self, "argus_heartbeat_stop_signal"):
@@ -4480,9 +4473,7 @@ class ClusterTester(unittest.TestCase):
         return write_queue
 
     def alter_table_encryption(self, table, scylla_encryption_options=None, upgradesstables=True):
-        """
-        Update table encryption
-        """
+        """Update table encryption"""
         if not scylla_encryption_options:
             self.log.debug(
                 "scylla_encryption_options is not set, skipping to enable encryption at-rest for all test tables"
@@ -4653,7 +4644,7 @@ class ClusterTester(unittest.TestCase):
         sleep_time=60,
     ):
         """
-        wait for any prometheus metric to have data in it
+        Wait for any prometheus metric to have data in it
 
         example: wait 5 mins for cassandra stress to start writing:
 
@@ -5006,9 +4997,7 @@ class ClusterTester(unittest.TestCase):
 
     @property
     def all_db_nodes(self) -> list[BaseNode]:
-        """
-        Returns a list of all DB nodes from the DB cluster.
-        """
+        """Returns a list of all DB nodes from the DB cluster."""
         return list(self.db_cluster.nodes) if self.db_cluster else []
 
     def download_artifacts_from_s3(self):
