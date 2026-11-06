@@ -5,6 +5,9 @@ prepare_write_cmd:  [
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=1000 -clustering-row-size=uniform:1024..4096 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=5 -timeout=60s -retry-number=30 -retry-interval=500ms,1s",
                     ]
 
+# Without a space amplification goal, ICS never compacts away stale copies of overwritten data
+post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'class': 'IncrementalCompactionStrategy', 'space_amplification_goal': '1.2'}"
+
 stress_cmd: [
              "cql-stress-cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..220200960)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
              "cql-stress-cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..220200960)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
