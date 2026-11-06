@@ -5,3 +5,6 @@
 
 # reformat using ruff (https://github.com/scylladb/scylla-cluster-tests/pull/11291)
 e298929269e4a73a270ad453820c1325c2b04b07
+
+# PR #16668: Apply ruff pydocstyle auto-fixes
+4828866092c5d7c5550f488d146ea666474af689 # style(docstrings): apply ruff pydocstyle auto-fixes
