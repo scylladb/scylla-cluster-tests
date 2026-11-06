@@ -227,8 +227,11 @@ class IOPropertiesResultsTable(StaticGenericResultTable):
 
 
 class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
-    def __init__(self, cluster_backend: str, instance_type: str):
-        super().__init__(name=f"{cluster_backend} - {instance_type} - Disk Performance Percent deviation")
+    def __init__(self, cluster_backend: str, instance_type: str, limit_pct: int):
+        super().__init__(
+            name=f"{cluster_backend} - {instance_type} - Disk Performance Percent deviation",
+            validation_rules={column.name: ValidationRule(fixed_limit=limit_pct) for column in self.Meta.Columns},
+        )
 
     class Meta:
         description = "io_properties.yaml percent deviation from pre-configured disk"
@@ -242,13 +245,6 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
                 name="write_bandwidth_pct_deviation", unit="%", type=ResultType.INTEGER, higher_is_better=False
             ),
         ]
-
-        ValidationRules = {
-            "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
-            "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-            "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
-            "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-        }
 
 
 class LatteStressLatencyComparison(StaticGenericResultTable):
@@ -468,14 +464,16 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
     submit_results_to_argus(argus_client, table)
 
     table = IOPropertiesDeviationResultsTable(
-        cluster_backend=params.get("cluster_backend"), instance_type=node.db_node_instance_type
+        cluster_backend=params.get("cluster_backend"),
+        instance_type=node.db_node_instance_type,
+        limit_pct=results["limit_pct"],
     )
     for key, value in results["deviation_pct"].items():
         table.add_result(
             column=f"{key}_pct_deviation",
             row="deviation_percent",
             value=value,
-            status=Status.PASS if value < 15 else Status.WARNING,
+            status=Status.UNSET,
         )
 
     submit_results_to_argus(argus_client, table)
