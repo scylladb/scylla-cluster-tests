@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-"""
-Handling Scylla-cluster-test configuration loading
-"""
+"""Handling Scylla-cluster-test configuration loading"""
 
 import os
 import random
@@ -168,7 +166,6 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
 
 def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     """Convert an environment variable into a Python's list."""
-
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
@@ -266,11 +263,10 @@ def is_config_option_appendable(option_name: str) -> bool:
 
 def merge_dicts_append_strings(d1, d2):
     """
-    merge two dictionaries, while having option
+    Merge two dictionaries, while having option
     to append string if the value starts with '++'
     and append list if first item is '++'
     """
-
     for key, value in copy.deepcopy(d2).items():
         if isinstance(value, str) and value.startswith("++"):
             assert is_config_option_appendable(key), f"Option {key} is not appendable"
@@ -289,9 +285,7 @@ def merge_dicts_append_strings(d1, d2):
 
 
 class SCTConfiguration(dict):
-    """
-    Class the hold the SCT configuration
-    """
+    """Class the hold the SCT configuration"""
 
     available_backends = [
         "azure",
@@ -4115,10 +4109,7 @@ class SCTConfiguration(dict):
         return environment_vars
 
     def get(self, key: str | None):
-        """
-        get the value of test configuration parameter by the name
-        """
-
+        """Get the value of test configuration parameter by the name"""
         if key and "." in key:
             if ret_val := self._dotted_get(key):
                 return ret_val
@@ -4131,7 +4122,7 @@ class SCTConfiguration(dict):
 
     def _dotted_get(self, key: str):
         """
-        if key for retrieval is dot notation, ex. 'stress_image.ycsb'
+        If key for retrieval is dot notation, ex. 'stress_image.ycsb'
         we assume `stress_image` would be a dict
         """
         keys = key.split(".")
@@ -4506,7 +4497,11 @@ class SCTConfiguration(dict):
                 ]
             if backend == "aws" and self.get("n_vector_store_nodes") > 0:
                 self.backend_required_params["aws"].extend(
-                    ["ami_id_vector_store", "instance_type_vector_store", "ami_vector_store_user"]
+                    [
+                        "ami_id_vector_store",
+                        "instance_type_vector_store",
+                        "ami_vector_store_user",
+                    ]
                 )
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
@@ -4611,9 +4606,7 @@ class SCTConfiguration(dict):
         assert backend == "aws", "Only AWS supports zero nodes configuration"
 
     def verify_configuration_urls_validity(self):  # noqa: PLR0914
-        """
-        Check if ami_id and repo urls are valid
-        """
+        """Check if ami_id and repo urls are valid"""
         backend = self.get("cluster_backend")
         if backend in ("k8s-eks", "k8s-gke"):
             return
@@ -4718,7 +4711,7 @@ class SCTConfiguration(dict):
 
     def get_version_based_on_conf(self):
         """
-        figure out which version and if it's enterprise version
+        Figure out which version and if it's enterprise version
         base on configuration only, before nodes are up and running
         so test configuration can set up things which need to happen
         before nodes are up

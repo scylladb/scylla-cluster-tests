@@ -168,9 +168,7 @@ def reconfigure_scylla_manager(manager_node, logger, values_to_update=(), values
 
 
 class ScyllaManagerError(Exception):
-    """
-    A custom exception for Manager related errors
-    """
+    """A custom exception for Manager related errors"""
 
 
 class HostSsl(Enum):
@@ -267,9 +265,7 @@ class AgentBackupParameters(BaseModel):
 
 
 def get_backup_size(mgr_cluster, task_id):
-    """
-    Returns the generated backup size of a given Manager backup Task.
-    """
+    """Returns the generated backup size of a given Manager backup Task."""
     res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}", parse_table_res=False)
     match = BACKUP_SIZE_REGEX.search(res.stdout)
     if match:

@@ -7,9 +7,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class QueryFilter:
-    """
-    Definition of query filtering parameters
-    """
+    """Definition of query filtering parameters"""
 
     SETUP_PARAMS = ["n_db_nodes", "n_loaders", "n_monitor_nodes"]
     SETUP_INSTANCE_PARAMS = ["instance_type_db", "instance_type_loader", "instance_type_monitor", "append_scylla_args"]

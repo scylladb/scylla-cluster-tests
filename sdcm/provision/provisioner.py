@@ -109,14 +109,16 @@ class VmInstance:
     private_dns_name: str | None = None
 
     def terminate(self, wait: bool = True) -> None:
-        """terminates VM instance.
+        """Terminates VM instance.
         If wait is set to True, waits until deletion, otherwise, returns when termination
-        was triggered."""
+        was triggered.
+        """
         self._provisioner.terminate_instance(self.name, wait=wait)
 
     def reboot(self, wait: bool = True, hard: bool = False) -> None:
         """Reboots the instance.
-        If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
+        If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered.
+        """
         self._provisioner.reboot_instance(self.name, wait, hard)
 
     def add_tags(self, tags: Dict[str, str]) -> None:
@@ -135,7 +137,8 @@ class VmInstance:
 
 class Provisioner(ABC):
     """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
-    Limits only to machines related to provided test_id."""
+    Limits only to machines related to provided test_id.
+    """
 
     def __init__(self, test_id: str, region: str, availability_zone: str) -> None:
         self._test_id = test_id
@@ -163,14 +166,16 @@ class Provisioner(ABC):
         self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT
     ) -> VmInstance:
         """Create an instance specified by an InstanceDefinition.
-        If instance already exists, returns it."""
+        If instance already exists, returns it.
+        """
         raise NotImplementedError()
 
     def get_or_create_instances(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT
     ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
-        If instances already exist, returns them."""
+        If instances already exist, returns them.
+        """
         raise NotImplementedError()
 
     def terminate_instance(self, name: str, wait: bool = False) -> None:
@@ -219,7 +224,8 @@ class ProvisionerFactory:
 
     def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:
         """Discovers regions where resources for given test_id are created.
-        Returning provisioner class instance for each region."""
+        Returning provisioner class instance for each region.
+        """
         provisioner = self._classes.get(backend)
         if not provisioner:
             raise ProvisionerError("Provisioner class was not registered for the '%s' backend" % backend)

@@ -479,9 +479,7 @@ class TestBaseMonitorSet(unittest.TestCase):
         self.monitor_cluster.log = logging
 
     def test_monitoring_version(self):
-        """
-        verify that dev version are mapped to monitor master version
-        """
+        """Verify that dev version are mapped to monitor master version"""
         self.node.remoter = VersionDummyRemote(
             self,
             (
@@ -513,7 +511,7 @@ class NodetoolDummyNode(BaseNode):
         return Result(exited=0, stderr="", stdout=self.resp)
 
     def db_up(self):
-        """return True if the database is up
+        """Return True if the database is up
         Couldn't be a property, because BaseNode.db_up is a method
         """
         return self._db_up
@@ -529,7 +527,7 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
         self.log = logging.getLogger(self.name)
 
     def get_ip_to_node_map(self, nodes=None):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        """Returns {ip: node} map for all nodes in cluster to get node by ip"""
         nodes = nodes if nodes is not None else self.nodes
         return {node.myname: node for node in nodes}
 
@@ -574,7 +572,7 @@ class TestNodetoolStatus(unittest.TestCase):
         }
 
     def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
-        """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
+        """Case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
         resp = "\n".join(
             [
                 "Datacenter: datacenter1",
@@ -1235,7 +1233,7 @@ def test_get_tables_with_sstable_folder(docker_scylla, params, events):
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """

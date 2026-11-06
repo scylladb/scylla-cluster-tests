@@ -19,9 +19,7 @@ from sdcm.tester import ClusterTester
 
 
 class PerformanceRegressionUserProfilesTest(ClusterTester):
-    """
-    Test Scylla performance regression with cassandra-stress using custom user profiles.
-    """
+    """Test Scylla performance regression with cassandra-stress using custom user profiles."""
 
     def setUp(self):
         super().setUp()
@@ -36,9 +34,7 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
                 session.execute("DROP KEYSPACE IF EXISTS {};".format(key_space[0]))
 
     def test_user_profiles(self):
-        """
-        Run workload using user profiles
-        """
+        """Run workload using user profiles"""
         duration = self.params.get("cs_duration")
         user_profiles = self.params.get("cs_user_profiles")
         assert user_profiles is not None, "No user profiles defined!"

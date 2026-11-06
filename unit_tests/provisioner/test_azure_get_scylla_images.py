@@ -53,7 +53,7 @@ def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
 
 
 def generate_images_json_file():
-    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    """Generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.images.list_by_resource_group(
         resource_group_name=resource_group,
@@ -66,7 +66,7 @@ def generate_images_json_file():
 
 
 def generate_gallery_images_json_file(gallery_name="scylladb_dev", image_name="master"):
-    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    """Generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
         resource_group_name=resource_group,

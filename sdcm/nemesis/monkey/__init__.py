@@ -68,11 +68,13 @@ class AddRemoveDcNemesis(NemesisBaseClass):
     topology_changes = True
 
     def precheck(self, node) -> str | None:
+        """Skip on multi-region clusters."""
         if self.runner.cluster.test_config.MULTI_REGION:
             return "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
         return None
 
     def disrupt(self):
+        """Add a datacenter, then remove it."""
         self.runner.disrupt_add_remove_dc()
 
 
@@ -668,11 +670,14 @@ class MemoryStressMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class ResetLocalSchemaMonkey(NemesisBaseClass):
+    """Reset the local schema of a node so it is recovered from the cluster."""
+
     disruptive = False
     config_changes = True
     free_tier_set = True
 
     def disrupt(self):
+        """Reset the local schema on the target node."""
         self.runner.disrupt_resetlocalschema()
 
 

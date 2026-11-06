@@ -524,9 +524,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.error("Error saving test status to Argus", exc_info=True)
 
     def generate_scylla_server_package(self) -> Package:
-        """
-        Used for offline tests for tracking scylla versions in Argus.
-        """
+        """Used for offline tests for tracking scylla versions in Argus."""
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
 
         expr = re.compile(
@@ -1279,7 +1277,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         make_threads_be_daemonic_by_default()
 
         if not self.params.get("cluster_backend").startswith("k8s") and any(
-            [self.params.get("client_encrypt"), self.params.get("server_encrypt")]
+            [
+                self.params.get("client_encrypt"),
+                self.params.get("server_encrypt"),
+            ]
         ):
             create_ca(self.localhost)
             if self.params.get("client_encrypt"):
@@ -3290,7 +3291,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.create_stats:
             self.update_stress_results(results, calculate_stats=False)
             self.update(
-                {"status": stats["status"], "test_details": {"status": stats["status"]}, "errors": stats["errors"]}
+                {
+                    "status": stats["status"],
+                    "test_details": {"status": stats["status"]},
+                    "errors": stats["errors"],
+                }
             )
         return stats
 
@@ -3363,7 +3368,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         e.g.
         {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
         """
-
         execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(execution_node) as session:
             if isinstance(replication_factor, int):
@@ -3996,9 +4000,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info("Failure statistics collection completed")
 
     def save_schema(self):
-        """
-        Saves the node's schema including internal metadata.
-        """
+        """Saves the node's schema including internal metadata."""
         if self.db_cluster is None:
             self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
@@ -4205,9 +4207,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     @pytest.fixture(autouse=True, name="argus_finalize")
     def fixture_argus_finalize(self):
-        """
-        Fixture to handle Argus cleanup operations after test completion.
-        """
+        """Fixture to handle Argus cleanup operations after test completion."""
         yield
         self.argus_finalize_test_run()
         self.argus_heartbeat_stop_signal.set()
@@ -4295,9 +4295,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return write_queue
 
     def alter_table_encryption(self, table, scylla_encryption_options=None, upgradesstables=True):
-        """
-        Update table encryption
-        """
+        """Update table encryption"""
         if not scylla_encryption_options:
             self.log.debug(
                 "scylla_encryption_options is not set, skipping to enable encryption at-rest for all test tables"
@@ -4622,7 +4620,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         sleep_time=60,
     ):
         """
-        wait for any prometheus metric to have data in it
+        Wait for any prometheus metric to have data in it
 
         example: wait 5 mins for cassandra stress to start writing:
 
@@ -4917,7 +4915,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             )
 
     def get_email_data(self):
-        """prepare data to generate and send via email
+        """Prepare data to generate and send via email
 
         Have to return the dict which is used to build the
         html content with email template.
@@ -4946,7 +4944,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def _get_common_email_data(self) -> Dict[str, Any]:
         """Helper for subclasses which extracts common data for email."""
-
         if self.db_cluster:
             nodes_shards = self.all_nodes_scylla_shards()
         else:
@@ -5131,9 +5128,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     @property
     def all_db_nodes(self) -> list[BaseNode]:
-        """
-        Returns a list of all DB nodes from all managed DB clusters (for multi-tenant support).
-        """
+        """Returns a list of all DB nodes from all managed DB clusters (for multi-tenant support)."""
         db_clusters = self.db_clusters_multitenant or [self.db_cluster]
         return [node for cluster in db_clusters for node in cluster.nodes]
 
