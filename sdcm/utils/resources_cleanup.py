@@ -193,7 +193,6 @@ def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:
 
 def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all instances with specific tags in AWS."""
-
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     if regions:
         aws_instances = {}
@@ -306,7 +305,6 @@ def clean_load_balancers_aws(tags_dict, regions=None, dry_run=False):
     :param dry_run: if True, wouldn't delete any resource
     :return: None
     """
-
     # don't if `post_behavior_k8s_cluster` was set to not destroy
     if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return
@@ -339,7 +337,6 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
     :param dry_run: if True, wouldn't delete any resource
     :return: None
     """
-
     # don't if `post_behavior_k8s_cluster` was set to not destroy
     if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return
@@ -372,7 +369,6 @@ def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
     :param dry_run: if True, wouldn't delete any resource
     :return: None
     """
-
     assert tags_dict, "Can't cleanup launch templates because 'tags_dict' was not provided."
 
     lts_per_region = list_launch_templates_aws(tags_dict=tags_dict, regions=regions)

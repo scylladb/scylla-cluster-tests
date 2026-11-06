@@ -48,9 +48,7 @@ never fetched, so ``latest`` is sufficient and never goes stale).
 
 
 def general_test(scylla_repo="", linux_distro="", cloud_provider=None):
-    """
-    General test function to retrieve the list of supported Scylla versions for upgrade.
-    """
+    """General test function to retrieve the list of supported Scylla versions for upgrade."""
     scylla_version = None
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)

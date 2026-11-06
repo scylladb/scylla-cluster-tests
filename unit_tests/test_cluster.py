@@ -483,9 +483,7 @@ class TestBaseMonitorSet(unittest.TestCase):
         self.monitor_cluster.log = logging
 
     def test_monitoring_version(self):
-        """
-        verify that dev version are mapped to monitor master version
-        """
+        """Verify that dev version are mapped to monitor master version"""
         self.node.remoter = VersionDummyRemote(
             self,
             (
@@ -526,7 +524,7 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
         self.log = logging.getLogger(self.name)
 
     def get_ip_to_node_map(self):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        """Returns {ip: node} map for all nodes in cluster to get node by ip"""
         return {node.myname: node for node in self.nodes}
 
 
@@ -570,7 +568,7 @@ class TestNodetoolStatus(unittest.TestCase):
         }
 
     def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
-        """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
+        """Case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
         resp = "\n".join(
             [
                 "Datacenter: datacenter1",
@@ -1102,9 +1100,7 @@ def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
 
 @pytest.mark.integration
 def test_is_table_has_no_sstables(docker_scylla, params, events):
-    """
-    test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis
-    """
+    """Test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis"""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
@@ -1125,7 +1121,7 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
 
         def is_virtual_tables_get_snapshot():
             """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            Scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """

@@ -250,7 +250,6 @@ class PrometheusAlertManagerListener(threading.Thread):
         :param end: if None, will be calculated by duration
         :return: silenceID
         """
-
         assert duration or (start and end), "should define duration or (start and end)"
         if not start:
             start = datetime.datetime.utcnow()
@@ -270,7 +269,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def delete_silence(self, silence_id: str) -> None:
         """
-        delete a alert silence
+        Delete a alert silence
 
         :param silence_id: silence id returned from `silence()` api call
         :return:

@@ -1,6 +1,4 @@
-"""
-Tests for get_db_tables function in sdcm.utils.common
-"""
+"""Tests for get_db_tables function in sdcm.utils.common"""
 
 import pytest
 from unittest.mock import MagicMock

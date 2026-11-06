@@ -611,9 +611,7 @@ def ignore_ipv6_failure_to_assign():
 
 
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
-    """
-    helper to decorate a function to run with a list of callables that return context managers
-    """
+    """Helper to decorate a function to run with a list of callables that return context managers"""
     context_list = context_list if isinstance(context_list, Sequence) else [context_list]
     for context in context_list:
         assert callable(context) or isinstance(context, ContextManager), (
@@ -645,9 +643,7 @@ def decorate_with_context(context_list: list[Callable | ContextManager] | Callab
 def decorate_with_context_if_issues_open(
     contexts: list[Callable | ContextManager] | Callable | ContextManager, issue_refs: list[str]
 ):
-    """
-    Helper to decorate a function, to apply the provided contexts only if referenced GitHub issues are opened.
-    """
+    """Helper to decorate a function, to apply the provided contexts only if referenced GitHub issues are opened."""
 
     def decorator(func):
         @wraps(func)

@@ -359,7 +359,8 @@ class GceLoggingClient:
     def get_system_events(self, from_: float, until: float):
         """Gets system events logs entries from GCE between time (since -> to).
 
-        Returns list of entries in a form of dictionaries. See example output in unit tests."""
+        Returns list of entries in a form of dictionaries. See example output in unit tests.
+        """
         from_ = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(from_))
         until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
         query = {
@@ -638,7 +639,6 @@ def gce_set_labels(
     Returns:
         Whatever the operation.result() returns.
     """
-
     request = compute_v1.InstancesSetLabelsRequest()
     request.labels = instance.labels
     request.label_fingerprint = instance.label_fingerprint
@@ -668,7 +668,6 @@ def gce_set_tags(
     Returns:
         Whatever the operation.result() returns.
     """
-
     request = compute_v1.SetTagsInstanceRequest()
 
     request.tags_resource = instance.tags
@@ -686,9 +685,7 @@ def gce_set_tags(
 def gce_check_if_machine_type_supported(
     machine_types_client: compute_v1.MachineTypesClient, machine_type: str, project: str, zone: str
 ):
-    """
-    Check if the given machine type is supported in the given zone.
-    """
+    """Check if the given machine type is supported in the given zone."""
     request = compute_v1.GetMachineTypeRequest()
     request.project = project
     request.zone = zone

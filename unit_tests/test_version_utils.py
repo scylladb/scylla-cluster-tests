@@ -1113,7 +1113,6 @@ def test_azure_full_version_string_preservation():
 # Docker version detection tests
 def test_docker_version_detection():
     """Test that full version tags are correctly detected for Docker repo selection."""
-
     # Full version tags with ~dev should go to nightly repos
     full_version_dev = "2026.1.0~dev-0.20260119.4cde34f6f20b"
     repo_dev = get_scylla_docker_repo_from_version(full_version_dev)

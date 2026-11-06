@@ -23,9 +23,7 @@ from sdcm.utils.common import skip_optional_stage
 
 
 class MaintainanceTest(ClusterTester):
-    """
-    Test a Scylla cluster maintenance operations.
-    """
+    """Test a Scylla cluster maintenance operations."""
 
     def _base_procedure(self, nemesis_class):
         if not skip_optional_stage("main_load"):
@@ -42,19 +40,13 @@ class MaintainanceTest(ClusterTester):
             self.verify_stress_thread(cs_thread_pool)
 
     def test_drain(self):
-        """
-        Drain a node an restart it.
-        """
+        """Drain a node an restart it."""
         self._base_procedure(DrainerMonkey)
 
     def test_repair(self):
-        """
-        Repair a node
-        """
+        """Repair a node"""
         self._base_procedure(CorruptThenRepairMonkey)
 
     def test_rebuild(self):
-        """
-        Rebuild all nodes
-        """
+        """Rebuild all nodes"""
         self._base_procedure(CorruptThenRebuildMonkey)

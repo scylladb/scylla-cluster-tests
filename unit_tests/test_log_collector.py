@@ -135,7 +135,7 @@ def test_schema_log_collector_is_tracked_as_critical(tmp_path):
 
 
 def test_hydra_watchdog_log_collected_from_result_dir(tmp_path):
-    """hydra's transport watchdog appends its samples to the test's result dir (SCT-1044)."""
+    """Hydra's transport watchdog appends its samples to the test's result dir (SCT-1044)."""
     result_dir = tmp_path / "20260923-165527-000000"
     result_dir.mkdir()
     (result_dir / "hydra-watchdog.log").write_text("=== 2026-09-23T17:30:32Z\nbuilder -> runner sockets:\n")

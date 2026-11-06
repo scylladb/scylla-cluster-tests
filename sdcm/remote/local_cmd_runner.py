@@ -33,9 +33,7 @@ class LocalCmdRunner(CommandRunner):
         super().__init__(user=user, hostname=hostname)
 
     def get_init_arguments(self) -> dict:
-        """
-        Return instance parameters required to rebuild instance
-        """
+        """Return instance parameters required to rebuild instance"""
         return {"hostname": self.hostname, "user": self.user}
 
     def _create_connection(self) -> Connection:

@@ -19,16 +19,12 @@ from sdcm.utils.common import get_data_dir_path
 
 
 class CustomCsTest(ClusterTester):
-    """
-    Run a custom c-s workload (yaml) on a cluster.
-    """
+    """Run a custom c-s workload (yaml) on a cluster."""
 
     default_params = {"timeout": 650000}
 
     def test_write_mode(self):
-        """
-        Run cassandra-stress with params defined in data_dir/scylla.yaml
-        """
+        """Run cassandra-stress with params defined in data_dir/scylla.yaml"""
         cs_custom_config = get_data_dir_path("cassandra-stress-custom.yaml")
         with open(cs_custom_config, encoding="utf-8") as cs_custom_config_file:
             self.log.info("Using custom cassandra-stress config:")

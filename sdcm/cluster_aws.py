@@ -78,9 +78,7 @@ R = TypeVar("R")
 
 
 class AWSCluster(cluster.BaseCluster):
-    """
-    Cluster of Node objects, started on Amazon EC2.
-    """
+    """Cluster of Node objects, started on Amazon EC2."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -412,9 +410,7 @@ class AWSCluster(cluster.BaseCluster):
 
     @staticmethod
     def update_bootstrap(ec2_user_data, enable_auto_bootstrap):
-        """
-        Update --bootstrap argument inside ec2_user_data string.
-        """
+        """Update --bootstrap argument inside ec2_user_data string."""
         if isinstance(ec2_user_data, dict):
             ec2_user_data["scylla_yaml"]["auto_bootstrap"] = enable_auto_bootstrap
             return ec2_user_data
@@ -536,9 +532,7 @@ class AWSCluster(cluster.BaseCluster):
 
 
 class AWSNode(cluster.BaseNode):
-    """
-    Wraps EC2.Instance, so that we can also control the instance through SSH.
-    """
+    """Wraps EC2.Instance, so that we can also control the instance through SSH."""
 
     METADATA_BASE_URL = "http://169.254.169.254/latest/meta-data/"
     TOKEN_URL = "http://169.254.169.254/latest/api/token"
@@ -668,9 +662,7 @@ class AWSNode(cluster.BaseNode):
 
     @property
     def short_hostname(self):
-        """
-        Don't need to get hostname from the system since we already know what it should be
-        """
+        """Don't need to get hostname from the system since we already know what it should be"""
         return self.name
 
     @cached_property
@@ -759,7 +751,7 @@ class AWSNode(cluster.BaseNode):
     @property
     def external_address(self):
         """
-        the communication address for usage between the test and the nodes
+        The communication address for usage between the test and the nodes
         :return:
         """
         self.log.debug("external_address is: %s", self.scylla_network_configuration.test_communication)
@@ -991,11 +983,10 @@ class AWSNode(cluster.BaseNode):
 
     def traffic_control(self, tcconfig_params=None):
         """
-        run tcconfig locally to create tc commands, and run them on the node
+        Run tcconfig locally to create tc commands, and run them on the node
         :param tcconfig_params: commandline arguments for tcset, if None will call tcdel
         :return: None
         """
-
         self.remoter.run("sudo modprobe sch_netem")
 
         if tcconfig_params is None:

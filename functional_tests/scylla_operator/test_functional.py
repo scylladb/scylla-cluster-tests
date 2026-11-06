@@ -248,10 +248,7 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # noqa:
 @pytest.mark.restart_is_used
 @pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/797")
 def test_cassandra_rackdc(db_cluster, cassandra_rackdc_properties):
-    """
-    Test of applying cassandra-rackdc.properties via configmap
-    """
-
+    """Test of applying cassandra-rackdc.properties via configmap"""
     with cassandra_rackdc_properties() as props:
         config_map_props = props
     with db_cluster.nodes[0].actual_cassandra_rackdc_properties() as props:
@@ -539,7 +536,6 @@ def test_listen_address(db_cluster):
 @pytest.mark.restart_is_used
 def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
     """Covers https://github.com/scylladb/scylla-operator/issues/447"""
-
     # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
     log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
     cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
@@ -798,7 +794,6 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     Deploy Scylla using helm chart with only default values.
     Storage capacity expected to be 10Gi
     """
-
     target_chart_name, namespace = ("t-default-values",) * 2
     expected_capacity = "10Gi"
     need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
@@ -874,9 +869,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
 
 @pytest.mark.restart_is_used
 def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
-    """
-    Cover logic of disrupt_rolling_config_change_internode_compression nemesis
-    """
+    """Cover logic of disrupt_rolling_config_change_internode_compression nemesis"""
     internode_compression_option_name = "internode_compression"
 
     with db_cluster.nodes[0].actual_scylla_yaml() as props:

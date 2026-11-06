@@ -220,9 +220,10 @@ class TestSdcmWaitWithEventStop(unittest.TestCase):
         self.assertEqual(len(self.calls), 6)
 
     def test_04_set_event_timeout_at_same_time(self):
-        """if event was set at same time as timeout exceed
+        """If event was set at same time as timeout exceed
         and throw_exc is true wait_for will raise Exception with
-        message wait_for stopped by event"""
+        message wait_for stopped by event
+        """
         self.callback_return_true_after = 8
         th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 4})
         th.start()
