@@ -22,9 +22,27 @@ import yaml
 
 from sdcm import sct_config
 from sdcm.keystore import KeyStore
+<<<<<<< HEAD:unit_tests/test_config.py
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_config.py
+from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.provision.provisioner import VmArch
+from sdcm.sct_config import config as sct_config
+=======
+from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.sct_config import config as sct_config
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_config.py
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
+<<<<<<< HEAD:unit_tests/test_config.py
 from sdcm.utils.aws_utils import get_ssm_ami
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_config.py
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
+=======
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_config.py
 
 RPM_URL = (
     "https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/"
