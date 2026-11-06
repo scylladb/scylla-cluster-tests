@@ -16,7 +16,7 @@ import re
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import find_log_event
+from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS,
     SYSTEM_ERROR_EVENTS_PATTERNS,
@@ -153,6 +153,16 @@ def test_find_log_event_no_match_returns_none():
     assert find_log_event(patterns, "all fine") is None
 
 
+def test_database_log_event_subevents_all_listed():
+    """Every subevent of DatabaseLogEvent is in SYSTEM_ERROR_EVENTS, so log parsing can raise each one.
+
+    Since python3.14 `__annotate_func__` also shows up in dir() and is excluded.
+    """
+    assert set(dir(DatabaseLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
+        ev.type for ev in SYSTEM_ERROR_EVENTS
+    }
+
+
 def test_system_error_events_partitioned_by_log_level():
     """INFO must sit after every WARNING/NORMAL/DEBUG subevent and before every ERROR/CRITICAL one.
 
@@ -213,6 +223,30 @@ def test_info_level_runtime_error_line_is_suppressed():
 def test_system_error_line_keeps_classification_outside_info_suppression(line, expected):
     """ERROR-level lines and INFO lines with a lower-severity event keep their own classification, not INFO."""
     assert find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line).type == expected.type
+
+
+def test_mutation_write_exception_line_is_paxos_timeout():
+    """A mutation write failure log line is raised as SYSTEM_PAXOS_TIMEOUT."""
+    line = (
+        "2026-11-03T14:31:24.998 db-node-1 !ERR | scylla[1] [shard 0] storage_proxy - exception during mutation write "
+        "to 10.0.0.1: exceptions::mutation_write_failure_exception (Operation failed for ks.t - received 0 responses "
+        "and 1 failures from 1 CL=ONE.)"
+    )
+    assert find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line).type == DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT.type
+
+
+def test_backtrace_frame_with_mutation_write_type_name_is_not_paxos_timeout():
+    """A frame of a decoded task backtrace, e.g. of a "topology version N held for X s past expiry" warning,
+    names the exception type in a template argument list: that's not a write timeout and must not raise an event.
+    """
+    line = (
+        "seastar::internal::coroutine_traits_base<boost::outcome_v2::basic_result<"
+        "service::storage_proxy_coordinator_query_result, utils::exception_container<"
+        "exceptions::mutation_write_timeout_exception, exceptions::read_timeout_exception, "
+        "exceptions::read_failure_exception, exceptions::rate_limit_exception, exceptions::overloaded_exception, "
+        "exceptions::read_failure_exception_with_timeout>, utils::exception_container_throw_policy> >::promise_type"
+    )
+    assert find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line) is None
 
 
 @pytest.mark.parametrize(

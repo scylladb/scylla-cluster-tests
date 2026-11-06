@@ -226,7 +226,6 @@ def test_init_argus_client_is_idempotent_after_first_resolution(monkeypatch, arg
     happen in practice) proves the second call really is a pure no-op, not a lucky
     same-run_id match - it must not blow away a working connection either way.
     """
-
     real_client = MagicMock()
     get_argus_client_mock = MagicMock(return_value=real_client)
     monkeypatch.setattr("sdcm.test_config.get_argus_client", get_argus_client_mock)
