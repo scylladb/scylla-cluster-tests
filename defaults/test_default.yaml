@@ -282,7 +282,19 @@ kafka_backend: null
 kafka_connectors: []
 
 run_scylla_doctor: true
+<<<<<<< HEAD
 scylla_doctor_version: "1.14.1"
+||||||| parent of b08084178 (chore(deps): update dependency scylla-doctor to v1.14.2)
+scylla_doctor_version: "1.14.1"
+scylla_doctor_full_tarball_url: null
+run_scylla_doctor_only: false
+scylla_doctor_edition: "basic"
+=======
+scylla_doctor_version: "1.14.2"
+scylla_doctor_full_tarball_url: null
+run_scylla_doctor_only: false
+scylla_doctor_edition: "basic"
+>>>>>>> b08084178 (chore(deps): update dependency scylla-doctor to v1.14.2)
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
