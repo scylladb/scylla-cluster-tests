@@ -285,7 +285,6 @@ def test_backtrace_decoding_configuration(
         event_filter: Lambda function to filter events for validation
         should_decode: Whether the filtered events should have decoded backtraces
     """
-
     # Setup
     dummy_node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 

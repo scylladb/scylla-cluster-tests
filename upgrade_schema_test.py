@@ -255,9 +255,7 @@ class TestThriftTableConvertedFromDenseToSparse(Test):
 
 
 class UpgradeSchemaTest(ClusterTester):
-    """
-    Test a Scylla cluster upgrade.
-    """
+    """Test a Scylla cluster upgrade."""
 
     default_params = {"timeout": 650000}
 

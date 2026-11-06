@@ -72,7 +72,7 @@ class AWSPricing:
     @staticmethod
     @lru_cache(maxsize=None)
     def get_spot_instance_price(region_name, instance_type):
-        """currently doesn't take AZ into consideration"""
+        """Currently doesn't take AZ into consideration"""
         client = boto3.client("ec2", region_name=region_name)
         result = client.describe_spot_price_history(
             InstanceTypes=[instance_type],

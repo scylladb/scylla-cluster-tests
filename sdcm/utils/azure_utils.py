@@ -239,9 +239,7 @@ def list_instances_azure(
 
 
 def azure_check_instance_type_available(instance_type: str, location: str) -> bool:
-    """
-    Check if instance type is available in the given location.
-    """
+    """Check if instance type is available in the given location."""
     azure_service = AzureService()
     return any(
         instance_type in size.name for size in azure_service.compute.virtual_machine_sizes.list(location=location)

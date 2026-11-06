@@ -6,9 +6,7 @@ from sdcm.utils.common import skip_optional_stage
 
 
 class AdmissionControlOverloadTest(ClusterTester):
-    """
-    Test Scylla load with cassandra-stress to trigger admission control for both read and write
-    """
+    """Test Scylla load with cassandra-stress to trigger admission control for both read and write"""
 
     max_transport_requests = 0
 

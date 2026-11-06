@@ -63,7 +63,6 @@ pytest_plugins = ["pytester"]
 @contextmanager
 def mock_remote_scylla_yaml(scylla_node):
     """A mock for remote_scylla_yaml that can actually modify scylla.yaml in running container"""
-
     scylla_yaml = SimpleNamespace()
     yield scylla_yaml
 

@@ -22,9 +22,7 @@ from sdcm.tester import teardown_on_exception
 
 
 class HugeClusterTest(ClusterTester):
-    """
-    Test a huge Scylla cluster
-    """
+    """Test a huge Scylla cluster"""
 
     @teardown_on_exception
     def setUp(self):
@@ -48,7 +46,5 @@ class HugeClusterTest(ClusterTester):
         self.stress_thread = None
 
     def test_huge(self):
-        """
-        Test a huge Scylla cluster
-        """
+        """Test a huge Scylla cluster"""
         self.run_stress(stress_cmd=self.params.get("stress_cmd"), duration=20)

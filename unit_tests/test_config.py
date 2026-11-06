@@ -445,7 +445,6 @@ class ConfigurationTests(unittest.TestCase):
     def test_config_dupes(self):
         def get_dupes(c):
             """sort/tee/izip"""
-
             a, b = itertools.tee(sorted(c))
             next(b, None)
             r = None

@@ -153,9 +153,7 @@ VECTOR_BASE_URL = "https://packages.timber.io/vector/latest"
 
 
 def download_vector_locally(arch="amd64", dest_dir="downloads"):
-    """
-    Download the latest vector.dev installer .deb for a given architecture.
-    """
+    """Download the latest vector.dev installer .deb for a given architecture."""
     os.makedirs(dest_dir, exist_ok=True)
     url = f"{VECTOR_BASE_URL}/vector_latest-1_{arch}.deb"
     dest = Path(dest_dir) / f"vector_latest-1_{arch}.deb"

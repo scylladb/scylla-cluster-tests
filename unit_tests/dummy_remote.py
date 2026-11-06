@@ -125,5 +125,5 @@ class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
         raise NotImplementedError
 
     def get_ip_to_node_map(self):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        """Returns {ip: node} map for all nodes in cluster to get node by ip"""
         return {node.ip_address: node for node in self.nodes}
