@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-"""
-Wait functions appropriate for tests that have high timing variance.
-"""
+"""Wait functions appropriate for tests that have high timing variance."""
 
 import time
 import logging

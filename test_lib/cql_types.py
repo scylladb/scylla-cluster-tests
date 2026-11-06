@@ -117,7 +117,6 @@ class CQLColumnType:
         return:
             Will return randomly generated instance of CQLColumnType
         """
-
         while True:
             calculated_available_types = cls._get_available_variants(
                 already_created_info, avoid_types, allowed_types, allow_levels
@@ -141,18 +140,14 @@ class CQLColumnType:
         return True
 
     def remember_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType"""
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             self_bucket = stored_variants[self.self_type] = True
         return self_bucket
 
     def forget_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and remove mark about instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and remove mark about instance of CQLColumnType"""
         if not stored_variants:
             return
         if self.self_type in stored_variants:
@@ -197,9 +192,7 @@ class CQLColumnTypeMap(CQLColumnType):
         return True
 
     def remember_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType"""
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             self_bucket = stored_variants[self.self_type] = {}
@@ -213,9 +206,7 @@ class CQLColumnTypeMap(CQLColumnType):
         self.value_type.remember_variant(value_type_bucket)
 
     def forget_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and remove mark about instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and remove mark about instance of CQLColumnType"""
         if not stored_variants:
             return
         self_bucket = stored_variants.get(self.self_type, None)
@@ -263,9 +254,7 @@ class CQLColumnTypeList(CQLColumnType):
         return True
 
     def remember_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and set mark there based on instance of CQLColumnType"""
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             self_bucket = stored_variants[self.self_type] = {}
@@ -275,9 +264,7 @@ class CQLColumnTypeList(CQLColumnType):
         self.element_type.remember_variant(element_type_bucket)
 
     def forget_variant(self, stored_variants):
-        """
-        Go down thru structure of stored_variants and remove mark about instance of CQLColumnType
-        """
+        """Go down thru structure of stored_variants and remove mark about instance of CQLColumnType"""
         if not stored_variants:
             return
         self_bucket = stored_variants.get(self.self_type, None)

@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Constants for GCE provisioning.
-"""
+"""Constants for GCE provisioning."""
 
 # Timeout values (in seconds)
 OPERATION_TIMEOUT = 600  # 10 minutes for general operations
