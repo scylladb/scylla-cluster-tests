@@ -5585,6 +5585,15 @@ class BaseCluster:
                         self.log.warning(f"Failed to get rows from {table_name} table. Error: {exc}")
 
                     if not has_data:
+                        # SCT-1380: the cfstats estimate counts sstable partitions only, it is 0 for a logstor
+                        # table (no sstables) and for data still in memtables, so ask CQL directly.
+                        keyspace, table = table_name.split(".", 1)
+                        try:
+                            has_data = bool(cql_session.execute(f'SELECT * FROM "{keyspace}"."{table}" LIMIT 1').one())
+                        except Exception as exc:  # noqa: BLE001
+                            self.log.warning(f"Failed to read a row from {table_name} table. Error: {exc}")
+
+                    if not has_data:
                         result.discard(table_name)
 
             if filter_func is not None:
