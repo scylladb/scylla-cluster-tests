@@ -23,6 +23,7 @@ from abc import abstractmethod
 from shlex import quote
 from typing import List, Optional, Tuple, Type
 
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from invoke.watchers import StreamWatcher
 from path import Path
@@ -234,7 +235,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
     def is_up(self, timeout: float = 30):
         pass
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
+    # Retry for at least ~30s: sshd was seen refusing new connections for up to ~26s during log collection
+    @retrying(n=4, sleep_time=10, allowed_exceptions=(RetryableNetworkException,))
     def receive_files(
         self,
         src: str,
@@ -292,7 +294,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                 result = LocalCmdRunner().run(rsync, timeout=timeout)
                 self.log.debug(result.exited)
                 try_scp = False
-            except (self.exception_failure, self.exception_unexpected) as ex:
+            # rsync and scp run locally, so they raise invoke's exceptions whatever the SSH transport of this remoter is
+            except (Failure, UnexpectedExit) as ex:
                 self.log.warning("<%s>: Trying scp, rsync failed: %s", self.hostname, ex)
                 # Make sure master ssh available
                 files_received = False
@@ -325,8 +328,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 try:
                     result = LocalCmdRunner().run(scp, timeout=timeout)
-                except self.exception_unexpected as ex:
-                    if self._is_error_retryable(ex.result.stderr):
+                except UnexpectedExit as ex:
+                    if self._is_copy_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
                 if sudo:
@@ -349,7 +352,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
             self._set_umask_perms(dst)
         return files_received
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
+    # Retry for at least ~30s: sshd was seen refusing new connections for up to ~26s during log collection
+    @retrying(n=4, sleep_time=10, allowed_exceptions=(RetryableNetworkException,))
     def send_files(
         self,
         src: str,
@@ -404,7 +408,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                 )
                 LocalCmdRunner().run(rsync)
                 try_scp = False
-            except (self.exception_failure, self.exception_unexpected) as details:
+            except (Failure, UnexpectedExit) as details:
                 self.log.warning("<%s>: Trying scp, rsync failed: %s", self.hostname, details)
                 files_sent = False
 
@@ -462,8 +466,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 try:
                     result = LocalCmdRunner().run(scp)
-                except self.exception_unexpected as ex:
-                    if self._is_error_retryable(ex.result.stderr):
+                except UnexpectedExit as ex:
+                    if self._is_copy_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
                 if sudo:
