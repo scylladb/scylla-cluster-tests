@@ -113,6 +113,7 @@ from sdcm.utils import cdc
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import (
+    MAX_TABLES_IN_CMD,
     clean_enospc_on_node,
     get_views_of_base_table,
     parse_nodetool_listsnapshots,
@@ -2456,16 +2457,25 @@ class NemesisRunner:
             else:
                 return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
 
-        filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
-        ks_cf = self.cluster.get_any_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
-        )
-        # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
-        ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
+        def get_ks_cf():
+            """Return the "ks.table" names expected in a '-kc' or full snapshot.
+
+            Called only for those, since a '-cf' snapshot takes its tables from the command.
+            """
+            ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
+            # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
+            ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
+            if is_virtual_tables_get_snapshot():
+                # virtual tables have no data folder
+                tables_with_folder = self.target_node.get_tables_with_sstable_folder()
+                ks_cf = [k_c for k_c in ks_cf if k_c in tables_with_folder]
+            return ks_cf
+
         keyspace_table = []
         if len(snapshot_params) > 1:
             if snapshot_params[1] == "-kc":
                 # Example: snapshot -kc cqlstress_lwt_example
+                ks_cf = get_ks_cf()
                 for ks in snapshot_params[2].split(","):
                     keyspace_table.extend([k_c.split(".") for k_c in ks_cf if k_c.startswith(f"{ks}.")])
             else:
@@ -2483,7 +2493,7 @@ class NemesisRunner:
                                 keyspace_table.extend([[keyspace, view]])
         else:
             # Example: snapshot
-            keyspace_table.extend([k_c.split(".") for k_c in ks_cf])
+            keyspace_table.extend([k_c.split(".") for k_c in get_ks_cf()])
 
         if ComparableScyllaVersion(self.target_node.scylla_version) >= "2026.2.0":
             # Since https://github.com/scylladb/scylladb/commit/39baa1870e2cd84304ec453a12955fdb0a0abc61
@@ -2571,7 +2581,8 @@ class NemesisRunner:
                 return _full_snapshot()
 
             selected_keyspace = random.choice(ks_with_few_tables)
-            tables = ",".join([k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")])
+            ks_tables = [k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")]
+            tables = ",".join(random.sample(ks_tables, k=min(len(ks_tables), MAX_TABLES_IN_CMD)))
 
             if not tables:
                 # it's unexpected situation. We have system keyspaces with few tables, so the keyspaces should be found.
