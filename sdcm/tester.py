@@ -3886,26 +3886,6 @@ class ClusterTester(unittest.TestCase):
         self.log.debug("All rows have been copied from %s to %s", src_table, dest_table)
         return True
 
-    def get_tables_id_of_keyspace(self, session, keyspace_name):
-        query = f"SELECT id FROM system_schema.tables WHERE keyspace_name='{keyspace_name}' "
-        table_id = self.rows_to_list(session.execute(query))
-        return table_id[0]
-
-    def get_tables_name_of_keyspace(self, session, keyspace_name):
-        query = f"SELECT table_name FROM system_schema.tables WHERE keyspace_name='{keyspace_name}' "
-        table_id = self.rows_to_list(session.execute(query))
-        return table_id[0]
-
-    def get_truncated_time_from_system_local(self, session):
-        query = "SELECT truncated_at FROM system.local"
-        truncated_time = self.rows_to_list(session.execute(query))
-        return truncated_time
-
-    def get_truncated_time_from_system_truncated(self, session, table_id):
-        query = f"SELECT truncated_at FROM system.truncated WHERE table_uuid={table_id}"
-        truncated_time = self.rows_to_list(session.execute(query))
-        return truncated_time[0]
-
     def get_describecluster_info(self) -> Optional[ClusterInformation]:
         """
         Runs the 'nodetool describecluster' command on a node.
