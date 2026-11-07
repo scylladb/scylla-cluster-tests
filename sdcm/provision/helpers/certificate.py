@@ -359,9 +359,10 @@ def update_certificate(node: BaseNode) -> None:
 
 def c_s_transport_str(peer_verification: bool, client_mtls: bool) -> str:
     """Build transport string for cassandra-stress."""
-    transport_str = f"truststore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.JKS_TRUSTSTORE} truststore-password=cassandra"
-    if peer_verification:
-        transport_str += " hostname-verification=true"
+    transport_str = (
+        f"truststore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.JKS_TRUSTSTORE} truststore-password=cassandra"
+        f" hostname-verification={str(bool(peer_verification)).lower()}"
+    )
     if client_mtls:
         transport_str += f" keystore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.PKCS12_KEYSTORE} keystore-password=cassandra"
     return transport_str
