@@ -1,9 +1,9 @@
 # Mini-Plan: Cheaper Artifact Tests: Skip Logs on Pass, Faster Checks, and Spot with Retry
 
-**Date:** 2026-10-18 (updated 2026-10-21)
+**Date:** 2026-10-18 (updated 2026-11-05)
 **Estimated LOC:** ~900 across the PRs below
 **Related ticket:** [SCT-707](https://scylladb.atlassian.net/browse/SCT-707)
-**Implementation:** #16546 (part B, the retry loop for artifact tests)
+**Implementation:** #16546 (part B, the retry loop for artifact tests), #16591 (part C, spot sizing)
 
 ## Problem
 
@@ -76,8 +76,8 @@ The parts are independent. Part A pays off on its own and should land regardless
   result can only get worse and a passing retry would stay red. Only the last attempt's error is recorded,
   which keeps today's build result.
 - **The instance-type loop.** Each `instance_type` branch runs on its own builder (every builder has 1
-  executor), so the retry loop runs inside each branch with its own counter and Argus runs. Retries keep a
-  type the job named explicitly; only a type chosen by sizing is swapped out (part C).
+  executor), so the retry loop runs inside each branch with its own counter and Argus runs. Retries keep
+  the same instance type: part C already picks the least-interrupted type of its size on the first attempt.
 
   Example: `instance_type="t3.large m6i.large i4i.large"` with `spot_termination_retry: [spot, on_demand]`:
 
@@ -92,21 +92,27 @@ The parts are independent. Part A pays off on its own and should land regardless
 
 ### Part C: rank spot candidates by interruption rate
 
-- **Offline data, no runtime network calls.** `sct_sizing.py update-catalog` writes an
-  `interruption_bucket` per region into the instance catalog, next to the spot prices it already stores
-  (0 = below 5%, 1 = 5–10%, 2 = 10–15%, 3 = 15–20%, 4 = above 20%).
+- **Offline data, no runtime network calls.** `sct.py sizing update-interruption` writes the bucket per
+  region and instance type to `data/instance_catalog/interruption.yaml` (0 = below 5%, 1 = 5–10%,
+  2 = 10–15%, 3 = 15–20%, 4 = above 20%), for the regions SCT builders use and the types already in the
+  catalog. A separate file and command keep the advisor data out of the catalog files that `update-catalog`
+  regenerates per cloud, and let it be refreshed on its own.
 
   | Cloud | Source | Result |
   |---|---|---|
   | AWS | Spot Instance Advisor data (`spot-bid-advisor.s3.amazonaws.com/spot-advisor-data.json`), keyed by region, OS and type | bucket 0–4 |
-  | Azure | Resource Graph `SpotResources`, type `microsoft.compute/skuspotevictionrate/location` (`azure-mgmt-resourcegraph` is already a dependency) | bucket 0–4 |
+  | Azure | Resource Graph `SpotResources`, type `microsoft.compute/skuspotevictionrate/location`. Returns no rows to the SCT service principal, even unfiltered. **Needs Investigation:** permissions or scope | none for now |
   | GCE | No per-type signal. Capacity Advisor (`sdcm/provision/gce/capacity_advisor.py`) returned 0.9 obtainability and 3600s estimated uptime, the API maximum, for `n2d-standard-2`, `n2-standard-2`, `n2-highmem-2` and `e2-standard-2` in us-east1 on 2026-10-18 | none |
   | OCI | No interruption data, and preemptible capacity has a flat price | none |
 
-- **Selection rule.** For spot, `select_instance` in `sdcm/utils/cloud_catalog/instance_matcher.py` sorts
-  by `interruption_bucket` first, then by the existing order. A missing bucket sorts after the known ones,
-  so GCE and OCI keep today's order. A new list option `sizing_exclude_instance_types` (default empty)
-  removes the reclaimed type on a spot retry.
+- **Selection rule.** For an AWS spot run, `select_instance` in
+  `sdcm/utils/cloud_catalog/instance_matcher.py` sorts by vCPU count, then by the bucket in the test's first
+  region, then by the existing order. Size comes first so the bucket only chooses between candidates of the
+  closest size: ranking the bucket first sent `vcpu: '>=4'` to a bucket-0 `i8g.24xlarge`. A missing bucket
+  sorts after the known ones. When no candidate has a bucket in the region (GCE, Azure, OCI, or an AWS
+  region without data), the existing order applies unchanged.
+- **No reclaimed-type exclusion.** The planned `sizing_exclude_instance_types` option is dropped until a
+  retry shows the need: the first pick is already the least-interrupted type of its size.
 - **GCE default, now.** Put `n2` ahead of `n2d` for the GCE `db` role, which restores the type artifact jobs
   used before 2026-08-23. **Needs Investigation:** a GCE ranking from our own Argus data (preempted runs
   divided by spot runs, per type and region) once 30 days of `SpotProvisionOutcomeEvent` data exist.
@@ -165,10 +171,12 @@ Part B (#16546):
 - `unit_tests/unit/test_spot_retry.py` (new file)
 
 Part C:
-- `sdcm/utils/cloud_catalog/catalog_generator.py` -- AWS advisor and Azure eviction buckets
-- `sdcm/utils/cloud_catalog/instance_matcher.py` -- spot sort order, `sizing_exclude_instance_types`
-- `data/instance_catalog/sizing_config.yaml` -- `n2` before `n2d` for the GCE `db` role
-- `data/instance_catalog/aws.yaml`, `data/instance_catalog/azure.yaml` -- regenerated
+- `sdcm/utils/cloud_catalog/interruption.py` (new file), `sct_sizing.py` -- AWS advisor buckets and the
+  `update-interruption` command
+- `data/instance_catalog/interruption.yaml` (new file) -- the buckets
+- `sdcm/utils/cloud_catalog/instance_catalog.py`, `sdcm/utils/cloud_catalog/instance_matcher.py`,
+  `sdcm/sct_config/config.py` -- load the buckets, spot sort order, first region of a spot run
+- `data/instance_catalog/sizing_config.yaml` -- `n2` before `n2d` for the GCE storage roles
 - `docs/cross-cloud-sizing.md` -- interruption ranking and its data sources
 
 Part D:
@@ -183,8 +191,8 @@ In `unit_tests/`, with no cloud access:
   `[spot, on_demand]`, reclaim present or absent, `OperationPreemptedError`, Argus unreachable, and a
   replay-only Argus client.
 - Config validator: rejects 3 entries, and rejects a list whose last entry is not `on_demand`.
-- Matcher: for spot, a bucket-0 candidate beats a cheaper bucket-3 one; on-demand order is unchanged; an
-  excluded type is never chosen.
+- Matcher: for spot, a bucket-0 candidate beats a cheaper bucket-4 one of the same size; size is never
+  traded for a lower bucket; on-demand order is unchanged; with no bucket data the family order is kept.
 - Every changed `vars/*.groovy` compiles in a groovy container, because lint-pipelines never compiles them.
 
 ### Staging
