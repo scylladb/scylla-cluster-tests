@@ -1046,8 +1046,6 @@ def list_instances_gce(
 
     if running:
         instances = [i for i in instances if i.status == "RUNNING"]
-    else:
-        instances = [i for i in instances if not i.status != "RUNNING"]
     if verbose:
         LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
