@@ -26,6 +26,9 @@ scylla_setup_no_raid: false
 append_scylla_node_exporter_args: ''
 append_scylla_yaml:
   rf_rack_valid_keyspaces: true
+  # advanced RPC compression, as Siren configures ScyllaDB Cloud clusters (2026.1+)
+  internode_compression_enable_advanced: true
+  rpc_dict_training_when: 'when_leader'
 experimental_features: []
 
 db_nodes_shards_selection: 'default'
@@ -118,6 +121,7 @@ stop_test_on_stress_failure: true
 stress_cdc_log_reader_batching_enable: true
 use_legacy_cluster_init: false
 internode_encryption: 'all'
+internode_compression: 'rack'
 
 use_mgmt: true
 n_monitor_nodes: 1
