@@ -1,0 +1,99 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test reproducing the custom_s1 workload1 shape (ad-tech user-profile
+    store) on a 6-node single-DC AWS cluster of i8ge.2xlarge: each node is 1/6 of the customer's
+    us-east-1 i8ge.12xlarge node, so the cluster gets the load and disk fill of one such node.
+    latte preloads 90M ~55 KB single-row partitions over 5 tables, then runs the 51% read / 49%
+    full-row upsert mix for 3 hours under SisyphusMonkey.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+# NOTE: the main load runs for 180m. Population of the 90M rows is expected to take ~3-4 hours.
+test_duration: 540
+n_db_nodes: 6
+# NOTE: the customer's clusters spread RF=3 over 3 virtual racks inside a single AZ,
+#       so the 6 nodes get the same layout: 2 nodes per rack.
+simulated_racks: 3
+n_loaders: 2
+# NOTE: i8ge.2xlarge (8 vCPU, 64 GiB, 5 TB NVMe) is 1/6 of the customer's i8ge.12xlarge in every
+#       dimension, so 6 such nodes hold the data and the load of 1 customer's us-east-1 node.
+#       i8ge is not available in every availability zone, see the jenkinsfile.
+instance_type_db: 'i8ge.2xlarge'
+instance_type_loader: 'c6i.2xlarge'
+
+user_prefix: 'long-custom-s1-wrkld1'
+use_preinstalled_scylla: true
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: 29
+
+latte_schema_parameters:
+  # NOTE: us-east-1 uses LZ4, while the rune script defaults to ZstdWithDicts (eu-central-1)
+  compression: 'lz4'
+  # NOTE: how the 'tablets_initial' value is calculated.
+  #       The test keeps the number of tablet replicas per shard of the customer's us-east-1,
+  #       and with it the amount of data per tablet, since both clusters hold the same data per shard.
+  #       1) Customer: 8192 initial tablets per table, RF=3, 33 nodes of i8ge.12xlarge (48 vCPU),
+  #          ~47 shards per node: 8192 * 3 / (33 * 47) ~= 15.8 tablet replicas per table per shard.
+  #       2) Test: 6 nodes of i8ge.2xlarge (8 vCPU), ~7 shards per node, RF=3:
+  #          15.8 * (6 * 7) / 3 ~= 222 tablets per table.
+  #       3) Tablet counts are powers of 2, so 222 -> 256.
+  #       The shard counts assume 1 vCPU per node goes to IRQ handling. With all vCPUs as shards
+  #       the result is 248, which also gives 256.
+  #       The customer's schema shows only the initial count, and their tablets have probably split
+  #       since then.
+  # TODO: Recalculate it once the actual per-table tablet counts are known.
+  tablets_initial: 256
+
+# NOTE: 'round_robin' runs every command on its own loader, so each of the 2 loaders runs
+#       1 prepare and 1 main command.
+round_robin: true
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+  # NOTE: 90M rows of ~55 KB make ~5 TB of data, which is ~2.5 TB per node with RF=3,
+  #       half of the 5 TB disks. The overwrites of the main load and ICS space amplification
+  #       bring it up towards the customer's 20 of 30 TB disk usage, while leaving room
+  #       for the nemeses which decommission and replace nodes.
+  # NOTE: every loader writes its own 45M rows slice, set by '--start-cycle' and '--end-cycle'.
+  #       The rune script uses the cycle number as the row index.
+  #       Slices are multiples of 1000 rows, so every table gets exactly its share of the rows.
+  # NOTE: 'large_cell_per_100k=10': 1 of 10k rows gets a 1.1-2 MB 'associated_records' cell.
+  # TODO: tweak it after testing
+  - >-
+    latte run --tag latte-prepare-01 --duration 45000000 --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 64 --rate 4500 --start-cycle 0 --end-cycle 45000000
+    --function insert -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-02 --duration 45000000 --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 64 --rate 4500 --start-cycle 45000000 --end-cycle 90000000
+    --function insert -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+
+stress_cmd:
+  # NOTE: the customer's us-east-1 serves 161k reads/s and 147k writes/s on 33 nodes,
+  #       ~9333 ops/s per node.
+  #       The cluster gets that load of 1 node: 2 x 4650 ops/s of the 'mixed' function,
+  #       which reads 51% of the time and upserts full rows otherwise.
+  #       Each loader works on the rows slice it has written, cycling over it
+  #       within the same '--start-cycle' and '--end-cycle' range for the whole duration.
+  - >-
+    latte run --tag latte-main-01 --duration 180m --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 48 --rate 4650 --start-cycle 0 --end-cycle 45000000
+    --function mixed -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --tag latte-main-02 --duration 180m --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 48 --rate 4650 --start-cycle 45000000 --end-cycle 90000000
+    --function mixed -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
