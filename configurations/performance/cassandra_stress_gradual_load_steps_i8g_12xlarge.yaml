@@ -1,0 +1,9 @@
+# i8g.12xlarge variant of cassandra_stress_gradual_load_steps_i8g.yaml (i8g.4xlarge).
+# i8g.12xlarge triples every node resource (vCPU 16->48, RAM 128->384GB, disk 3.75->11.25TB),
+# so every throttle step is tripled. Loaders, dataset and stress commands stay as on 4xlarge.
+# Threads are tripled too (Little's law): reachable ops/s = threads / mean latency, so at the
+# same per-node latency 3x the rate needs 3x the in-flight requests.
+# The steps are ESTIMATES (3x the 4xlarge numbers); recalibrate after the first runs.
+perf_gradual_threads: {"read": 1860, "write": 1200, "mixed": 5700, "read_disk_only": 1860}
+perf_gradual_throttle_steps: {"read": ['1500000', '2700000', '3600000', '4500000', 'unthrottled'], "mixed": ['750000', '1440000', '1800000', '2250000', 'unthrottled'], "write": ['1050000', '1800000', 'unthrottled'], "read_disk_only": ['330000', '660000', '990000', '1200000', 'unthrottled']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '30m'}
