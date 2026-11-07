@@ -153,16 +153,17 @@ def test_validate_minicloud_params_rejects_missing_overlay():
         )
 
 
-def test_validate_minicloud_params_allows_kms_on_aws_only():
+def test_validate_minicloud_params_allows_kms_on_minicloud_backends_only():
     params = {
         "instance_provision": "on_demand",
         "ip_ssh_connections": "private",
         "enterprise_disable_kms": False,
         "force_run_iotune": False,
     }
-    validate_minicloud_params(params={**params, "cluster_backend": "aws"})
+    for backend in ("aws", "gce", "azure"):
+        validate_minicloud_params(params={**params, "cluster_backend": backend})
     with pytest.raises(MinicloudError, match="enterprise_disable_kms"):
-        validate_minicloud_params(params={**params, "cluster_backend": "gce"})
+        validate_minicloud_params(params={**params, "cluster_backend": "gce-siren"})
 
 
 def test_set_endpoint_env_exports_azure_vars_for_azure_backend():

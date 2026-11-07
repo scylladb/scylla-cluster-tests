@@ -15,6 +15,7 @@ import logging
 import os
 
 from google.api_core.client_options import ClientOptions
+from google.api_core.exceptions import NotFound
 from google.cloud import kms
 from google.cloud.exceptions import GoogleCloudError
 from google.oauth2 import service_account
@@ -39,12 +40,22 @@ class GcpKms:
         credentials = service_account.Credentials.from_service_account_info(KeyStore().get_gcp_credentials())
         kwargs = {}
         if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
-            # Deliberate redirect even though minicloud serves no KMS API (yet): under
-            # minicloud everything points at the emulator and gaps are closed one service
-            # at a time. Unreachable in practice — configurations/minicloud.yaml disables
-            # KMS via enterprise_disable_kms before this client is ever used.
+            # the default gRPC transport cannot reach minicloud plain HTTP endpoint
             kwargs["client_options"] = ClientOptions(api_endpoint=endpoint)
+            kwargs["transport"] = "rest"
         self.client = kms.KeyManagementServiceClient(credentials=credentials, **kwargs)
+
+    def ensure_key_ring(self) -> None:
+        try:
+            self.client.get_key_ring(name=self.keyring_path)
+            LOGGER.info("Using the existing GCP KMS key ring")
+        except NotFound:
+            self.client.create_key_ring(
+                parent=f"projects/{self.project_id}/locations/{self.location}",
+                key_ring_id=self.keyring_name,
+                key_ring={},
+            )
+            LOGGER.info("Created the GCP KMS key ring")
 
     def create_test_key(self):
         self.client.create_crypto_key(
