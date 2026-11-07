@@ -29,7 +29,7 @@ jobs:
       # Skip team membership check for bots since GitHub API cannot resolve bot users
       # This prevents GraphQL errors like "Could not resolve to a User with the login of 'Copilot'"
       - name: Check user for team affiliation
-        uses: tspascoal/get-user-teams-membership@b2546c5affc730fd8e3d8483ae9ad3621938c2f9 # v4.0.2
+        uses: tspascoal/get-user-teams-membership@239f45b779d25e70c2e669134c6ed90826f008a1 # v4.0.3
         if: github.event.pull_request.user.type != 'Bot'
         id: teamAffiliation
         with:
