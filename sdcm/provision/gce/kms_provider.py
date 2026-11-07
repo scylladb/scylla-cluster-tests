@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 
 from google.cloud.exceptions import GoogleCloudError
@@ -50,6 +51,8 @@ class GcpKmsProvider:
 
     def get_or_create_keys_pool(self, test_id: str):
         try:
+            if os.environ.get("GCE_ENDPOINT_URL"):
+                GcpKms(self._project_id, self._location, "scylla-key-1").ensure_key_ring()
             num_of_keys = self._gcp_kms_config["num_of_keys"]
             for i in range(1, num_of_keys + 1):
                 key_name = f"scylla-key-{i}"
