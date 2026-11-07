@@ -56,6 +56,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     install_agent: bool = False
     # off by default: the callers which build a boot script decide, from the backend
     disable_guest_firewall: bool = False
+    # off for a host shared with other jobs: nothing turns its apt-daily timers back on after the run
+    disable_apt_triggers: bool = True
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -137,7 +139,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += self._skip_if_already_run_syslogng()
         if self.logs_transport == "vector":
             script += self._skip_if_already_run_vector()
-        script += disable_daily_apt_triggers()
+        if self.disable_apt_triggers:
+            script += disable_daily_apt_triggers()
         if self.logs_transport == "syslog-ng":
             script += update_repo_cache()
             script += install_syslogng_service()
