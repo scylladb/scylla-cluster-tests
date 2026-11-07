@@ -37,6 +37,17 @@ def sum_node_counts(value) -> int:
     return sum(int(part) for part in value)
 
 
+def db_guest_count(params) -> int:
+    """Return the peak number of db guests in the run, at least 1.
+
+    Counts the target size of a scale test and the oracle nodes of a db type that provisions them.
+    """
+    guests = max(sum_node_counts(params.get("n_db_nodes")), sum_node_counts(params.get("cluster_target_size")))
+    if params.get("db_type") in ORACLE_GUEST_DB_TYPES:
+        guests += sum_node_counts(params.get("n_test_oracle_db_nodes"))
+    return max(guests, 1)
+
+
 def parse_memory_gib(value: str, param_name: str = "") -> float:
     """Parse a '4GiB'/'2.5GiB'/'4096MiB' memory string into GiB.
 

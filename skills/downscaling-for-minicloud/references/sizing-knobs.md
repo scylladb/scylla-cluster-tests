@@ -243,7 +243,10 @@ and a second place to update when the emulator grows the missing feature:
 Lists replace rather than merge, so `scylla_d_overrides_files` set in a shrink overlay or the
 test-case is lost to the one in `configurations/minicloud.yaml`. A run that needs its own
 `scylla.d` files sets the list in a layer after `configurations/minicloud.yaml` and also lists
-`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`.
+`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`. On minicloud SCT treats any
+listed `io_properties.yaml` as the figure of the whole host and deploys each db guest its share of
+it, less `minicloud_io_properties_margin`, so a custom file there must hold the host's numbers.
+
 ---
 
 ## CI Only — Irrelevant to a Local Run

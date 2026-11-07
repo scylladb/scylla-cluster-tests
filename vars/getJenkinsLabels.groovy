@@ -119,7 +119,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
         // to, the minicloud KVM agent family, or `pinnableExtras`. A machine becomes pinnable
         // by a one-line addition here, so there is a review trail for "this host may run SCT
         // jobs, with their credentials". Individual lab machines go into the extras list.
-        def pinnableExtras = []
+        def pinnableExtras = ['minipc2.cloudius-systems.com', 'minipc3.cloudius-systems.com', 'minipc4.cloudius-systems.com']
         def pinnable = new ArrayList(pinnableExtras)
         for (v in jenkins_labels.values()) {
             pinnable.add(v.toString())  // GCE entries are GStrings - normalize before compare
