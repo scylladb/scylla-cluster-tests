@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
@@ -130,3 +130,77 @@ def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
             ]
         },
     )
+
+
+def test_configure_skips_builder_group_under_minicloud(aws_region, monkeypatch):
+    aws_region._is_minicloud = True
+    for name in (
+        "update_sct_key_pair",
+        "create_sct_vpc",
+        "create_sct_internet_gateway",
+        "configure_sct_route_table",
+        "create_sct_subnets",
+        "create_sct_security_group",
+        "create_sct_ssh_security_group",
+        "configure_backup_storage",
+        "configure_ssm",
+    ):
+        monkeypatch.setattr(aws_region, name, MagicMock())
+    loader = MagicMock(side_effect=AssertionError("keystore must not be read under minicloud"))
+    monkeypatch.setattr("sdcm.utils.aws_region.get_builder_ssh_sources", loader)
+    ensure = MagicMock()
+    monkeypatch.setattr(aws_region, "ensure_builder_security_group", ensure)
+
+    aws_region.configure()
+
+    loader.assert_not_called()
+    ensure.assert_not_called()
+
+
+def _instance_in_groups(group_ids):
+    instance = MagicMock()
+    instance.security_groups = [{"GroupId": gid, "GroupName": gid} for gid in group_ids]
+    return instance
+
+
+def test_secure_running_builders_moves_every_builder_version(aws_region):
+    stale, done = _instance_in_groups(["sg-sct", "sg-old-ssh"]), _instance_in_groups(["sg-builder"])
+    aws_region.resource.instances.filter.return_value = [stale, done]
+
+    assert aws_region.secure_running_builders("sg-builder") == 1
+
+    stale.modify_attribute.assert_called_once_with(Groups=["sg-builder"])
+    done.modify_attribute.assert_not_called()
+    filters = aws_region.resource.instances.filter.call_args.kwargs["Filters"]
+    assert {"Name": "tag:aws:autoscaling:groupName", "Values": ["aws-us-east-1-qa-builder-*"]} in filters
+    assert {"Name": "instance-state-name", "Values": ["running"]} in filters
+
+
+def test_secure_builder_launch_templates_covers_every_builder_version(aws_region):
+    ec2 = aws_region._mock_ec2
+    ec2.get_paginator.return_value.paginate.return_value = [
+        {
+            "LaunchTemplates": [
+                {"LaunchTemplateId": "lt-v3", "LaunchTemplateName": "aws-sct-builders-v3"},
+                {"LaunchTemplateId": "lt-v4", "LaunchTemplateName": "aws-sct-builders-v4"},
+                {"LaunchTemplateId": "lt-other", "LaunchTemplateName": "eks-nodes"},
+            ]
+        }
+    ]
+    groups = {"lt-v3": ["sg-old-ssh", "sg-sct"], "lt-v4": ["sg-builder"]}
+    ec2.describe_launch_template_versions.side_effect = lambda LaunchTemplateId, Versions: {
+        "LaunchTemplateVersions": [
+            {"VersionNumber": 15, "LaunchTemplateData": {"SecurityGroupIds": groups[LaunchTemplateId]}}
+        ]
+    }
+    ec2.create_launch_template_version.return_value = {"LaunchTemplateVersion": {"VersionNumber": 16}}
+
+    assert aws_region.secure_builder_launch_templates("sg-builder") == 1
+
+    ec2.create_launch_template_version.assert_called_once_with(
+        LaunchTemplateId="lt-v3",
+        SourceVersion="15",
+        LaunchTemplateData={"SecurityGroupIds": ["sg-builder"]},
+        VersionDescription=ANY,
+    )
+    ec2.modify_launch_template.assert_called_once_with(LaunchTemplateId="lt-v3", DefaultVersion="16")

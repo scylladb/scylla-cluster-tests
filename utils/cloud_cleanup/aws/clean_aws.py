@@ -427,7 +427,7 @@ def clean_unattached_security_groups(region_name: str):
         tags = group.get("Tags", [])
         # Skip default and specific security groups, and one tagged with 'keep:alive'
         if (
-            group["GroupName"] in ("default", "SCT-2-sg", "SCT-builder-ssh-sg")
+            group["GroupName"] in ("default", "SCT-2-sg", "SCT-builder-ssh-sg", "SCT-builder-sg")
             or {"Key": "keep", "Value": "alive"} in tags
         ):
             continue

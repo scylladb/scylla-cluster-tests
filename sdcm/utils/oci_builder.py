@@ -23,6 +23,7 @@ import requests
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_runner import OciSctRunner
+from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.sct_cmd_helpers import get_all_regions
 
@@ -102,13 +103,13 @@ class OciBuilder:
         _ = self.region.vcn
         _ = self.region.internet_gateway
 
-        # Get or create subnet
-        subnet = self.region.subnet(public=True)
+        self.region.ensure_builder_security_list(get_builder_ssh_sources())
+        subnet = self.region.subnet(public=True, builder=True)
         if not subnet:
-            click.secho(f"{self.region.region_name}: creating a public subnet")
-            subnet = self.region.create_subnet(public=True)
+            click.secho(f"{self.region.region_name}: creating the builder subnet")
+            subnet = self.region.create_subnet(public=True, builder=True)
         if not subnet:
-            raise ValueError(f"Unable to create or find a public subnet in {self.region.region_name}")
+            raise ValueError(f"Unable to create or find the builder subnet in {self.region.region_name}")
 
         return {
             "image_id": image_id,
