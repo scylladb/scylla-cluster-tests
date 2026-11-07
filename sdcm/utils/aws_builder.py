@@ -98,7 +98,7 @@ jenkins.save()
 class AwsBuilder:
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v4"
+    VERSION = "v5"
 
     def __init__(self, region: AwsRegion, params=None, number=1):
         self.region = region
@@ -238,12 +238,15 @@ class AwsBuilder:
         click.secho(f"{self.region.region_name}: create_auto_scaling_group")
         try:
             asg_client = boto3.client("autoscaling", region_name=self.region.region_name)
-            subnet_ids = [self.region.sct_subnet(region_az=az).subnet_id for az in self.region.availability_zones]
+            # AWS adds zones to a region (eu-west-2d) before SCT has a subnet there: use only zones with one
+            subnets = {az: self.region.sct_subnet(region_az=az) for az in self.region.availability_zones}
+            subnets = {az: subnet for az, subnet in subnets.items() if subnet}
+            subnet_ids = [subnet.subnet_id for subnet in subnets.values()]
             asg_client.create_auto_scaling_group(
                 AutoScalingGroupName=self.name,
                 MinSize=0,
                 MaxSize=200,
-                AvailabilityZones=self.region.availability_zones,
+                AvailabilityZones=list(subnets),
                 VPCZoneIdentifier=",".join(subnet_ids),
                 MixedInstancesPolicy=self.mixed_instances_policy,
                 Tags=[
@@ -323,7 +326,7 @@ class AwsCiBuilder(AwsBuilder):
 class AwsFipsCiBuilder(AwsBuilder):
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v4-fibs"
+    VERSION = "v5-fibs"
 
     @cached_property
     def name(self):
