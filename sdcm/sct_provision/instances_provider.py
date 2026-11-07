@@ -33,6 +33,7 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
@@ -75,6 +76,15 @@ def _record_outcome(
         )
 
 
+def _was_reclaimed(provisioner: Provisioner, name: str) -> bool:
+    """`provisioner.was_reclaimed`, answering False when the cloud API fails, so its error never hides the real one."""
+    try:
+        return provisioner.was_reclaimed(name)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not check whether %s was reclaimed", name, exc_info=True)
+        return False
+
+
 def provision_instances_with_fallback(
     provisioner: Provisioner,
     definitions: List[InstanceDefinition],
@@ -88,19 +98,23 @@ def provision_instances_with_fallback(
     requested = pricing_model.value
     realized = requested
     try:
+        preempted = False
         try:
             provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
         except OperationPreemptedError:
-            if pricing_model.is_spot() and fallback_on_demand:
-                LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
-                # Rebinding matters beyond this retry: the `get_or_create_instances` call below is handed
-                # this same variable, and it defaults to spot, so leaving it unchanged would re-create any
-                # uncached definition at exactly the pricing that just failed.
-                pricing_model = PricingModel.ON_DEMAND
-                realized = pricing_model.value
-                provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
-            else:
+            if not (pricing_model.is_spot() and fallback_on_demand):
                 raise
+            preempted = True
+        # Outside the `except`: a failed on-demand retry must not chain the preemption into its traceback,
+        # or `spot-retry-decision` reads the failure as a spot reclaim (SCT-707).
+        if preempted:
+            LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
+            # Rebinding matters beyond this retry: the `get_or_create_instances` call below is handed
+            # this same variable, and it defaults to spot, so leaving it unchanged would re-create any
+            # uncached definition at exactly the pricing that just failed.
+            pricing_model = PricingModel.ON_DEMAND
+            realized = pricing_model.value
+            provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
     except Exception:
         # Report before re-raising: this path raises rather than returning empty, so recording afterwards
         # would mean the total-failure case - the one worth alerting on - is the one never recorded.
@@ -123,7 +137,15 @@ def provision_instances_with_fallback(
             "key_file": f"~/.ssh/{v_m.ssh_key_name}",
         }
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
-        wait_cloud_init_completes(remoter=remoter, instance=v_m)
+        try:
+            wait_cloud_init_completes(remoter=remoter, instance=v_m)
+        except Exception:
+            # No node exists yet to watch for reclaims, so ask the cloud, or SCT-707 retries nothing.
+            if pricing_model.is_spot() and _was_reclaimed(provisioner, v_m.name):
+                SpotTerminationEvent(
+                    node=v_m.name, message="Spot VM reclaimed while waiting for cloud-init"
+                ).publish_or_dump(default_logger=LOGGER)
+            raise
         # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
     return provisioned_instances
 

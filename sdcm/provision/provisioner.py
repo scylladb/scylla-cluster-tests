@@ -211,6 +211,10 @@ class Provisioner(ABC):
         """Runs command on instance."""
         raise NotImplementedError()
 
+    def was_reclaimed(self, name: str) -> bool:
+        """True when the cloud took this spot instance back. Backends that cannot tell answer False."""
+        return False
+
 
 class ProvisionerFactory:
     def __init__(self) -> None:

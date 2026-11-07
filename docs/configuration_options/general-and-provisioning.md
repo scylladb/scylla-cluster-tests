@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**74 options.**
+**75 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -752,6 +752,17 @@ Duration (min) up to which [`instance_provision`](#instance_provision) defaults 
 **default:** 720
 
 **type:** int
+
+
+<a id="spot_termination_retry"></a>
+
+## **spot_termination_retry** / SCT_SPOT_TERMINATION_RETRY
+
+Re-run the test inside the same Jenkins build when an attempt is lost to a spot reclaim. One [`instance_provision`](#instance_provision) value per retry, e.g. `[spot, on_demand]`: at most 2 entries, and the last must be `on_demand`, so a retrying test always ends on an attempt that cannot be reclaimed. Empty (the default) means no retry. Read by `sct.py spot-retry-decision`; only pipelines that call `runWithSpotRetry` act on it.
+
+**default:** []
+
+**type:** str | list[str] → list[str]
 
 
 <a id="ssh_transport"></a>

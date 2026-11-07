@@ -435,6 +435,14 @@ class AzureProvisioner(Provisioner):
         self._cache[name] = instance
         LOGGER.info("Added tags '%s' to intance '%s'", tags, name)
 
+    def was_reclaimed(self, name: str) -> bool:
+        # SCT creates spot VMs with evictionPolicy=Delete: an evicted VM is being deleted, or is gone.
+        try:
+            v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, name)
+        except ResourceNotFoundError:
+            return True
+        return v_m.provisioning_state == "Deleting"
+
     def run_command(self, name: str, command: str) -> Result:
         """Runs command on instance."""
         return self._vm_provider.run_command(name, command)

@@ -132,7 +132,12 @@ from sdcm.provision.helpers.certificate import (
 )
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.oci.provisioner import OciProvisioner
-from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, provisioner_factory
+from sdcm.provision.provisioner import (
+    OperationPreemptedError,
+    ProvisionError,
+    ProvisionUnrecoverableError,
+    provisioner_factory,
+)
 from sdcm.remote import LOCALRUNNER, RemoteCmdRunnerBase
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
@@ -147,7 +152,13 @@ from sdcm.sct_events.setup import (
     start_events_device,
     stop_events_device,
 )
-from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
+from sdcm.sct_events.system import (
+    InfoEvent,
+    SpotTerminationEvent,
+    TestFrameworkEvent,
+    TestResultEvent,
+    TestTimeoutEvent,
+)
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.spark_migrator import build_spark4_bootstrap_actions
 from sdcm.stress.latte_thread import LatteStressThread
@@ -262,6 +273,15 @@ PERF_COLLECTOR_SERVICE = "scylla-perf-collector"
 PYTHON_THREAD_LIST = (KafkaCDCReaderThread, KafkaProducerThread, KafkaValidatorThread)
 
 
+def _chained_preemption(exc: BaseException | None) -> OperationPreemptedError | None:
+    """The OperationPreemptedError in *exc*'s cause/context chain, if any."""
+    while exc is not None:
+        if isinstance(exc, OperationPreemptedError):
+            return exc
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
 def teardown_on_exception(method):
     """
     Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs
@@ -290,6 +310,10 @@ def teardown_on_exception(method):
                 exception=exc,
                 severity=severity,
             ).publish_or_dump()
+            # A spot preemption that reached setUp is final - the on-demand fallback already had its chance - so
+            # report it as one: `spot-retry-decision` only reads SpotTerminationEvent (SCT-707).
+            if preemption := _chained_preemption(exc):
+                SpotTerminationEvent(node="provisioning", message=str(preemption)).publish_or_dump()
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
             # Try to initialize Argus if it hasn't been done yet, so the failure
             # is reported with proper TEST_ERROR status.
@@ -1040,6 +1064,24 @@ class ClusterTester(unittest.TestCase):
         if summary.get("ERROR", 0) or summary.get("CRITICAL", 0):
             return "FAILED"
         return "SUCCESS"
+
+    @contextlib.contextmanager
+    def subTest(self, *args, **params):
+        """`unittest.TestCase.subTest` that lets a critical failure end the test.
+
+        unittest records any exception of a subtest as that subtest's failure and goes on with the next one, so
+        `kill_test` (a spot reclaim, the test duration running out) would only fail one subtest, and the rest
+        would run against dead nodes until the job timeout. The failure is still recorded on the subtest.
+        """
+        critical = None
+        with super().subTest(*args, **params):
+            try:
+                yield
+            except CriticalTestFailure as exc:
+                critical = exc
+                raise
+        if critical:
+            raise critical
 
     def kill_test(self, backtrace_with_reason):
         test_pid = os.getpid()
