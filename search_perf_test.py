@@ -17,36 +17,46 @@ The flow is the same whichever index is under test -- full-text (BM25 over docum
 (ANN over embeddings) -- because vector-store serves both and latte drives both:
 
     a YAML plan names datasets; a dataset is a sequence of steps; a step loads more shards on top
-    of the previous ones and rebuilds the index, so one dataset yields results at several corpus
-    sizes. Index build time comes from vector-store's own log (see sdcm.utils.vector_store_index),
-    and every measurement is appended to RESULTS_FILE_NAME in the run's log directory as it is
-    taken, one JSON object per line.
+    of the previous ones, rebuilds the index and runs its query sets, so one dataset yields results
+    at several corpus sizes. Index build time comes from vector-store's own log (see
+    sdcm.utils.vector_store_index), query latency from latte's HDR output, and every measurement is
+    appended to RESULTS_FILE_NAME in the run's log directory as it is taken, one JSON object per line.
 
 What differs per workload is the rune script, the vocabulary and the names things are reported
 under. All of it is declared in a 'SearchWorkload', which a subclass points 'WORKLOAD' at; the
 subclass then only owns its 'test_*' entry point. See fts_test.py for a worked
 example, and docs/fts-search-test.md for the plan format.
-
-The query phase -- running a step's query sets against the index that was just built and reporting
-their latency -- is not here yet. It needs the hdr-tag workload detection fix, and lands on top of
-this.
 """
 
+import concurrent.futures
+import contextlib
+import functools
 import json
 import math
 import os
 import posixpath
 import re
+import shutil
+import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
+import boto3
+import boto3.s3.transfer
+import botocore.config
 import yaml  # type: ignore
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.stress.latte_thread import remove_from_loader, send_to_loader, staged_file_path
+from sdcm.utils.common import DEFAULT_AWS_REGION
+from sdcm.utils.search_argus import SearchArgusReporter, sut_timestamp
 from sdcm.utils.vector_store_client import VectorStoreClient
 from sdcm.utils.vector_store_index import wait_for_index_build_seconds
 
@@ -57,7 +67,16 @@ RESULTS_FILE_NAME = "search_results.jsonl"
 # test: the plan format is the flow's, not any single workload's, so a vector-search test reuses it.
 TEST_CONFIG_PARAM = "search_test_config"
 
+# NOTE: plans fetched from S3 land here rather than next to the tracked ones, so that they do not
+#       show up as untracked files (the .gitignore covers every subdirectory of a workload's data
+#       directory) and are not sent to every loader with the top-level files of the rune
+#       script's directory.
+DOWNLOADED_DIR = "downloaded"
+
 DEFAULT_MAX_INDEX_WAIT = 1800
+DEFAULT_RATE = 0
+DEFAULT_DURATION = "60s"
+DEFAULT_LIMIT = 5
 
 # How often SCT re-checks the vector-store state it is waiting on over the API: the node reporting
 # SERVING, and a dropped index disappearing. Neither is on a measured path -- the build time comes
@@ -84,6 +103,31 @@ INDEX_BUILD_TIMEOUT_GRACE_SECS = 120
 # Validated once on the way in instead of being quoted differently at each of those three places.
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 SAFE_DATA_FILE_RE = re.compile(r"[A-Za-z0-9_.\-/]+")
+# Argus track and row names: free text, but they only ever reach a table or row name, and a short
+# printable one keeps that readable.
+SAFE_TRACK_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.,:;()/|+-]{0,119}")
+# A latte '--duration': digits and one of its unit suffixes, the form 'get_timeout_from_stress_cmd'
+# parses a phase timeout out of.
+SAFE_DURATION_RE = re.compile(r"\d+[hms]")
+# A query entry's 'stress_options' reach latte as '--<name> <value>', so using another latte option
+# is a plan change.
+SAFE_OPTION_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+SAFE_OPTION_VALUE_RE = re.compile(r"[A-Za-z0-9_.:/+-]+")
+
+# What a query record keeps of the HDR summary 'get_hdrhistogram' builds, under the record's names.
+HDR_SUMMARY_FIELDS = {
+    "percentile_50": "p50_ms",
+    "percentile_90": "p90_ms",
+    "percentile_95": "p95_ms",
+    "percentile_99": "p99_ms",
+    "percentile_99_9": "p99_9_ms",
+    "percentile_99_99": "p99_99_ms",
+    "throughput": "throughput_ops",
+}
+
+# Cap on the 'query_example' field of a query record. The value comes from a corpus the plan names
+# rather than from anything validated here.
+QUERY_EXAMPLE_MAX_CHARS = 256
 
 
 @dataclass(frozen=True)
@@ -102,6 +146,10 @@ class LatteScriptParams:
     dataset_dir: str
     records_file: str
     record_count: str
+    queries_file: str
+    qrels_file: str
+    search_limit: str
+    compute_accuracy: str
     index_name: str
     max_index_wait: str
     min_probes: str
@@ -116,6 +164,7 @@ class SearchWorkload:
     name: str  # 'fts_search' -- names the workload in the results file
     base_dir: str  # holds the rune script, the tracked plans and the local datasets
     script: str  # the rune script latte runs
+    hdr_tag: str  # HDR tag its search function emits, e.g. 'fn--search'
     item_noun: str  # 'docs' -- the unit record counts are logged in
     index_prefix: str  # 'fts_idx' -- prefixes every index this test builds
     default_keyspace: str
@@ -125,6 +174,11 @@ class SearchWorkload:
     step_records_file_key: str
     default_records_file: str
     default_shard_suffix: str
+    # How the Argus tables describe the workload, and the label of what an index covers.
+    description: str = ""
+    # Starts every Argus table name, so workloads reporting to one Argus test keep their tables apart.
+    table_prefix: str = ""
+    record_label: str = "record count"
 
 
 def _local_path(workload: SearchWorkload, *parts: str) -> str:
@@ -154,9 +208,9 @@ def _checked_name(name: str, kind: str) -> str:
 def _checked_data_file(name: str, kind: str) -> str:
     """Validate a plan-supplied, dataset-relative data file name.
 
-    The name is interpolated into the shell commands that copy the file into the loader container,
-    and joined onto the local dataset directory, so reject both shell metacharacters and anything
-    that escapes the dataset directory.
+    The name is interpolated into the latte command line and into the commands that stage the file
+    on a loader, and joined onto the local dataset directory, so reject both shell metacharacters
+    and anything that escapes the dataset directory.
     """
     if not isinstance(name, str) or not SAFE_DATA_FILE_RE.fullmatch(name):
         raise ValueError(f"Invalid {kind} {name!r}: expected only letters, digits, '.', '-', '_' and '/'")
@@ -164,6 +218,29 @@ def _checked_data_file(name: str, kind: str) -> str:
     if name.startswith("/") or ".." in parts:
         raise ValueError(f"Invalid {kind} {name!r}: must be a relative path inside the dataset directory")
     return name
+
+
+def _checked_int(value, kind: str, minimum: int = 0) -> int:
+    """Validate a plan-supplied number that is interpolated into a latte command line."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"Invalid {kind} {value!r}: expected an integer >= {minimum}")
+    return value
+
+
+def _checked_positive_float(value, kind: str) -> float:
+    """Validate a plan-supplied latency expectation: a finite number > 0, and not a bool."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(f"Invalid {kind} {value!r}: expected a finite number > 0")
+    return float(value)
+
+
+def _checked_duration(value, kind: str) -> str:
+    """Validate a plan-supplied latte duration in the time form ('60s', '5m', '1h'): the only one
+    'get_timeout_from_stress_cmd' parses, and the phase timeout otherwise becomes 'test_duration'.
+    """
+    if not isinstance(value, str) or not SAFE_DURATION_RE.fullmatch(value):
+        raise ValueError(f"Invalid {kind} {value!r}: expected a latte duration like '60s', '5m' or '1h'")
+    return value
 
 
 def _count_tsv_lines(path: str) -> int:
@@ -178,6 +255,61 @@ def _count_tsv_lines(path: str) -> int:
             if line.strip():
                 count += 1
     return count
+
+
+def _first_query_example(local_ds_dir: str, queries_file: str) -> str:
+    """Return the text of the first query in a 'queries_<set>.tsv' file, or "" if there is none.
+
+    Truncated, since natural-language queries can run long.
+    """
+    path = os.path.join(local_ds_dir, queries_file)
+    try:
+        with open(path, encoding="utf-8") as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                parts = stripped.split("\t", 1)
+                text = parts[1] if len(parts) > 1 else parts[0]
+                if len(text) <= QUERY_EXAMPLE_MAX_CHARS:
+                    return text
+                return text[: QUERY_EXAMPLE_MAX_CHARS - 3] + "..."
+    except FileNotFoundError:
+        pass
+    return ""
+
+
+@lru_cache(maxsize=1)
+def _s3_client():
+    # NOTE: shard files run to hundreds of MB and are fetched over the whole run, so retry more than
+    #       the botocore defaults do.
+    return boto3.client(
+        "s3",
+        region_name=DEFAULT_AWS_REGION,
+        config=botocore.config.Config(retries={"max_attempts": 5, "mode": "standard"}),
+    )
+
+
+@lru_cache(maxsize=1)
+def _s3_transfer_config():
+    return boto3.s3.transfer.TransferConfig(num_download_attempts=5)
+
+
+def _s3_download_file(bucket: str, key: str, local_path: str):
+    """Download a single file from S3 to a local path."""
+    _s3_client().download_file(bucket, key, local_path, Config=_s3_transfer_config())
+
+
+def _parse_s3_url(url: str) -> tuple[str, str]:
+    """Parse an 's3://bucket/prefix' URL into (bucket, prefix), the prefix without slashes at its ends."""
+    parsed = urlparse(url)
+    if parsed.scheme != "s3" or not parsed.hostname:
+        raise ValueError(f"Invalid S3 URL {url!r}: expected s3://<bucket>[/<prefix>]")
+    return parsed.hostname, parsed.path.strip("/")
+
+
+def _s3_key(prefix: str, name: str) -> str:
+    return f"{prefix}/{name}" if prefix else name
 
 
 def _parse_shard_spec(shards: list) -> list[int]:
@@ -214,20 +346,225 @@ def _parse_shard_spec(shards: list) -> list[int]:
     return result
 
 
-def resolve_test_config_path(config: str) -> str:
-    """Resolve the plan param to a local file.
+def resolve_test_config_path(workload: SearchWorkload, config: str) -> str:
+    """Resolve the plan param to a local file, downloading it if it is an S3 URL.
 
-    Two accepted forms, so that pointing a run at a different plan is a single overridable
-    param (SCT_SEARCH_TEST_CONFIG):
+    Three accepted forms, so that pointing a run at a different plan is a single overridable
+    param (SCT_SEARCH_TEST_CONFIG) instead of an edit to the nested `download_from_s3` mapping:
 
+      s3://bucket/key                      downloaded into the workload's '<base_dir>/downloaded/'
       /a/local/path                        used as-is
       data_dir/latte/fts_search/plan.yaml  relative to the SCT root, like every other file a
                                            test case names -- see 'scylla_d_overrides_files' and
                                            the '.rn' paths inside latte stress commands
+
+    A downloaded plan is cached under its full bucket and key rather than under its basename: the
+    param exists precisely so a run can point at any plan, and two of them named 'plan.yaml' would
+    otherwise share one local file -- the second run silently executing the first one's plan and
+    reporting its results against the wrong workload. It is downloaded again on every resolve, so a
+    plan updated in place on S3 is not served stale from an earlier run's copy.
     """
+    if config.startswith("s3://"):
+        bucket, key = _parse_s3_url(config)
+        # The key becomes a local path, so it must not be able to climb out of the download dir.
+        if not key or any(part in ("", ".", "..") for part in key.split("/")):
+            raise ValueError(f"Invalid S3 URL: {config} (its key is not a usable relative path)")
+        local_path = _local_path(workload, DOWNLOADED_DIR, bucket, *key.split("/"))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        _s3_download_file(bucket, key, local_path)
+        return local_path
     if os.path.isabs(config):
         return config
     return sct_abs_path(config)
+
+
+# ---------------------------------------------------------------------------
+# Query discovery
+# ---------------------------------------------------------------------------
+
+
+def _query_params(query: dict, defaults: dict) -> tuple:
+    """Resolve (limit, rate) for a query entry, applying dataset defaults.
+
+    Checked, not just read: both are interpolated into the latte command line, the same reason
+    '_checked_name' exists for the plan's names.
+    """
+    return (
+        _checked_int(query.get("limit", defaults.get("limit", DEFAULT_LIMIT)), "query limit", minimum=1),
+        # 0 is 'unthrottled' -- '_run_search' drops '--rate' entirely for it.
+        _checked_int(query.get("rate", defaults.get("rate", DEFAULT_RATE)), "query rate"),
+    )
+
+
+def _stress_options(query: dict, defaults: dict) -> str:
+    """Render a query entry's 'stress_options' as latte flags, merged over the dataset defaults'.
+
+    Merged by name, so an entry adding one option keeps the rest. A true value is a bare flag, a
+    false one drops a default's. Only checked to be shell-safe and not 'rate': latte itself rejects an
+    option it does not know, and one given twice, as one SCT also sets would be.
+    """
+    if "concurrency" in query or "concurrency" in defaults:
+        raise ValueError("'concurrency' is a stress option: set it under 'stress_options'")
+    options = {}
+    for source in (defaults, query):
+        value = source.get("stress_options", {})
+        if not isinstance(value, dict):
+            raise ValueError(f"Invalid stress_options {value!r}: expected a mapping of option names to values")
+        options |= value
+    flags = []
+    for name, value in options.items():
+        if not isinstance(name, str) or not SAFE_OPTION_NAME_RE.fullmatch(name):
+            raise ValueError(f"Invalid stress option {name!r}: expected a long option name like 'warmup'")
+        # NOTE: SCT drops '--rate' for an unthrottled entry, so one here would reach latte unopposed
+        #       while the entry is still recorded as unthrottled.
+        if name == "rate":
+            raise ValueError("'rate' is a plan key, not a stress option: SCT reads it")
+        if value is True:
+            flags.append(f"--{name}")
+        elif value is not False:
+            if not isinstance(value, (int, str)) or not SAFE_OPTION_VALUE_RE.fullmatch(str(value)):
+                raise ValueError(f"Invalid value {value!r} of stress option {name!r}")
+            flags.append(f"--{name} {value}")
+    return " ".join(flags)
+
+
+def _query_duration(query: dict, defaults: dict) -> str:
+    """Resolve the latte '--duration' for a query entry, applying dataset defaults."""
+    return _checked_duration(query.get("duration", defaults.get("duration", DEFAULT_DURATION)), "query duration")
+
+
+def _expected_p99_read_ms(query: dict, defaults: dict) -> float:
+    """Resolve the expected P99 read latency (ms) for a query entry.
+
+    Required, on the entry or in the dataset's 'defaults': the expectation belongs to the plan, so
+    SCT has no default for it.
+    """
+    expected = query.get("expected_p99_read_ms", defaults.get("expected_p99_read_ms"))
+    if expected is None:
+        raise ValueError(
+            f"Query set {query.get('set')!r} has no 'expected_p99_read_ms' "
+            f"(set it on the query entry or the dataset's 'defaults')"
+        )
+    return _checked_positive_float(expected, f"expected_p99_read_ms for query set {query.get('set')!r}")
+
+
+def _has_invalid_queries(dataset: dict) -> bool:
+    """Whether the plan says the dataset's query sets include queries vector-store cannot parse."""
+    value = dataset.get("has_invalid_queries", False)
+    # NOTE: a quoted "false" would read as true.
+    if not isinstance(value, bool):
+        raise ValueError(
+            f"Invalid 'has_invalid_queries' {value!r} in dataset {dataset.get('name')!r}: expected true or false"
+        )
+    return value
+
+
+def validate_plan_queries(datasets: list) -> None:
+    """Check every query entry of every dataset, so a bad plan fails before anything runs.
+
+    At query time the step has already loaded and indexed its corpus: tens of minutes on a real one.
+    """
+    for dataset in datasets:
+        defaults = dataset.get("defaults", {})
+        for step_idx, step in enumerate(dataset.get("steps", [])):
+            for query in step.get("queries", []):
+                where = f"dataset {dataset.get('name')!r}, step #{step_idx + 1}"
+                if "set" not in query:
+                    raise ValueError(f"Query entry in {where} has no 'set'")
+                try:
+                    _checked_name(query["set"], "query set name")
+                    _query_params(query, defaults)
+                    _stress_options(query, defaults)
+                    _query_duration(query, defaults)
+                    _expected_p99_read_ms(query, defaults)
+                except ValueError as exc:
+                    raise ValueError(f"{exc} (in {where})") from exc
+
+
+def _checked_track_name(value, kind: str) -> str:
+    if not isinstance(value, str) or not SAFE_TRACK_NAME_RE.fullmatch(value):
+        raise ValueError(
+            f"Invalid {kind} {value!r}: expected up to 120 letters, digits, spaces and ' _.,:;()/|+-', "
+            "starting with a letter or digit"
+        )
+    return value
+
+
+def _tracked(entry: dict, track_key: str, label_key: str) -> tuple[str | None, str | None]:
+    """The Argus track and row label a plan entry names, or (None, None) for an untracked one.
+
+    The label is required: it names the row's series across runs, so the plan states it rather than
+    SCT deriving one that changes with the entry, or does not when it should.
+    """
+    track, label = entry.get(track_key), entry.get(label_key)
+    if track is None:
+        if label is not None:
+            raise ValueError(f"'{label_key}' without '{track_key}': the label names a row of a track")
+        return None, None
+    if label is None:
+        raise ValueError(f"'{track_key}' without '{label_key}': a tracked entry needs a row label")
+    return _checked_track_name(track, track_key), _checked_track_name(label, label_key)
+
+
+def _query_track(query: dict) -> tuple[str | None, str | None]:
+    return _tracked(query, "track", "label")
+
+
+def _build_track(step: dict) -> tuple[str | None, str | None]:
+    return _tracked(step, "build_track", "build_label")
+
+
+def validate_plan_tracks(datasets: list) -> None:
+    """Check the plan's Argus tracks up front, as 'validate_plan_queries' does its queries.
+
+    A track is one Argus table and each of its rows one graphed series, so: a row label appears once
+    per track; a track holds index builds or searches, whose columns differ, not both; its searches
+    are all rate-limited or all unthrottled, whose latency and throughput do not share a scale; and a
+    rate-limited track's searches share one P99 limit, a rule of the table.
+    """
+    build_tracks, search_tracks, rows = set(), {}, set()
+    for dataset in datasets:
+        defaults = dataset.get("defaults", {})
+        for step_idx, step in enumerate(dataset.get("steps", [])):
+            where = f"dataset {dataset.get('name')!r}, step #{step_idx + 1}"
+            try:
+                track, label = _build_track(step)
+                tracked = [(track, label)] if track else []
+                if track:
+                    build_tracks.add(track)
+                for query in step.get("queries", []):
+                    track, label = _query_track(query)
+                    if not track:
+                        continue
+                    expected = _expected_p99_read_ms(query, defaults)
+                    rate_limited = _query_params(query, defaults)[1] > 0
+                    first_expected, first_rate_limited = search_tracks.setdefault(track, (expected, rate_limited))
+                    if rate_limited and expected != first_expected:
+                        raise ValueError(
+                            f"Track {track!r} checks P99 against {expected:g} ms here but {first_expected:g} ms "
+                            "elsewhere: one track has one limit"
+                        )
+                    if rate_limited != first_rate_limited:
+                        raise ValueError(f"Track {track!r} mixes rate-limited and unthrottled queries")
+                    tracked.append((track, label))
+                for track, label in tracked:
+                    if (track, label) in rows:
+                        raise ValueError(f"Track {track!r} already has a row {label!r}: give one a different label")
+                    rows.add((track, label))
+            except ValueError as exc:
+                raise ValueError(f"{exc} (in {where})") from exc
+    if both := sorted(build_tracks & search_tracks.keys()):
+        raise ValueError(f"Track(s) {both} hold both index builds and searches")
+
+
+@dataclass
+class _PreparedShard:
+    """A shard ready to load, see 'SearchPerformanceTest._prepare_shard'."""
+
+    file: str
+    records: int  # 0 for an empty shard, which is neither sent nor loaded
+    loader: object
+    cleanup: contextlib.ExitStack
 
 
 # ---------------------------------------------------------------------------
@@ -243,16 +580,19 @@ class SearchPerformanceTest(PerformanceRegressionTest):
     """
 
     WORKLOAD: SearchWorkload = None
+    _argus_reporter: SearchArgusReporter | None = None
 
-    def _run_latte(self, stress_cmd, files_to_stage=None, **kwargs):
+    def _run_latte(self, stress_cmd, files_to_stage=None, loader=None, **kwargs):
         """Run one latte command to completion and return its stress thread.
 
-        Bypasses `run_stress_thread` so that the per-run data files of this command are staged into
-        the loader container. `files_to_stage` is a list of `(local_path, container_path)` pairs.
+        Bypasses `run_stress_thread` so that the per-run data files of this command are staged on
+        its loader. `files_to_stage` is a list of `(local_path, container_path)` pairs.
+        `loader` runs it on that loader rather than the next one, see '_prepare_shard'.
         """
         thread = self.run_latte_thread(
             stress_cmd=stress_cmd,
             extra_files_to_stage=files_to_stage or [],
+            loader=loader,
             # NOTE: every phase here is a single command -- one schema change, one shard, one index
             #       build -- so it belongs on one loader. Without this the thread fans out to *all*
             #       of them ('DockerBasedStressThread.configure_executer'), which on a multi-loader
@@ -301,7 +641,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         self.log.info("Creating schema")
         self._run_latte(f"latte schema {self.WORKLOAD.script}", duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT))
 
-    def _load_shard(self, local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait):
+    def _load_shard(self, local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait, loader=None):
         """Load a single shard file into Scylla via the loader container."""
         params = self.WORKLOAD.params
         self.log.info("Loading shard %s (%d %s)", shard_file, shard_records, self.WORKLOAD.item_noun)
@@ -309,19 +649,24 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             # NOTE: latte's '-d' is a cycle count here, not a duration, so the phase gets an
             #       explicit 'duration' -- see DEFAULT_MAX_SHARD_LOAD.
             stress_cmd=(
-                f"latte run -f load {self.WORKLOAD.script} "
+                f"latte run -f load "
                 f"-d {shard_records} "
                 rf"-P {params.dataset_dir}=\"{container_ds_dir}\" "
                 rf"-P {params.records_file}=\"{shard_file}\" "
+                f"{self.WORKLOAD.script} "
             ),
             files_to_stage=[
                 (os.path.join(local_ds_dir, shard_file), posixpath.join(container_ds_dir, shard_file)),
             ],
+            loader=loader,
             duration=_timeout_minutes(max_load_wait),
+            # NOTE: nothing reads the latency of a setup phase, and its 'fn--load' tag is neither a
+            #       read nor a write to the HDR exporter, which fails the command on such a tag.
+            record_hdr=False,
         )
 
-    def _load_step_shards(self, step, local_ds_dir, container_ds_dir, max_load_wait):
-        """Load all shard files for a step. Returns the record count."""
+    def _load_step_shards(self, step, bucket, prefix, local_ds_dir, container_ds_dir, max_load_wait):
+        """Download, load and clean up all shard files for a step. Returns the record count."""
         workload = self.WORKLOAD
         if "shards" in step:
             shard_ids = _parse_shard_spec(step["shards"])
@@ -331,19 +676,74 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             shard_files = [step.get(workload.step_records_file_key, workload.default_records_file)]
         shard_files = [_checked_data_file(shard_file, "records file") for shard_file in shard_files]
 
+        # A step may load nothing and only rebuild the index over what earlier steps loaded.
+        if not shard_files:
+            return 0
         record_count = 0
-        for shard_file in shard_files:
+        prepare = functools.partial(self._prepare_shard, bucket, prefix, local_ds_dir, container_ds_dir)
+        # NOTE: one shard ahead -- while a shard loads, the next one is downloaded and sent to the
+        #       loader that will load it, so a load overlaps the next shard's transfers.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="shard-prefetch") as prefetch:
+            upcoming = [prefetch.submit(prepare, shard_files[0])]
+            try:
+                for next_file in [*shard_files[1:], None]:
+                    shard = upcoming[0].result()
+                    with shard.cleanup:
+                        # Taken off 'upcoming' only once its own cleanup is armed, so an interrupt
+                        # while waiting for it still leaves it to the cleanup below.
+                        upcoming.pop(0)
+                        if next_file is not None:
+                            upcoming.append(prefetch.submit(prepare, next_file))
+                        if shard.records:
+                            self._load_shard(
+                                local_ds_dir,
+                                container_ds_dir,
+                                shard.file,
+                                shard.records,
+                                max_load_wait,
+                                loader=shard.loader,
+                            )
+                            record_count += shard.records
+            except BaseException:
+                # Whatever the next shard put on its loader and on the runner goes too.
+                for pending in upcoming:
+                    with contextlib.suppress(Exception):
+                        pending.result().cleanup.close()
+                raise
+        return record_count
+
+    def _prepare_shard(self, bucket, prefix, local_ds_dir, container_ds_dir, shard_file) -> "_PreparedShard":
+        """Get one shard ready to load: on the runner, counted, and sent to the loader that loads it.
+
+        The load then stages the shard as any other file -- 'extra_files_to_stage' finds it already in
+        place and does not send it again. Closing the returned 'cleanup' undoes all of it, including
+        after a failure half way.
+        """
+        cleanup = contextlib.ExitStack()
+        try:
             local_shard_path = os.path.join(local_ds_dir, shard_file)
+            if bucket:
+                os.makedirs(os.path.dirname(local_shard_path), exist_ok=True)
+                _s3_download_file(bucket, _s3_key(prefix, shard_file), local_shard_path)
+                # The full corpora do not fit on the runner's disk next to each other.
+                cleanup.callback(os.remove, local_shard_path)
+
             if not os.path.isfile(local_shard_path):
                 raise FileNotFoundError(f"Shard {shard_file} is not in the dataset directory {local_ds_dir}")
             shard_records = _count_tsv_lines(local_shard_path)
             if shard_records == 0:
                 self.log.warning("Shard file %s is empty, skipping", local_shard_path)
-                continue
+                return _PreparedShard(shard_file, 0, None, cleanup)
 
-            self._load_shard(local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait)
-            record_count += shard_records
-        return record_count
+            loader = self.loaders.get_loader()
+            host_path = staged_file_path(loader, posixpath.join(container_ds_dir, shard_file))
+            # Registered before sending, so a send that fails half way is cleaned up too.
+            cleanup.callback(remove_from_loader, loader, [host_path])
+            send_to_loader(loader, [(local_shard_path, host_path)])
+            return _PreparedShard(shard_file, shard_records, loader, cleanup)
+        except BaseException:
+            cleanup.close()
+            raise
 
     def _build_index(self, record_count, max_index_wait, index_name, keyspace) -> float | None:
         """Build the index on the current table and return how long the build took, in seconds.
@@ -366,16 +766,18 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         ):
             self._run_latte(
                 stress_cmd=(
-                    f"latte run -f build_index {self.WORKLOAD.script} "
+                    f"latte run -f build_index "
                     f"-d 1 "
                     f'-P {params.index_name}=\\"{index_name}\\" '
                     f"-P {params.record_count}={record_count} "
                     f"-P {params.max_index_wait}={max_index_wait} "
                     f"-P {params.min_probes}=3 "
+                    f"{self.WORKLOAD.script} "
                 ),
                 # An outer bound past the script's own give-up, so a clean "index never built" is
                 # not turned into a killed loader by both expiring in the same second.
                 duration=_timeout_minutes(max_index_wait + INDEX_BUILD_TIMEOUT_GRACE_SECS),
+                record_hdr=False,  # a setup phase, as in '_load_shard'
             )
         return wait_for_index_build_seconds(self._vector_store_node().system_log, keyspace, index_name)
 
@@ -406,17 +808,85 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT),
         )
 
+    def _run_search(
+        self,
+        local_ds_dir,
+        container_ds_dir,
+        queries_file,
+        limit,
+        stress_options,
+        rate,
+        search_duration,
+        qrels_file=None,
+        ignore_parse_errors=False,
+    ) -> dict:
+        """Run a single search configuration and return its latency summary.
+
+        `stress_options` are latte flags, see '_stress_options'. Passing `qrels_file` turns on the relevance (accuracy) metrics of the rune script. The
+        summary is what 'get_hdrhistogram' builds from latte's HDR output for the search function's
+        tag over the run's time window -- percentiles in ms, throughput in ops/s -- and is empty if
+        no histogram was written for it.
+        """
+        workload = self.WORKLOAD
+        params = workload.params
+        files_to_stage = [
+            (os.path.join(local_ds_dir, queries_file), os.path.join(container_ds_dir, queries_file)),
+        ]
+        qrels_param = ""
+        if qrels_file:
+            files_to_stage.append((os.path.join(local_ds_dir, qrels_file), os.path.join(container_ds_dir, qrels_file)))
+            qrels_param = rf"-P {params.qrels_file}=\"{qrels_file}\" "
+        rate_param = f"--rate={rate} " if rate else ""
+
+        # NOTE: a query vector-store cannot parse makes ScyllaDB log an error, which fails the test.
+        parse_errors_filter = (
+            DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line=r"failed to parse query",
+                extra_time_to_expiration=120,
+            )
+            if ignore_parse_errors
+            else contextlib.nullcontext()
+        )
+        start = time.time()
+        with parse_errors_filter:
+            self._run_latte(
+                # NOTE: '--duration' spelled out rather than '-d': 'get_timeout_from_stress_cmd'
+                #       only recognises the long form, and without it the phase would fall back to
+                #       the whole 'test_duration' as its timeout. '--retry-number 1' is the lowest
+                #       that runs at all: latte counts it as attempts per cycle but as retries per
+                #       query, so a rejected query is still retried once (QATOOLS-629).
+                stress_cmd=(
+                    f"latte run -f search "
+                    f"--duration {search_duration} "
+                    rf"-P {params.dataset_dir}=\"{container_ds_dir}/\" "
+                    rf"-P {params.queries_file}=\"{queries_file}\" "
+                    f"{qrels_param}"
+                    f"-P {params.compute_accuracy}={'true' if qrels_file else 'false'} "
+                    f"-P {params.search_limit}={limit} "
+                    f"{rate_param}{stress_options} --retry-number 1 "
+                    f"{workload.script} "
+                ),
+                files_to_stage=files_to_stage,
+            )
+        end = time.time()
+        summary = self.get_hdrhistogram(
+            hdr_tags=[workload.hdr_tag], stress_operation="read", start_time=start, end_time=end
+        )
+        # One entry, keyed '<operation>--<tag>', for the one tag asked for.
+        return next(iter(summary.values()), {})
+
     def run_search_benchmark(self):
         """Run every dataset of the plan 'search_test_config' points at."""
         self._wait_for_vector_store_serving()
 
-        # NOTE: no fallback plan. Which datasets and shards to run is the whole definition of the
-        #       test, and it is test-case specific, so there is nothing sensible to default to --
-        #       say so instead of failing later on a missing file.
+        # NOTE: no fallback plan. Which datasets, shards and query sets to run is the whole
+        #       definition of the test, and it is test-case specific, so there is nothing sensible
+        #       to default to -- say so instead of failing later on a missing file.
         config_name = self.params.get(TEST_CONFIG_PARAM)
         if not config_name:
             raise ValueError(f"'{TEST_CONFIG_PARAM}' is not set: the search test needs a plan to run")
-        config_path = resolve_test_config_path(config_name)
+        config_path = resolve_test_config_path(self.WORKLOAD, config_name)
         if not os.path.isfile(config_path):
             raise FileNotFoundError(f"Test config '{config_name}' not found at {config_path}")
 
@@ -437,18 +907,31 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         names = [_checked_name(dataset["name"], "dataset name") for dataset in datasets]
         if duplicates := sorted({name for name in names if names.count(name) > 1}):
             raise ValueError(f"Duplicate dataset names in '{config_name}': {duplicates}")
+        # Checked now rather than when its dataset starts, which may be hours into the run.
+        for dataset in datasets:
+            if dataset.get("base_url"):
+                _parse_s3_url(dataset["base_url"])
+        validate_plan_queries(datasets)
+        for dataset in datasets:
+            _has_invalid_queries(dataset)
+        validate_plan_tracks(datasets)
+        # Query latency comes from latte's HDR output, which is only written with 'use_hdrhistogram'.
+        if not self.params.get("use_hdrhistogram") and any(
+            step.get("queries") for dataset in datasets for step in dataset.get("steps") or []
+        ):
+            raise ValueError(f"Test config '{config_name}' runs query sets, but 'use_hdrhistogram' is off")
 
         for dataset in datasets:
             self._run_dataset(dataset)
 
     def _run_dataset(self, dataset):
-        """Load and index one dataset.
+        """Load, index and query one dataset.
 
         Every dataset uses the keyspace/table named by 'latte_schema_parameters', dropped and
         recreated here so each one starts from an empty table.
 
         Each step adds more shards on top of the previous ones and rebuilds the index, so that one
-        dataset yields index build results at several corpus sizes. An *empty* 'shards'
+        dataset yields index build and search results at several corpus sizes. An *empty* 'shards'
         list loads nothing and only rebuilds on the corpus already there, e.g. to sample build-time
         variance; an *absent* one falls back to the step's single-file key (an unsharded corpus --
         see 'local_smoke' in data_dir/latte/fts_search/local_config.yaml).
@@ -461,16 +944,38 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         if not steps:
             raise ValueError(f"Dataset '{dataset_name}' has no steps to run")
 
-        local_ds_dir = _local_path(workload, dataset_name)
+        bucket, prefix = _parse_s3_url(dataset["base_url"]) if dataset.get("base_url") else ("", "")
         container_ds_dir = f"{workload.container_root}/{dataset_name}"
-        # The corpora are generated rather than tracked, so name the directory that is missing
-        # instead of failing further down on an unhelpful open() of a shard inside it.
-        if not os.path.isdir(local_ds_dir):
-            raise FileNotFoundError(f"Dataset '{dataset_name}' has no local directory at {local_ds_dir}")
+        if bucket:
+            # A folder of this run's own: everything in it was downloaded now, and it all goes when the
+            # dataset is done, whatever happened. A local corpus of the same name is never touched.
+            downloads = _local_path(workload, DOWNLOADED_DIR, "datasets")
+            os.makedirs(downloads, exist_ok=True)
+            local_ds_dir = tempfile.mkdtemp(prefix=f"{dataset_name}-", dir=downloads)
+        else:
+            local_ds_dir = _local_path(workload, dataset_name)
+            # A dataset with no 'base_url' is an input, not a cache: nothing will create it, so name
+            # the directory that is missing instead of failing further down on an unhelpful open()
+            # of a shard inside it.
+            if not os.path.isdir(local_ds_dir):
+                raise FileNotFoundError(f"Dataset '{dataset_name}' has no local directory at {local_ds_dir}")
+        try:
+            self._run_dataset_in(dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir)
+        finally:
+            if bucket:
+                shutil.rmtree(local_ds_dir, ignore_errors=True)
 
+    def _run_dataset_in(self, dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir):
+        """The rest of '_run_dataset', once the dataset's local directory is chosen."""
+        workload = self.WORKLOAD
         max_index_wait = dataset.get("max_index_wait_secs", DEFAULT_MAX_INDEX_WAIT)
         max_load_wait = dataset.get("max_shard_load_secs", DEFAULT_MAX_SHARD_LOAD)
+        defaults = dataset.get("defaults", {})
+        has_invalid_queries = _has_invalid_queries(dataset)
         keyspace = (self.params.get("latte_schema_parameters") or {}).get("keyspace") or workload.default_keyspace
+
+        # Every step queries the same sets, so fetch the query/qrels files once up front.
+        self._download_dataset_files(bucket, prefix, local_ds_dir, dataset)
 
         # NOTE: the script drops with 'IF EXISTS', so on a fresh cluster this is a no-op.
         self._drop_table()
@@ -482,16 +987,133 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             if index_name is not None:
                 self._drop_index(index_name, keyspace, max_index_wait)
 
-            total_record_count += self._load_step_shards(step, local_ds_dir, container_ds_dir, max_load_wait)
+            total_record_count += self._load_step_shards(
+                step, bucket, prefix, local_ds_dir, container_ds_dir, max_load_wait
+            )
 
             index_name = f"{workload.index_prefix}_{dataset_name}_{step_idx}"
             build_seconds = self._build_index(
                 total_record_count, max_index_wait, index_name=index_name, keyspace=keyspace
             )
-            self._record_index_build(dataset_name, step_idx + 1, index_name, total_record_count, build_seconds)
+            self._record_index_build(
+                dataset_name,
+                step_idx + 1,
+                index_name,
+                total_record_count,
+                build_seconds,
+                *_build_track(step),
+            )
+
+            self._run_step_queries(
+                step,
+                dataset_name,
+                defaults,
+                total_record_count,
+                step_idx + 1,
+                local_ds_dir,
+                container_ds_dir,
+                ignore_parse_errors=has_invalid_queries,
+            )
 
         if index_name is not None:
             self._drop_index(index_name, keyspace, max_index_wait)
+
+    def _run_step_queries(
+        self,
+        step,
+        dataset_name,
+        defaults,
+        record_count,
+        step_number,
+        local_ds_dir,
+        container_ds_dir,
+        ignore_parse_errors=False,
+    ):
+        """Run every query set of a step against the index that was just built, recording each."""
+        for query_index, query in enumerate(step.get("queries", []), start=1):
+            qset = _checked_name(query["set"], "query set name")
+            limit, rate = _query_params(query, defaults)
+            stress_options = _stress_options(query, defaults)
+            search_duration = _query_duration(query, defaults)
+            expected_p99_read_ms = _expected_p99_read_ms(query, defaults)
+            track, label = _query_track(query)
+            queries_file = f"queries_{qset}.tsv"
+            qrels_file = f"qrels_{qset}.tsv" if query.get("qrels") else None
+            # Checked here to name the query set that asked for a missing file, rather than fail
+            # on the copy to the loader.
+            for needed in (queries_file, qrels_file):
+                if needed and not os.path.isfile(os.path.join(local_ds_dir, needed)):
+                    raise ValueError(
+                        f"Query set {qset!r} of step #{step_number} needs {needed!r}, which is not in {local_ds_dir}"
+                    )
+
+            latency = self._run_search(
+                local_ds_dir,
+                container_ds_dir,
+                queries_file=queries_file,
+                limit=limit,
+                stress_options=stress_options,
+                rate=rate,
+                search_duration=search_duration,
+                qrels_file=qrels_file,
+                ignore_parse_errors=ignore_parse_errors,
+            )
+            if not latency:
+                self.log.warning("No HDR latency summary for query set %s of step #%d", qset, step_number)
+            self._record_search(
+                dataset=dataset_name,
+                step=step_number,
+                record_count=record_count,
+                # Position in the step: two entries with the same configuration are told apart by it.
+                query_index=query_index,
+                query_set=qset,
+                limit=limit,
+                stress_options=stress_options,
+                rate=rate,
+                duration=search_duration,
+                qrels=qrels_file is not None,
+                query_example=_first_query_example(local_ds_dir, queries_file),
+                expected_p99_read_ms=expected_p99_read_ms,
+                latency=latency,
+                **({"track": track, "label": label} if track else {}),
+            )
+
+    def _download_dataset_files(self, bucket, prefix, local_dir, dataset):
+        """Download query and qrels files for a dataset from S3."""
+        if not bucket:
+            return
+        # Tracked separately, because 'qrels' is per query entry while the query file is per set: a
+        # set first named without qrels and later with them needs the second file, and a single
+        # already-seen set would skip the whole entry before ever looking at its 'qrels'. The search
+        # phase would then stage a qrels path that was never downloaded.
+        queries_downloaded = set()
+        qrels_downloaded = set()
+        for step in dataset.get("steps", []):
+            for q in step.get("queries", []):
+                qset = _checked_name(q["set"], "query set name")
+                if qset not in queries_downloaded:
+                    queries_downloaded.add(qset)
+                    queries_path = os.path.join(local_dir, f"queries_{qset}.tsv")
+                    _s3_download_file(bucket, _s3_key(prefix, f"queries_{qset}.tsv"), queries_path)
+                if q.get("qrels", False) and qset not in qrels_downloaded:
+                    qrels_downloaded.add(qset)
+                    qrels_path = os.path.join(local_dir, f"qrels_{qset}.tsv")
+                    _s3_download_file(bucket, _s3_key(prefix, f"qrels_{qset}.tsv"), qrels_path)
+
+    def _record_search(self, expected_p99_read_ms: float, latency: dict, **fields):
+        """Record one query configuration: what ran, and the latency and throughput it measured.
+
+        An empty *latency* -- no histogram for the run -- is recorded too, with nulls.
+        """
+        measured = {field: latency.get(key) for key, field in HDR_SUMMARY_FIELDS.items()}
+        p99 = measured["p99_ms"]
+        self._record_result(
+            "search",
+            **fields,
+            expected_p99_read_ms=expected_p99_read_ms,
+            **measured,
+            p99_within_expectation=None if p99 is None else p99 <= expected_p99_read_ms,
+        )
 
     def _record_result(self, phase: str, **fields):
         """Append one measurement to the run's results file."""
@@ -503,9 +1125,62 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         }
         with open(os.path.join(self.logdir, RESULTS_FILE_NAME), "a", encoding="utf-8") as results:
             results.write(json.dumps(record) + "\n")
+        self._report_to_argus(record)
 
-    def _record_index_build(self, dataset_name, step_number, index_name, record_count, build_seconds: float | None):
-        """Record the build time and indexing throughput of one step's index.
+    def _report_to_argus(self, record: dict):
+        """Send one results record to Argus as well.
+
+        A failure is logged rather than raised: the record is already in the results file, and a
+        reporting problem should not fail a run that measured what it set out to.
+        """
+        try:
+            if self._argus_reporter is None:
+                self._argus_reporter = SearchArgusReporter(
+                    self.WORKLOAD, self.test_config.argus_client(), self._sut_timestamp()
+                )
+            self._argus_reporter.report(record)
+        except Exception:  # noqa: BLE001
+            self.log.error("Failed to report the %s record to Argus", record["phase"], exc_info=True)
+
+    def _sut_timestamp(self) -> int:
+        """Where this run goes on the x-axis of the Argus graphs, or 0 to leave it to Argus."""
+        try:
+            scylla = self.get_scylla_versions().get("scylla-server")
+            if scylla:
+                scylla_date, scylla_revision = scylla["date"], scylla["commit_id"]
+            else:
+                try:
+                    package = self.generate_scylla_server_package()
+                    scylla_date, scylla_revision = package.date, package.revision_id
+                except ValueError:
+                    self.log.warning("No ScyllaDB build date for the Argus x-axis", exc_info=True)
+                    scylla_date, scylla_revision = None, ""
+            vector_store_time, vector_store_revision = self._vector_store_node().get_vector_store_build()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("No Argus x-axis position for this run, left to Argus: %s", exc)
+            return 0
+        timestamp = sut_timestamp(scylla_date, scylla_revision, vector_store_time, vector_store_revision)
+        self.log.info(
+            "Argus x-axis: %s (ScyllaDB %s %s, vector-store %s built %s)",
+            timestamp,
+            scylla_date,
+            scylla_revision,
+            vector_store_revision,
+            vector_store_time,
+        )
+        return timestamp
+
+    def _record_index_build(
+        self,
+        dataset_name,
+        step_number,
+        index_name,
+        record_count,
+        build_seconds: float | None,
+        track: str | None = None,
+        label: str | None = None,
+    ):
+        """Record the build time and indexing throughput of one step's index, and its track if any.
 
         A build whose time was not measured is recorded too, with nulls, so the gap stays visible.
         """
@@ -521,4 +1196,5 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             record_count=record_count,
             build_time_s=build_seconds,
             indexing_throughput=indexing_throughput(record_count, build_seconds),
+            **({"track": track, "label": label} if track else {}),
         )

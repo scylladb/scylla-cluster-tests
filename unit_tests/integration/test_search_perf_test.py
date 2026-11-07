@@ -16,24 +16,26 @@
 Two levels, because they need different things to run:
 
   - staging a dataset file and loading it, which need only a ScyllaDB container: the unit tests can
-    only assert what 'LatteStressThread' copies into the loader container, but whether the file
-    arrives where the rune script looks for it depends on the copy itself, the '-P' names the script
-    declares and the path the flow interpolates, none of which a mock can check;
+    only assert what 'LatteStressThread' sends to the loader and mounts, but whether the file arrives
+    where the rune script looks for it depends on the mount itself, the '-P' names the script declares
+    and the path the flow interpolates, none of which a mock can check;
   - the whole per-dataset cycle -- schema, load, index build, build time, index drop -- which needs a
     ScyllaDB with full-text indexes (2026.3+) and a vector-store that serves them. It runs the 'latest'
     images by default; override either with SCT_FTS_IT_SCYLLA_IMAGE / SCT_FTS_IT_VECTOR_STORE_IMAGE,
     e.g. to test a local vector-store build.
 
-The second one runs the flow's own methods, not a re-implementation of them. Only one seam is
-replaced: '_run_latte', which would otherwise need ClusterTester's loader provisioning. Everything
-behind it -- copying each shard into the loader container, the step loop, the '-P' mapping, the index
-naming, reading the build time out of vector-store's log, the results file, waiting for the drop --
+The second one runs the flow's own methods, not a re-implementation of them. Two seams are
+replaced: '_run_latte', which would otherwise need ClusterTester's loader provisioning, and the Argus
+client, which records the tables instead of posting them. Everything behind them -- staging each
+shard on the loader's host, the step loop, the '-P' mapping, the index naming, reading the build time
+out of vector-store's log, the results file and the Argus rows built from it, waiting for the drop --
 is the code that ships.
 """
 
 import json
 import logging
 import os
+import types
 
 import pytest
 
@@ -80,10 +82,11 @@ def test_a_staged_corpus_is_loaded_by_the_rune_script(request, docker_scylla, pa
     remote_dir = f"{workload.container_root}/integration"
     remote_path = f"{remote_dir}/{staged_corpus.name}"
     stress_cmd = (
-        f"latte run -f load {workload.script} "
+        f"latte run -f load "
         f"-d {len(DOCUMENTS)} "
         rf"-P {workload.params.dataset_dir}=\"{remote_dir}\" "
         rf"-P {workload.params.records_file}=\"{staged_corpus.name}\" "
+        f"{workload.script} "
     )
 
     latte_thread = LatteStressThread(
@@ -121,10 +124,11 @@ def test_an_unstaged_corpus_loads_nothing(request, docker_scylla, params, staged
 
     workload = FTS_WORKLOAD
     stress_cmd = (
-        f"latte run -f load {workload.script} "
+        f"latte run -f load "
         f"-d {len(DOCUMENTS)} "
         rf"-P {workload.params.dataset_dir}=\"{workload.container_root}/absent\" "
         rf"-P {workload.params.records_file}=\"{staged_corpus.name}\" "
+        f"{workload.script} "
     )
 
     latte_thread = LatteStressThread(
@@ -160,7 +164,7 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
     flow.db_cluster = docker_scylla.parent_cluster
     flow.db_cluster.vector_store_cluster = vs_cluster
 
-    def run_latte(stress_cmd, files_to_stage=None, **_kwargs):
+    def run_latte(stress_cmd, files_to_stage=None, loader=None, **_kwargs):
         thread = LatteStressThread(
             loader_set,
             stress_cmd,
@@ -168,6 +172,7 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
             timeout=10,
             params=params,
             extra_files_to_stage=files_to_stage or [],
+            loader=loader,
         )
         thread.run()
         _, errors = thread.parse_results()
@@ -175,6 +180,10 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
         return thread
 
     flow._run_latte = run_latte
+    flow.argus_submitted = []
+    flow.test_config = types.SimpleNamespace(
+        argus_client=lambda: types.SimpleNamespace(submit_results=flow.argus_submitted.append)
+    )
     return flow
 
 
@@ -199,9 +208,8 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
             "".join(f"{doc_id}_{shard}\t{body}\n" for doc_id, body in documents), encoding="utf-8"
         )
     # The flow resolves a dataset directory inside the repo; keep this run's data out of the tree.
-    request.getfixturevalue("monkeypatch").setattr(
-        search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts))
-    )
+    monkeypatch = request.getfixturevalue("monkeypatch")
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
 
     logdir = tmp_path / "logs"
     logdir.mkdir()
@@ -210,7 +218,7 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
         {
             "name": dataset_name,
             "max_index_wait_secs": 300,
-            "steps": [{"shards": [0]}, {"shards": [1]}],
+            "steps": [{"shards": [0]}, {"shards": [1], "build_track": "indexing", "build_label": "two shards"}],
         }
     )
 
@@ -228,6 +236,18 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
     with flow.db_cluster.cql_connection_patient(docker_scylla) as session:
         loaded = list(session.execute(f"SELECT doc_id FROM {keyspace}.documents"))
     assert len(loaded) == len(DOCUMENTS) + 2, "both shards must be in the table"
+
+    assert [
+        (table.name, [(cell.row, cell.column) for cell in table.results if cell.column == "build time"])
+        for table in flow.argus_submitted
+    ] == [
+        ("FTS index builds", [("#01 index build", "build time")]),
+        ("FTS index builds", [("#02 index build", "build time")]),
+        ("FTS indexing", [("two shards", "build time")]),
+    ], "every build is a row of the build log, and a tracked one also of its track"
+    assert all(table.sut_timestamp > 0 for table in flow.argus_submitted), (
+        "the x position falls back to the ScyllaDB build date, read from the node under test"
+    )
 
     vs_client = docker_vector_store.nodes[0].get_vector_store_api_client()
     last_index = f"{FTS_WORKLOAD.index_prefix}_{dataset_name}_1"

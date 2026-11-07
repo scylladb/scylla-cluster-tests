@@ -1,0 +1,226 @@
+# Full FTS sweep: both 10M-document datasets, loaded in three steps (100k, 1M and 10M documents).
+#
+# Its tracks are sanity_config.yaml's -- both plans report to the same Argus test -- with rows named
+# by dataset and corpus size: index build time at each size; rate-limited latency of 'term_common'
+# at each size and of the compound query sets at full size, in two tracks as their P99 limits
+# differ (a rate-limited track has one); and unthrottled throughput of 'term_common' at each size
+# and of every query set at full size.
+datasets:
+  - name: 10M_20tok
+    base_url: s3://full-text-search-sct/fts/10M_20tok
+    max_index_wait_secs: 1800
+    defaults:
+      limit: 5
+      # latte flags. 200 warmup queries cover a set of about 30, which a run repeats, so their first
+      # use is not measured cold. 'natural' draws ~1,500 of ~510k queries, so it runs cold by design
+      # and its entries turn the warmup off.
+      stress_options: {concurrency: 32, warmup: 200}
+      rate: 0
+      duration: 30s
+      expected_p99_read_ms: 10
+    steps:
+      - shards: [0]
+        build_track: indexing
+        build_label: 10M_20tok 100k
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_20tok 100k
+          - set: term_common
+            track: throughput
+            label: 10M_20tok 100k term_common
+      - shards: [1..9]
+        build_track: indexing
+        build_label: 10M_20tok 1M
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_20tok 1M
+          - set: term_common
+            track: throughput
+            label: 10M_20tok 1M term_common
+      - shards: [10..99]
+        build_track: indexing
+        build_label: 10M_20tok 10M
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_20tok 10M
+          - set: term_common
+            track: throughput
+            label: 10M_20tok 10M term_common
+          - set: term_common
+            limit: 100
+            track: throughput
+            label: 10M_20tok 10M term_common limit 100
+          - set: term_medium
+            track: throughput
+            label: 10M_20tok 10M term_medium
+          - set: term_rare
+            track: throughput
+            label: 10M_20tok 10M term_rare
+          - set: boolean_and
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 10M boolean_and
+          - set: boolean_or
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 10M boolean_or
+          - set: boolean_not
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 10M boolean_not
+          - set: phrase
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 10M phrase
+          - set: natural
+            stress_options: {warmup: false}
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 10M natural
+          - set: boolean_and
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 10M boolean_and
+          - set: boolean_or
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 10M boolean_or
+          - set: boolean_not
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 10M boolean_not
+          - set: phrase
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 10M phrase
+          - set: natural
+            stress_options: {concurrency: 1, warmup: false}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 10M natural
+  - name: 10M_400tok
+    base_url: s3://full-text-search-sct/fts/10M_400tok
+    max_index_wait_secs: 1800
+    defaults:
+      limit: 5
+      # latte flags, see 10M_20tok above.
+      stress_options: {concurrency: 64, warmup: 200}
+      rate: 0
+      duration: 30s
+      expected_p99_read_ms: 10
+    steps:
+      - shards: [0]
+        build_track: indexing
+        build_label: 10M_400tok 100k
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_400tok 100k
+          - set: term_common
+            track: throughput
+            label: 10M_400tok 100k term_common
+      - shards: [1..9]
+        build_track: indexing
+        build_label: 10M_400tok 1M
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_400tok 1M
+          - set: term_common
+            track: throughput
+            label: 10M_400tok 1M term_common
+      - shards: [10..99]
+        build_track: indexing
+        build_label: 10M_400tok 10M
+        queries:
+          - set: term_common
+            stress_options: {concurrency: 1}
+            rate: 50
+            track: term latency
+            label: 10M_400tok 10M
+          - set: term_common
+            track: throughput
+            label: 10M_400tok 10M term_common
+          - set: term_common
+            limit: 100
+            track: throughput
+            label: 10M_400tok 10M term_common limit 100
+          - set: term_medium
+            track: throughput
+            label: 10M_400tok 10M term_medium
+          - set: term_rare
+            track: throughput
+            label: 10M_400tok 10M term_rare
+          - set: boolean_and
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_400tok 10M boolean_and
+          - set: boolean_or
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_400tok 10M boolean_or
+          - set: boolean_not
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_400tok 10M boolean_not
+          - set: phrase
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_400tok 10M phrase
+          - set: natural
+            stress_options: {warmup: false}
+            expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_400tok 10M natural
+          - set: boolean_and
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_400tok 10M boolean_and
+          - set: boolean_or
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_400tok 10M boolean_or
+          - set: boolean_not
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_400tok 10M boolean_not
+          - set: phrase
+            stress_options: {concurrency: 1}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_400tok 10M phrase
+          - set: natural
+            stress_options: {concurrency: 1, warmup: false}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_400tok 10M natural

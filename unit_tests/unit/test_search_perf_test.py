@@ -18,29 +18,44 @@ what FTS happens to be called cannot make these pass or fail. fts_test's own des
 in test_fts_test.py.
 """
 
+import contextlib
+import itertools
 import json
 import logging
 import os
+import pathlib
+import re
+import threading
 import types
 
 import pytest
 
 import search_perf_test
+from sdcm.stress import latte_thread
+from sdcm.stress.latte_thread import get_latte_operation_type
 from search_perf_test import (
+    QUERY_EXAMPLE_MAX_CHARS,
     LatteScriptParams,
     SearchWorkload,
     _checked_data_file,
     _checked_name,
+    _expected_p99_read_ms,
+    _first_query_example,
     _parse_shard_spec,
+    _query_params,
+    _stress_options,
     _timeout_minutes,
     indexing_throughput,
     resolve_test_config_path,
+    validate_plan_queries,
+    validate_plan_tracks,
 )
 
 WORKLOAD = SearchWorkload(
     name="search_bench",
     base_dir="data_dir/latte/search_bench",
     script="data_dir/latte/search_bench/bench.rn",
+    hdr_tag="fn--search",
     item_noun="docs",
     index_prefix="bench_idx",
     default_keyspace="bench",
@@ -49,6 +64,10 @@ WORKLOAD = SearchWorkload(
         dataset_dir="data_dir",
         records_file="records_file",
         record_count="record_count",
+        queries_file="queries_file",
+        qrels_file="qrels_file",
+        search_limit="search_limit",
+        compute_accuracy="compute_accuracy",
         index_name="index_name",
         max_index_wait="max_index_wait_secs",
         min_probes="min_successful_probes",
@@ -59,6 +78,288 @@ WORKLOAD = SearchWorkload(
     default_records_file="records.tsv",
     default_shard_suffix="records_{:03d}.tsv",
 )
+
+DEFAULTS = {"limit": 5, "stress_options": {"concurrency": 32}, "rate": 0, "expected_p99_read_ms": 10}
+
+# ---------------------------------------------------------------------------
+# Resolving the expected latency
+# ---------------------------------------------------------------------------
+
+
+def test_expected_p99_read_ms_query_overrides_defaults():
+    assert _expected_p99_read_ms({"set": "s", "expected_p99_read_ms": 50}, {"expected_p99_read_ms": 10}) == 50.0
+
+
+def test_expected_p99_read_ms_falls_back_to_defaults():
+    assert _expected_p99_read_ms({"set": "s"}, {"expected_p99_read_ms": 10}) == 10.0
+
+
+def test_expected_p99_read_ms_missing_raises():
+    with pytest.raises(ValueError, match="term_common"):
+        _expected_p99_read_ms({"set": "term_common"}, {})
+
+
+@pytest.mark.parametrize(
+    "value",
+    (True, 0, -1, float("nan"), float("inf"), "fast", [10]),
+    ids=["bool", "zero", "negative", "nan", "inf", "string", "list"],
+)
+def test_expected_p99_read_ms_rejects_unusable_values(value):
+    """The measured P99 is compared against this value. 'float()' alone accepts all of these: a bool
+    from an unquoted YAML 'yes', or an expectation no run can meet or none can miss.
+    """
+    with pytest.raises(ValueError, match="expected a finite number > 0"):
+        _expected_p99_read_ms({"set": "term_common", "expected_p99_read_ms": value}, {})
+
+
+# ---------------------------------------------------------------------------
+# Validating a plan's query entries up front
+# ---------------------------------------------------------------------------
+
+
+def _plan(query, defaults=None):
+    return [{"name": "ds", "defaults": DEFAULTS if defaults is None else defaults, "steps": [{"queries": [query]}]}]
+
+
+def test_validate_plan_queries_accepts_a_good_plan():
+    validate_plan_queries(
+        _plan({"set": "term_common", "limit": 100, "stress_options": {"concurrency": 1}, "rate": 50, "duration": "5m"})
+    )
+
+
+@pytest.mark.parametrize(
+    "query, message",
+    (
+        ({"limit": 5}, "has no 'set'"),
+        ({"set": "term common"}, "query set name"),
+        ({"set": "t", "limit": 0}, "query limit"),
+        ({"set": "t", "limit": "5; rm -rf /"}, "query limit"),
+        ({"set": "t", "stress_options": "--concurrency 1"}, "expected a mapping"),
+        ({"set": "t", "stress_options": {"concurrency": "1; id"}}, "stress option 'concurrency'"),
+        ({"set": "t", "stress_options": {"--concurrency": 1}}, "stress option '--concurrency'"),
+        ({"set": "t", "stress_options": {"rate": 100}}, "'rate' is a plan key"),
+        ({"set": "t", "rate": -1}, "query rate"),
+        ({"set": "t", "duration": "10"}, "query duration"),
+        ({"set": "t", "duration": "10s; id"}, "query duration"),
+    ),
+)
+def test_validate_plan_queries_rejects_a_bad_entry(query, message):
+    """Every one of these reaches a latte command line, so it is checked before the run rather than
+    quoted at each use.
+    """
+    with pytest.raises(ValueError, match=re.escape(message)):
+        validate_plan_queries(_plan(query))
+
+
+def test_validate_plan_queries_names_the_offending_step():
+    with pytest.raises(ValueError, match=r"dataset 'ds', step #1"):
+        validate_plan_queries(_plan({"set": "t"}, defaults={}))
+
+
+def test_validate_plan_queries_ignores_steps_without_queries():
+    validate_plan_queries([{"name": "ds", "steps": [{"shards": []}, {"documents_file": "documents.tsv"}]}])
+
+
+# ---------------------------------------------------------------------------
+# Argus tracks named by the plan
+# ---------------------------------------------------------------------------
+
+
+def _steps(*steps, name="ds"):
+    return {"name": name, "defaults": DEFAULTS, "steps": list(steps)}
+
+
+def test_a_plan_without_tracks_is_valid():
+    validate_plan_tracks([_steps({"shards": [0], "queries": [{"set": "t"}, {"set": "t"}]})])
+
+
+def test_one_track_may_span_steps_and_datasets():
+    """What a track compares is the plan's choice, e.g. one query set over two corpora."""
+    validate_plan_tracks(
+        [
+            _steps(
+                {
+                    "build_track": "builds",
+                    "build_label": "small",
+                    "queries": [{"set": "t", "track": "t", "label": "small"}],
+                },
+                name="small",
+            ),
+            _steps(
+                {
+                    "build_track": "builds",
+                    "build_label": "large",
+                    "queries": [{"set": "t", "track": "t", "label": "large"}],
+                },
+                name="large",
+            ),
+        ]
+    )
+
+
+def test_an_unthrottled_track_may_mix_p99_limits():
+    """Only a rate-limited track checks P99, so only its entries must agree on the limit."""
+    validate_plan_tracks(
+        [
+            _steps(
+                {
+                    "queries": [
+                        {"set": "t", "track": "throughput", "label": "a"},
+                        {"set": "t", "track": "throughput", "expected_p99_read_ms": 50, "label": "b"},
+                    ]
+                }
+            )
+        ]
+    )
+
+
+def test_a_tracked_entry_names_its_track_and_row():
+    assert search_perf_test._query_track({"set": "t", "track": "latency", "label": "small"}) == ("latency", "small")
+    assert search_perf_test._build_track({"build_track": "builds", "build_label": "small"}) == ("builds", "small")
+
+
+def test_an_untracked_entry_has_no_track():
+    assert search_perf_test._query_track({"set": "t"}) == (None, None)
+    assert search_perf_test._build_track({"shards": [0]}) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "step, message",
+    (
+        (
+            {"queries": [{"set": "t", "track": "t", "label": "a"}, {"set": "t", "track": "t", "label": "a"}]},
+            "Track 't' already has a row 'a'",
+        ),
+        (
+            {
+                "queries": [
+                    {"set": "t", "track": "t", "rate": 50, "label": "a"},
+                    {"set": "t", "track": "t", "rate": 50, "expected_p99_read_ms": 50, "label": "b"},
+                ]
+            },
+            "Track 't' checks P99 against 50 ms here but 10 ms elsewhere",
+        ),
+        (
+            {
+                "queries": [
+                    {"set": "t", "track": "t", "label": "a"},
+                    {"set": "t", "track": "t", "rate": 50, "label": "b"},
+                ]
+            },
+            "Track 't' mixes rate-limited and unthrottled queries",
+        ),
+        ({"queries": [{"set": "t", "label": "row"}]}, "'label' without 'track'"),
+        ({"build_label": "row"}, "'build_label' without 'build_track'"),
+        ({"queries": [{"set": "t", "track": "t"}]}, "'track' without 'label'"),
+        ({"build_track": "builds"}, "'build_track' without 'build_label'"),
+        ({"queries": [{"set": "t", "track": "latency\nP99", "label": "a"}]}, "Invalid track"),
+        ({"queries": [{"set": "t", "track": " leading space", "label": "a"}]}, "Invalid track"),
+        ({"queries": [{"set": "t", "track": "t", "label": "x" * 121}]}, "Invalid label"),
+    ),
+)
+def test_a_bad_track_is_rejected_before_the_run(step, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        validate_plan_tracks([_steps(step)])
+
+
+def test_a_repeated_build_label_is_rejected_across_datasets():
+    with pytest.raises(ValueError, match=r"Track 'builds' already has a row 'same'.*\(in dataset 'b', step #1\)"):
+        validate_plan_tracks(
+            [
+                _steps({"build_track": "builds", "build_label": "same"}, name="a"),
+                _steps({"build_track": "builds", "build_label": "same"}, name="b"),
+            ]
+        )
+
+
+def test_a_track_holds_builds_or_searches_not_both():
+    """Their columns differ, and a track is one table."""
+    with pytest.raises(ValueError, match=r"Track\(s\) \['mixed'\] hold both index builds and searches"):
+        validate_plan_tracks(
+            [
+                _steps(
+                    {
+                        "build_track": "mixed",
+                        "build_label": "a",
+                        "queries": [{"set": "t", "track": "mixed", "label": "b"}],
+                    }
+                )
+            ]
+        )
+
+
+def test_rate_zero_is_allowed_as_unthrottled():
+    """0 means 'no --rate at all', not a missing value -- it is the DEFAULT_RATE."""
+    assert _query_params({"set": "t", "rate": 0}, DEFAULTS)[1] == 0
+
+
+def test_booleans_are_not_accepted_as_numbers():
+    """'True' is an int in Python and would reach the command line as 'search_limit=True'."""
+    with pytest.raises(ValueError, match="query limit"):
+        _query_params({"set": "t", "limit": True}, DEFAULTS)
+
+
+def test_an_entrys_stress_options_merge_over_the_defaults_by_name():
+    defaults = {"stress_options": {"concurrency": 32, "warmup": 200}}
+    assert (
+        _stress_options({"set": "t", "stress_options": {"concurrency": 1}}, defaults) == "--concurrency 1 --warmup 200"
+    )
+
+
+def test_a_false_stress_option_drops_the_defaults_and_a_true_one_is_a_bare_flag():
+    defaults = {"stress_options": {"concurrency": 32, "warmup": 200}}
+    assert _stress_options({"set": "t", "stress_options": {"warmup": False, "generate-report": True}}, defaults) == (
+        "--concurrency 32 --generate-report"
+    )
+
+
+def test_concurrency_outside_the_stress_options_is_rejected():
+    """It was a key of its own: left there, it would be ignored and latte would run 128 in flight."""
+    with pytest.raises(ValueError, match="under 'stress_options'"):
+        _stress_options({"set": "t", "concurrency": 1}, {})
+
+
+# ---------------------------------------------------------------------------
+# Extracting a readable query example for a query record
+# ---------------------------------------------------------------------------
+
+
+def test_first_query_example_returns_the_text_column(tmp_path):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tfirst query text\nq2\tsecond\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_term_common.tsv") == "first query text"
+
+
+def test_first_query_example_skips_leading_blank_lines(tmp_path):
+    (tmp_path / "queries_natural.tsv").write_text("\n\nq1\tactual first\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_natural.tsv") == "actual first"
+
+
+def test_first_query_example_missing_file_returns_empty_string(tmp_path):
+    assert _first_query_example(str(tmp_path), "queries_missing.tsv") == ""
+
+
+def test_first_query_example_without_a_tab_returns_whole_line(tmp_path):
+    (tmp_path / "queries_odd.tsv").write_text("just one column\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_odd.tsv") == "just one column"
+
+
+def test_first_query_example_truncates_a_long_query(tmp_path):
+    """The record's field is bounded here, not by the corpus the plan happens to name."""
+    (tmp_path / "queries_long.tsv").write_text(f"q1\t{'a' * 900}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_long.tsv")
+
+    assert len(example) == QUERY_EXAMPLE_MAX_CHARS
+    assert example.endswith("...")
+
+
+def test_first_query_example_keeps_a_query_at_the_cap_intact(tmp_path):
+    (tmp_path / "queries_exact.tsv").write_text(f"q1\t{'a' * QUERY_EXAMPLE_MAX_CHARS}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_exact.tsv")
+
+    assert example == "a" * QUERY_EXAMPLE_MAX_CHARS
+
 
 # ---------------------------------------------------------------------------
 # Waiting for the vector-store node to actually serve
@@ -102,6 +403,10 @@ def test_wait_for_vector_store_serving_raises_when_it_never_serves():
 
 # ---------------------------------------------------------------------------
 # Resolving the plan param to a local file
+#
+# The point of accepting a full S3 URL is that pointing a run at a different plan becomes a single
+# overridable string (SCT_SEARCH_TEST_CONFIG) instead of an edit to the nested 'download_from_s3'
+# mapping, which cannot be overridden from the environment.
 # ---------------------------------------------------------------------------
 
 
@@ -109,7 +414,7 @@ def test_a_relative_path_resolves_from_the_sct_root():
     """The plan is named the way every other file a test case points at is -- repo-relative -- so
     a plan outside the workload's own data directory needs no new param.
     """
-    resolved = resolve_test_config_path("data_dir/latte/search_bench/local_config.yaml")
+    resolved = resolve_test_config_path(WORKLOAD, "data_dir/latte/search_bench/local_config.yaml")
     assert resolved.endswith(os.path.join("data_dir", "latte", "search_bench", "local_config.yaml"))
     assert os.path.isabs(resolved)
 
@@ -117,7 +422,189 @@ def test_a_relative_path_resolves_from_the_sct_root():
 def test_absolute_path_is_used_as_is(tmp_path):
     plan = tmp_path / "my_plan.yaml"
     plan.write_text("datasets: []\n", encoding="utf-8")
-    assert resolve_test_config_path(str(plan)) == str(plan)
+    assert resolve_test_config_path(WORKLOAD, str(plan)) == str(plan)
+
+
+def test_s3_url_is_downloaded_into_the_workload_data_dir(monkeypatch, tmp_path):
+    downloads = []
+
+    def fake_download(bucket, key, local_path):
+        downloads.append((bucket, key, local_path))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "w", encoding="utf-8") as plan:
+            plan.write("datasets: []\n")
+
+    # Redirect the data dir so the test never writes into the repo.
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", fake_download)
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    resolved = resolve_test_config_path(WORKLOAD, "s3://my-bucket/fts/config/large_config.yaml")
+
+    # A downloaded plan goes into the gitignored subdirectory, not next to the tracked ones, and
+    # under its full bucket and key -- see 'test_plans_sharing_a_basename_do_not_share_a_file'.
+    expected = str(tmp_path / search_perf_test.DOWNLOADED_DIR / "my-bucket" / "fts/config/large_config.yaml")
+    assert resolved == expected
+    assert downloads == [("my-bucket", "fts/config/large_config.yaml", expected)]
+
+
+def test_plans_sharing_a_basename_do_not_share_a_file(monkeypatch, tmp_path):
+    """Caching by basename let the second run execute the first one's plan.
+
+    SCT_SEARCH_TEST_CONFIG exists so a run can point at any plan, which makes two of them called
+    'plan.yaml' an ordinary thing to happen -- and the failure is silent: the run finishes green and
+    reports its results under the other plan's workload.
+    """
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, _key, _path: None)
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    first = resolve_test_config_path(WORKLOAD, "s3://my-bucket/sanity/plan.yaml")
+    second = resolve_test_config_path(WORKLOAD, "s3://my-bucket/large/plan.yaml")
+    other_bucket = resolve_test_config_path(WORKLOAD, "s3://other-bucket/sanity/plan.yaml")
+
+    assert len({first, second, other_bucket}) == 3
+
+
+def test_an_s3_plan_is_downloaded_again_over_an_earlier_copy(monkeypatch, tmp_path):
+    """The object may have been updated in place since an earlier run downloaded it."""
+    plan = tmp_path / search_perf_test.DOWNLOADED_DIR / "my-bucket" / "large_config.yaml"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("datasets: []\n", encoding="utf-8")
+    downloads = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda *args: downloads.append(args))
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    assert resolve_test_config_path(WORKLOAD, "s3://my-bucket/large_config.yaml") == str(plan)
+    assert downloads == [("my-bucket", "large_config.yaml", str(plan))]
+
+
+def test_malformed_s3_url_raises():
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        resolve_test_config_path(WORKLOAD, "s3:///no-bucket/key.yaml")
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "s3://my-bucket/",
+        "s3://my-bucket/../../etc/plan.yaml",
+        "s3://my-bucket/config/../../../plan.yaml",
+        "s3://my-bucket/config//plan.yaml",
+    ),
+    ids=["empty-key", "climbing-key", "climbing-mid-key", "empty-segment"],
+)
+def test_a_key_that_is_not_a_usable_relative_path_raises(url):
+    """The key is joined onto the download directory now, so it must stay inside it."""
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        resolve_test_config_path(WORKLOAD, url)
+
+
+# ---------------------------------------------------------------------------
+# Fetching a dataset's query and qrels files
+# ---------------------------------------------------------------------------
+
+
+def _downloaded_keys(monkeypatch, tmp_path, dataset) -> list[str]:
+    """Run the per-dataset query/qrels fetch, recording the keys it asks S3 for."""
+    keys = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, key, _path: keys.append(key))
+    search_perf_test.SearchPerformanceTest._download_dataset_files(None, "my-bucket", "fts/10M", str(tmp_path), dataset)
+    return keys
+
+
+def test_qrels_are_fetched_for_a_set_that_first_appeared_without_them(monkeypatch, tmp_path):
+    """The dedup is per query set, but 'qrels' is per entry: skipping an already-seen set outright
+    would leave the search phase staging a qrels file that was never downloaded.
+    """
+    dataset = {
+        "steps": [
+            {"queries": [{"set": "term_common"}]},
+            {"queries": [{"set": "term_common", "qrels": True}]},
+        ]
+    }
+    assert _downloaded_keys(monkeypatch, tmp_path, dataset) == [
+        "fts/10M/queries_term_common.tsv",
+        "fts/10M/qrels_term_common.tsv",
+    ]
+
+
+def test_each_file_is_fetched_once_per_dataset(monkeypatch, tmp_path):
+    """Both files are shared by every step naming the set -- the shards are what differ per step."""
+    dataset = {
+        "steps": [
+            {"queries": [{"set": "term_common", "qrels": True}, {"set": "natural"}]},
+            {"queries": [{"set": "term_common", "qrels": True}, {"set": "natural"}]},
+        ]
+    }
+    assert _downloaded_keys(monkeypatch, tmp_path, dataset) == [
+        "fts/10M/queries_term_common.tsv",
+        "fts/10M/qrels_term_common.tsv",
+        "fts/10M/queries_natural.tsv",
+    ]
+
+
+def test_nothing_is_fetched_for_a_local_dataset(monkeypatch, tmp_path):
+    """A dataset with no 'base_url' resolves to an empty bucket: its files are the run's input."""
+    keys = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, key, _path: keys.append(key))
+    search_perf_test.SearchPerformanceTest._download_dataset_files(
+        None, None, None, str(tmp_path), {"steps": [{"queries": [{"set": "term_common", "qrels": True}]}]}
+    )
+    assert keys == []
+
+
+@pytest.mark.parametrize(
+    "url, prefix",
+    (("s3://b/fts/10M", "fts/10M"), ("s3://b/fts/10M/", "fts/10M"), ("s3://b", "")),
+    ids=["prefix", "trailing-slash", "bucket-only"],
+)
+def test_a_base_url_prefix_has_no_slashes_at_its_ends(url, prefix):
+    """A trailing slash made every key 'fts/10M//shards/...', which S3 does not have."""
+    assert search_perf_test._parse_s3_url(url) == ("b", prefix)
+
+
+def test_a_base_url_must_be_an_s3_url():
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        search_perf_test._parse_s3_url("https://b/fts/10M")
+
+
+def test_a_bucket_level_base_url_keys_files_at_the_bucket_root():
+    assert search_perf_test._s3_key("", "shards/documents_000.tsv") == "shards/documents_000.tsv"
+
+
+class _FolderTester:
+    """Records the local directory '_run_dataset' picks, and puts a downloaded file into it."""
+
+    WORKLOAD = WORKLOAD
+
+    def __init__(self, fail):
+        self.fail = fail
+        self.folders = []
+
+    def _run_dataset_in(self, dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir):
+        self.folders.append(local_ds_dir)
+        (pathlib.Path(local_ds_dir) / "documents_000.tsv").write_text("d0\tbody\n", encoding="utf-8")
+        if self.fail:
+            raise RuntimeError("load failed")
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["done", "failed"])
+def test_a_base_url_dataset_downloads_into_a_folder_of_its_own(monkeypatch, tmp_path, fail):
+    """Everything in it was downloaded by this run, so all of it goes; a local corpus of the same
+    name is not touched.
+    """
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+    (tmp_path / "ds").mkdir()
+    tester = _FolderTester(fail)
+
+    with pytest.raises(RuntimeError) if fail else contextlib.nullcontext():
+        search_perf_test.SearchPerformanceTest._run_dataset(
+            tester, {"name": "ds", "base_url": "s3://b/fts/ds", "steps": [{"shards": [0]}]}
+        )
+
+    (folder,) = tester.folders
+    assert pathlib.Path(folder).parent == tmp_path / search_perf_test.DOWNLOADED_DIR / "datasets"
+    assert not os.path.exists(folder)
+    assert (tmp_path / "ds").is_dir()
 
 
 # ---------------------------------------------------------------------------
@@ -257,17 +744,41 @@ def test_every_phase_runs_on_one_loader():
     assert tester.asked["round_robin"] is True
 
 
+def test_a_load_runs_on_the_loader_its_shard_was_sent_to():
+    tester = _RecordingTester()
+    search_perf_test.SearchPerformanceTest._run_latte(tester, "latte run -f load bench.rn", loader="loader-2")
+    assert tester.asked["loader"] == "loader-2"
+
+
 def test_a_missing_shard_is_named_in_the_error(tmp_path):
     """Rather than a bare 'No such file' from counting its lines."""
-
-    class _Tester:
-        WORKLOAD = WORKLOAD
-        log = logging.getLogger("test")
-
     with pytest.raises(FileNotFoundError, match=r"Shard shards/records_000\.tsv is not in the dataset directory"):
         search_perf_test.SearchPerformanceTest._load_step_shards(
-            _Tester, {"shards": [0]}, str(tmp_path), "/tmp/bench/ds", 60
+            _PhaseTester(), {"shards": [0]}, None, "", str(tmp_path), "/tmp/bench/ds", 60
         )
+
+
+@pytest.fixture(autouse=True)
+def nothing_sent_yet(monkeypatch):
+    """What earlier tests sent to their fake loaders must not count as sent here."""
+    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
+    monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
+    monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
+
+
+class _LoaderRemoter:
+    """Records what is run on, and sent to, one loader's host."""
+
+    def __init__(self):
+        self.ran, self.sent = [], []
+
+    def run(self, cmd, **_):
+        self.ran.append(cmd)
+        return types.SimpleNamespace(stdout="/home/ubuntu\n" if cmd == "echo $HOME" else "")
+
+    def send_files(self, src, dst, **_):
+        self.sent.append((src, dst))
+        return True
 
 
 class _PhaseTester:
@@ -275,18 +786,37 @@ class _PhaseTester:
 
     WORKLOAD = WORKLOAD
 
-    def __init__(self):
+    def __init__(self, loaders=("loader-1",), fail_latte=False):
         self.log = logging.getLogger("test")
+        nodes = [types.SimpleNamespace(name=name, remoter=_LoaderRemoter()) for name in loaders]
+        self.loaders = types.SimpleNamespace(nodes=nodes, get_loader=itertools.cycle(nodes).__next__)
         self.asked = []
+        self.fail_latte = fail_latte
 
     def _run_latte(self, stress_cmd, **kwargs):
-        self.asked.append(kwargs)
+        self.asked.append({"stress_cmd": stress_cmd, **kwargs})
+        if self.fail_latte:
+            raise RuntimeError("latte failed")
 
     def _vector_store_node(self):
         return types.SimpleNamespace(system_log="system.log")
 
-    def _load_shard(self, *args):
-        return search_perf_test.SearchPerformanceTest._load_shard(self, *args)
+    def _load_shard(self, *args, **kwargs):
+        return search_perf_test.SearchPerformanceTest._load_shard(self, *args, **kwargs)
+
+    def _prepare_shard(self, *args):
+        return search_perf_test.SearchPerformanceTest._prepare_shard(self, *args)
+
+
+def test_setup_phases_record_no_hdr(monkeypatch):
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
+    monkeypatch.setattr(search_perf_test, "wait_for_index_build_seconds", lambda *_: 1.0)
+    tester = _PhaseTester()
+
+    search_perf_test.SearchPerformanceTest._load_shard(tester, "/local", "/remote", "records.tsv", 10, 60)
+    search_perf_test.SearchPerformanceTest._build_index(tester, 10, 60, "bench_idx_1", "bench")
+
+    assert [asked["record_hdr"] for asked in tester.asked] == [False, False]
 
 
 def _load(tester, local_ds_dir, *shard_ids):
@@ -297,7 +827,7 @@ def _load(tester, local_ds_dir, *shard_ids):
         (shards / f"records_{shard:03d}.tsv").write_text(f"doc_{shard}\tbody\n", encoding="utf-8")
     step = {"shards": list(shard_ids)}
     return search_perf_test.SearchPerformanceTest._load_step_shards(
-        tester, step, str(local_ds_dir), "/tmp/bench/ds", 60
+        tester, step, None, "", str(local_ds_dir), "/tmp/bench/ds", 60
     )
 
 
@@ -312,6 +842,209 @@ def test_each_shard_is_staged_for_the_load_that_reads_it(tmp_path):
     ]
 
 
+def test_a_query_set_stages_its_queries_and_qrels(monkeypatch):
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries/queries.tsv",
+        limit=10,
+        stress_options="--concurrency 1 --warmup 20",
+        rate=None,
+        search_duration="10s",
+        qrels_file="queries/qrels.tsv",
+    )
+
+    (asked,) = tester.asked
+    assert asked["files_to_stage"] == [
+        ("/local/ds/queries/queries.tsv", "/tmp/bench/ds/queries/queries.tsv"),
+        ("/local/ds/queries/qrels.tsv", "/tmp/bench/ds/queries/qrels.tsv"),
+    ]
+
+
+def _search_command():
+    """Run one search; return the command it asked latte to run."""
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries_natural.tsv",
+        limit=5,
+        stress_options="--concurrency 1 --warmup 20",
+        rate=0,
+        search_duration="10s",
+    )
+    (asked,) = tester.asked
+    return asked["stress_cmd"]
+
+
+def test_a_search_passes_its_stress_options_to_latte():
+    assert " --concurrency 1 --warmup 20 " in _search_command()
+
+
+def test_a_search_retries_as_little_as_latte_allows():
+    """Between retries latte waits inside the measured call, and a rejected query never succeeds.
+    0 would not run the search function at all.
+    """
+    assert "--retry-number 1 " in _search_command()
+
+
+def _filtered_log_lines(monkeypatch, ignore_parse_errors):
+    """Run one search; return the database log lines it kept from failing the test."""
+    filtered = []
+
+    def events_filter(line, **_):
+        filtered.append(line)
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", events_filter)
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries_natural.tsv",
+        limit=5,
+        stress_options="--concurrency 1 --warmup 20",
+        rate=0,
+        search_duration="10s",
+        ignore_parse_errors=ignore_parse_errors,
+    )
+    return filtered
+
+
+def test_a_query_parse_error_fails_the_test_by_default(monkeypatch):
+    assert _filtered_log_lines(monkeypatch, ignore_parse_errors=False) == []
+
+
+def test_a_query_parse_error_can_be_tolerated(monkeypatch):
+    assert _filtered_log_lines(monkeypatch, ignore_parse_errors=True) == [r"failed to parse query"]
+
+
+def test_a_search_is_a_read_to_latte():
+    """Otherwise the HDR exporter cannot classify its 'fn--search' tag and fails the command."""
+    assert get_latte_operation_type(_search_command()) == "read"
+
+
+def _sent_names(loader):
+    return [dst.rsplit("/", 1)[1] for _, dst in loader.remoter.sent]
+
+
+def test_each_shard_is_sent_ahead_to_the_loader_its_load_runs_on(tmp_path):
+    """Sending every shard to every loader would multiply the transfers by the loader count."""
+    tester = _PhaseTester(loaders=("loader-1", "loader-2"))
+
+    assert _load(tester, tmp_path, 0, 1, 2) == 3
+
+    assert [asked["loader"].name for asked in tester.asked] == ["loader-1", "loader-2", "loader-1"]
+    first, second = tester.loaders.nodes
+    assert _sent_names(first) == ["records_000.tsv", "records_002.tsv"]
+    assert _sent_names(second) == ["records_001.tsv"]
+    assert first.remoter.ran[-1].startswith("rm -f "), "a loaded shard is removed from its loader"
+
+
+def _watch_sends(tester, file_name):
+    """An event set once *file_name* is sent to the (first) loader."""
+    sent = threading.Event()
+    remoter = tester.loaders.nodes[0].remoter
+    send_files = remoter.send_files
+
+    def watched(src, dst, **kwargs):
+        if dst.endswith(file_name):
+            sent.set()
+        return send_files(src, dst, **kwargs)
+
+    remoter.send_files = watched
+    return sent
+
+
+def test_the_next_shard_is_sent_while_the_current_one_loads(tmp_path):
+    tester = _PhaseTester()
+    next_sent = _watch_sends(tester, "records_001.tsv")
+    sent_during_load = []
+
+    def run_latte(stress_cmd, **kwargs):
+        tester.asked.append(kwargs)
+        if "records_000" in stress_cmd:
+            sent_during_load.append(next_sent.wait(timeout=5))
+
+    tester._run_latte = run_latte
+
+    assert _load(tester, tmp_path, 0, 1) == 2
+    assert sent_during_load == [True]
+
+
+def test_a_failed_load_also_removes_the_shard_sent_after_it(tmp_path):
+    tester = _PhaseTester(fail_latte=True)
+    next_sent = _watch_sends(tester, "records_001.tsv")
+    run_latte = tester._run_latte
+
+    def fail_once_the_next_is_sent(stress_cmd, **kwargs):
+        next_sent.wait(timeout=5)
+        run_latte(stress_cmd, **kwargs)
+
+    tester._run_latte = fail_once_the_next_is_sent
+
+    with pytest.raises(RuntimeError, match="latte failed"):
+        _load(tester, tmp_path, 0, 1)
+
+    removed = [cmd for cmd in tester.loaders.nodes[0].remoter.ran if cmd.startswith("rm -f ")]
+    assert [cmd.rsplit("/", 1)[1] for cmd in removed] == ["records_000.tsv", "records_001.tsv"]
+    assert len(tester.asked) == 1, "the shard after a failed one is never loaded"
+
+
+def test_a_step_without_shards_loads_nothing(tmp_path):
+    """A step may only rebuild the index over what earlier steps loaded -- 'local_smoke' has one."""
+    tester = _PhaseTester()
+
+    assert _load(tester, tmp_path) == 0
+    assert tester.asked == []
+
+
+def test_an_empty_shard_is_neither_sent_nor_loaded(tmp_path):
+    tester = _PhaseTester()
+    (tmp_path / "shards").mkdir()
+    (tmp_path / "shards" / "records_001.tsv").write_text("\n", encoding="utf-8")
+
+    assert _load(tester, tmp_path, 0) == 1
+    step = {"shards": [1]}
+    assert (
+        search_perf_test.SearchPerformanceTest._load_step_shards(
+            tester, step, None, "", str(tmp_path), "/tmp/bench/ds", 60
+        )
+        == 0
+    )
+    assert _sent_names(tester.loaders.nodes[0]) == ["records_000.tsv"]
+
+
+def test_a_downloaded_shard_leaves_the_runner_once_loaded(monkeypatch, tmp_path):
+    tester = _PhaseTester()
+    downloaded = []
+
+    def fake_download(_bucket, key, path):
+        downloaded.append(key)
+        with open(path, "w", encoding="utf-8") as shard:
+            shard.write("doc_0\tbody\n")
+
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", fake_download)
+
+    step = {"shards": [0, 1]}
+    count = search_perf_test.SearchPerformanceTest._load_step_shards(
+        tester, step, "bucket", "fts/ds", str(tmp_path), "/tmp/bench/ds", 60
+    )
+
+    assert count == 2
+    assert downloaded == ["fts/ds/shards/records_000.tsv", "fts/ds/shards/records_001.tsv"]
+    assert list((tmp_path / "shards").iterdir()) == []
+
+
 # ---------------------------------------------------------------------------
 # Plan validation
 # ---------------------------------------------------------------------------
@@ -322,9 +1055,9 @@ class _PlanTester:
 
     WORKLOAD = WORKLOAD
 
-    def __init__(self, plan_path):
+    def __init__(self, plan_path, use_hdrhistogram=True):
         self.log = logging.getLogger("test")
-        self.params = {search_perf_test.TEST_CONFIG_PARAM: str(plan_path)}
+        self.params = {search_perf_test.TEST_CONFIG_PARAM: str(plan_path), "use_hdrhistogram": use_hdrhistogram}
         self.ran = []
 
     def _wait_for_vector_store_serving(self):
@@ -334,17 +1067,57 @@ class _PlanTester:
         self.ran.append(dataset["name"])
 
 
-def _run_plan(tmp_path, plan):
+def _run_plan(tmp_path, plan, **kwargs):
     plan_path = tmp_path / "plan.yaml"
     plan_path.write_text(plan, encoding="utf-8")
-    tester = _PlanTester(plan_path)
+    tester = _PlanTester(plan_path, **kwargs)
     search_perf_test.SearchPerformanceTest.run_search_benchmark(tester)
     return tester
+
+
+def test_a_bad_base_url_fails_the_plan_before_any_dataset_runs(tmp_path):
+    """Not when its dataset starts, after the ones before it have loaded."""
+    plan = "datasets:\n  - name: first\n  - name: second\n    base_url: https://example.com/ds\n"
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        _run_plan(tmp_path, plan)
 
 
 def test_a_plan_runs_its_datasets_in_order(tmp_path):
     tester = _run_plan(tmp_path, "datasets:\n  - name: first\n  - name: second\n")
     assert tester.ran == ["first", "second"]
+
+
+QUERYING_PLAN = """\
+datasets:
+  - name: first
+    defaults: {expected_p99_read_ms: 10}
+    steps:
+      - queries: [{set: natural}]
+"""
+
+
+def test_a_plan_with_queries_needs_hdr_histograms(tmp_path):
+    """Without them every query would be recorded with null latencies, after the corpus was loaded."""
+    with pytest.raises(ValueError, match="use_hdrhistogram"):
+        _run_plan(tmp_path, QUERYING_PLAN, use_hdrhistogram=False)
+
+
+def test_has_invalid_queries_must_be_a_boolean(tmp_path):
+    """A quoted "false" would read as true, and quietly let unparsable queries through."""
+    with pytest.raises(ValueError, match="has_invalid_queries"):
+        _run_plan(tmp_path, "datasets:\n  - name: first\n    has_invalid_queries: 'false'\n")
+
+
+def test_a_plan_without_queries_runs_without_hdr_histograms(tmp_path):
+    tester = _run_plan(tmp_path, "datasets:\n  - name: first\n", use_hdrhistogram=False)
+    assert tester.ran == ["first"]
+
+
+def test_a_bad_track_is_rejected_before_any_dataset_runs(tmp_path):
+    plan = "datasets:\n  - name: first\n    steps:\n      - build_track: builds\n"
+    # '_PlanTester' runs no dataset, so the error can only come from the plan check before them.
+    with pytest.raises(ValueError, match="'build_track' without 'build_label'"):
+        _run_plan(tmp_path, plan)
 
 
 def test_repeated_dataset_names_are_rejected(tmp_path):
@@ -419,9 +1192,13 @@ class _ResultsTester:
     def __init__(self, logdir):
         self.log = logging.getLogger("test")
         self.logdir = str(logdir)
+        self.reported = []
 
     def _record_result(self, phase, **fields):
         search_perf_test.SearchPerformanceTest._record_result(self, phase, **fields)
+
+    def _report_to_argus(self, record):
+        self.reported.append(record)
 
 
 def _results(logdir):
@@ -462,6 +1239,114 @@ def test_index_builds_are_appended_one_json_object_per_line(tmp_path):
     assert all(record["time"] for record in records)
 
 
+def test_every_record_goes_to_argus_as_written(tmp_path):
+    tester = _ResultsTester(tmp_path)
+
+    search_perf_test.SearchPerformanceTest._record_index_build(tester, "local_tiny", 1, "idx", 1000, 2.5)
+
+    assert tester.reported == _results(tmp_path)
+
+
+class _ArgusTester:
+    WORKLOAD = WORKLOAD
+    _argus_reporter = None
+
+    def __init__(self, argus_client):
+        self.log = logging.getLogger("test")
+        self.test_config = types.SimpleNamespace(argus_client=lambda: argus_client)
+
+    def _sut_timestamp(self):
+        return 0
+
+
+def test_the_records_of_a_run_share_one_reporter():
+    """Its row count numbers the overview rows; a reporter per record would make them all '#01'."""
+    submitted = []
+    tester = _ArgusTester(types.SimpleNamespace(submit_results=submitted.append))
+    record = {"phase": "index_build", "dataset": "ds", "step": 1, "record_count": 1, "build_time_s": 1.0}
+    record["indexing_throughput"] = 1.0
+
+    for _ in range(2):
+        search_perf_test.SearchPerformanceTest._report_to_argus(tester, record)
+
+    assert [table.results[0].row for table in submitted] == ["#01 index build", "#02 index build"]
+
+
+def test_an_argus_failure_is_logged_not_raised(caplog):
+    """The record is already in the results file; a reporting problem must not fail the run."""
+    client = types.SimpleNamespace(submit_results=lambda table: (_ for _ in ()).throw(RuntimeError("argus down")))
+    record = {"phase": "index_build", "dataset": "ds", "step": 1, "record_count": 1, "build_time_s": 1.0}
+    record["indexing_throughput"] = 1.0
+
+    with caplog.at_level(logging.ERROR):
+        search_perf_test.SearchPerformanceTest._report_to_argus(_ArgusTester(client), record)
+
+    assert "Failed to report the index_build record to Argus" in caplog.text
+    assert "argus down" in caplog.text
+
+
+class _SutTester:
+    """The flow's view of the builds under test, for '_sut_timestamp'."""
+
+    def __init__(self, scylla_versions=None, scylla_package=None, build=(1760000000, "ami-0vs")):
+        self.log = logging.getLogger("test")
+        self._scylla_versions = scylla_versions or {}
+        self._scylla_package = scylla_package
+        self.build = build
+
+    def get_scylla_versions(self):
+        return self._scylla_versions
+
+    def generate_scylla_server_package(self):
+        if self._scylla_package is None:
+            raise ValueError("Unable to parse scylla version")
+        return self._scylla_package
+
+    def _vector_store_node(self):
+        if isinstance(self.build, Exception):
+            raise self.build
+        return types.SimpleNamespace(get_vector_store_build=lambda: self.build)
+
+
+@pytest.fixture(name="positioned")
+def fixture_positioned(monkeypatch):
+    """'sut_timestamp' returns its arguments, so a test sees what the flow passed it."""
+    monkeypatch.setattr(search_perf_test, "sut_timestamp", lambda *args: args)
+
+
+def test_the_position_comes_from_both_builds(positioned):
+    tester = _SutTester(scylla_versions={"scylla-server": {"date": "20261007", "commit_id": "96e73c66cc74"}})
+
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(tester) == (
+        "20261007",
+        "96e73c66cc74",
+        1760000000,
+        "ami-0vs",
+    )
+
+
+def test_an_offline_scylla_is_dated_by_its_version_string(positioned):
+    package = types.SimpleNamespace(date="20261007", revision_id="96e73c66cc74")
+
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester(scylla_package=package))[:2] == (
+        "20261007",
+        "96e73c66cc74",
+    )
+
+
+def test_an_undated_scylla_still_dates_the_run_by_vector_store(positioned):
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester())[:3] == (None, "", 1760000000)
+
+
+def test_a_failed_lookup_leaves_the_position_to_argus(positioned, caplog):
+    """Raising would stop every record of the run from reaching Argus."""
+    tester = _SutTester(build=RuntimeError("vector-store unreachable"))
+
+    with caplog.at_level(logging.WARNING):
+        assert search_perf_test.SearchPerformanceTest._sut_timestamp(tester) == 0
+    assert "vector-store unreachable" in caplog.text
+
+
 def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):
     """A missing measurement has to stay visible, not drop out of the results."""
     search_perf_test.SearchPerformanceTest._record_index_build(
@@ -476,3 +1361,181 @@ def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):
 @pytest.mark.parametrize("record_count, build_seconds", ((1000, None), (1000, 0.0), (0, 2.5)))
 def test_no_throughput_is_derived_without_a_build_time_or_records(record_count, build_seconds):
     assert indexing_throughput(record_count, build_seconds) is None
+
+
+def test_a_search_is_recorded_with_its_configuration_and_latency(tmp_path):
+    tester = _ResultsTester(tmp_path)
+    search_perf_test.SearchPerformanceTest._record_search(
+        tester,
+        expected_p99_read_ms=10.0,
+        latency={"percentile_50": 2.08, "percentile_99": 3.86, "percentile_99_9": 5.0, "throughput": 50},
+        dataset="local_tiny",
+        step=1,
+        query_index=2,
+        query_set="term_common",
+        limit=5,
+        stress_options="--concurrency 1 --warmup 20",
+        rate=50,
+    )
+
+    (record,) = _results(tmp_path)
+    assert {k: v for k, v in record.items() if k != "time"} == {
+        "workload": "search_bench",
+        "phase": "search",
+        "dataset": "local_tiny",
+        "step": 1,
+        "query_index": 2,
+        "query_set": "term_common",
+        "limit": 5,
+        "stress_options": "--concurrency 1 --warmup 20",
+        "rate": 50,
+        "expected_p99_read_ms": 10.0,
+        "p50_ms": 2.08,
+        "p90_ms": None,
+        "p95_ms": None,
+        "p99_ms": 3.86,
+        "p99_9_ms": 5.0,
+        "p99_99_ms": None,
+        "throughput_ops": 50,
+        "p99_within_expectation": True,
+    }
+
+
+@pytest.mark.parametrize("latency, within", (({"percentile_99": 12.0}, False), ({}, None)))
+def test_a_search_says_whether_it_met_its_expectation(tmp_path, latency, within):
+    """Unknown when nothing was measured -- not a pass, and not a miss either."""
+    search_perf_test.SearchPerformanceTest._record_search(
+        _ResultsTester(tmp_path), expected_p99_read_ms=10.0, latency=latency, query_set="natural"
+    )
+    (record,) = _results(tmp_path)
+    assert record["p99_within_expectation"] is within
+
+
+class _StepTester(_ResultsTester):
+    """Runs a step's queries with '_run_search' answering from a canned HDR summary."""
+
+    def __init__(self, logdir):
+        super().__init__(logdir)
+        self.searched = []
+
+    def _run_search(self, local_ds_dir, container_ds_dir, **kwargs):
+        self.searched.append(kwargs)
+        return {"percentile_99": 4.0, "throughput": 50}
+
+    def _record_search(self, **fields):
+        search_perf_test.SearchPerformanceTest._record_search(self, **fields)
+
+
+def test_every_query_of_a_step_is_recorded_in_order(tmp_path):
+    """Two entries with the same configuration stay apart by their position in the step."""
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common"}, {"set": "term_common", "limit": 100}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester, step, "ds", DEFAULTS, record_count=900, step_number=2, local_ds_dir=str(tmp_path), container_ds_dir="/r"
+    )
+
+    assert [searched["limit"] for searched in tester.searched] == [5, 100, 5]
+    records = _results(tmp_path)
+    assert [(r["step"], r["query_index"], r["limit"], r["record_count"]) for r in records] == [
+        (2, 1, 5, 900),
+        (2, 2, 100, 900),
+        (2, 3, 5, 900),
+    ]
+    assert {r["query_example"] for r in records} == {"the query"}
+    assert {r["p99_ms"] for r in records} == {4.0}
+
+
+class _DatasetTester:
+    """Runs '_run_dataset' with every phase stubbed, recording how each step's queries are run."""
+
+    WORKLOAD = WORKLOAD
+
+    def __init__(self):
+        self.log = logging.getLogger("test")
+        self.params = {}
+        self.ignore_parse_errors = []
+
+    def _drop_table(self):
+        pass
+
+    def _create_schema(self):
+        pass
+
+    _run_dataset_in = search_perf_test.SearchPerformanceTest._run_dataset_in
+
+    def _download_dataset_files(self, *_):
+        pass
+
+    def _drop_index(self, *_):
+        pass
+
+    def _load_step_shards(self, *_):
+        return 0
+
+    def _build_index(self, *_, **__):
+        return 1.0
+
+    def _record_index_build(self, *_):
+        pass
+
+    def _run_step_queries(self, *_, ignore_parse_errors=False):
+        self.ignore_parse_errors.append(ignore_parse_errors)
+
+
+@pytest.mark.parametrize("has_invalid_queries", [False, True])
+def test_a_dataset_says_how_its_queries_handle_parse_errors(tmp_path, monkeypatch, has_invalid_queries):
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda *_: str(tmp_path))
+    tester = _DatasetTester()
+
+    search_perf_test.SearchPerformanceTest._run_dataset(
+        tester, {"name": "ds", "has_invalid_queries": has_invalid_queries, "steps": [{"shards": []}, {"shards": []}]}
+    )
+
+    assert tester.ignore_parse_errors == [has_invalid_queries] * 2
+
+
+@pytest.mark.parametrize("ignore_parse_errors", [False, True])
+def test_every_query_of_a_step_gets_the_same_parse_error_handling(tmp_path, ignore_parse_errors):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common"}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester,
+        step,
+        "ds",
+        DEFAULTS,
+        record_count=900,
+        step_number=1,
+        local_ds_dir=str(tmp_path),
+        container_ds_dir="/r",
+        ignore_parse_errors=ignore_parse_errors,
+    )
+
+    assert [searched["ignore_parse_errors"] for searched in tester.searched] == [ignore_parse_errors] * 2
+
+
+def test_a_tracked_query_carries_its_track_into_the_record(tmp_path):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common", "track": "latency", "label": "small"}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester, step, "ds", DEFAULTS, record_count=900, step_number=1, local_ds_dir=str(tmp_path), container_ds_dir="/r"
+    )
+
+    tracked, untracked = _results(tmp_path)
+    assert (tracked["track"], tracked["label"]) == ("latency", "small")
+    assert "track" not in untracked
+    assert "label" not in untracked
+
+
+def test_a_tracked_index_build_carries_its_track_into_the_record(tmp_path):
+    search_perf_test.SearchPerformanceTest._record_index_build(
+        _ResultsTester(tmp_path), "local_tiny", 1, "bench_idx_local_tiny_0", 1000, 2.5, "builds", "local_tiny"
+    )
+
+    (record,) = _results(tmp_path)
+    assert (record["track"], record["label"]) == ("builds", "local_tiny")
