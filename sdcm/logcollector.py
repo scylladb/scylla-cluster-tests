@@ -2115,7 +2115,7 @@ class Collector:
                         "key_file": f"~/.ssh/{instance.ssh_key_name}",
                     },
                     instance=instance,
-                    global_ip=instance.public_ip_address,
+                    global_ip=instance.public_ip_address or instance.private_ip_address,
                     tags=instance.tags,
                 )
                 for instance in instances.values()
