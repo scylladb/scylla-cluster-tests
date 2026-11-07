@@ -382,6 +382,12 @@ Azure comes with the size family, and the runner code reaches real Azure through
 `AzureService.real_cloud()` while every other ARM call stays redirected. minicloud uses the Azure
 credential only for the image download, SCT only for the runner itself.
 
+### Publish the run to Argus
+
+`scripts/run-minicloud-test.sh` sets `SCT_ENABLE_ARGUS=false`, so the run sends nothing to Argus. To
+show it in Argus, send its replay log with `argus run replay`. See [Upload a minicloud run to Argus](minicloud-argus-upload.md), which
+also covers the native macOS setup.
+
 ## Troubleshooting
 
 | symptom | cause |
