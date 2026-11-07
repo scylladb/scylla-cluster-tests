@@ -15,6 +15,13 @@ def no_atexit(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def container_mode(monkeypatch):
+    # The native-process default follows the host OS. Pin it, so a run on a macOS laptop
+    # tests the same container path as the Linux CI. Native-mode tests pass native=True.
+    monkeypatch.setattr("sdcm.utils.minicloud.config.MINICLOUD_NATIVE_DEFAULT", False)
+
+
+@pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     # MinicloudManager.set_env_overrides() writes straight into os.environ (that is its
     # job - it configures the SCT process). monkeypatch cannot undo what it never saw, so
