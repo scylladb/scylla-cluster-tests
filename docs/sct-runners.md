@@ -37,6 +37,9 @@ the first node is created.
 
 ### process of updating sct runner images
 
+The full flow, with the boot check per cloud and the failures seen in past rollouts, is in the
+[updating-runner-images](../skills/updating-runner-images/SKILL.md) skill. In short:
+
 1. update code in sct_runner.py, give it a new version number
 2. Build all images
     ```bash
@@ -50,11 +53,12 @@ the first node is created.
 
    ./sct.py create-runner-image -c oci -r us-ashburn-1 -z a
     ```
-3. update version on `aws_builder.py` and `gce_builder.py`
-4. build jenkins configuration with new sct runner image
+3. boot a runner from each image with `create-runner-instance`, reboot it, check SSH again
+4. update version on `aws_builder.py`, `gce_builder.py` and `oci_builder.py`, and
+   `vars/getJenkinsLabels.groovy` with the matching labels, in one commit
+5. build jenkins configuration with new sct runner image
     ```bash
-    ./sct.py configure-jenkins-builders -c gce
     ./sct.py configure-jenkins-builders -c aws
+    ./sct.py configure-jenkins-builders -c gce
+    ./sct.py configure-jenkins-builders -c oci
     ```
-
-5. update `vars/getJenkinsLabels.groovy` with the new labels created in step 1
