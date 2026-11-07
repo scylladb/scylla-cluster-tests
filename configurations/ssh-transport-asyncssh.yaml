@@ -1,0 +1,7 @@
+# Run the test with the asyncssh SSH transport (SCT-1396) instead of the default libssh2 one.
+# Layer it after the test-case yaml, e.g.
+#
+#   test_config: '''["test-cases/longevity/longevity-minicloud-10gb-1h.yaml", "configurations/ssh-transport-asyncssh.yaml"]'''
+#
+# See docs/plans/remote/asyncssh-transport/spec.md.
+ssh_transport: 'asyncssh'
