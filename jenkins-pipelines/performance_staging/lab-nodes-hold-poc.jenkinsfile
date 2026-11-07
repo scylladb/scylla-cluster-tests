@@ -1,0 +1,250 @@
+#!groovy
+
+// Proof of concept for docs/plans/jenkins/lab-builders-baremetal/ (SCT-900).
+// Throwaway: it checks that the approach is feasible on the live Jenkins and gets deleted once
+// the plan's hold helper lands.
+//
+// The `target` parameter picks the agents:
+//   aws-asg     - step 1: runner and held agents are AWS ASG builders, plentiful and disposable.
+//   lab         - step 2: the runner is a minipc and the held agents are one spider and one minipc,
+//                 all chosen by label, so it also proves the lab network path. Run it when the lab is
+//                 quiet (weekend; not Friday night, when the weekly-minicloud cron uses the minipcs).
+//   lab-monster - step 2 on the least used lab hosts: the runner is monster (only it carries
+//                 minicloud-kvm-builders-artifacts) and the held agent is spider4, which carries no
+//                 label, so it is picked by node name and no other build is scheduled on it.
+// runner_label / held_labels / acquire_minutes override the target's defaults when set.
+//
+// Jenkins is only the resource manager here. Each held slot is a branch that sits in
+// node(<label>) and runs nothing, which keeps that agent's single executor busy so Jenkins
+// schedules no other build on it. The runner branch, on another agent, then:
+//   1. gets the held agents' names and resolves their addresses without touching them
+//      (lab DNS for hostnames, EC2 API for ASG instance ids),
+//   2. writes and archives a BareMetalCredentials-shaped hosts file: the held agents are the DB
+//      nodes, the runner itself is the loader and the monitor,
+//   3. inside hydra, syncs the SSH key from the KeyStore and reads that hosts file back from
+//      hydra's working directory, the way the baremetal backend will,
+//   4. SSHes to every host in the file out of band (login and passwordless sudo),
+//   5. with run_sct, runs a short SCT test against those hosts on the baremetal backend, then
+//      collects its logs and cleans the hosts up; without it, waits for "Release" (or hold_minutes).
+// Whatever ends the build (Release, failure, abort, timeout), the holder branches end with it
+// and the executors are freed.
+//
+// While the agents are held, queue any job on the held label: it must wait for, or get, a
+// different agent.
+
+def targets = [
+    'aws-asg': [
+        runner: 'aws-sct-builders-eu-west-1-v4-asg',
+        held: 'aws-sct-builders-eu-west-1-v4-asg,aws-sct-builders-eu-west-1-v4-asg',
+        acquireMinutes: '20',
+    ],
+    // spiders carry builders_x86, minipcs carry minicloud-kvm-builders-rolling-upgrades. Lab hosts
+    // are taken only when idle, so acquiring can wait for running dtest/minicloud builds to end.
+    'lab': [
+        runner: 'minicloud-kvm-builders-rolling-upgrades',
+        held: 'builders_x86,minicloud-kvm-builders-rolling-upgrades',
+        acquireMinutes: '120',
+    ],
+    'lab-monster': [
+        runner: 'minicloud-kvm-builders-artifacts',
+        held: 'spider4.cloudius-systems.com',
+        acquireMinutes: '60',
+    ],
+]
+
+properties([
+    parameters([
+        choice(name: 'target', choices: ['aws-asg', 'lab', 'lab-monster'],
+               description: 'Which agents to use: aws-asg (step 1), lab spider/minipc hosts, or monster holding spider4 (step 2)'),
+        string(name: 'runner_label', defaultValue: '',
+               description: 'Node name or label of the runner agent; empty = the target default'),
+        string(name: 'held_labels', defaultValue: '',
+               description: 'Comma-separated node names or labels, one held agent per entry (repeats allowed); empty = the target default'),
+        string(name: 'aws_region', defaultValue: 'eu-west-1',
+               description: 'Region used to resolve held agents named by an EC2 instance id'),
+        string(name: 'ssh_user', defaultValue: 'jenkins',
+               description: 'User the runner logs in as on the held agents and on itself'),
+        string(name: 'acquire_minutes', defaultValue: '',
+               description: 'Fail if not every held agent is acquired by then; empty = the target default'),
+        string(name: 'hold_minutes', defaultValue: '30',
+               description: 'Without run_sct: release automatically after this long if nobody presses Release'),
+        booleanParam(name: 'run_sct', defaultValue: false,
+                     description: 'After the checks, run a short SCT test (PR-provision-test, one DB node) on the held hosts'),
+        string(name: 'sct_repo', defaultValue: 'https://github.com/fruch/scylla-cluster-tests.git',
+               description: 'run_sct: SCT clone to run the test from (anonymous HTTPS)'),
+        string(name: 'sct_branch', defaultValue: 'baremetal/sct1215-collect',
+               description: 'run_sct: branch with the baremetal fixes the test needs (SCT-1215 collect branch)'),
+        string(name: 'sct_minutes', defaultValue: '150',
+               description: 'run_sct: time budget for the test, log collection and cleanup'),
+    ])
+])
+
+if (params.target == null) {
+    // First build of a new job: Jenkins only learns the parameters above by running it once.
+    currentBuild.result = 'NOT_BUILT'
+    currentBuild.description = 'parameters registered, nothing held'
+    return
+}
+
+def target = targets[params.target]
+def runnerLabel = params.runner_label?.trim() ?: target.runner
+def wanted = (params.held_labels?.trim() ?: target.held).split(',').collect { it.trim() }.findAll { it }
+if (!wanted) {
+    error('held_labels is empty')
+}
+def acquireMinutes = (params.acquire_minutes?.trim() ?: target.acquireMinutes) as int
+def holdMinutes = params.hold_minutes as int
+def workMinutes = params.run_sct ? (params.sct_minutes as int) : holdMinutes
+def sshKey = '~/.ssh/scylla_test_id_ed25519'
+def heldBySlot = [:]
+def released = false
+
+timeout(time: acquireMinutes + workMinutes + 20, unit: 'MINUTES') {
+    def branches = [:]
+
+    for (int i = 0; i < wanted.size(); i++) {
+        def slot = i
+        def label = wanted[i]
+        branches["hold ${slot}: ${label}"] = {
+            node(label) {
+                // Nothing runs on the held agent: the branch only keeps its executor busy.
+                heldBySlot[slot] = env.NODE_NAME
+                echo "Holding ${env.NODE_NAME}"
+                waitUntil(initialRecurrencePeriod: 5000, quiet: true) { released }
+                echo "Releasing ${env.NODE_NAME}"
+            }
+        }
+    }
+
+    branches['runner'] = {
+        node(runnerLabel) {
+            try {
+                timeout(time: acquireMinutes, unit: 'MINUTES') {
+                    waitUntil(initialRecurrencePeriod: 5000, quiet: true) { heldBySlot.size() == wanted.size() }
+                }
+                def hosts = (0..<wanted.size()).collect { heldBySlot[it] }
+                currentBuild.description = "${params.target}: runner ${env.NODE_NAME}, holding ${hosts.join(', ')}"
+
+                checkout scm
+                def findings = []
+                def configName = "lab-poc-${env.BUILD_NUMBER}"
+
+                withCredentials([string(credentialsId: 'qa-aws-secret-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                                 string(credentialsId: 'qa-aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    // 1. Addresses, resolved on the runner. Static agents are named by hostname;
+                    //    ec2-fleet agents are named by instance id.
+                    def nodeList = hosts.collect { host ->
+                        def script = host ==~ /i-[0-9a-f]+/
+                            ? "aws ec2 describe-instances --region ${params.aws_region} --instance-ids ${host} " +
+                              "--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text"
+                            : "getent ahostsv4 '${host}' | awk 'NR==1 {print \$1}'"
+                        def ip = sh(returnStdout: true, script: script).trim()
+                        if (!ip || ip == 'None') {
+                            findings << "${host}: could not resolve an address"
+                            ip = ''
+                        }
+                        [host: host, ip: ip]
+                    }
+                    // The runner's own address on the route to the held hosts: it is the loader and the monitor.
+                    def routeTo = nodeList.find { it.ip }?.ip ?: '1.1.1.1'
+                    def runnerIp = sh(returnStdout: true,
+                                      script: "ip -4 route get ${routeTo} | awk '{for (i = 1; i < NF; i++) if (\$i == \"src\") print \$(i + 1)}'").trim()
+                    if (!runnerIp) {
+                        findings << "${env.NODE_NAME}: no source address on the route to ${routeTo}"
+                    }
+                    def runnerHost = [host: env.NODE_NAME, ip: runnerIp]
+
+                    // 2. Hosts file, in the shape sdcm/cluster_baremetal.py:BareMetalCredentials expects. Every
+                    //    role is on the runner's network, so each one is reached directly (`private`), no tunnels.
+                    def asEntries = { list -> list.findAll { it.ip }.collect { [public_ip: it.ip, private_ip: it.ip] } }
+                    def role = { list -> [username: params.ssh_user, ip_ssh_connections: 'private', node_list: asEntries(list)] }
+                    writeJSON file: "${configName}.json", pretty: 2, json: [
+                        db_nodes: role(nodeList),
+                        loader_nodes: role([runnerHost]),
+                        monitor_nodes: role([runnerHost]),
+                    ]
+                    archiveArtifacts artifacts: "${configName}.json"
+
+                    // 3. hydra runs with the checkout as its working dir and the home dir mounted:
+                    //    sync the SSH key the way sct.py does, then read the hosts file back the
+                    //    way the baremetal backend does (local <name>.json before S3).
+                    writeFile file: 'lab_poc_hydra_check.py', text: '''
+import sys
+from pathlib import Path
+from sdcm.keystore import KeyStore
+KeyStore().sync(keys=["scylla_test_id_ed25519"], local_path=Path.home() / ".ssh", permissions=0o600)
+config = KeyStore().get_baremetal_config(sys.argv[1])
+print("hosts file read by hydra:", [n["public_ip"] for section in config.values() for n in section["node_list"]])
+'''
+                    if (sh(returnStatus: true,
+                           script: "./docker/env/hydra.sh python3 lab_poc_hydra_check.py ${configName}") != 0) {
+                        findings << "hydra could not sync the SSH key or read ${configName}.json from its working directory"
+                    }
+
+                    // 4. Out-of-band SSH from the runner, the way SCT will do it: to the held hosts, and with
+                    //    run_sct also to the runner itself, since SCT reaches the loader and monitor over SSH too.
+                    def sshTargets = params.run_sct ? nodeList + [runnerHost] : nodeList
+                    sshTargets.findAll { it.ip }.each { n ->
+                        def rc = sh(returnStatus: true, script: """
+                            ssh -i ${sshKey} -o BatchMode=yes -o StrictHostKeyChecking=no \
+                                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                                ${params.ssh_user}@${n.ip} 'hostname && sudo -n true && echo SUDO_OK'
+                        """)
+                        if (rc != 0) {
+                            findings << "${n.host}: ssh ${params.ssh_user}@${n.ip} with sudo -n failed (rc=${rc})"
+                        }
+                    }
+
+                    if (findings) {
+                        error("POC findings:\n  - " + findings.join('\n  - '))
+                    }
+
+                    if (params.run_sct) {
+                        // 5. A short SCT test on the held hosts. The baremetal fixes it needs are not on master
+                        //    yet, so it runs from the SCT-1215 collect branch, with this job's hosts file and
+                        //    overlay copied in. The held agents stay held until the cleanup is done.
+                        echo "All checks passed. Running SCT on ${hosts.join(', ')} from ${params.sct_branch}."
+                        sh """
+                            rm -rf sct
+                            git clone --depth 1 --branch '${params.sct_branch}' '${params.sct_repo}' sct
+                            cp '${configName}.json' sct/
+                            cp configurations/baremetal/lab-hold-poc.yaml sct/configurations/baremetal/
+                        """
+                        def sctEnv = [
+                            "SCT_TEST_ID=${UUID.randomUUID()}",
+                            'SCT_CLUSTER_BACKEND=baremetal',
+                            'SCT_CONFIG_FILES=["test-cases/PR-provision-test.yaml", "configurations/baremetal/loader-monitor-shared-host.yaml", "configurations/baremetal/lab-hold-poc.yaml"]',
+                            "SCT_S3_BAREMETAL_CONFIG=${configName}",
+                        ]
+                        dir('sct') {
+                            withEnv(sctEnv) {
+                                try {
+                                    sh './docker/env/hydra.sh run-test longevity_test.LongevityTest.test_custom_time --backend baremetal --logdir "$(pwd)"'
+                                } finally {
+                                    // The same steps runCollectLogs / runCleanupResource run for a local agent.
+                                    sh(returnStatus: true, script: './docker/env/hydra.sh collect-logs --backend baremetal --logdir "$(pwd)"')
+                                    sh './docker/env/hydra.sh clean-resources --backend baremetal --post-behavior --logdir "$(pwd)"'
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!params.run_sct) {
+                    // 5. Hold until someone presses Release; running out of hold_minutes aborts the
+                    //    build, which releases the agents the same way.
+                    echo "All checks passed. Holding ${hosts.join(', ')} for up to ${holdMinutes} minutes."
+                    timeout(time: holdMinutes, unit: 'MINUTES') {
+                        input id: 'Release', message: "Release ${hosts.join(', ')}?"
+                    }
+                }
+            } finally {
+                released = true
+            }
+        }
+    }
+
+    // failFast: if the runner fails, holders still queued for an agent are cancelled too.
+    branches.failFast = true
+    parallel branches
+}
