@@ -37,7 +37,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import ROUND_UP, Decimal
 from functools import cached_property, lru_cache, partial, wraps
@@ -267,6 +267,87 @@ FIREWALL_RULE_DUMP_COMMANDS = ("iptables-save", "ip6tables-save", "nft list rule
 # how `ss` prints a listener bound to every address of the node, per address family
 CQL_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})
 
+# Tools the monitoring stack's scripts need on the monitor host, installed only when missing
+MONITOR_PREREQ_PACKAGES = ("curl", "unzip", "python3", "python3-pip")
+
+# Prints what the monitor host lacks: package names from MONITOR_PREREQ_PACKAGES, `python-libs` when the
+# scylla-monitoring scripts can't import their modules, `docker-group` when only root can use Docker and
+# `docker` when Docker doesn't work at all
+MONITOR_PREREQS_PROBE = """
+    for tool in curl unzip python3; do command -v $tool > /dev/null || echo $tool; done
+    if ! python3 -c "import yaml, psutil" 2> /dev/null; then
+        echo python-libs
+        command -v pip3 > /dev/null || echo python3-pip
+    fi
+    if ! docker info > /dev/null 2>&1; then
+        if sudo -n docker info > /dev/null 2>&1; then echo docker-group; else echo docker; fi
+    fi
+"""
+
+# Oldest Docker Engine SCT accepts on loaders and monitors, whatever its packaging (docker-ce, moby-engine,
+# docker.io). 20.10 is the oldest line still shipped by the supported distros.
+DOCKER_MIN_VERSION = (20, 10)
+DOCKER_UNUSABLE = (
+    "Docker is not running, or the SSH user can't use it, and SCT doesn't install or change Docker on this host: "
+    "install and start Docker, and add the user to the `docker` group"
+)
+
+MONITOR_PYTHON_LIBS_INSTALL_SCRIPT = """
+    # PEP 668 distros refuse system-wide pip installs unless asked to
+    if pip3 install --help | grep -q break-system-packages; then
+        PIP_ARGS=--break-system-packages
+    fi
+    pip3 install $PIP_ARGS pyyaml psutil
+"""
+
+DOCKER_INSTALL_SCRIPT = f"""
+    install_docker() {{
+        local max_retries=3
+        local attempt=0
+        while [ $attempt -lt $max_retries ]; do
+            echo "Installing Docker (attempt $((attempt+1))/$max_retries)..."
+            {curl_with_retry("https://get.docker.com", follow_redirects=True, fail_early=True, output="get-docker.sh")} && bash get-docker.sh && return 0
+            attempt=$((attempt+1))
+            echo "Docker installation failed, retrying in 10 seconds..."
+            sleep 10
+        done
+        # Fallback for Rocky Linux: use CentOS repo (Rocky repo has no packages)
+        # See: https://github.com/docker/docker-install/pull/557
+        if . /etc/os-release && [ "$ID" = "rocky" ]; then
+            echo "Falling back to CentOS Docker repo for Rocky Linux..."
+            {curl_with_retry("https://download.docker.com/linux/centos/docker-ce.repo", follow_redirects=True, fail_early=True, output="/etc/yum.repos.d/docker-ce.repo")}
+            dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && return 0
+        fi
+        echo "Docker installation failed after $max_retries attempts."
+        exit 1
+    }}
+    install_docker
+    systemctl start docker
+"""
+
+# Prints where Docker keeps image layers. With the containerd image store (the default since Docker 29, and Fedora's
+# moby-engine) that is containerd's root, not DockerRootDir.
+DOCKER_IMAGE_STORE_PROBE = """
+    if docker info --format "{{json .DriverStatus}}" | grep -q io.containerd.snapshotter; then
+        echo /var/lib/containerd
+    else
+        docker info --format "{{.DockerRootDir}}"
+    fi
+"""
+
+# Ports the monitoring stack takes on the monitor host: SCT starts it on the host network (start-all.sh -l)
+MONITORING_STACK_PORTS = {
+    3000: "Grafana",
+    8081: "Grafana renderer",
+    9090: "Prometheus",
+    9093: "Alertmanager",
+    9094: "Alertmanager gossip",
+    3100: "Loki",
+    9095: "Loki gRPC",
+    9080: "Promtail",
+    1514: "Promtail syslog",
+}
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -456,6 +537,8 @@ class BaseNode(AutoSshContainerMixin):
     journal_since: str | None = None
     # A host that outlives the run (bare metal) keeps one journal for every run on it
     journal_outlives_run: bool = False
+    # a host shared with other jobs keeps its apt-daily timers and unattended-upgrades
+    keeps_daily_apt_triggers: bool = False
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -4196,6 +4279,7 @@ class BaseNode(AutoSshContainerMixin):
             # NOTE: only before the run start is marked: a later call keeps the checkpoint of this run
             vector_journal_from_now=self.journal_outlives_run and not self.journal_since,
             test_config=self.test_config,
+            disable_apt_triggers=not self.keeps_daily_apt_triggers,
             # NOTE: no 'disable_guest_firewall' here on purpose - this one re-runs on a live node
             #       to re-point the logs, long after boot, and flushing the tables there would
             #       take the rules of a running network nemesis with it
@@ -4305,6 +4389,8 @@ class BaseNode(AutoSshContainerMixin):
             self.log.extra["prefix"] = str(self)
 
     def disable_daily_triggered_services(self):
+        if self.keeps_daily_apt_triggers:
+            return
         if self.distro.uses_systemd and (self.distro.is_ubuntu or self.distro.is_debian):
             self.remoter.sudo(shell_script_cmd(disable_daily_apt_triggers(), quote="'"))
 
@@ -5708,6 +5794,102 @@ class NodeSetupFailed(Exception):
 
     def __repr__(self):
         return self.__str__()
+
+
+def ensure_docker_version(node: BaseNode) -> None:
+    """Preflight: the node runs Docker Engine at DOCKER_MIN_VERSION or newer.
+
+    SCT never upgrades Docker: on a shared host that restarts the daemon under other jobs' containers. A too old one
+    fails the setup, naming both versions, so the host owner can act. The server is asked as the SSH user, the way the
+    run uses it, so a stopped Docker or a user outside the `docker` group fails here too.
+    """
+    client = node.remoter.run("docker --version", ignore_status=True)
+    if client.failed:
+        raise NodeSetupFailed(node=node, error_msg="Docker is not installed")
+    if "podman" in client.stdout.lower():
+        raise NodeSetupFailed(node=node, error_msg="`docker` is the Podman shim, SCT needs Docker Engine")
+    server = node.remoter.run("docker version --format '{{.Server.Version}}'", ignore_status=True)
+    if server.failed:
+        raise NodeSetupFailed(node=node, error_msg=DOCKER_UNUSABLE)
+    found = server.stdout.strip()
+    if tuple(int(part) for part in re.findall(r"\d+", found)[:2]) >= DOCKER_MIN_VERSION:
+        return
+    needed = ".".join(map(str, DOCKER_MIN_VERSION))
+    raise NodeSetupFailed(node=node, error_msg=f"Docker {found} is older than {needed}, upgrade it on the host")
+
+
+def ensure_docker_free_space(node: BaseNode, min_free_gb: int) -> None:
+    """Fail before the first image pull when the node's Docker image store can't take the run's images.
+
+    Images no container uses are removed first. Setup fails only if the space is still short, naming the store and both
+    sizes, instead of a pull failing mid-test with "no space left on device".
+    """
+    if not min_free_gb:
+        return
+    # ponytail: assumes containerd's default root; a host with a custom `root` in containerd's config is measured wrong
+    store = node.remoter.sudo(shell_script_cmd(DOCKER_IMAGE_STORE_PROBE, quote="'"), verbose=False).stdout.split()[-1]
+
+    def free_gb() -> int:
+        # No pipe: a df failure (e.g. a missing store) fails the run with df's own error
+        return int(node.remoter.run(f"df --output=avail -BG {store}", verbose=False).stdout.split()[-1].rstrip("G"))
+
+    if (free := free_gb()) >= min_free_gb:
+        return
+    node.log.warning("Only %sGB free in %s, removing images no container uses", free, store)
+    node.remoter.sudo("docker image prune --all --force", ignore_status=True)
+    if (free := free_gb()) < min_free_gb:
+        raise NodeSetupFailed(
+            node=node,
+            error_msg=f"Docker image store {store} has {free}GB free, the run needs {min_free_gb}GB "
+            "(docker_min_free_space_gb_loader/_monitor)",
+        )
+
+
+@dataclass
+class _DockerHostCheck:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    # The Docker roles (loader, monitor) this run has on the host, registered before any role's setup starts
+    roles: set[str] = field(default_factory=set)
+    checked: bool = False
+
+
+# Hosts of this run, by private address. A host with several roles (a lab host that is both loader and monitor) is
+# checked once, by the first role to reach it, against the sum of all its roles' space, before either role pulls.
+_DOCKER_HOST_CHECKS: dict[str, _DockerHostCheck] = {}
+
+
+def register_docker_host_role(address: str, role: str) -> None:
+    """Record that this run uses the host at `address` as a loader or monitor, for its Docker preflight."""
+    _DOCKER_HOST_CHECKS.setdefault(address, _DockerHostCheck()).roles.add(role)
+
+
+def docker_host_preflight(node: BaseNode, params, role: str) -> None:
+    """Preflight of the Docker a loader or monitor runs on: version, then free space for the images of every role the
+    host has in this run."""
+    host = _DOCKER_HOST_CHECKS.setdefault(node.private_ip_address, _DockerHostCheck())
+    with host.lock:
+        if host.checked:
+            return
+        ensure_docker_version(node)
+        min_free_gb = sum(params.get(f"docker_min_free_space_gb_{each}") or 0 for each in host.roles | {role})
+        ensure_docker_free_space(node, min_free_gb)
+        host.checked = True
+
+
+def ensure_monitoring_ports_free(node: BaseNode) -> None:
+    """Preflight: the monitoring stack's ports are free on the monitor host.
+
+    A taken port fails the setup naming the port and what holds it, before any container starts. Lab host owners keep
+    these ports free (e.g. Fedora's Cockpit, on 9090, is disabled on lab hosts).
+    """
+    taken = {}
+    for line in node.remoter.sudo("ss -Hltnp", verbose=False).stdout.splitlines():
+        fields = line.split()
+        port = int(fields[3].rsplit(":", 1)[1])
+        if service := MONITORING_STACK_PORTS.get(port):
+            taken.setdefault(port, f"{port} ({service}) is held by {fields[5] if len(fields) > 5 else 'a process'}")
+    if taken:
+        raise NodeSetupFailed(node=node, error_msg=f"Monitoring stack ports are taken: {'; '.join(taken.values())}")
 
 
 class NodeSetupTimeout(Exception):
@@ -7341,6 +7523,9 @@ class BaseScyllaCluster:
 
 
 class BaseLoaderSet:
+    # False for a host other jobs share: setup then leaves its Docker alone, and the preflight check fails a missing one
+    owns_host = True
+
     def __init__(self, params):
         self._loader_cycle = None
         self.params = params
@@ -7407,11 +7592,11 @@ class BaseLoaderSet:
         )
         if result.exit_status == 0:
             node.log.debug("Skip loader setup for using a prepared AMI")
-        else:
+        elif self.owns_host:
             if node.distro.is_fedora:
                 self._install_docker_on_fedora(node)
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
-
+        docker_host_preflight(node, self.params, "loader")
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
 
@@ -7532,6 +7717,9 @@ class BaseLoaderSet:
 class BaseMonitorSet:
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = "ip_address"
+    # False for a host other jobs share: setup then leaves its Docker, firewall and packages alone, and fails a stack
+    # that doesn't start instead of restarting it
+    owns_host = True
     json_file_params_for_replace = {"$test_name": get_test_name()}
     # Parallel callers (e.g. parallel decommissions) race on the same targets files
     _reconfigure_lock = threading.Lock()
@@ -7657,7 +7845,7 @@ class BaseMonitorSet:
         node.wait_ssh_up()
         node.install_minicloud_ca()
 
-        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
+        if self.owns_host and (node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci"):
             node.disable_firewall()
             node.upgrade_ssh_packages()
 
@@ -7679,6 +7867,8 @@ class BaseMonitorSet:
         try:
             self.start_scylla_monitoring(node)
         except Failure, UnexpectedExit, Libssh2_UnexpectedExit:
+            if not self.owns_host:
+                raise
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -7778,127 +7968,32 @@ class BaseMonitorSet:
                 docker_hub_login(remoter=node.remoter)
             return
 
-        node.update_repo_cache()
+        missing = node.remoter.run(shell_script_cmd(MONITOR_PREREQS_PROBE, quote="'"), verbose=False).stdout.split()
+        node.log.info("Missing monitor prerequisites: %s", missing or "none")
 
-        prereqs_script = dedent("""
-            # Function to wait for apt locks to be released
-            wait_for_apt_lock() {
-                echo "Waiting for apt locks to be released..."
-                local max_attempts=60
-                local attempt=0
-                while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock >/dev/null 2>&1; do
-                    if [ $attempt -ge $max_attempts ]; then
-                        echo "Timeout waiting for apt lock after $max_attempts attempts"
-                        exit 1
-                    fi
-                    echo "Apt is locked by another process, waiting... (attempt $((attempt+1))/$max_attempts)"
-                    sleep 10
-                    attempt=$((attempt+1))
-                done
-                echo "Apt locks are free, proceeding..."
-            }
+        if packages := [item for item in missing if item in MONITOR_PREREQ_PACKAGES]:
+            node.update_repo_cache()
+            node.install_package(" ".join(packages))
 
-            # Function to install Docker and Python basics on Debian/Ubuntu
-            install_debian_pkgs() {
-                echo "Detected Debian/Ubuntu system..."
+        if "python-libs" in missing:
+            node.remoter.sudo(shell_script_cmd(MONITOR_PYTHON_LIBS_INSTALL_SCRIPT, quote="'"))
 
-                # 1. Wait for apt lock and update existing list of packages
-                wait_for_apt_lock
-                apt-get update
-
-                # 2. Install Docker prerequisites and basic Python
-                apt-get install -y \\
-                    curl \\
-                    unzip \\
-                    python3 \\
-                    python3-pip
-            }
-
-            # Function to install Docker and Python basics on CentOS/RHEL/Fedora
-            install_centos_pkgs() {
-                echo "Detected CentOS/RHEL system..."
-
-                # 1. Install basic python
-                yum install -y python3 python3-pip curl unzip wget
-            }
-
-            # Function to manage Pip and install libraries
-            install_python_libs() {
-                echo "Configuring Python environment..."
-
-                # Base pip command
-                PIP_CMD="pip3 install"
-                PIP_ARGS=""
-
-                # Check if current pip supports/requires --break-system-packages
-                if pip3 install --help | grep -q "break-system-packages"; then
-                    echo "PEP 668 detected: Enabling --break-system-packages flag."
-                    PIP_ARGS="--break-system-packages"
-                fi
-
-                # Install libraries (skip pip upgrade to avoid conflicts with system pip)
-                echo "Installing pyyaml and psutil..."
-                $PIP_CMD $PIP_ARGS pyyaml psutil
-
-                if [ $? -eq 0 ]; then
-                    echo "Python libraries installed successfully."
-                else
-                    echo "Failed to install Python libraries."
-                    exit 1
-                fi
-            }
-            install_docker() {
-                local max_retries=3
-                local attempt=0
-                while [ $attempt -lt $max_retries ]; do
-                    echo "Installing Docker (attempt $((attempt+1))/$max_retries)..."
-                    curl -fsSL https://get.docker.com --retry 5 --retry-max-time 300 $(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors) -o get-docker.sh && \
-                        bash get-docker.sh && return 0
-                    attempt=$((attempt+1))
-                    echo "Docker installation failed, retrying in 10 seconds..."
-                    sleep 10
-                done
-                # Fallback for Rocky Linux: use CentOS repo (Rocky repo has no packages)
-                # See: https://github.com/docker/docker-install/pull/557
-                if . /etc/os-release && [ "$ID" = "rocky" ]; then
-                    echo "Falling back to CentOS Docker repo for Rocky Linux..."
-                    curl -fsSL https://download.docker.com/linux/centos/docker-ce.repo --retry 5 --retry-max-time 300 $(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors) -o /etc/yum.repos.d/docker-ce.repo
-                    dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && return 0
-                fi
-                echo "Docker installation failed after $max_retries attempts."
-                exit 1
-            }
-
-            start_docker() {
-                systemctl start docker
-            }
-
-            # Main execution logic
-            if [ -f /etc/debian_version ]; then
-                install_debian_pkgs
-                install_docker
-                install_python_libs
-                start_docker
-            elif [ -f /etc/redhat-release ]; then
-                install_centos_pkgs
-                install_docker
-                install_python_libs
-                start_docker
-            else
-                echo "Unsupported Operating System. This script supports Debian/Ubuntu or CentOS/RHEL."
-                exit 1
-            fi
-        """)
+        if docker_problem := {"docker", "docker-group"}.intersection(missing):
+            if not self.owns_host:
+                raise NodeSetupFailed(node=node, error_msg=DOCKER_UNUSABLE)
+            if "docker" in docker_problem:
+                node.remoter.sudo(shell_script_cmd(DOCKER_INSTALL_SCRIPT, quote="'"))
+            node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(node)
 
-        node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
-        node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
-
-        node.remoter.run(cmd="sudo systemctl restart docker", timeout=60)
-
         docker_hub_login(remoter=node.remoter)
+
+    def preflight_check(self, node):
+        """Fail before any image pull or container start if the host can't run the monitoring stack."""
+        docker_host_preflight(node, self.params, "monitor")
+        ensure_monitoring_ports_free(node)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent(
@@ -7906,7 +8001,7 @@ class BaseMonitorSet:
             rm -rf {self.monitor_install_path_base}
             mkdir -p {self.monitor_install_path_base}
             cd {self.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-monitoring/archive/{self.monitor_branch}.zip
+            {curl_with_retry(f"https://github.com/scylladb/scylla-monitoring/archive/{self.monitor_branch}.zip", follow_redirects=True, fail_early=True, output=f"{self.monitor_branch}.zip")}
             rm -rf ./tmp {self.monitor_install_path} 2>/dev/null
             unzip {self.monitor_branch}.zip -d ./tmp
             mv ./tmp/scylla-monitoring-{self.monitor_branch}/ {self.monitor_install_path}
@@ -8417,6 +8512,7 @@ class BaseMonitorSet:
     @log_run_info
     def install_scylla_monitoring(self, node):
         self.install_scylla_monitoring_prereqs(node)
+        self.preflight_check(node)
         if not self.is_formal_monitor_image:
             self.download_scylla_monitoring(node)
 
