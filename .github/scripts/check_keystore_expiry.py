@@ -73,6 +73,7 @@ KNOWN_SECRETS = (
     "hytrust-kmip-cacert.pem",
     "hytrust-kmip-scylla.pem",
     "backup_azure_blob.json",
+    "backup_oci.json",
     "azure_kms_config.json",
     "gcp_kms_config.json",
     "scylladb_upload.json",
