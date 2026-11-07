@@ -84,6 +84,8 @@ def test_positive_price_is_kept():
     [
         ("aws", "eu-west-1", "i4i.4xlarge", 1.373),
         ("gce", "us-east1", "n2-highmem-32", 2.096224),
+        ("gce", "us-central1", "z4d-highmem-16-highlssd", 2.528691507),
+        ("gce", "us-east4", "z4d-highmem-16-standardlssd", 2.145129863),
         ("azure", "eastus", "Standard_L8s_v3", 0.696),
     ],
 )
@@ -651,14 +653,15 @@ def test_xcloud_db_nodes_are_never_priced_at_spot(fake_ec2):
     assert "i4i.4xlarge" not in fake_ec2.calls[0]
 
 
-def test_gce_z3_db_nodes_are_never_priced_at_spot():
-    """SCT's GCE provisioning requests z3 on-demand: its bundled local SSD needs MIGRATE."""
+@pytest.mark.parametrize("db_instance_type", ["z3-highmem-8-highlssd", "z4d-highmem-16-highlssd"])
+def test_gce_bundled_ssd_db_nodes_are_never_priced_at_spot(db_instance_type):
+    """SCT's GCE provisioning requests z3 and z4d on-demand: their bundled local SSD needs MIGRATE."""
     params = _config(
         cluster_backend="gce",
         gce_datacenter="us-east1",
         test_duration=60,
         instance_provision="spot",
-        gce_instance_type_db="z3-highmem-8-highlssd",
+        gce_instance_type_db=db_instance_type,
         n_db_nodes=3,
         gce_instance_type_loader="n2-standard-16",
         n_loaders=1,
@@ -666,6 +669,23 @@ def test_gce_z3_db_nodes_are_never_priced_at_spot():
     roles = {r.role: r for r in estimate_run_cost(params).roles}
     assert roles["db"].rate.is_spot is False
     assert roles["loader"].rate.is_spot is True
+
+
+def test_gce_z4d_db_nodes_are_priced():
+    """SCT-1384: z4d db nodes have a catalog price, so the estimate is not reported as partial."""
+    params = _config(
+        cluster_backend="gce",
+        gce_datacenter="us-central1",
+        test_duration=60,
+        gce_instance_type_db="z4d-highmem-16-highlssd",
+        n_db_nodes=3,
+        gce_instance_type_loader="n2-standard-16",
+        n_loaders=1,
+    )
+    estimate = estimate_run_cost(params)
+    roles = {r.role: r for r in estimate.roles}
+    assert roles["db"].rate.price_per_hour == pytest.approx(2.528691507)
+    assert "db" not in estimate.unpriced_roles
 
 
 def test_role_table_follows_config_so_a_new_role_is_not_silently_dropped():

@@ -24,7 +24,6 @@ from google.cloud import compute_v1
 
 from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error
 from sdcm.provision.gce.constants import (
-    BUNDLED_LOCAL_SSD_FAMILIES,
     DISK_TYPE_HYPERDISK_BALANCED,
     DISK_TYPE_LOCAL_SSD,
     DISK_TYPE_PD_STANDARD,
@@ -32,7 +31,6 @@ from sdcm.provision.gce.constants import (
     GCE_MIN_NETWORK_INTERFACES,
     GCE_SUPPORTED_NETWORK_INTERFACES,
     HYPERDISK_ONLY_FAMILIES,
-    bundles_local_ssds,
 )
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
@@ -47,6 +45,7 @@ from sdcm.provision.provisioner import (
     ZoneResourcesExhaustedError,
 )
 from sdcm.utils.decorators import retrying
+from sdcm.utils.gce_machine_types import bundles_local_ssds, is_bundled_local_ssd_family
 from sdcm.utils.gce_utils import (
     gce_set_labels,
     get_gce_compute_instances_client,
@@ -136,7 +135,7 @@ def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
 def build_scheduling(instance_type: str, pricing_model: PricingModel) -> compute_v1.Scheduling:
     """Build the scheduling policy for `instance_type` at `pricing_model`.
 
-    A bundled-local-SSD family (z3) has no spot form at all: GCE rejects the insert outright with
+    A bundled-local-SSD family (z3, z4d) has no spot form at all: GCE rejects the insert outright with
     "OnHostMaintenance must be set to MIGRATE for machine type - z3-highmem-8-highlssd", and a spot
     VM cannot live-migrate, so TERMINATE is the only value it can carry. Those machine types are
     therefore requested on-demand, as the legacy `sdcm.utils.gce_utils` path already does.
@@ -146,8 +145,7 @@ def build_scheduling(instance_type: str, pricing_model: PricingModel) -> compute
     on-demand VM while the test believed it was running on spot.
     """
     scheduling = compute_v1.Scheduling()
-    family = instance_type.split("-", maxsplit=1)[0]
-    if family in BUNDLED_LOCAL_SSD_FAMILIES:
+    if is_bundled_local_ssd_family(instance_type):
         if pricing_model.is_spot():
             LOGGER.warning(
                 "Machine type %s requires on_host_maintenance=MIGRATE, which a spot VM cannot have; "
