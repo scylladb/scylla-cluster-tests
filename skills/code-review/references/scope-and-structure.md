@@ -162,8 +162,8 @@ Default values belong in `defaults/` YAML files or as named constants, not inlin
 **Bad** (magic numbers scattered in code):
 
 ```python
-def check_cluster_health(nodes=None, timeout=300, max_retries=5):
-    ...
+def check_cluster_health(nodes=None, timeout=300, max_retries=5): ...
+
 
 def wait_for_repair(node, timeout=300):  # same 300 but no connection to the other
     ...
@@ -185,13 +185,10 @@ HEALTH_CHECK_TIMEOUT_SECONDS = 300
 HEALTH_CHECK_MAX_RETRIES = 5
 
 
-def check_cluster_health(nodes=None, timeout=HEALTH_CHECK_TIMEOUT_SECONDS,
-                         max_retries=HEALTH_CHECK_MAX_RETRIES):
-    ...
+def check_cluster_health(nodes=None, timeout=HEALTH_CHECK_TIMEOUT_SECONDS, max_retries=HEALTH_CHECK_MAX_RETRIES): ...
 
 
-def wait_for_repair(node, timeout=HEALTH_CHECK_TIMEOUT_SECONDS):
-    ...
+def wait_for_repair(node, timeout=HEALTH_CHECK_TIMEOUT_SECONDS): ...
 ```
 
 **For SCT config parameters**: Every new `SctField` in `sct_config.py` MUST have a corresponding

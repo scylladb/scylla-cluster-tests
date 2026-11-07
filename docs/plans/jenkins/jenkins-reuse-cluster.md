@@ -305,8 +305,12 @@ The `runCleanupResource.groovy` (line 3) calls `hydra clean-resources --post-beh
            keep_alive_since = datetime.fromisoformat(keep_alive_since_str)
            elapsed = (utc_now - keep_alive_since).total_seconds() / 3600
            if elapsed > MAX_ALIVE_HOURS:
-               LOGGER.warning("Runner %s exceeded max alive time (%dh since %s). Terminating.",
-                              sct_runner_info.name, MAX_ALIVE_HOURS, keep_alive_since_str)
+               LOGGER.warning(
+                   "Runner %s exceeded max alive time (%dh since %s). Terminating.",
+                   sct_runner_info.name,
+                   MAX_ALIVE_HOURS,
+                   keep_alive_since_str,
+               )
                sct_runner_info.terminate()
                continue
        continue

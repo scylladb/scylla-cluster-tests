@@ -25,10 +25,11 @@ Verify logs to see last good and bad Scylla versions.
 ```python
 from sdcm.utils.bisect_test import bisect_test
 
+
 @bisect_test
 def test_write(self):
-    base_cmd_w = self.params.get('stress_cmd_w')
-    stress_multiplier = self.params.get('stress_multiplier')
+    base_cmd_w = self.params.get("stress_cmd_w")
+    stress_multiplier = self.params.get("stress_multiplier")
     if stress_multiplier_w := self.params.get("stress_multiplier_w"):
         stress_multiplier = stress_multiplier_w
 
@@ -36,14 +37,15 @@ def test_write(self):
     self.run_fstrim_on_all_db_nodes()
 
     stress_queue = self.run_stress_thread(
-        stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+        stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False
+    )
     results = self.get_stress_results(queue=stress_queue)
 
     # set bisect_ref_value only for the first test run
     self.bisect_ref_value = self.bisect_result_value * 0.95 if self.bisect_ref_value is None else self.bisect_ref_value
     # update bisect_result_value with the result value for further comparison
-    self.bisect_result_value = sum([int(result['op rate']) for result in results])
+    self.bisect_result_value = sum([int(result["op rate"]) for result in results])
     self.update_test_details(scylla_conf=True)
-    self.display_results(results, test_name='test_write')
+    self.display_results(results, test_name="test_write")
     self.check_regression()
 ```
