@@ -291,7 +291,7 @@ Critical environment variables:
 - `SCT_REUSE_CLUSTER` - Test ID to reuse existing cluster
 - `SCT_ENABLE_ARGUS` - Enable/disable Argus reporting
 - `SCT_IP_SSH_CONNECTIONS` - Use 'public' for local development
-- `SCT_KEYSTORE_BACKEND` - Credential storage backend: `secretsmanager` (default) or `s3` (legacy)
+- `SCT_KEYSTORE_BACKEND` - Credential storage backend: `secretsmanager` (default) or `s3` (legacy), or `local` (files under `SCT_KEYSTORE_LOCAL_DIR`, default `~/.sct/keystore`, for running without SCT AWS access)
 - `SCT_KEYSTORE_SM_PREFIX` - Secrets Manager secret name prefix (default: `sct/`)
 - `SCT_KEYSTORE_SM_REGION` - Region holding the Secrets Manager secrets (default: `us-east-1`)
 - `AWS_PROFILE` - AWS profile for authentication (if using OKTA)
