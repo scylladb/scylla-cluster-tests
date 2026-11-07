@@ -69,7 +69,7 @@ def test_tunnel_ports_relabelled_only_on_enforcing_node(mode, has_semanage, sema
 def test_port_mapping_allows_the_ports_of_the_tunnels_it_creates(node_type, ldap, expected):
     """Every tunnel but syslog-ng's gets its node port relabelled, and each tunnel container still starts."""
     node = BaseNode.__new__(BaseNode)
-    node.parent_cluster = SimpleNamespace(node_type=node_type)
+    node.parent_cluster = SimpleNamespace(node_type=node_type, ip_ssh_connections=None)
     node._allow_reverse_tunnel_ports_in_selinux = mock.Mock()
     test_config = SimpleNamespace(
         IP_SSH_CONNECTIONS="public",

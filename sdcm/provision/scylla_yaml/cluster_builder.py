@@ -26,6 +26,8 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     cluster_name: str
     test_config: Any = Field(exclude=True)
     msldap_server_info: dict = Field(exclude=True, default=None)
+    # How the runner reaches the DB nodes (the cluster's own setting), defaults to the run's `ip_ssh_connections`
+    ip_ssh_connections: Optional[str] = Field(exclude=True, default=None)
 
     @computed_field
     @property
@@ -179,7 +181,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _open_ldap_server_address_port(self) -> str:
-        if self.test_config.IP_SSH_CONNECTIONS == "public":
+        if (self.ip_ssh_connections or self.test_config.IP_SSH_CONNECTIONS) == "public":
             # When connection goes public we run ssh tunnel on db-nodes side to access openldap server
             # that is why we pass address it in scylla config as '127.0.0.1:{LDAP_SSH_TUNNEL_LOCAL_PORT}'
             return "127.0.0.1:" + str(LDAP_SSH_TUNNEL_LOCAL_PORT)

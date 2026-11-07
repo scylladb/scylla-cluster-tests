@@ -153,7 +153,7 @@ class CassandraNodeMixin:
 
     @cached_property
     def cql_address(self):
-        return self.external_address if self.test_config.IP_SSH_CONNECTIONS == "public" else self.ip_address
+        return self.external_address if self.ip_ssh_connections == "public" else self.ip_address
 
     def wait_native_transport(self):
         """Cassandra has no Scylla REST API; check CQL port instead."""

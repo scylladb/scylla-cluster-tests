@@ -30,6 +30,7 @@ from mypy_boto3_ec2 import EC2Client
 
 from sdcm.cluster_baremetal import PhysicalHost
 from sdcm.keystore import KeyStore
+from sdcm.localhost import LocalHost
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.emr_provisioner import list_emr_clusters
@@ -46,6 +47,7 @@ from sdcm.utils.argus import (
 )
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.baremetal_hosts import host_ssh_address
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
@@ -238,46 +240,68 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     """Leave the hosts of a bare-metal run clean for the next run.
 
     SCT neither creates nor destroys physical hosts, so cleaning them up means undoing what the run left on them that
-    breaks the next one: the SSH tunnel ports it bound, with `ip_ssh_connections: public`, and the Scylla install of a
-    DB host (its disk setup and the files it left), unless Scylla came preinstalled. Every host also gets back the
-    packages it had before the run. Runs in the cleanup phase, after the logs were collected, for the node types the
-    post behavior asks to clean (`NodeType`, all of them when not given).
+    breaks the next one: the SSH tunnel ports it bound on the roles with `ip_ssh_connections: public` (the role's own
+    setting in the hosts config, else the run's), and the Scylla install of a DB host (its disk setup and the files it
+    left), unless Scylla came preinstalled. Every host also gets back the packages it had before the run. Runs in the
+    cleanup phase, after the logs were collected, for the node types the post behavior asks to clean (`NodeType`, all
+    of them when not given).
     """
     node_types = tags_dict.get("NodeType")
     node_types = list(BAREMETAL_HOSTS_SECTIONS) if node_types is None else node_types
     if not (node_types := [node_type for node_type in node_types if node_type in BAREMETAL_HOSTS_SECTIONS]):
         LOGGER.info("No bare-metal hosts to clean up")
         return
-    tunnel_ports = config.get("ip_ssh_connections") == "public"
-    if tunnel_ports:
+    hosts_config = KeyStore().get_baremetal_config(config.get("s3_baremetal_config"))
+    sections = {node_type: hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]] for node_type in node_types}
+    # Each role's own `ip_ssh_connections`, else the run's: only `public` roles have tunnel ports to free
+    public_roles = {
+        node_type
+        for node_type, section in sections.items()
+        if (section.get("ip_ssh_connections") or config.get("ip_ssh_connections")) == "public"
+    }
+    if public_roles:
         # The run's tunnel containers go first: one left running would reconnect and bind its port on the host again
         clean_resources_docker(tags_dict, dry_run=dry_run)
 
-    hosts_config = KeyStore().get_baremetal_config(config.get("s3_baremetal_config"))
-    for node_type in node_types:
-        section = hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]]
-        scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
-        for host_ips in section["node_list"]:
-            address = host_ips["public_ip"] if tunnel_ports else host_ips["private_ip"]
-            if dry_run:
-                LOGGER.info(
-                    "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: yes)",
-                    node_type,
-                    address,
-                    tunnel_ports,
-                    scylla_disk_setup,
+    # Hosts named in the lab access service are reached through it, the way the run reached them
+    lab_access = not dry_run and any(
+        host.get("access") for section in sections.values() for host in section["node_list"]
+    )
+    localhost = (
+        LocalHost(user_prefix=config.get("user_prefix"), test_id=tags_dict.get("TestId")) if lab_access else None
+    )
+    try:
+        for node_type, section in sections.items():
+            role_tunnel_ports = node_type in public_roles
+            scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
+            for host in section["node_list"]:
+                # A host reached through the lab access service never gets tunnels, see PhysicalMachineNode
+                tunnel_ports = role_tunnel_ports and not host.get("access")
+                name = host.get("access") or (
+                    host.get("public_ip", host["private_ip"]) if tunnel_ports else host["private_ip"]
                 )
-                continue
-            LOGGER.info("Cleaning up %s host %s", node_type, address)
-            remoter = RemoteCmdRunnerBase.create_remoter(
-                hostname=address, user=section["username"], key_file=config.get("user_credentials_path")
-            )
-            try:
-                PhysicalHost(name=f"{node_type} {address}", remoter=remoter).clean_up_host(
-                    tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup
-                )
-            finally:
-                remoter.stop()
+                if dry_run:
+                    LOGGER.info(
+                        "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: yes)",
+                        node_type,
+                        name,
+                        tunnel_ports,
+                        scylla_disk_setup,
+                    )
+                    continue
+                LOGGER.info("Cleaning up %s host %s", node_type, name)
+                ssh_login_info = {"user": section["username"], "key_file": config.get("user_credentials_path")}
+                ssh_login_info |= host_ssh_address(host, "public" if tunnel_ports else "private", localhost)
+                remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
+                try:
+                    PhysicalHost(name=f"{node_type} {name}", remoter=remoter).clean_up_host(
+                        tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup
+                    )
+                finally:
+                    remoter.stop()
+    finally:
+        if localhost:
+            localhost.destroy()
 
 
 def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:

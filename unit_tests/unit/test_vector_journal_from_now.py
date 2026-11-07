@@ -61,7 +61,7 @@ def test_only_a_host_that_outlives_the_run_reads_vector_journal_from_now(node_cl
     node = node_class.__new__(node_class)
     node.name = "node-1"
     node.journal_since = journal_since
-    node.parent_cluster = SimpleNamespace(params={"logs_transport": "vector"})
+    node.parent_cluster = SimpleNamespace(params={"logs_transport": "vector"}, ip_ssh_connections=None)
     node.test_config = mock.Mock(get_logging_service_host_port=mock.Mock(return_value=("127.0.0.1", 5003)))
     node.remoter = mock.Mock()
 
