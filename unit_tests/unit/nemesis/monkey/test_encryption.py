@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from sdcm.exceptions import UnsupportedNemesis
+from sdcm.exceptions import SstablesNotFound, UnsupportedNemesis
 from sdcm.nemesis.monkey import encryption as enc_module
 from sdcm.nemesis.monkey.encryption import (
     EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey,
@@ -23,6 +23,16 @@ def _make_scylla_yaml(user_info_encryption_enabled=False):
         {"enabled": user_info_encryption_enabled} if user_info_encryption_enabled else False
     )
     return scylla_yaml
+
+
+def sstable_utils_per_node(mock_sstable_cls, sstables_by_node):
+    """Make ``SstableUtils(db_node=...)`` return a per-node mock whose ``get_sstables`` returns the given list."""
+    utils = {}
+    for node, sstables in sstables_by_node.items():
+        utils[node] = MagicMock()
+        utils[node].get_sstables.return_value = sstables
+    mock_sstable_cls.side_effect = lambda db_node, ks_cf: utils[db_node]
+    return utils
 
 
 @pytest.fixture()
@@ -49,7 +59,7 @@ def runner(base_runner):
 
 
 @pytest.fixture(autouse=True)
-def _patch_slow_parts():
+def mocked_deps():
     """Skip real sleeps and heavy AWS/sstable interactions used by every test."""
     with (
         patch(f"{_MODULE}.time") as mock_time,
@@ -93,8 +103,9 @@ def test_with_rotation_full_flow(runner):
     aws_kms.rotate_kms_key.assert_called_once_with("alias/testid-test-id-123")
 
     sstable_util = enc_module.SstableUtils.return_value
+    sstables = sstable_util.get_sstables.return_value
     sstable_util.check_that_sstables_are_encrypted.assert_has_calls(
-        [call(expected_bool_value=True), call(expected_bool_value=False)]
+        [call(sstables=sstables, expected_bool_value=True), call(sstables=sstables, expected_bool_value=False)]
     )
 
     # write+read happen twice (rotation loop) plus reread+rewrite+reread during the disable phase
@@ -166,5 +177,49 @@ def test_drops_table_even_when_stress_fails(runner):
     monkey = EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(runner)
     with pytest.raises(RuntimeError, match="boom"):
         monkey.disrupt()
+
+    assert runner.executed[-1] == "DROP TABLE tmp_encrypted_table;"
+
+
+def test_checks_encryption_on_node_holding_sstables(runner, mocked_deps):
+    """The target node may hold no replica of the table (tablets, RF < nodes);
+    the check must run on a node that actually has sstables."""
+    node1, node2 = runner.cluster.data_nodes
+    runner.target_node = node1
+    utils = sstable_utils_per_node(mocked_deps[2], {node1: [], node2: ["/var/lib/scylla/data/x-Data.db"]})
+
+    EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(runner).disrupt()
+
+    utils[node1].check_that_sstables_are_encrypted.assert_not_called()
+    utils[node2].check_that_sstables_are_encrypted.assert_has_calls(
+        [
+            call(sstables=["/var/lib/scylla/data/x-Data.db"], expected_bool_value=True),
+            call(sstables=["/var/lib/scylla/data/x-Data.db"], expected_bool_value=False),
+        ]
+    )
+
+
+def test_prefers_target_node_for_encryption_check(runner, mocked_deps):
+    """When the target node holds sstables, the check runs there and other nodes aren't probed."""
+    node1, node2 = runner.cluster.data_nodes
+    runner.target_node = node2
+    utils = sstable_utils_per_node(mocked_deps[2], {node1: ["a-Data.db"], node2: ["b-Data.db"]})
+
+    EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(runner).disrupt()
+
+    utils[node1].get_sstables.assert_not_called()
+    assert utils[node2].check_that_sstables_are_encrypted.call_count == 2
+
+
+def test_raises_when_no_node_holds_sstables(runner, mocked_deps):
+    """If no data node has sstables of the table, SstablesNotFound is raised (after retries) and the table is dropped."""
+    node1, node2 = runner.cluster.data_nodes
+    sstable_utils_per_node(mocked_deps[2], {node1: [], node2: []})
+
+    with (
+        patch("sdcm.utils.decorators.time.sleep"),
+        pytest.raises(SstablesNotFound, match="weren't found on any of the nodes"),
+    ):
+        EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(runner).disrupt()
 
     assert runner.executed[-1] == "DROP TABLE tmp_encrypted_table;"
