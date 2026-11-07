@@ -567,6 +567,16 @@ This ensures the user has final control over the section wording, warning banner
 
 **Exit criteria:** Report is ready for email distribution.
 
+## Phase 7: Refresh the Trends Dashboard
+
+**Entry criteria:** Phase 6 passed. Claude Code only; on other agents skip this phase and say so.
+
+Follow [update-trends-dashboard.md](update-trends-dashboard.md). It reuses the `argus` login and the
+`$OUT` directory from this run and refreshes one dashboard holding both master and release views,
+whichever build type this email covered.
+
+**Exit criteria:** the dashboard shows today's fetch date, and its link is in the summary to the user.
+
 ## Complete Example Command Sequence
 
 ```bash

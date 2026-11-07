@@ -6,7 +6,9 @@ description: >-
   status email, aggregate latency and throughput results across enterprise perf
   tests, or generate an HTML report for stakeholders. Covers predefined-throughput-steps,
   latency-650gb-with-nemesis, rolling-upgrade, and microbenchmark tests using
-  argus run list and argus run results commands.
+  argus run list and argus run results commands. Also refreshes the Perf Weekly
+  Trends dashboard (a Claude Artifact graphing these tests per release branch over
+  months); use when asked to update or preview the perf trends dashboard.
 ---
 
 # Performance Weekly Status Report
@@ -347,6 +349,15 @@ reading pane. Inner tables stay at `width="100%"` so they follow the outer table
 
 Write it anywhere outside the working tree -- the agent's own scratchpad/temp directory is the natural choice, or the user's home directory. Never commit it to the repo. (`/tmp/opencode/` also works but is specific to one agent harness; don't treat it as required.)
 
+### Refresh the Trends Dashboard in the Same Run
+
+**After the email report, refresh the Perf Weekly Trends dashboard (Phase 7).**
+
+The email shows one week; the dashboard graphs the same registry tests over six months, with master
+and release builds as separate views and one line per release branch. Refreshing it from the same
+session keeps the two in step without a second weekly task. It needs Claude Code's Artifact tools;
+other agents skip it. See [workflows/update-trends-dashboard.md](workflows/update-trends-dashboard.md).
+
 ## When to Use
 
 - Generating a weekly performance status email for stakeholders
@@ -520,6 +531,9 @@ Argus link in every row carries the rest.
 | File | Content |
 |------|---------|
 | [workflows/generate-report.md](workflows/generate-report.md) | Step-by-step process for generating the report |
+| [workflows/update-trends-dashboard.md](workflows/update-trends-dashboard.md) | Refresh the Perf Weekly Trends dashboard (Claude Artifact) after the email report |
+| [references/trends-dashboard.html](references/trends-dashboard.html) | The dashboard page, pushed to the artifact by the workflow above |
+| [scripts/fetch_perf_trends.py](scripts/fetch_perf_trends.py) | Exports the registry tests' results from Argus to the dashboard CSV |
 | [references/argus-data-format.md](references/argus-data-format.md) | Detailed Argus CLI output format documentation |
 | [references/html-template.md](references/html-template.md) | Gmail-compatible HTML template patterns |
 | [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- four release versions, one Overview table each |
