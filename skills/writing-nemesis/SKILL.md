@@ -245,6 +245,7 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 | `enospc` | Nemesis causes disk-full (ENOSPC) |
 | `modify_table` | Nemesis modifies table properties and does not restore them. Tests that pin a property exclude these by class name in `nemesis_selector` (see docs/nemesis.md), so keep one property per class |
 | `supports_high_disk_utilization` | Nemesis is safe at 90% disk usage (default: `True`) |
+| `supports_logstor` | Nemesis works on logstor tables (default: `True`). Set `False` if it touches sstable files, compaction or sstable table properties, MV, CDC, indexes, or fills the disk |
 
 ## Decision Guide
 

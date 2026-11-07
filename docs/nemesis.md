@@ -468,13 +468,14 @@ See `CategoricalMonkey` in `monkey/runners.py` for a complete example of weighte
 
 ## Nemesis Flags Reference
 
-All flags are defined in the `NemesisFlags` class (`sdcm/nemesis/__init__.py`). Each flag defaults to `False` (except `supports_high_disk_utilization` which defaults to `True`).
+All flags are defined in the `NemesisFlags` class (`sdcm/nemesis/__init__.py`). Each flag defaults to `False` (except `supports_high_disk_utilization` and `supports_logstor` which default to `True`).
 
 | Flag | Description |
 |------|-------------|
 | `topology_changes` | Nemesis changes cluster topology (adding/removing nodes or data centers) |
 | `disruptive` | Nemesis disrupts a node or cluster (reboot, kill, hard reboot, terminate) |
 | `supports_high_disk_utilization` | Nemesis can run safely in 90% disk utilization scenarios (default: `True`) |
+| `supports_logstor` | Nemesis is meaningful against logstor tables: no sstable file operations, compaction or sstable table properties, MV, CDC, secondary index or disk-full (default: `True`). Logstor jobs use `nemesis_selector: "supports_logstor"` |
 | `networking` | Nemesis interacts with network interfaces (block, delay, partition) |
 | `kubernetes` | Nemesis is compatible with Kubernetes cluster backends |
 | `xcloud` | Nemesis can run with Scylla Cloud (xcloud) backend |

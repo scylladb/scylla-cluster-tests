@@ -322,6 +322,7 @@ class MgmtBackup(ManagerMonkeyBase):
     disruptive = False
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def disrupt(self):
         """Back up all keyspaces with Scylla Manager."""
@@ -335,6 +336,7 @@ class MgmtBackupSpecificKeyspaces(ManagerMonkeyBase):
     disruptive = False
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def disrupt(self):
         """Back up only the test keyspaces with Scylla Manager."""
@@ -350,6 +352,7 @@ class MgmtRestore(ManagerMonkeyBase):
     xcloud = True
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def precheck(self, node) -> str | None:
         """Skip multi-DC setups affected by known Scylla Manager issues."""
@@ -459,6 +462,7 @@ class MgmtCorruptThenRepair(ManagerMonkeyBase):
 
     disruptive = True
     kubernetes = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         """Destroy SSTables on the target node, then repair with Scylla Manager."""
