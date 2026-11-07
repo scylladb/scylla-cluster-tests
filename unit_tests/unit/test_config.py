@@ -1189,6 +1189,89 @@ def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(m
     assert conf["ami_id_db_scylla"] == "ami-persisted-west"
 
 
+def test_resolved_placement_amis_skip_scylla_version_lookup(monkeypatch, placement_logdir):  # noqa: ARG001
+    """A full dev tag was already resolved to AMIs by the provisioning step; the handoff must not
+    push the version into the repo-file lookup, which knows only released version prefixes."""
+    test_id = "66666666-6666-6666-6666-666666666666"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.4.0~dev-0.20260925.b85f3c44eae5")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="us-west-2",
+        availability_zone="a",
+        amis={"ami_id_db_scylla": "ami-handoff-west"},
+    )
+
+    with (
+        patch("sdcm.sct_config.config.find_scylla_repo", side_effect=ValueError("repo wasn't found")) as mock_repo,
+        patch("sdcm.sct_config.config.get_scylla_ami_versions", side_effect=AssertionError("must not hit AWS")),
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    mock_repo.assert_not_called()
+    assert conf["ami_id_db_scylla"] == "ami-handoff-west"
+    assert not conf["scylla_repo"]
+
+
+def test_scylla_version_with_explicit_ami_still_uses_repo_lookup(monkeypatch, placement_logdir):  # noqa: ARG001
+    """Without a handoff, an explicit AMI is a base OS image and scylla_version picks the repo."""
+    test_id = "77777777-7777-7777-7777-777777777777"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1")
+
+    with patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://repo/scylla-2026.1.repo") as mock_repo:
+        conf = sct_config.SCTConfiguration()
+
+    mock_repo.assert_called_once()
+    assert conf["ami_id_db_scylla"] == "ami-dummy"
+    assert conf["scylla_repo"] == "https://repo/scylla-2026.1.repo"
+
+
+def test_resolved_placement_base_os_ami_still_uses_repo_lookup(monkeypatch, placement_logdir):  # noqa: ARG001
+    """A user-set base-OS AMI also travels through the handoff, but scylla_repo does not, so it has
+    to be resolved from scylla_version again when Scylla is not preinstalled."""
+    test_id = "99999999-9999-9999-9999-999999999999"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="us-west-2",
+        availability_zone="a",
+        amis={"ami_id_db_scylla": "ami-base-os-west"},
+    )
+
+    with patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://repo/scylla-2026.1.repo") as mock_repo:
+        conf = sct_config.SCTConfiguration()
+
+    mock_repo.assert_called_once()
+    assert conf["ami_id_db_scylla"] == "ami-base-os-west"
+    assert conf["scylla_repo"] == "https://repo/scylla-2026.1.repo"
+
+
+def test_resolved_placement_amis_skip_oracle_version_lookup(monkeypatch, placement_logdir):  # noqa: ARG001
+    """Same for oracle_scylla_version: a handoff-restored ami_id_db_oracle is not a conflict."""
+    test_id = "88888888-8888-8888-8888-888888888888"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
+    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", "2026.1")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="us-west-2",
+        availability_zone="a",
+        amis={"ami_id_db_scylla": "ami-handoff-west", "ami_id_db_oracle": "ami-oracle-west"},
+    )
+
+    with patch.dict(
+        "sdcm.sct_config.config._ORACLE_IMAGE_RESOLVERS",
+        {"aws": lambda *_: (_ for _ in ()).throw(AssertionError("must not resolve"))},
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf["ami_id_db_oracle"] == "ami-oracle-west"
+
+
 def _set_gce_overlay_env(monkeypatch, test_id, original_datacenter):
     """Env for a GCE run whose placement handoff should be picked up at config load."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
