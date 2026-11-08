@@ -3,4 +3,3 @@ gce_root_disk_type_db: 'hyperdisk-balanced'
 gce_n_local_ssd_disk_db: 2
 gce_instance_type_loader: 'c4-highcpu-32'
 gce_root_disk_type_loader: 'hyperdisk-balanced'
-force_run_iotune: true
