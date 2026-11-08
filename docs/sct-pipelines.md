@@ -155,7 +155,8 @@ that, both usable independently:
   uses it when its hosts sit in a lab network a cloud sct-runner cannot reach: pin a lab agent
   next to them with `jenkins_label`, e.g. `minicloud-kvm-builders-artifacts`. Without a
   `jenkins_label` the test runs on the regular builder, which suits hosts that are cloud
-  instances.
+  instances. A local agent keeps its workspace between builds, so each build starts by
+  removing log trees older than 3 days (`workspaceReclaim`).
 
   ```groovy
   longevityPipeline(

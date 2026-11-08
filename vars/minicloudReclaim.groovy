@@ -8,8 +8,9 @@
 //
 // Called TWICE per build, deliberately:
 //
-//   minicloudReclaim()             at build start - sweeps what earlier builds left, and clears a
-//                                  stale ./sct_runner_ip before any stage can act on it
+//   minicloudReclaim()             at build start - sweeps what earlier builds left (the workspace
+//                                  part through workspaceReclaim(), which also clears a stale
+//                                  ./sct_runner_ip before any stage can act on it)
 //   minicloudReclaim(atEnd: true)  at build end - this build's own guest state and container, so
 //                                  the agent is left clean for whoever runs next. A shared agent
 //                                  also serves scylla builds and dtest, and those jobs know
@@ -44,6 +45,11 @@ def call(Map args = [:]) {
     // master images fill the disk well inside the TTL.
     def maxImageCacheGiB = args.get('maxImageCacheGiB', 10)
     def atEnd = args.get('atEnd', false)
+
+    if (!atEnd) {
+        // The log trees, ./latest, coredump archives and a stale ./sct_runner_ip
+        workspaceReclaim(keepDays: keepDays)
+    }
 
     sh """#!/bin/bash
 # Reclaiming is best-effort: a build must never fail because an old file could not be removed.
@@ -126,14 +132,6 @@ else
     docker ps -a --filter 'name=minicloud' --format '{{.Names}} {{.Status}}' 2>/dev/null
     docker rm -f minicloud 2>/dev/null
 
-    # Old per-test log trees in the persistent workspace, and the symlink into the newest one.
-    find . -maxdepth 1 -type d -name '????????-????-????-????-????????????' -mtime +${keepDays} -print -exec rm -rf {} + 2>/dev/null
-    find . -maxdepth 1 -name 'latest' -type l -delete 2>/dev/null
-
-    # Delete stale coredump archives left by aborted hydra builds.
-    # They are owned by the build user, so no sudo is needed.
-    find . -maxdepth 1 -type f -name 'sct-coredumps-*.tar.zst' -print -delete 2>/dev/null
-
     # Guest state an aborted build never got to clean.
     reclaim instances -mtime +${keepDays}
 
@@ -167,11 +165,6 @@ else
             remove "\${AMI_CACHE}" "\${evict[@]}"
         fi
     fi
-
-    # A stale sct_runner_ip is actively dangerous here: on a persistent workspace it would send
-    # every stage down the --execute-on-runner branch and SSH to an IP that belongs to a
-    # long-dead runner.
-    rm -fv ./sct_runner_ip
 fi
 
 if [[ "\${RECLAIM_FAILED}" == "1" ]] ; then
