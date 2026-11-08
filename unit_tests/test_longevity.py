@@ -17,7 +17,12 @@ LongevityTest.__test__ = False
 
 @pytest.fixture(scope="function", autouse=True)
 def fixture_mock_calls():
-    with unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"), unittest.mock.patch("sdcm.tester.time.sleep"):
+    # the nemesis thread would otherwise fetch es_token.json from AWS and connect to the real Elasticsearch
+    with (
+        unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"),
+        unittest.mock.patch("sdcm.tester.time.sleep"),
+        unittest.mock.patch("sdcm.nemesis.NemesisElasticSearchPublisher"),
+    ):
         yield
 
 
