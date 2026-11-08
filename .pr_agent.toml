@@ -8,6 +8,9 @@
 #   /agentic_describe
 #   /improve
 #
+# The review rules live in REVIEW.md and docs/standards/. Do not restate them
+# here. Design: docs/plans/ai-tooling/review-tools/spec.md
+#
 # Repository-root config takes precedence over the organization-level
 # `pr-agent-settings` repo and over the Qodo portal settings.
 [github_app]
@@ -19,3 +22,27 @@ push_commands = []
 
 # Do not re-trigger anything on push.
 handle_push_trigger = false
+
+[review_agent]
+# Read the root REVIEW.md as the review guide (research preview).
+# https://docs.qodo.ai/governance/use-review-md.md
+enable_review_md = true
+# Inline comments for High and Medium findings; Low findings go to the summary.
+# Inline findings are review threads, which the reviewer trial measures.
+# https://docs.qodo.ai/code-review/severity-thresholds.md
+inline_comments_severity_threshold = 2
+
+[review_agent_ux]
+# The summary shows at most five findings per severity group before "View all".
+# Qodo has no setting that caps the total number of findings.
+# https://docs.qodo.ai/code-review/findings-visibility.md
+finding_overflow_count = 5
+
+# Legacy /review only (the agentic review does not document these keys):
+# findings only, no effort estimate, ticket analysis, or labels.
+[pr_reviewer]
+num_max_findings = 5
+require_estimate_effort_to_review = false
+require_ticket_analysis_review = false
+enable_review_labels_effort = false
+enable_review_labels_security = false
