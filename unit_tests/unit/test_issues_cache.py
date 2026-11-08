@@ -277,6 +277,42 @@ def test_reconcile_failed_comment_is_retried_next_run():
     assert state["scylladb/siren#1"]["comment_id"] == 77
 
 
+def test_refresh_retries_a_dropped_ref_whose_fetch_failed(tmp_path, monkeypatch):
+    """A dropped ref that can't be fetched keeps its label: the next run must still remove it."""
+    github_down = True
+
+    def fake_gh(method, path, body=None, paginate=False):
+        if method == "GET" and path == "/repos/scylladb/scylladb":
+            return 200, {"permissions": {"triage": True}}
+        if method == "GET" and path.endswith("/issues/2") and github_down:
+            return 502, None
+        if method == "GET":
+            return 200, {"state": "open", "labels": [{"name": "used-by-sct"}], "title": "t"}
+        writes.append((method, path))
+        return 200, {}
+
+    monkeypatch.setattr("utils.issues_cache.__main__.gh_api", fake_gh)
+    (tmp_path / "refs").mkdir()
+    manifest = {"version": 1, "repo": "scylladb/scylla-cluster-tests", "label": "used-by-sct"}
+    manifest |= {"label_description": "SCT", "refs": {"scylladb/scylladb#1": [{"branch": "master", "file": "a.py"}]}}
+    (tmp_path / "refs" / "sct.json").write_text(json.dumps(manifest))
+    state = tmp_path / "state.json"
+    state.write_text(
+        json.dumps({"refs": {"scylladb/scylladb#1": ["used-by-sct"], "scylladb/scylladb#2": ["used-by-sct"]}})
+    )
+    argv = ["refresh-github", "--refs-dir", str(tmp_path / "refs"), "--out-dir", str(tmp_path / "out")]
+    argv += ["--state", str(state), "--labels", "on"]
+
+    writes = []
+    main(argv)
+    assert writes == []
+
+    github_down = False
+    main(argv)
+    assert writes == [("DELETE", "/repos/scylladb/scylladb/issues/2/labels/used-by-sct")]
+    assert "scylladb/scylladb#2" not in json.loads(state.read_text())["refs"]
+
+
 def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
     new, old = tmp_path / "new", tmp_path / "old"
     write_csvs(

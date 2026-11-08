@@ -57,7 +57,7 @@ def cmd_refresh_github(args) -> None:
     written = write_csvs(Path(args.out_dir), states)
     LOGGER.info("%d refs cached in %d files, %d failed", len(states), len(written) // 2, len(failed))
 
-    plan = []
+    plan, dropped_failed = [], []
     if args.labels != "off":
         reconciler = Reconciler(
             gh_api,
@@ -67,7 +67,7 @@ def cmd_refresh_github(args) -> None:
             managed={label for labels in previous.values() for label in labels},
         )
         # refs that dropped out since last run still need their marker removed
-        dropped, _ = fetch_states(gh_api, sorted(set(previous) - set(union)))
+        dropped, dropped_failed = fetch_states(gh_api, sorted(set(previous) - set(union)))
         for ref in sorted(set(union) | set(dropped)):
             current = (states.get(ref) or dropped.get(ref) or {}).get("labels", [])
             reconciler.reconcile(ref, union.get(ref, {}), current)
@@ -86,6 +86,8 @@ def cmd_refresh_github(args) -> None:
     )
     if state_file:
         state["refs"] = {ref: sorted(labels) for ref, labels in union.items()}
+        # a dropped ref that failed to fetch still has its marker: keep it so the next run retries
+        state["refs"] |= {ref: previous[ref] for ref in dropped_failed}
         state_file.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
 
 
