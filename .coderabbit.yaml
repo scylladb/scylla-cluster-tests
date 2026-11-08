@@ -8,11 +8,11 @@ reviews:
     auto_incremental_review: false
     ignore_title_keywords:
       - "[Backport"
-    labels_to_ignore:
-      - "skip-review"
-      - "backport"
-    path_filters:
-      - "!argus/**"
+    labels:
+      - "!skip-review"
+      - "!backport"
+  path_filters:
+    - "!argus/**"
   request_changes_workflow: false
   collapse_walkthrough: true
   poem: false
