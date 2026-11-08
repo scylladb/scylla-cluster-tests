@@ -100,7 +100,8 @@ class NodeExporterSetup:
 
             systemctl daemon-reload
             systemctl enable node_exporter.service
-            systemctl start node_exporter.service
+            # restart, not start: a unit already running (one the probe missed) keeps its old port on start
+            systemctl restart node_exporter.service
         """)
         # Probes under the lock: another node's setup on this host may have started an exporter meanwhile
         result = remoter.sudo(
