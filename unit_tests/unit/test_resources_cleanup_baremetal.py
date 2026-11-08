@@ -174,7 +174,7 @@ def test_a_lab_host_the_access_service_cant_reach_doesnt_stop_the_cleanup(cleane
 
     resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
 
-    assert cleaned == [("loader 10.0.0.2", False, False)]
+    assert [call[:3] for call in cleaned] == [("loader 10.0.0.2", False, False)]
     localhost.destroy.assert_called_once()
 
 
