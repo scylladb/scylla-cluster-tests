@@ -573,8 +573,10 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         if not self._access_name:
             return super()._ssh_address()
         localhost = TestConfig().tester_obj().localhost
+        # Access for the whole run: Jenkins adds about 3h to test_duration for setup, teardown, logs and cleanup
+        duration = f"{self.parent_cluster.params.get('test_duration') + 240}m"
         # The access service accepts only `none` auth, which the SSH client tries only without a key
-        return {"key_file": None, **localhost.lab_access_ssh_address(self._access_name)}
+        return {"key_file": None, **localhost.lab_access_ssh_address(self._access_name, duration=duration)}
 
     @property
     def ip_ssh_connections(self) -> str:
