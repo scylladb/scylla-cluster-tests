@@ -19,6 +19,7 @@ import pytest
 from google.cloud.compute_v1.types import Instance, Items, Metadata, NetworkInterface
 
 from sdcm.cluster_gce import GCECluster, gce_instance_node_index
+from sdcm.cluster_k8s.gke import MonitorSetGKE
 
 
 def _instance(name: str, zone: str) -> MagicMock:
@@ -201,3 +202,17 @@ def test_get_instances_skips_a_stopped_vm():
         found = GCECluster._get_instances(cluster, dc_idx=0)
 
     assert [i.name for i in found] == ["db-running"]
+
+
+def test_gke_monitor_looks_up_only_running_instances():
+    """The GKE monitor adopts instances the same way, so it must not see stopped VMs either."""
+    monitor = MagicMock(spec=MonitorSetGKE)
+    monitor.monitor_id = "m1"
+    monitor.node_type = "monitor"
+    monitor._get_instances_by_prefix.return_value = []
+    monitor._node_public_ips = []
+
+    with patch("sdcm.cluster_k8s.gke.list_instances_gce", return_value=[]) as list_instances:
+        MonitorSetGKE._get_instances(monitor, dc_idx=0)
+
+    assert list_instances.call_args.kwargs["running"] is True
