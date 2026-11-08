@@ -78,17 +78,32 @@ def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
 
     package_manager_calls = _package_manager_calls(fake_node)
     dist_upgrade_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "dist-upgrade" in cmd]
-    assert len(dist_upgrade_calls) == 1, f"expected exactly one dist-upgrade call, got: {package_manager_calls!r}"
+    assert len(dist_upgrade_calls) == 2, (
+        f"expected download + install dist-upgrade calls, got: {package_manager_calls!r}"
+    )
 
-    cmd, kwargs = dist_upgrade_calls[0]
-    assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
-    assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
-    assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
+    for cmd, kwargs in dist_upgrade_calls:
+        assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
+        assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
+        assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
+
+    # SCT-1426: the download is killed remotely before the SCT timeout, so a stalled
+    # download never leaves an orphaned apt-get holding the lock for the retries...
+    download_cmd, _ = dist_upgrade_calls[0]
+    assert download_cmd.startswith("timeout --kill-after=30s 540 "), download_cmd
+    assert download_cmd.endswith("--download-only"), download_cmd
+    # ...and the install runs from the local cache only
+    install_cmd, _ = dist_upgrade_calls[1]
+    assert install_cmd.endswith("--no-download"), install_cmd
+    assert "timeout --kill-after" not in install_cmd, install_cmd
 
     # the 'apt-get update' preceding it should also go through the shared apt_cmd() helper
     update_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if cmd.split()[-1] == "update"]
     assert update_calls, f"expected an 'apt-get ... update' call, got: {package_manager_calls!r}"
     assert "DPkg::Lock::Timeout" in update_calls[0][0]
+    # SCT-1426: the update downloads from the mirror too, and its lists lock is not covered
+    # by DPkg::Lock::Timeout, so it must also be killed remotely before the SCT timeout
+    assert update_calls[0][0].startswith("timeout --kill-after=30s 540 "), update_calls[0][0]
 
 
 def test_rollback_node_apt_get_install_waits_for_dpkg_lock():

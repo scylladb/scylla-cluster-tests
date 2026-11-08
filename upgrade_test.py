@@ -373,11 +373,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                         f"dist-upgrade {scylla_pkg_ver} -y",
                         options={"DPkg::Lock::Timeout": "300"},
                     )
-                    node.remoter.sudo(apt_cmd("update"), retry=3, timeout=600)
+                    # The network steps (update, download) run under a remote `timeout` that fires
+                    # before the SCT one: a stalled mirror must not leave an orphaned apt-get holding
+                    # the locks for the retries. Killing them is safe, the retry resumes. The install
+                    # then runs from the local cache and never stalls on a mirror. See SCT-1426.
+                    apt_timeout = 600
+                    remote_timeout = f"timeout --kill-after=30s {apt_timeout - 60}"
+                    node.remoter.sudo(f"{remote_timeout} {apt_cmd('update')}", retry=3, timeout=apt_timeout)
                     node.remoter.sudo(
-                        f"DEBIAN_FRONTEND=noninteractive {dist_upgrade_cmd}",
+                        f"{remote_timeout} {dist_upgrade_cmd} --download-only",
                         retry=3,
-                        timeout=600,
+                        timeout=apt_timeout,
+                    )
+                    node.remoter.sudo(
+                        f"DEBIAN_FRONTEND=noninteractive {dist_upgrade_cmd} --no-download",
+                        retry=3,
+                        timeout=apt_timeout,
                     )
 
         node.remoter.sudo(
