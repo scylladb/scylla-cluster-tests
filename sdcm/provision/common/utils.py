@@ -359,7 +359,7 @@ def apply_cve_2026_98432_mitigation() -> str:
     pass, so SSH and every other connection SCT makes keep working.
 
     The rule lives in its own table, loaded by its own systemd unit, so it survives a reboot and
-    `disable_firewall()`, which disables `nftables.service` and flushes the iptables tables. The
+    anything that disables `nftables.service` or flushes the iptables tables. The
     file deletes the table before it adds it, so running the script again doesn't duplicate the rule.
 
     The unit sets `DefaultDependencies=no`, like Debian's `nftables.service`. Without it the unit is
