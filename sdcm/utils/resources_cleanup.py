@@ -291,7 +291,12 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
                     continue
                 LOGGER.info("Cleaning up %s host %s", node_type, name)
                 ssh_login_info = {"user": section["username"], "key_file": config.get("user_credentials_path")}
-                ssh_login_info |= host_ssh_address(host, "public" if tunnel_ports else "private", localhost)
+                try:
+                    ssh_login_info |= host_ssh_address(host, "public" if tunnel_ports else "private", localhost)
+                except Exception as exc:  # noqa: BLE001
+                    # As in clean_up_host: one host that can't be reached must not keep the others dirty
+                    LOGGER.warning("Can't reach %s host %s, not cleaning it up: %s", node_type, name, exc)
+                    continue
                 remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
                 try:
                     PhysicalHost(name=f"{node_type} {name}", remoter=remoter).clean_up_host(

@@ -161,6 +161,23 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
     localhost.destroy.assert_called_once()
 
 
+def test_a_lab_host_the_access_service_cant_reach_doesnt_stop_the_cleanup(cleaned, monkeypatch):
+    hosts = {
+        "db_nodes": {"username": "fedora", "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]},
+        "loader_nodes": HOSTS["loader_nodes"],
+        "monitor_nodes": {"username": "fedora", "node_list": []},
+    }
+    monkeypatch.setattr(keystore.KeyStore, "get_baremetal_config", lambda self, name: hosts)
+    localhost = MagicMock()
+    localhost.lab_access_ssh_address.side_effect = RuntimeError("sdm status failed")
+    monkeypatch.setattr(resources_cleanup, "LocalHost", lambda **kwargs: localhost)
+
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
+
+    assert cleaned == [("loader 10.0.0.2", False, False)]
+    localhost.destroy.assert_called_once()
+
+
 def test_a_lab_host_without_a_localhost_is_reported_clearly():
     with pytest.raises(ValueError, match="'monster' is reached through the lab access service"):
         host_ssh_address({"private_ip": "10.0.0.60", "access": "monster"}, "private", None)
