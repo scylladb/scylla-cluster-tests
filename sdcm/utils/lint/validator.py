@@ -72,6 +72,8 @@ _CLOUD_API_PATCHES = {
     "sdcm.sct_config.config.get_arch_from_instance_type": lambda *a, **kw: "x86_64",
     # EC2 instance type validation
     "sdcm.sct_config.config.aws_check_instance_type_supported": lambda *a, **kw: True,
+    # AWS Spot Instance Advisor JSON, read by spot sizing (no data = the normal sizing order)
+    "sdcm.utils.cloud_catalog.interruption.aws_spot_buckets": dict,
     # Azure branched image lookup (private/community galleries)
     "sdcm.provision.azure.utils.get_scylla_images": lambda **kw: [_FAKE_IMAGE],
     # Azure released image lookup (community gallery)
