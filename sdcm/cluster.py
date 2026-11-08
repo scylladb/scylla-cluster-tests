@@ -7859,8 +7859,8 @@ class BaseMonitorSet:
         missing = node.remoter.run(shell_script_cmd(MONITOR_PREREQS_PROBE, quote="'"), verbose=False).stdout.split()
         node.log.info("Missing monitor prerequisites: %s", missing or "none")
 
+        # node_setup refreshed the repo cache just before
         if packages := [item for item in missing if item in MONITOR_PREREQ_PACKAGES]:
-            node.update_repo_cache()
             node.install_package(" ".join(packages))
 
         if "python-libs" in missing:
