@@ -2,7 +2,7 @@
 
 **Jira:** SCT-1215
 
-**Status:** draft
+**Status:** built
 
 ## Overview
 
