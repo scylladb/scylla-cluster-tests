@@ -30,6 +30,7 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
+from sdcm.utils.gce_machine_types import bundles_local_ssds, is_bundled_local_ssd_family
 from sdcm.provision.provisioner import VmArch
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
@@ -573,11 +574,20 @@ def create_instance(  # noqa: PLR0913
 
     instance.scheduling = compute_v1.Scheduling()
 
-    if "z3-highmem" in machine_type:
-        instance.scheduling.on_host_maintenance = "MIGRATE"
+    if bundles_local_ssds(machine_type):
+        # The local SSDs come with the machine type, GCE rejects explicitly requested ones on top
         instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
 
-    if spot:
+    if is_bundled_local_ssd_family(machine_type):
+        # z3 and z4d accept only MIGRATE on host maintenance, which a spot VM cannot have
+        if spot:
+            LOGGER.warning(
+                "Machine type %s requires on_host_maintenance=MIGRATE, which a spot VM cannot have; "
+                "requesting it on-demand instead",
+                machine_type,
+            )
+        instance.scheduling.on_host_maintenance = "MIGRATE"
+    elif spot:
         # Set the Spot VM setting
         instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
         instance.scheduling.instance_termination_action = instance_termination_action
