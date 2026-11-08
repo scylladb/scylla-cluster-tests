@@ -1,0 +1,202 @@
+"""Regression tests for SCT-839: apt-get upgrade/install must wait for the dpkg lock.
+
+If the rolling upgrade's ``apt-get dist-upgrade`` hits the SCT 600s SSH timeout while
+still running remotely, the remoter retries the command. Without a dpkg lock-wait
+option, the retried ``apt-get`` invocation immediately fails with
+"Unable to acquire the dpkg frontend lock" because the previous remote process is
+still holding it, instead of waiting for it to finish. These tests assert that
+``UpgradeTest._upgrade_node`` (Debian/Ubuntu upgrade path) and
+``UpgradeTest._rollback_node`` (Debian/Ubuntu rollback path) build their apt-get
+commands via ``sdcm.utils.apt.apt_cmd()`` -- the same helper used elsewhere in the
+codebase (e.g. ``BaseNode.install_package()`` / ``upgrade_manager_agent()``) -- so
+that ``-o DPkg::Lock::Timeout=...`` is always present.
+"""
+
+import threading
+from unittest.mock import MagicMock
+
+import pytest
+
+from upgrade_test import UpgradeTest, download_then_install
+
+UpgradeTest.__test__ = False
+
+pytestmark = pytest.mark.usefixtures("events")
+
+
+def _run_side_effect(orig_ver, new_ver):
+    """Return distinct ``scylla --version`` results across the two calls, empty stdout otherwise."""
+    call_count = {"n": 0}
+
+    def _side_effect(cmd, *args, **kwargs):  # noqa: ARG001
+        if cmd == "scylla --version":
+            call_count["n"] += 1
+            stdout = orig_ver if call_count["n"] == 1 else new_ver
+            return MagicMock(stdout=stdout, stderr="")
+        return MagicMock(stdout="", stderr="")
+
+    return _side_effect
+
+
+def _package_manager_calls(fake_node):
+    """Collect (cmd, kwargs) pairs for every apt-get invocation on ``fake_node.remoter``."""
+    calls = list(fake_node.remoter.run.call_args_list) + list(fake_node.remoter.sudo.call_args_list)
+    package_manager_calls = []
+    for call in calls:
+        cmd = call.args[0]
+        if "apt-get" in cmd:
+            package_manager_calls.append((cmd, call.kwargs))
+    return package_manager_calls
+
+
+def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
+    """The exact SCT-839 failure site: the Debian/Ubuntu 'apt-get dist-upgrade' call."""
+    fake_self = MagicMock()
+    fake_self.upgrade_rollback_mode = None
+    params = {
+        "upgrade_node_packages": None,
+        "disable_raft": True,
+        "enable_tablets_on_upgrade": False,
+        "enable_views_with_tablets_on_upgrade": False,
+        "use_preinstalled_scylla": False,
+    }
+    fake_self.params.get.side_effect = lambda key, *a, **kw: params.get(key)
+
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = False
+    fake_node.distro.is_sles = False
+    fake_node.is_product_enterprise = False
+    fake_node.remoter.run.side_effect = _run_side_effect("2026.1.10", "2026.3.0")
+
+    UpgradeTest._upgrade_node(
+        fake_self,
+        node=fake_node,
+        upgrade_sstables=False,
+        new_scylla_repo="http://example.com/scylla.list",
+        new_version="2026.3.0",
+    )
+
+    package_manager_calls = _package_manager_calls(fake_node)
+    dist_upgrade_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "dist-upgrade" in cmd]
+    assert len(dist_upgrade_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
+
+    for cmd, kwargs in dist_upgrade_calls:
+        assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
+        assert "fuser -k -TERM" in cmd, f"dist-upgrade retry must kill a stale lock holder: {cmd!r}"
+        assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
+        assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
+    (download, _), (install, _) = dist_upgrade_calls
+    assert download.startswith("timeout --kill-after=30s 540 env DEBIAN_FRONTEND=noninteractive bash -c '"), download
+    assert download.endswith("--download-only'"), download
+    assert install.startswith("env DEBIAN_FRONTEND=noninteractive bash -c '"), install
+    assert install.endswith("--no-download'"), install
+
+    # the 'apt-get update' preceding it should also go through the shared apt_cmd() helper
+    update_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if cmd.split()[-1].strip("'") == "update"]
+    assert update_calls, f"expected an 'apt-get ... update' call, got: {package_manager_calls!r}"
+    assert "DPkg::Lock::Timeout" in update_calls[0][0]
+    assert "fuser -k -TERM" in update_calls[0][0]
+
+
+def test_upgrade_node_yum_update_downloads_then_installs_on_rhel():
+    """SCT-1456: the RHEL 'yum update' of the upgrade downloads under the remote deadline, then installs from cache."""
+    fake_self = MagicMock()
+    fake_self.upgrade_rollback_mode = None
+    params = {"disable_raft": True}
+    fake_self.params.get.side_effect = lambda key, *a, **kw: params.get(key)
+
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = True
+    fake_node.is_product_enterprise = False
+    fake_node.scylla_pkg.return_value = "scylla"
+    fake_node.remoter.run.side_effect = _run_side_effect("2026.1.10", "2026.3.0")
+
+    UpgradeTest._upgrade_node(
+        fake_self,
+        node=fake_node,
+        upgrade_sstables=False,
+        new_scylla_repo="http://example.com/scylla.repo",
+        new_version="2026.3.0",
+    )
+
+    yum_update_calls = [call for call in fake_node.remoter.sudo.call_args_list if "yum update" in call.args[0]]
+    assert [call.args[0] for call in yum_update_calls] == [
+        r"timeout --kill-after=30s 540 yum update scylla\*2026.3.0\* -y --downloadonly",
+        r"yum update scylla\*2026.3.0\* -y -C",
+    ]
+
+
+def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
+    """The Debian/Ubuntu rollback counterpart: 'apt-get install <scylla_pkg_ver>' must also wait for the lock."""
+    fake_self = MagicMock()
+    fake_self.upgrade_rollback_mode = None
+    fake_self.orig_ver = "2026.3.0"
+    fake_self.new_ver = "2026.1.10"
+    fake_self.params.get.return_value = False
+
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = False
+    fake_node.scylla_pkg.return_value = "scylla"
+    fake_node.remoter.run.side_effect = _run_side_effect("2026.3.0", "2026.1.10")
+
+    UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
+
+    package_manager_calls = _package_manager_calls(fake_node)
+    install_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "install" in cmd]
+    assert len(install_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
+
+    for cmd, kwargs in install_calls:
+        assert "DPkg::Lock::Timeout" in cmd, f"install command missing dpkg lock-wait option: {cmd!r}"
+        assert "fuser -k -TERM" in cmd, f"install retry must kill a stale lock holder: {cmd!r}"
+        assert kwargs.get("retry") == 3, f"install command missing retry=3: {kwargs!r}"
+        assert kwargs.get("timeout") == 600, f"install command missing timeout=600: {kwargs!r}"
+    # The flag must land inside the apt_cmd() ``bash -c '...'`` wrapper, not after it.
+    assert install_calls[0][0].endswith("--download-only'"), install_calls[0][0]
+    assert install_calls[1][0].endswith("--no-download'"), install_calls[1][0]
+
+
+def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
+    """After an OS upgrade timeout on RHEL, wait for the yum/dnf process: dnf never creates /var/run/yum.pid."""
+    fake_self = MagicMock()
+    fake_self.params.get.return_value = True
+    fake_self.system_upgrade_timeout = 0.1
+
+    release = threading.Event()
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = True
+    fake_node.upgrade_system.side_effect = lambda: release.wait(10)
+
+    try:
+        UpgradeTest.upgrade_os(fake_self, nodes=[fake_node])
+    finally:
+        release.set()
+
+    fake_node.remoter.sudo.assert_called_once()
+    cmd = fake_node.remoter.sudo.call_args.args[0]
+    assert 'while pgrep -x "yum|dnf|dnf5"' in cmd, cmd
+    assert "yum.pid" not in cmd, cmd
+
+
+@pytest.mark.parametrize(
+    "is_rhel_like, download_only, cache_only",
+    [(True, "--downloadonly", "-C"), (False, "--download-only", "--no-download")],
+)
+def test_download_then_install(is_rhel_like, download_only, cache_only):
+    """SCT-1456: only the download runs under the remote deadline, the install runs from the local cache."""
+    fake_node = MagicMock()
+    fake_node.distro.is_rhel_like = is_rhel_like
+
+    download_then_install(fake_node, lambda flag: f"pkg-manager install scylla -y {flag}")
+
+    (download, download_kwargs), (install, install_kwargs) = [
+        (call.args[0], call.kwargs) for call in fake_node.remoter.sudo.call_args_list
+    ]
+    assert download.startswith("timeout --kill-after=30s 540 "), download
+    assert download.endswith(f"pkg-manager install scylla -y {download_only}"), download
+    assert install.endswith(f"pkg-manager install scylla -y {cache_only}"), install
+    assert "timeout --kill-after" not in install, install
+    assert download_kwargs == install_kwargs == {"retry": 3, "timeout": 600}
