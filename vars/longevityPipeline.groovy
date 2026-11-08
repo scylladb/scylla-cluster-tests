@@ -351,11 +351,12 @@ def call(Map pipelineParams) {
                         if (!(minicloudEnabled && localAgent)) {
                             tagBuilder()
                         }
-                        if (localAgent) {
-                            // A persistent workspace may hold ./sct_runner_ip from an earlier runner
-                            // build; with no runner created here, later stages would SSH to it.
-                            // minicloudReclaim() clears it as well, this covers baremetal.
-                            sh 'rm -fv scylla-cluster-tests/sct_runner_ip'
+                        if (localAgent && !minicloudEnabled) {
+                            // A baremetal lab agent keeps its workspace: sweep old log trees and a
+                            // stale ./sct_runner_ip (minicloud runs do it in 'Minicloud Agent Preflight')
+                            dir('scylla-cluster-tests') {
+                                workspaceReclaim()
+                            }
                         }
                     }
                     dir('scylla-cluster-tests') {
@@ -370,9 +371,9 @@ def call(Map pipelineParams) {
             // Only on a local agent: a persistent workspace needs sweeping, and the agent has to be
             // proven KVM-capable, before anything expensive or externally visible happens - so this
             // sits ahead of 'Create Argus Test Run' and the hydra pull it triggers, not after them.
-            // Reclaim is also the only thing that removes a stale ./sct_runner_ip once 'Create SCT
-            // Runner' is skipped; without it every later stage would take the --execute-on-runner
-            // branch and SSH to an IP from some earlier build.
+            // Reclaim also removes a stale ./sct_runner_ip once 'Create SCT Runner' is skipped (on
+            // baremetal, workspaceReclaim() in 'Checkout' does); without it every later stage would
+            // take the --execute-on-runner branch and SSH to an IP from some earlier build.
             stage('Minicloud Agent Preflight') {
                 when { expression { minicloudEnabled && localAgent } }
                 steps {
