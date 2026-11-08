@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import unittest
 import os.path
 import subprocess
+import sys
 import logging
 import pickle
 import tempfile
@@ -234,7 +235,10 @@ class TestMBM(unittest.TestCase):
 
     def test_main_help_message(self):
         with subprocess.Popen(
-            ["./microbenchmarking.py", "--help"], cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            [sys.executable, "./microbenchmarking.py", "--help"],
+            cwd=self.cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         ) as ps:
             stdout, stderr = ps.communicate()
             self.assertEqual(ps.returncode, 0)
@@ -244,7 +248,7 @@ class TestMBM(unittest.TestCase):
     def test_help_parameter_for_exclude(self):
         msg = b"usage: microbenchmarking.py exclude [-h]"
         with subprocess.Popen(
-            ["./microbenchmarking.py", "exclude", "--help"],
+            [sys.executable, "./microbenchmarking.py", "exclude", "--help"],
             cwd=self.cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -258,7 +262,10 @@ class TestMBM(unittest.TestCase):
         msg = b"""usage: microbenchmarking.py check [-h] [--update-db]"""
 
         with subprocess.Popen(
-            ["./microbenchmarking.py", "check", "--help"], cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            [sys.executable, "./microbenchmarking.py", "check", "--help"],
+            cwd=self.cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         ) as ps:
             stdout, stderr = ps.communicate()
             self.assertEqual(ps.returncode, 0)
@@ -271,6 +278,7 @@ class TestMBM(unittest.TestCase):
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
         with subprocess.Popen(
             [
+                sys.executable,
                 "./microbenchmarking.py",
                 "check",
                 "--results-path",
