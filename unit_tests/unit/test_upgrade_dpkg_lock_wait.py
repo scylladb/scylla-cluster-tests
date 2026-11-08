@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from upgrade_test import UpgradeTest
+from upgrade_test import UpgradeTest, download_then_install
 
 
 UpgradeTest.__test__ = False
@@ -80,20 +80,53 @@ def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
 
     package_manager_calls = _package_manager_calls(fake_node)
     dist_upgrade_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "dist-upgrade" in cmd]
-    assert len(dist_upgrade_calls) == 1, f"expected exactly one dist-upgrade call, got: {package_manager_calls!r}"
+    assert len(dist_upgrade_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
 
-    cmd, kwargs = dist_upgrade_calls[0]
-    assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
-    assert "fuser -k -TERM" in cmd, f"dist-upgrade retry must kill a stale lock holder: {cmd!r}"
-    assert cmd.startswith("DEBIAN_FRONTEND=noninteractive bash -c '"), cmd
-    assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
-    assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
+    for cmd, kwargs in dist_upgrade_calls:
+        assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
+        assert "fuser -k -TERM" in cmd, f"dist-upgrade retry must kill a stale lock holder: {cmd!r}"
+        assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
+        assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
+    (download, _), (install, _) = dist_upgrade_calls
+    assert download.startswith("timeout --kill-after=30s 540 env DEBIAN_FRONTEND=noninteractive bash -c '"), download
+    assert download.endswith("--download-only'"), download
+    assert install.startswith("env DEBIAN_FRONTEND=noninteractive bash -c '"), install
+    assert install.endswith("--no-download'"), install
 
     # the 'apt-get update' preceding it should also go through the shared apt_cmd() helper
     update_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if cmd.split()[-1].strip("'") == "update"]
     assert update_calls, f"expected an 'apt-get ... update' call, got: {package_manager_calls!r}"
     assert "DPkg::Lock::Timeout" in update_calls[0][0]
     assert "fuser -k -TERM" in update_calls[0][0]
+
+
+def test_upgrade_node_yum_update_downloads_then_installs_on_rhel():
+    """SCT-1456: the RHEL 'yum update' of the upgrade downloads under the remote deadline, then installs from cache."""
+    fake_self = MagicMock()
+    fake_self.upgrade_rollback_mode = None
+    params = {"disable_raft": True}
+    fake_self.params.get.side_effect = lambda key, *a, **kw: params.get(key)
+
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = True
+    fake_node.is_product_enterprise = False
+    fake_node.scylla_pkg.return_value = "scylla"
+    fake_node.remoter.run.side_effect = _run_side_effect("2026.1.10", "2026.3.0")
+
+    UpgradeTest._upgrade_node(
+        fake_self,
+        node=fake_node,
+        upgrade_sstables=False,
+        new_scylla_repo="http://example.com/scylla.repo",
+        new_version="2026.3.0",
+    )
+
+    yum_update_calls = [call for call in fake_node.remoter.sudo.call_args_list if "yum update" in call.args[0]]
+    assert [call.args[0] for call in yum_update_calls] == [
+        r"timeout --kill-after=30s 540 yum update scylla\*2026.3.0\* -y --downloadonly",
+        r"yum update scylla\*2026.3.0\* -y -C",
+    ]
 
 
 def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
@@ -114,13 +147,16 @@ def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
 
     package_manager_calls = _package_manager_calls(fake_node)
     install_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "install" in cmd]
-    assert len(install_calls) == 1, f"expected exactly one install call, got: {package_manager_calls!r}"
+    assert len(install_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
 
-    cmd, kwargs = install_calls[0]
-    assert "DPkg::Lock::Timeout" in cmd, f"install command missing dpkg lock-wait option: {cmd!r}"
-    assert "fuser -k -TERM" in cmd, f"install retry must kill a stale lock holder: {cmd!r}"
-    assert kwargs.get("retry") == 3, f"install command missing retry=3: {kwargs!r}"
-    assert kwargs.get("timeout") == 600, f"install command missing timeout=600: {kwargs!r}"
+    for cmd, kwargs in install_calls:
+        assert "DPkg::Lock::Timeout" in cmd, f"install command missing dpkg lock-wait option: {cmd!r}"
+        assert "fuser -k -TERM" in cmd, f"install retry must kill a stale lock holder: {cmd!r}"
+        assert kwargs.get("retry") == 3, f"install command missing retry=3: {kwargs!r}"
+        assert kwargs.get("timeout") == 600, f"install command missing timeout=600: {kwargs!r}"
+    # The flag must land inside the apt_cmd() ``bash -c '...'`` wrapper, not after it.
+    assert install_calls[0][0].endswith("--download-only'"), install_calls[0][0]
+    assert install_calls[1][0].endswith("--no-download'"), install_calls[1][0]
 
 
 def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
@@ -144,3 +180,24 @@ def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
     cmd = fake_node.remoter.sudo.call_args.args[0]
     assert 'while pgrep -x "yum|dnf|dnf5"' in cmd, cmd
     assert "yum.pid" not in cmd, cmd
+
+
+@pytest.mark.parametrize(
+    "is_rhel_like, download_only, cache_only",
+    [(True, "--downloadonly", "-C"), (False, "--download-only", "--no-download")],
+)
+def test_download_then_install(is_rhel_like, download_only, cache_only):
+    """SCT-1456: only the download runs under the remote deadline, the install runs from the local cache."""
+    fake_node = MagicMock()
+    fake_node.distro.is_rhel_like = is_rhel_like
+
+    download_then_install(fake_node, lambda flag: f"pkg-manager install scylla -y {flag}")
+
+    (download, download_kwargs), (install, install_kwargs) = [
+        (call.args[0], call.kwargs) for call in fake_node.remoter.sudo.call_args_list
+    ]
+    assert download.startswith("timeout --kill-after=30s 540 "), download
+    assert download.endswith(f"pkg-manager install scylla -y {download_only}"), download
+    assert install.endswith(f"pkg-manager install scylla -y {cache_only}"), install
+    assert "timeout --kill-after" not in install, install
+    assert download_kwargs == install_kwargs == {"retry": 3, "timeout": 600}
