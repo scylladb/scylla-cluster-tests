@@ -1,0 +1,49 @@
+name: AI review how-to comment
+# Posts one comment on each new PR with the commands that request the AI reviewers.
+# Design: docs/plans/ai-tooling/review-tools/spec.md
+# pull_request_target gives the token write access on fork PRs. The job never checks
+# out or runs code from the PR, and reads PR fields only through env variables.
+on:
+  pull_request_target:
+    types: [opened, ready_for_review]
+    branches:
+      - master
+
+permissions: {}
+
+jobs:
+  comment:
+    if: >-
+      github.event.pull_request.draft == false &&
+      !startsWith(github.event.pull_request.title, '[Backport') &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-review')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Post the comment once
+        run: |
+          marker='<!-- ai-review-howto -->'
+          # A failed listing fails the step (bash -e), so it never reads as "no comment yet".
+          bodies=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" --jq '.[].body')
+          if grep -qF "$marker" <<<"$bodies"; then
+            echo "How-to comment already posted"
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --body-file - <<EOF
+          $marker
+          AI reviewers run on request. Each one follows [REVIEW.md](https://github.com/$GH_REPO/blob/master/REVIEW.md).
+
+          | Reviewer | How to request |
+          |----------|----------------|
+          | CodeRabbit | Comment \`@coderabbitai review\`, or \`@coderabbitai full review\` |
+          | Qodo | Comment \`/agentic_review\` |
+          | Copilot | Reviewers menu → Copilot, or \`gh pr edit $PR_NUMBER --add-reviewer @copilot\` |
+          | Claude | Comment \`@claude review\` (org members) |
+
+          See the [contribution handbook, section 4.3](https://github.com/$GH_REPO/blob/master/docs/contribution-handbook.md#43-ai-agents-in-ci).
+          EOF

@@ -197,7 +197,7 @@ pull request. Each row names what the part needs and how to prove it.
 
 | Part | What it needs | How to add it | How to prove it |
 |---|---|---|---|
-| Claude in the how-to comment, handbook 4.3, and the trial | SCT-1393 (#16900) merged | One row in each of the two tables; add `claude` to `BOTS` in `bot_threads.py` | The how-to comment on the next pull request lists `@claude review` |
+| Claude in the trial counts | A marker in the posted review that tells it from other `github-actions` threads | Match the marker in `bot_threads.py` | A Claude thread counts as `claude`, a thread from another workflow does not |
 | A label trigger | Nothing | A `pull_request_target: labeled` event for the label `claude-review`, with the same two jobs | Add the label to a pull request; one review appears |
 | Automatic review | The SCT-1393 trial picks Claude | `pull_request_target: ready_for_review` on the same jobs | The next ready pull request gets a review without a request |
 | Run the changed tests | A job with no secrets | A `tests` job before `review`: no API key, read-only token, runs the changed unit tests of the pull request, and passes the result as a job output that Claude reads | A pull request with a failing new test gets a finding that quotes the failure |

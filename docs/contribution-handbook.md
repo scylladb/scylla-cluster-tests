@@ -195,7 +195,7 @@ Every pull request must be reviewed before merging. Reviewers should check for:
   for testing guidance. For changes that automated CI cannot cover (e.g., Jenkins
   pipeline or provisioning changes), manually triggering the affected pipelines may
   be necessary before merging
-- **Style and conventions** — see [`AGENTS.md`](../AGENTS.md) for the full style guide
+- **Style and conventions** — see the standards indexed in [`docs/INDEX.md`](INDEX.md)
 - **Security** — no credential leaks, no injection vulnerabilities, no secrets in config
   files. See section 7 (Security) for details
 - **Performance** — no unnecessary loops over large datasets, no blocking calls in async
@@ -462,14 +462,28 @@ SCT integrates AI agents into the CI workflow for code review and task execution
 See also section 2.1 for review expectations that apply to both human and AI
 reviewers.
 
-**Automated code review** — PRs are reviewed automatically by CodeRabbit and
-GitHub Copilot. CodeRabbit is configured in [`.coderabbit.yaml`](../.coderabbit.yaml),
-which skips backport PRs and anything labeled `skip-review`. These reviews
-supplement, but do not replace, human review: treat bot findings as suggestions to
-verify against the code, not as rulings.
+**AI code review** — four AI reviewers can review a PR: CodeRabbit, Qodo,
+GitHub Copilot, and Claude. Each one follows [`REVIEW.md`](../REVIEW.md) and the standards in
+[`docs/standards/`](standards/); their configuration holds no rules of its own.
+They run on request. On each non-draft, non-backport PR to `master`, a bot posts
+these commands once:
+
+| Reviewer | How to request | Configuration |
+|----------|----------------|---------------|
+| CodeRabbit | Comment `@coderabbitai review` (incremental) or `@coderabbitai full review` | [`.coderabbit.yaml`](../.coderabbit.yaml) |
+| Qodo | Comment `/agentic_review` | [`.pr_agent.toml`](../.pr_agent.toml) |
+| Copilot | Reviewers menu → Copilot, or `gh pr edit <number> --add-reviewer @copilot` | Reads `REVIEW.md` and `AGENTS.md` directly |
+| Claude | Comment `@claude review` (org members) | [`claude-review.yml`](../.github/workflows/claude-review.yml), with the `code-review` skill |
+
+Backport PRs and PRs labeled `skip-review` get no how-to comment. After a trial,
+one reviewer will run automatically, also skipping them; the design and the selection data are in
+[`docs/plans/ai-tooling/review-tools/spec.md`](plans/ai-tooling/review-tools/spec.md).
+These reviews supplement, but do not replace, human review: treat bot findings as
+suggestions to verify against the code, not as rulings.
 
 **On-demand task execution** — mentioning `@claude` in a PR comment or issue
-triggers the [`claude`](../.github/workflows/claude.yml) workflow. This is
+triggers the [`claude`](../.github/workflows/claude.yml) workflow, except a
+comment that starts with `@claude review`, which requests a review (see above). This is
 restricted to org members and collaborators. Claude can:
 - Implement code changes and push commits
 - Fix backport conflicts
