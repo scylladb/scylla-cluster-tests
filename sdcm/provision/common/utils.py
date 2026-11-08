@@ -121,7 +121,7 @@ def configure_vector_target_script(host: str, port: int) -> str:
                 type: vector
                 inputs:
                     - filter_suppress_warnings
-                address: {host}:{port}
+                address: http://{host}:{port}
                 healthcheck: false
             prometheus:
                 type: prometheus_exporter
