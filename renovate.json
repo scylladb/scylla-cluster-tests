@@ -4,7 +4,7 @@
     "config:recommended"
   ],
   "constraints": {
-    "uv": "0.13.0"
+    "uv": "0.13.4"
   },
   "ignorePresets": [
     "group:monorepos",
