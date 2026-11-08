@@ -110,7 +110,8 @@ case " $EXPORTERS " in *" ${address%/metrics} "*) echo 'node_exporter_build_info
 @pytest.fixture
 def run_probe(tmp_path):
     """Runs the probe NodeExporterSetup.install sends under its lock, against fake `ss` and `curl`, and returns what
-    it prints."""
+    it prints.
+    """
     for name, script in (("ss", FAKE_SS), ("curl", FAKE_CURL)):
         (tmp_path / name).write_text(script)
         (tmp_path / name).chmod(0o755)
