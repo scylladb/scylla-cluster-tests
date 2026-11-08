@@ -47,7 +47,8 @@ directory when it exists, otherwise `<name>.json` from the KeyStore (Secrets Man
 - `access` (optional): the host's name in the lab access service. SCT then opens SSH where that service says instead
   of to the host's address. What the lookup returns replaces the SSH address, and the user when the access service
   names one. SCT logs in without the key in `user_credentials_path`: the access service accepts only `none` auth.
-  The lookup lives in scylla-qa-internal (SCT-1275).
+  Access is requested for the run's length (`test_duration` plus 4 hours), or 12 hours when the access policy refuses
+  that. The lookup lives in scylla-qa-internal (SCT-1275).
   An `access` host is treated as `private` whatever its role's `ip_ssh_connections`: the lab access service blocks
   the port forwarding reverse tunnels need, so it gets none and ships its logs directly. Put lab DB hosts on a
   `private` role: with LDAP, a `public` DB role writes the LDAP tunnel address to `scylla.yaml`, and on an `access`
@@ -74,8 +75,8 @@ its ports and its timers onto the shared monitor host.
 
 ## What a host must provide
 
-- SSH as `username` with the key in `user_credentials_path`, at the host's address or where its `access` name
-  points.
+- SSH as `username` with the key in `user_credentials_path`, at the host's address. A host with an `access` name
+  needs no key: SCT goes through the lab access service.
 - Passwordless sudo for that user.
 - Loader and monitor hosts:
   - Docker Engine 20.10 or newer, any packaging (`docker-ce`, `moby-engine`, distro `docker.io`), running and usable
@@ -166,3 +167,5 @@ suffix of its `~/sct-monitoring-<test id>` directory on the host.
   collector stay empty.
 - The SCT test runner, when it runs on a lab host's Jenkins agent, keeps its own containers (vector) on that host;
   they are not part of the host cleanup.
+- Lab access that the account already has, for example from an earlier run, is reused without checking how long it
+  has left, so a long run can lose SSH to an `access` host midway.
