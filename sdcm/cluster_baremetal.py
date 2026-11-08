@@ -173,12 +173,14 @@ class PhysicalHostCleanup:
 
     def stop_monitoring_stack(self, test_id: str) -> None:
         """Remove the containers of the monitoring stack of the run `test_id`, and only those: the ones with its TestId
-        label and NodeType=monitor."""
+        label and NodeType=monitor.
+        """
         self.remoter.run(STOP_RUN_MONITORING_STACK.format(test_id=shlex.quote(test_id)))
 
     def remove_monitoring_stack(self, test_id: str) -> None:
         """Remove the monitoring stack of the run `test_id` and its directory, the Prometheus data included: log
-        collection, which runs before the cleanup, already took what it needs."""
+        collection, which runs before the cleanup, already took what it needs.
+        """
         self.stop_monitoring_stack(test_id)
         # With sudo: the stack's containers write their data as other users
         self.remoter.sudo(f'rm -rf "$HOME/{MONITOR_RUN_DIR.format(test_id=test_id)}"')

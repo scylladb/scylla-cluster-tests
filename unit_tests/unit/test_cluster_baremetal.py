@@ -1322,7 +1322,8 @@ def test_a_loader_host_cleanup_skips_the_scylla_steps_and_the_baseline_restore(m
 
 def test_a_monitor_host_cleanup_removes_only_the_runs_monitoring_stack(monkeypatch):
     """The run's own stack (containers with its TestId label and NodeType=monitor, the mountless renderer too) and
-    directory go; other runs' stacks and the run's stress containers stay."""
+    directory go; other runs' stacks and the run's stress containers stay.
+    """
     host = _host_with_disk_state()
     monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: None)
 
