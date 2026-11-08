@@ -34,6 +34,9 @@ from sdcm.utils.trigger_matrix.versions import determine_job_folder
         pytest.param("2026.3.0-rc0.0.20260719.a64da1e635f3", "scylla-2026.3", id="rc_dash_separator"),
         pytest.param("2026.1.0.rc1.0.20260501.abcdef123456", "scylla-2026.1", id="rc1_dot_separator"),
         pytest.param("2024.1.0.rc2.0.20231218.a063c2c16185.1", "scylla-2024.1", id="rc_with_revision"),
+        pytest.param("2026.4.0-rc1", "scylla-2026.4", id="short_rc_dash_separator"),
+        pytest.param("2026.4.0~rc1", "scylla-2026.4", id="short_rc_tilde_separator"),
+        pytest.param("2026.4.0.rc1", "scylla-2026.4", id="short_rc_dot_separator"),
     ],
 )
 def test_version_to_folder(version, expected):
@@ -51,6 +54,12 @@ def test_branch_qualifier():
 def test_invalid_version_raises():
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder("not-a-version")
+
+
+@pytest.mark.parametrize("version", ["2026.4.0-rc", "2026.4-rc1", "2026.4.0-rc1-extra"])
+def test_malformed_short_rc_version_raises(version):
+    with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
+        determine_job_folder(version)
 
 
 def test_empty_version_raises():

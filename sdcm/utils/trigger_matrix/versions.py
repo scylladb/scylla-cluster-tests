@@ -28,6 +28,7 @@ from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
 from sdcm.utils.version_utils import (
     BRANCH_VERSION_RE,
     FULL_VERSION_TAG_RE,
+    RC_SHORT_VERSION_RE,
     RELEASE_VERSION_RE,
     SIMPLE_VERSION_RE,
 )
@@ -122,6 +123,8 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
         'scylla-2025.4'
         >>> determine_job_folder("2024.2.5-0.20250221.cb9e2a54ae6d-1")
         'scylla-2024.2'
+        >>> determine_job_folder("2026.4.0-rc1")
+        'scylla-2026.4'
         >>> determine_job_folder("master:latest", job_folder="my-folder")
         'my-folder'
     """
@@ -146,8 +149,8 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
         minor = full_match.group("minor")
         return f"scylla-{major}.{minor}"
 
-    # Handle simple version strings (e.g., "2025.4", "2025.4.0")
-    simple_match = SIMPLE_VERSION_RE.match(scylla_version)
+    # Handle simple version strings (e.g., "2025.4", "2025.4.0") and short RC versions (e.g., "2026.4.0-rc1")
+    simple_match = SIMPLE_VERSION_RE.match(scylla_version) or RC_SHORT_VERSION_RE.match(scylla_version)
     if simple_match:
         major = simple_match.group("major")
         minor = simple_match.group("minor")
@@ -182,6 +185,8 @@ def _extract_branch_from_version(scylla_version: str) -> str:
         'master'
         >>> _extract_branch_from_version("2025.4.1-0.20250601.abc123def456-1")
         '2025.4'
+        >>> _extract_branch_from_version("2026.4.0-rc1")
+        '2026.4'
         >>> _extract_branch_from_version("")
         ''
     """
@@ -194,7 +199,7 @@ def _extract_branch_from_version(scylla_version: str) -> str:
 
     full_match = FULL_VERSION_TAG_RE.match(scylla_version)
     if not full_match:
-        full_match = SIMPLE_VERSION_RE.match(scylla_version)
+        full_match = SIMPLE_VERSION_RE.match(scylla_version) or RC_SHORT_VERSION_RE.match(scylla_version)
     if full_match:
         return f"{full_match.group('major')}.{full_match.group('minor')}"
 
