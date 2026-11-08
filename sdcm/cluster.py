@@ -5882,7 +5882,8 @@ def register_docker_host_role(address: str, role: str) -> None:
 
 def docker_host_preflight(node: BaseNode, params, role: str) -> None:
     """Preflight of the Docker a loader or monitor runs on: version, then free space for the images of every role the
-    host has in this run."""
+    host has in this run.
+    """
     host = _DOCKER_HOST_CHECKS.setdefault(node.private_ip_address, _DockerHostCheck())
     with host.lock:
         if host.checked:

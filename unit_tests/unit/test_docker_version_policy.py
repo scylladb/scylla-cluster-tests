@@ -13,7 +13,8 @@ from sdcm.cluster import BaseLoaderSet, NodeSetupFailed, ensure_docker_version
 
 def make_node(client_version: str, server_version: str, server_failed: bool = False) -> MagicMock:
     """A node whose `docker --version` prints `client_version`, and whose server query, run as the SSH user, prints
-    `server_version` or fails."""
+    `server_version` or fails.
+    """
     node = MagicMock()
     node.remoter.run.side_effect = [
         MagicMock(failed=False, stdout=client_version),
