@@ -41,6 +41,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws-eu-west-3' : 'aws-sct-builders-eu-west-3-v5-asg',
                           'aws-ca-central-1' : 'aws-sct-builders-ca-central-1-v5-asg',
                           'gce-us-east1': "${gcp_project}-builders-us-east1-template-v10",
+                          'gce-us-east4': "${gcp_project}-builders-us-east4-template-v10",
                           'gce-us-west1': "${gcp_project}-builders-us-west1-template-v10",
                           'gce-us-central1': "${gcp_project}-builders-us-central1-template-v10",
                           'gce': "${gcp_project}-builders-us-east1-template-v10",
@@ -62,7 +63,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
         if (cloud_provider == 'aws') {
             supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1", "us-west-2", "us-east-2", "eu-west-3", "ca-central-1"]
         } else if (cloud_provider == 'gce') {
-            supported_regions = ["us-east1", "us-west1", "us-central1"]
+            supported_regions = ["us-east1", "us-east4", "us-west1", "us-central1"]
             region = datacenter
         } else {
             supported_regions = ["eastus"]
