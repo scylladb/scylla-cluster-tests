@@ -2308,7 +2308,12 @@ class Collector:
 
                 node_name = f"{node_tag}-node-{self.test_id[:8]}-{idx}"
                 ssh_login_info = {"user": ssh_username, "key_file": user_credentials_path}
-                ssh_login_info |= host_ssh_address(node_info, ip_type, self.localhost)
+                try:
+                    ssh_login_info |= host_ssh_address(node_info, ip_type, self.localhost)
+                except Exception as exc:  # noqa: BLE001
+                    # A lab access lookup that fails loses this host's logs only, not the other hosts'
+                    LOGGER.warning("Can't reach baremetal node %s-%d, skipping: %s", config_key, idx, exc)
+                    continue
 
                 collecting_node = CollectingNode(
                     name=node_name,
