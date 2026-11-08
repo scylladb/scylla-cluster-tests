@@ -1430,8 +1430,33 @@ def test_access_name_routes_ssh_where_the_lab_access_service_says(monkeypatch):
     localhost.lab_access_ssh_address.return_value = {"hostname": "172.17.0.5", "port": 10027}
     monkeypatch.setattr(TestConfig, "tester_obj", lambda self: MagicMock(localhost=localhost))
 
-    assert node._ssh_address() == {"hostname": "172.17.0.5", "port": 10027}
+    # no SCT key: the access service accepts only `none` auth
+    assert node._ssh_address() == {"hostname": "172.17.0.5", "port": 10027, "key_file": None}
     localhost.lab_access_ssh_address.assert_called_once_with("monster")
+
+
+@pytest.mark.parametrize(
+    "use_mgmt, access_names, refused",
+    [
+        pytest.param(True, ["monster"], True, id="manager-on-access-monitor"),
+        pytest.param(False, ["monster"], False, id="no-manager"),
+        pytest.param(True, [None], False, id="monitor-at-an-address"),
+    ],
+)
+def test_manager_on_a_lab_access_monitor_is_refused_up_front(monkeypatch, use_mgmt, access_names, refused):
+    """install_mgmt copies the SSH key, which a lab access login doesn't have: say so before the setup fails."""
+    built = MagicMock()
+    monkeypatch.setattr(sdcm_cluster.BaseMonitorSet, "__init__", lambda self, **kwargs: built())
+    monkeypatch.setattr(PhysicalMachineCluster, "__init__", lambda self, **kwargs: built())
+    kwargs = dict(user_prefix="t", params={"use_mgmt": use_mgmt}, targets={}, access_names=access_names)
+
+    if refused:
+        with pytest.raises(ValueError, match="use_mgmt"):
+            cluster_baremetal.MonitorSetPhysical(**kwargs)
+        built.assert_not_called()
+    else:
+        cluster_baremetal.MonitorSetPhysical(**kwargs)
+        assert built.call_count == 2
 
 
 def test_host_without_access_name_is_reached_at_its_address(monkeypatch):

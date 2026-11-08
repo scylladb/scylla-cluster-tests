@@ -27,7 +27,9 @@ def host_ssh_address(host: dict, ip_ssh_connections: str | None, localhost: Loca
     if access := host.get("access"):
         if localhost is None:
             raise ValueError(f"Host {access!r} is reached through the lab access service, which needs a LocalHost")
-        return localhost.lab_access_ssh_address(access)
+        # The access service holds the host's credentials and accepts only `none` auth, which the SSH client tries
+        # only without a key
+        return {"key_file": None, **localhost.lab_access_ssh_address(access)}
     if ip_ssh_connections == "public":
         return {"hostname": host.get("public_ip", host["private_ip"])}
     return {"hostname": host["private_ip"]}

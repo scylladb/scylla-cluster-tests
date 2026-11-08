@@ -48,7 +48,9 @@ def fixture_cleaned(monkeypatch):
     def clean_up_host(host, tunnel_ports, scylla_disk_setup):
         calls.append((str(host), tunnel_ports, scylla_disk_setup))
         assert host.remoter.login[1]["user"] == "fedora"
-        assert host.remoter.login[1]["key_file"] == "~/.ssh/key"
+        # a host behind the lab access service logs in without a key, see the lab access tests
+        if "port" not in host.remoter.login[1]:
+            assert host.remoter.login[1]["key_file"] == "~/.ssh/key"
 
     monkeypatch.setattr(cluster_baremetal.PhysicalHost, "clean_up_host", clean_up_host)
     return calls
@@ -148,7 +150,11 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
 
     resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
 
-    assert [(login["hostname"], login.get("port")) for login in logins] == [("10.0.0.1", None), ("172.17.0.5", 10027)]
+    # the lab host logs in without the SCT key: the access service accepts only `none` auth
+    assert [(login["hostname"], login.get("port"), login["key_file"]) for login in logins] == [
+        ("10.0.0.1", None, "~/.ssh/key"),
+        ("172.17.0.5", 10027, None),
+    ]
     # the access service blocks port forwarding, so the lab host had no tunnel ports to free
     assert [call[:3] for call in cleaned[1:]] == [("scylla-db 10.0.0.1", True, True), ("loader monster", False, False)]
     localhost.lab_access_ssh_address.assert_called_once_with("monster")

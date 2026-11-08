@@ -573,7 +573,8 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         if not self._access_name:
             return super()._ssh_address()
         localhost = TestConfig().tester_obj().localhost
-        return localhost.lab_access_ssh_address(self._access_name)
+        # The access service accepts only `none` auth, which the SSH client tries only without a key
+        return {"key_file": None, **localhost.lab_access_ssh_address(self._access_name)}
 
     @property
     def ip_ssh_connections(self) -> str:
@@ -822,6 +823,12 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
     def __init__(self, **kwargs):
+        # install_mgmt copies the monitor's SSH key to the host, and a lab access login has no key, see _ssh_address
+        if kwargs["params"].get("use_mgmt") and any(kwargs.get("access_names") or []):
+            raise ValueError(
+                "use_mgmt needs the SSH key on the monitor host, and a monitor reached through the lab access "
+                "service logs in without one: set use_mgmt to false, or give the monitor an address instead of `access`"
+            )
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
             self._ssh_username = username

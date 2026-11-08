@@ -343,11 +343,12 @@ def test_get_baremetal_instances_reach_lab_hosts_through_the_access_service(test
         collector.get_baremetal_instances_by_testid()
 
     assert collector.db_cluster[0].ssh_login_info["hostname"] == "10.0.0.1"
+    # no SCT key: the access service accepts only `none` auth
     assert collector.loader_set[0].ssh_login_info == {
         "hostname": "172.17.0.5",
         "port": 10027,
         "user": "jenkins",
-        "key_file": "~/.ssh/test_key",
+        "key_file": None,
     }
 
 
