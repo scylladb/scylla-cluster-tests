@@ -108,7 +108,7 @@ Prometheus, the file keeps the loader entries instead of an empty list.
 | Risk | Response |
 |---|---|
 | A distro node_exporter lacks a collector that a dashboard panel uses | Accepted on lab hosts. The baremetal docs page lists the known gaps |
-| An exporter that answers after more than 2 seconds counts as taken | SCT installs a second exporter on the next port. Both are scraped correctly |
+| An exporter that answers after more than 2 seconds counts as taken | SCT's own exporter restarts on the next port. Next to a distro exporter, SCT installs a second one, and only the second is scraped |
 | The lock is per host, not per container | Loader and monitor containers that do not share `/var/lock` are not a supported layout |
 
 ## Decisions
@@ -120,3 +120,5 @@ Prometheus, the file keeps the loader entries instead of an empty list.
 - A reused exporter is not checked for its version or collector set. (spec)
 - A firewall between the monitor and the host is not probed. Letting the
   monitor scrape is a host requirement. (review)
+- The install restarts the exporter, so an exporter that already runs serves
+  the port that the install returns. (review)

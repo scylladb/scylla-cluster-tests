@@ -145,5 +145,6 @@ remoter when a key changed.
 - Access is requested for the run's length, not a fixed 12 hours. (review)
 - One host the lab access service can't reach doesn't stop the log
   collection or the cleanup of the others. (review)
-- Whether the hosts config loader rejects an `access` DB host on a `public`
-  role with LDAP. (open)
+- The hosts config loader does not reject an `access` DB host on a `public`
+  role with LDAP. The baremetal docs page tells to put lab DB hosts on a
+  `private` role. (review)
