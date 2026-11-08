@@ -128,6 +128,7 @@ class Reconciler:
         self.managed = set(label_meta) | set(managed)
         self.state = state  # {ref: {"comment_id": int, "body": str}}, persisted between runs
         self.plan: list[str] = []
+        self.failed: set[str] = set()  # refs with a failed write, retried next run
         self.can_label_repo: dict[str, bool] = {}
         self._described: set[tuple[str, str, str]] = set()
         self._login: str | None = None
@@ -163,10 +164,12 @@ class Reconciler:
             if not self.dry:
                 if self._write("POST", f"/repos/{owner}/{repo}/issues/{number}/labels", {"labels": [label]}):
                     self._describe(owner, repo, label)
+                else:
+                    self.failed.add(ref)
         for label in sorted(current - wanted):
             self.plan.append(f"{ref}: remove label {label}")
-            if not self.dry:
-                self._write("DELETE", f"/repos/{owner}/{repo}/issues/{number}/labels/{label}")
+            if not self.dry and not self._write("DELETE", f"/repos/{owner}/{repo}/issues/{number}/labels/{label}"):
+                self.failed.add(ref)
 
     def _write(self, method: str, path: str, body: dict | None = None) -> dict | bool:
         """Send a write; on failure log it and return False, so the next run retries."""
@@ -206,12 +209,14 @@ class Reconciler:
                 return
             if not self._write("PATCH", f"/repos/{owner}/{repo}/issues/comments/{comment_id}", {"body": body}):
                 self.state.pop(ref, None)  # e.g. the comment was deleted: look it up again next run
+                self.failed.add(ref)
                 return
         elif wanted:
             self.plan.append(f"{ref}: add marker comment")
-            if self.dry or not (
-                data := self._write("POST", f"/repos/{owner}/{repo}/issues/{number}/comments", {"body": body})
-            ):
+            if self.dry:
+                return
+            if not (data := self._write("POST", f"/repos/{owner}/{repo}/issues/{number}/comments", {"body": body})):
+                self.failed.add(ref)
                 return
             comment_id = data["id"]
         else:

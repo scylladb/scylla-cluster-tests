@@ -277,19 +277,19 @@ def test_reconcile_failed_comment_is_retried_next_run():
     assert state["scylladb/siren#1"]["comment_id"] == 77
 
 
-def test_refresh_retries_a_dropped_ref_whose_fetch_failed(tmp_path, monkeypatch):
-    """A dropped ref that can't be fetched keeps its label: the next run must still remove it."""
-    github_down = True
+def _refresh_runner(tmp_path, monkeypatch, previous_refs):
+    """Run `refresh-github` against a fake GitHub; the manifest references only scylladb/scylladb#1."""
+    gh = SimpleNamespace(down=set(), write_status=200, writes=[])
 
     def fake_gh(method, path, body=None, paginate=False):
         if method == "GET" and path == "/repos/scylladb/scylladb":
             return 200, {"permissions": {"triage": True}}
-        if method == "GET" and path.endswith("/issues/2") and github_down:
+        if method == "GET" and path.rsplit("/", 1)[1] in gh.down:
             return 502, None
         if method == "GET":
             return 200, {"state": "open", "labels": [{"name": "used-by-sct"}], "title": "t"}
-        writes.append((method, path))
-        return 200, {}
+        gh.writes.append((method, path))
+        return gh.write_status, {}
 
     monkeypatch.setattr("utils.issues_cache.__main__.gh_api", fake_gh)
     (tmp_path / "refs").mkdir()
@@ -297,20 +297,49 @@ def test_refresh_retries_a_dropped_ref_whose_fetch_failed(tmp_path, monkeypatch)
     manifest |= {"label_description": "SCT", "refs": {"scylladb/scylladb#1": [{"branch": "master", "file": "a.py"}]}}
     (tmp_path / "refs" / "sct.json").write_text(json.dumps(manifest))
     state = tmp_path / "state.json"
-    state.write_text(
-        json.dumps({"refs": {"scylladb/scylladb#1": ["used-by-sct"], "scylladb/scylladb#2": ["used-by-sct"]}})
-    )
-    argv = ["refresh-github", "--refs-dir", str(tmp_path / "refs"), "--out-dir", str(tmp_path / "out")]
-    argv += ["--state", str(state), "--labels", "on"]
+    state.write_text(json.dumps({"refs": {ref: ["used-by-sct"] for ref in previous_refs}}))
 
-    writes = []
-    main(argv)
-    assert writes == []
+    def run(*extra, labels="on"):
+        gh.writes.clear()
+        argv = ["refresh-github", "--refs-dir", str(tmp_path / "refs"), "--out-dir", str(tmp_path / "out")]
+        main([*argv, "--state", str(state), "--labels", labels, *extra])
+        return json.loads(state.read_text())
 
-    github_down = False
-    main(argv)
-    assert writes == [("DELETE", "/repos/scylladb/scylladb/issues/2/labels/used-by-sct")]
-    assert "scylladb/scylladb#2" not in json.loads(state.read_text())["refs"]
+    return gh, run
+
+
+DROPPED_DELETE = ("DELETE", "/repos/scylladb/scylladb/issues/2/labels/used-by-sct")
+
+
+@pytest.mark.parametrize("first_run", ["fetch fails", "removal fails", "dry-run"])
+def test_refresh_keeps_a_dropped_ref_until_its_marker_is_removed(tmp_path, monkeypatch, first_run):
+    gh, run = _refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
+    if first_run == "fetch fails":
+        gh.down = {"2"}
+    elif first_run == "removal fails":
+        gh.write_status = 500
+
+    state = run(labels="dry-run" if first_run == "dry-run" else "on")
+    assert list(state["refs"]) == ["scylladb/scylladb#1"]
+    assert list(state["retry"]) == ["scylladb/scylladb#2"]
+
+    gh.down, gh.write_status = set(), 200
+    state = run()
+    assert gh.writes == [DROPPED_DELETE]
+    assert state["retry"] == {}
+
+
+def test_retried_refs_dont_count_for_the_shrink_guard(tmp_path, monkeypatch):
+    """After an accepted shrink, unreachable dropped refs must not block the next run."""
+    previous = [f"scylladb/scylladb#{n}" for n in range(1, 6)]
+    gh, run = _refresh_runner(tmp_path, monkeypatch, previous)
+    gh.down = {"2", "3", "4", "5"}
+
+    run("--accept-shrink")
+    state = run()  # no --accept-shrink: 1 ref now vs 1 ref last run
+
+    assert list(state["refs"]) == ["scylladb/scylladb#1"]
+    assert sorted(state["retry"]) == previous[1:]
 
 
 def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):

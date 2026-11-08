@@ -50,31 +50,34 @@ def cmd_refresh_github(args) -> None:
     union = github_union(manifests)
     state_file = Path(args.state) if args.state else None
     state = json.loads(state_file.read_text()) if state_file and state_file.exists() else {}
-    previous = state.get("refs", {})
+    previous = state.get("refs", {})  # last run's union, for the shrink guard
+    # refs that left the union and may still carry a marker: {ref: labels}
+    pending = {ref: labels for ref, labels in (state.get("retry", {}) | previous).items() if ref not in union}
 
     states, failed = fetch_states(gh_api, sorted(union))
     check_guards(len(union), len(previous), len(failed), args.accept_shrink)
     written = write_csvs(Path(args.out_dir), states)
     LOGGER.info("%d refs cached in %d files, %d failed", len(states), len(written) // 2, len(failed))
 
-    plan, dropped_failed = [], []
+    plan, cleaned = [], set()
     if args.labels != "off":
         reconciler = Reconciler(
             gh_api,
             args.labels,
             {m["label"]: m for m in manifests},
             state.get("comments", {}),
-            managed={label for labels in previous.values() for label in labels},
+            managed={label for labels in [*previous.values(), *pending.values()] for label in labels},
         )
-        # refs that dropped out since last run still need their marker removed
-        dropped, dropped_failed = fetch_states(gh_api, sorted(set(previous) - set(union)))
+        dropped, _ = fetch_states(gh_api, sorted(pending))
         for ref in sorted(set(union) | set(dropped)):
             current = (states.get(ref) or dropped.get(ref) or {}).get("labels", [])
             reconciler.reconcile(ref, union.get(ref, {}), current)
-        no_perm = sorted(repo for repo, ok in reconciler.can_label_repo.items() if not ok)
+        if args.labels == "on":
+            cleaned = set(dropped) - reconciler.failed
         plan = [
             *reconciler.plan,
-            f"repos without label permission (marker comment instead): {', '.join(no_perm) or 'none'}",
+            "repos without label permission (marker comment instead): "
+            + (", ".join(sorted(repo for repo, ok in reconciler.can_label_repo.items() if not ok)) or "none"),
         ]
         state["comments"] = reconciler.state
 
@@ -86,8 +89,8 @@ def cmd_refresh_github(args) -> None:
     )
     if state_file:
         state["refs"] = {ref: sorted(labels) for ref, labels in union.items()}
-        # a dropped ref that failed to fetch still has its marker: keep it so the next run retries
-        state["refs"] |= {ref: previous[ref] for ref in dropped_failed}
+        # a dropped ref leaves only once its marker is really gone (fetched, written in `on` mode)
+        state["retry"] = {ref: labels for ref, labels in pending.items() if ref not in cleaned}
         state_file.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
 
 
