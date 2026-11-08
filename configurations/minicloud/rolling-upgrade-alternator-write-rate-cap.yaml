@@ -1,0 +1,19 @@
+# Caps the YCSB writes of configurations/rolling-upgrade-alternator.yaml, because on minicloud all
+# db guests share one host SSD. Use it right after that file:
+#
+#   -c configurations/rolling-upgrade-alternator.yaml \
+#   -c configurations/minicloud/rolling-upgrade-alternator-write-rate-cap.yaml \
+#   -c configurations/minicloud.yaml
+#
+# Same budget as rolling-upgrade-write-rate-cap.yaml: a write costs about 15x its payload on disk,
+# and these rows are 10 x 512 B = 5 KB, the same as its 1M-row c-s write, so the same 1200 ops/s
+# cap (host near 90 MB/s). Op counts stay as in the job; each write takes about 14 min.
+
+stress_before_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -target 1200 -p recordcount=1010020
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 -p table=usertable
+stress_during_entire_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -target 1200 -p recordcount=1005010
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1005010 -p table=usertable

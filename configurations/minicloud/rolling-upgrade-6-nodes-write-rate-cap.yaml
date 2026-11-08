@@ -1,0 +1,28 @@
+# Caps the writes of test-cases/upgrades/rolling-upgrade.yaml (test_rolling_upgrade, 6 db nodes),
+# because on minicloud all db guests share one host SSD. Use it right after that file:
+#
+#   -c test-cases/upgrades/rolling-upgrade.yaml \
+#   -c configurations/minicloud/rolling-upgrade-6-nodes-write-rate-cap.yaml \
+#   -c configurations/minicloud.yaml
+#
+# Same budget as rolling-upgrade-write-rate-cap.yaml: a write costs about 15x its payload on disk,
+# so the writers running at the same time stay under about 6 MB/s of payload (host near 90 MB/s).
+# The replicas of RF=3 land on the same SSD whether there are 3 or 6 db guests, so the budget does
+# not depend on the node count. Writers that run together, and their payload at the cap:
+#   write_stress_during_entire_test  2500/s x ~180 B          ~0.45 MB/s the whole test
+#   stress_cmd_complex_prepare       2000/s x ~1 KB with index ~2   MB/s  together with the above
+#   prepare_write_stress c-s         5000/s x ~180 B          ~0.9 MB/s  together with the above
+#   prepare_write_stress s-b          200/s x 10 rows x ~560 B ~1.1 MB/s  together with the above
+#   large_partition_stress_during_upgrade (same s-b cap)      ~1.1 MB/s  during the upgrades
+# Row and op counts stay as in the test-case; only the rate is capped, so the phases take longer.
+# Lists are replaced, not merged, so every command of a list is repeated.
+
+write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 throttle=2500/s -pop seq=1..20100200 -log interval=5
+
+stress_cmd_complex_prepare: latte run data_dir/latte/complex_schema.rn -f insert --consistency ALL -d 5000000 -P row_count=5000000 --threads 8 --concurrency 128 --rate 2000
+
+prepare_write_stress:
+  - cassandra-stress write no-warmup cl=QUORUM n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=1000 throttle=5000/s -pop seq=1..10100200 -log interval=5
+  - scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=all -rows-per-request=10 -timeout=30s -validate-data -max-rate 200
+
+large_partition_stress_during_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data -keyspace scylla_bench_during_upgrade -max-rate 200
