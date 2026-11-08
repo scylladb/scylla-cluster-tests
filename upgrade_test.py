@@ -150,6 +150,28 @@ def recover_conf(node):
         )
 
 
+PKG_TIMEOUT = 600
+
+
+def download_then_install(node, pkg_cmd: str) -> None:
+    """Download the packages of a yum/apt-get command under a remote deadline, then install them from the cache.
+
+    The SCT timeout closes only the SSH channel: a package manager stalled on a mirror keeps running
+    and holds its lock, and the retries fail on it. The remote `timeout` ends the download first.
+    Killing a download is safe, and the retry resumes it. The install then can't stall on a mirror,
+    and fails right away if the cache is incomplete. See SCT-1426 and SCT-1456.
+    """
+    if node.distro.is_rhel_like:
+        download_only, cache_only = "--downloadonly", "-C"
+    else:
+        pkg_cmd = f"env DEBIAN_FRONTEND=noninteractive {pkg_cmd}"
+        download_only, cache_only = "--download-only", "--no-download"
+    node.remoter.sudo(
+        f"timeout --kill-after=30s {PKG_TIMEOUT - 60} {pkg_cmd} {download_only}", retry=3, timeout=PKG_TIMEOUT
+    )
+    node.remoter.sudo(f"{pkg_cmd} {cache_only}", retry=3, timeout=PKG_TIMEOUT)
+
+
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """Test a Scylla cluster upgrade."""
 
@@ -362,7 +384,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
-                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
+                    download_then_install(node, rf"yum update {scylla_pkg_ver}\* -y")
                 else:
                     # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
                     # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
@@ -522,7 +544,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             if node.distro.is_rhel_like:
                 node.remoter.run(r"sudo yum remove scylla\* -y", retry=3)
-                node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y", retry=3, timeout=600)
+                download_then_install(node, f"yum install {scylla_pkg_ver} -y")
             else:
                 # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
                 # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
@@ -534,17 +556,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     f"install {scylla_pkg_ver} -y",
                     options={"DPkg::Lock::Timeout": "300"},
                 )
-                node.remoter.sudo(
-                    f"DEBIAN_FRONTEND=noninteractive {install_cmd}",
-                    retry=3,
-                    timeout=600,
-                )
+                download_then_install(node, install_cmd)
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
         elif self.upgrade_rollback_mode == "minor_release":
-            node.remoter.run(r"sudo yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0], retry=3, timeout=600)
+            download_then_install(node, r"yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0])
         else:
-            node.remoter.run(r"sudo yum downgrade scylla\* -y", retry=3, timeout=600)
+            download_then_install(node, r"yum downgrade scylla\* -y")
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
 
