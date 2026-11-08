@@ -20,6 +20,7 @@ ensure_start_method()
 
 lazy from collections import defaultdict
 lazy from datetime import datetime, timezone, timedelta, UTC
+lazy import importlib
 lazy import json
 lazy import os
 lazy import re
@@ -1749,6 +1750,9 @@ def lint_yamls(backend, exclude: str, include: str):
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
+    # The workers are forked from this process. `SCTConfiguration` is a lazy import, so load its module
+    # here first: otherwise every worker imports the whole config stack on its own.
+    importlib.import_module(SCTConfiguration.__module__)
     process_pool = ProcessPoolExecutor(max_workers=5)
 
     features = []
