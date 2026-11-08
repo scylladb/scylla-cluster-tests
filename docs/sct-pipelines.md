@@ -151,12 +151,12 @@ that, both usable independently:
   builder-local path when `./sct_runner_ip` is absent). It is honored only with
   `minicloud: true` (which resolves the KVM-capable label) or, in longevityPipeline only, with
   `backend: baremetal`, which provisions nothing; on any other backend the sct-runner is still
-  created. A baremetal run
-  uses it when its hosts sit in a lab network a cloud sct-runner cannot reach: pin a lab agent
-  next to them with `jenkins_label`, e.g. `minicloud-kvm-builders-artifacts`. Without a
-  `jenkins_label` the test runs on the regular builder, which suits hosts that are cloud
-  instances. A local agent keeps its workspace between builds, so each build starts by
-  removing log trees older than 3 days (`workspaceReclaim`).
+  created. A baremetal run uses it when its hosts sit in a lab network a cloud sct-runner
+  cannot reach: pin a lab agent next to them with `jenkins_label`, e.g.
+  `minicloud-kvm-builders-artifacts`. Without a `jenkins_label` the test runs on the regular
+  builder, which suits hosts that are cloud instances. A local agent keeps its workspace
+  between builds, so each build starts by removing log trees older than 3 days
+  (`workspaceReclaim`).
 
   ```groovy
   longevityPipeline(
