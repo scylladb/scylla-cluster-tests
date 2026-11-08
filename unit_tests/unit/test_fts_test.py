@@ -48,13 +48,18 @@ def test_every_mapped_parameter_is_a_parameter_of_the_script(script_source):
     assert mapped <= declared, f"not parameters of {FTS_WORKLOAD.script}: {sorted(mapped - declared)}"
 
 
-def test_the_phases_the_flow_invokes_exist(script_source):
-    """'load' and 'build_index' are the contract between the flow and any rune script. The script
-    also carries a 'search' function, unused until the query phase lands -- it is mirrored whole
-    from scylladb/vector-store, so trimming it would only create a divergence to undo.
+def test_the_hdr_tag_names_a_function_of_the_script(script_source):
+    """The tag is 'fn--<function>'; latte emits nothing under it if that function is not there,
+    and every query record would come out without a latency.
     """
+    function = FTS_WORKLOAD.hdr_tag.removeprefix("fn--")
+    assert function in set(RUNE_FUNCTION_RE.findall(script_source))
+
+
+def test_the_phases_the_flow_invokes_exist(script_source):
+    """'load', 'build_index' and 'search' are the contract between the flow and any rune script."""
     functions = set(RUNE_FUNCTION_RE.findall(script_source))
-    assert {"load", "build_index"} <= functions
+    assert {"load", "build_index", "search"} <= functions
 
 
 def test_the_step_record_file_key_shares_the_scripts_vocabulary():
@@ -62,9 +67,9 @@ def test_the_step_record_file_key_shares_the_scripts_vocabulary():
     assert FTS_WORKLOAD.step_records_file_key == FTS_WORKLOAD.params.records_file
 
 
-def test_the_test_case_entry_point_exists():
-    """The name docs/fts-search-test.md tells you to run, and what the Jenkins job will name as its
-    sub_test once the aws test case lands. Renaming it breaks every documented invocation.
+def test_the_test_case_entry_point_is_the_one_the_pipelines_call():
+    """jenkins-pipelines/performance_staging/fts-search-test.jenkinsfile names this sub_test, and
+    docs/fts-search-test.md tells you to run it. Renaming it breaks both.
     """
     assert callable(fts_test.FtsSearchTest.test_fts_search)
     assert fts_test.FtsSearchTest.WORKLOAD is FTS_WORKLOAD

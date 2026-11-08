@@ -11,10 +11,14 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import concurrent.futures
 import contextlib
 import logging
 import os
+import posixpath
 import re
+import shlex
+import threading
 import uuid
 from pathlib import Path
 
@@ -75,7 +79,7 @@ def get_latte_operation_type(stress_cmd):
             counter_read = True
         elif re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
             write_found = True
-        elif re.findall(r"(?:^|_)(read|select|get|count)(?:_|$)", fn):
+        elif re.findall(r"(?:^|_)(read|select|get|count|search)(?:_|$)", fn):
             read_found = True
         else:
             return "user"
@@ -91,23 +95,154 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
+# What this run sent to loader hosts: (loader name, host path) -> (local path, size, mtime) of the
+# file sent there. Only these count as sent -- a file an earlier run left on a host may hold anything.
+_SENT_TO_LOADERS: dict[tuple[str, str], tuple[str, int, int]] = {}
+_SEND_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_LOADER_HOMES: dict[str, str] = {}
+_LOADER_FILES_LOCK = threading.Lock()
+# Keeps apart the runs (and test workers) that share a host and loader names -- a docker host, say.
+_STAGING_RUN = uuid.uuid4().hex[:8]
+
+
+def loader_path(loader, relative: str) -> str:
+    """Where *relative* lives on *loader*'s host, under 'latte-staging/<run>/<loader name>' in its
+    home.
+
+    Docker loaders all run on one host; the loader name keeps their files apart. The home is
+    resolved, not written as '$HOME': rsync sends the destination with '--secluded-args', so no
+    remote shell expands it.
+    """
+    with _LOADER_FILES_LOCK:
+        home = _LOADER_HOMES.get(loader.name)
+    if home is None:
+        home = loader.remoter.run("echo $HOME", verbose=False).stdout.strip()
+        if not home.startswith("/"):
+            raise RuntimeError(f"Cannot resolve the home directory on {loader.name}: got {home!r}")
+        with _LOADER_FILES_LOCK:
+            _LOADER_HOMES[loader.name] = home
+    return posixpath.join(home, "latte-staging", _STAGING_RUN, loader.name, relative.lstrip("/"))
+
+
+def _fingerprint(local_path: str) -> tuple[str, int, int]:
+    stat = os.stat(local_path)
+    return local_path, stat.st_size, stat.st_mtime_ns
+
+
+def _send_lock(key: tuple[str, str]) -> threading.Lock:
+    with _LOADER_FILES_LOCK:
+        return _SEND_LOCKS.setdefault(key, threading.Lock())
+
+
+def send_to_loader(loader, files: list[tuple[str, str]]) -> None:
+    """Send '(local_path, host_path)' pairs to *loader*'s host, skipping a file this run already sent
+    there unchanged.
+    """
+    pending = [
+        (local_path, host_path)
+        for local_path, host_path in files
+        if _SENT_TO_LOADERS.get((loader.name, host_path)) != _fingerprint(local_path)
+    ]
+    if not pending:
+        return
+    parents = sorted({posixpath.dirname(host_path) for _, host_path in pending})
+    loader.remoter.run(f"mkdir -p {' '.join(map(shlex.quote, parents))}", verbose=False)
+    for local_path, host_path in pending:
+        key = (loader.name, host_path)
+        with _send_lock(key):
+            fingerprint = _fingerprint(local_path)
+            if _SENT_TO_LOADERS.get(key) == fingerprint:
+                continue
+            # One call per file: the local and agent runners take a single path, not a list.
+            if not loader.remoter.send_files(local_path, host_path, verbose=False):
+                raise RuntimeError(f"Failed to send {local_path} to {loader.name}:{host_path}")
+            _SENT_TO_LOADERS[key] = fingerprint
+
+
+def remove_from_loader(loader, host_paths: list[str]) -> None:
+    """Remove staged files from *loader*'s host. Never raises: it runs from 'finally' blocks, where
+    a dropped connection must not replace the outcome of the command it cleans up after.
+    """
+    for host_path in host_paths:
+        _SENT_TO_LOADERS.pop((loader.name, host_path), None)
+    try:
+        loader.remoter.run(f"rm -f {' '.join(map(shlex.quote, host_paths))}", verbose=False, ignore_status=True)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not remove %s from %s", host_paths, loader.name, exc_info=True)
+
+
+def staged_file_path(loader, container_path: str) -> str:
+    """Where an 'extra_files_to_stage' file for *container_path* lives on *loader*'s host."""
+    return loader_path(loader, f"files{container_path}")
+
+
 class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
-    def __init__(self, *args, extra_files_to_stage=None, **kwargs):
+    def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, loader=None, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
-        invocation needs, such as a dataset shard. 'build_stress_cmd' copies them into the loader
-        container with the rune script's directory; the container is removed after the run.
+        invocation needs, such as a dataset shard: each is sent to the host of the loader the
+        command runs on, mounted read-only at its container path and removed afterwards.
+
+        *record_hdr* set to False skips the HDR histogram of this invocation even when
+        'use_hdrhistogram' is on, for a command whose latency nobody reads.
+
+        *loader* runs the command on that loader only, instead of the next one round-robin or all
+        of them -- for a caller that sent its staged files to that loader ahead of the command.
         """
         super().__init__(*args, **kwargs)
         self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
+        self.record_hdr = record_hdr
+        self.pinned_loader = loader
         for _, container_path in self.extra_files_to_stage:
             if not container_path.startswith("/"):
                 raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
+        # NOTE: a staged file's place on the host follows from its loader and container path, so two
+        #       commands on one loader would share it and the first to finish would remove it.
+        #       Round-robin runs a single command whatever 'stress_num' says.
+        if self.extra_files_to_stage and self.stress_num > 1 and not self.round_robin:
+            raise ValueError("Files are staged per loader, so 'extra_files_to_stage' needs stress_num=1")
+        if self.extra_files_to_stage and "k8s" in self.params.get("cluster_backend"):
+            raise ValueError("'extra_files_to_stage' mounts files from a loader's docker host, which k8s loaders lack")
+
+    def configure_executer(self):
+        if self.pinned_loader is None:
+            super().configure_executer()
+            return
+        self.stress_num = 1
+        self.loaders = [self.pinned_loader]
+        self.max_workers = 1
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    def records_hdr(self) -> bool:
+        # 'latte schema' takes no '--hdrfile'
+        return self.record_hdr and bool(self.params.get("use_hdrhistogram")) and "latte schema" not in self.stress_cmd
+
+    @contextlib.contextmanager
+    def _staged_files(self, loader):
+        """Put 'extra_files_to_stage' on *loader*'s host for the command, and yield the docker
+        options mounting them. They are removed afterwards, whether the command ran or not.
+        """
+        if not self.extra_files_to_stage:
+            yield ""
+            return
+        files = [(local, staged_file_path(loader, container)) for local, container in self.extra_files_to_stage]
+        try:
+            send_to_loader(loader, files)
+            # 'z' relabels the file for SELinux loaders, like every other stress tool mount.
+            yield "".join(
+                " -v " + shlex.quote(f"{host_path}:{container_path}:ro,z")
+                for (_, host_path), (_, container_path) in zip(files, self.extra_files_to_stage)
+            )
+        finally:
+            remove_from_loader(loader, [host_path for _, host_path in files])
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
+
+    def _script_name(self) -> str:
+        return re.search(r"([/\w-]*\.rn)", self.stress_cmd).group(0)
 
     def _build_ssl_config(self, cmd_runner, loader):
         """Build SSL configuration flags and upload SSL files to the loader."""
@@ -154,22 +289,23 @@ class LatteStressThread(DockerBasedStressThread):
                     raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
         return datacenter, rack
 
+    def _script_dir_mount(self, loader) -> str:
+        """Send the top-level files of the rune script's directory to the loader host, and return the
+        docker option mounting them where the command looks for the script.
+
+        Every latte call gets a container of its own, so copying them into the container cost a
+        transfer per file per call; on the host they are sent once, and again only if changed.
+        """
+        script_dir = Path(self._script_name()).parent
+        host_dir = loader_path(loader, f"scripts/{script_dir}")
+        files = sorted(path for path in (Path(get_sct_root_path()) / script_dir).iterdir() if path.is_file())
+        send_to_loader(loader, [(str(path), f"{host_dir}/{path.name}") for path in files])
+        return "-v " + shlex.quote(f"{host_dir}:/{str(script_dir).lstrip('/')}:ro,z")
+
     def build_stress_cmd(self, cmd_runner, loader, hosts):
-        # extract the script so we know which files to mount into the docker image
-        script_name_regx = re.compile(r"([/\w-]*\.rn)")
-        script_name = script_name_regx.search(self.stress_cmd).group(0)
+        script_name = self._script_name()
         if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
             self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
-
-        for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
-            if src_file.is_file():
-                remote_path = str(Path(script_name).parent / src_file.name)
-                if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
-                    cmd_runner.send_files(str(src_file), remote_path)
-
-        for local_path, container_path in self.extra_files_to_stage:
-            if not cmd_runner.send_files(local_path, container_path, verbose=False):
-                raise RuntimeError(f"Failed to copy {local_path} into the loader container at {container_path}")
 
         ssl_config = self._build_ssl_config(cmd_runner, loader)
 
@@ -262,6 +398,10 @@ class LatteStressThread(DockerBasedStressThread):
         return output
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
+        with self._staged_files(loader) as staged_file_mounts:
+            return self._run_container(loader, loader_idx, cpu_idx, staged_file_mounts)
+
+    def _run_container(self, loader, loader_idx, cpu_idx, staged_file_mounts):
         cpu_options = ""
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
@@ -297,11 +437,14 @@ class LatteStressThread(DockerBasedStressThread):
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+                # The script path in the command is relative, so it resolves against the workdir.
+                f" --workdir / {self._script_dir_mount(loader)}"
+                f"{staged_file_mounts}"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
         stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
-        if self.params.get("use_hdrhistogram") and "latte schema" not in self.stress_cmd:
+        if self.records_hdr():
             stress_cmd += f" --hdrfile={remote_hdr_file_name}"
             hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
