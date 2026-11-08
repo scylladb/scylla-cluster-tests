@@ -260,13 +260,13 @@ class GceZoneResolver:
 
 
 def gce_public_addresses(instance: compute_v1.Instance) -> list[str]:
-    addresses = []
-
-    for interface in instance.network_interfaces:
-        for config in interface.access_configs:
-            addresses.append(str(config.nat_i_p))
-
-    return addresses
+    """A stopped VM keeps its access config but loses its ephemeral IP (`nat_i_p` is empty), so skip it."""
+    return [
+        config.nat_i_p
+        for interface in instance.network_interfaces
+        for config in interface.access_configs
+        if config.nat_i_p
+    ]
 
 
 def gce_private_addresses(instance: compute_v1.Instance) -> list[str]:
