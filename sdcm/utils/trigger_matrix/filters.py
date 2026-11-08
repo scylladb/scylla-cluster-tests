@@ -14,6 +14,7 @@
 """Selecting which jobs of a matrix a given trigger should run."""
 
 import logging
+import re
 
 from sdcm.utils.trigger_matrix.models import JobConfig, job_arch
 from sdcm.utils.trigger_matrix.versions import _strip_version_qualifier
@@ -142,8 +143,10 @@ def _is_version_included(scylla_version: str, include_versions: list[str]) -> bo
 def _is_pre_release_match(scylla_version: str, resolved_version: str, pre_release: list[str]) -> bool:
     """Check if version contains a pre-release tag or is 'master'.
 
-    Mirrors groovy logic: version.contains("-${pr}"). Additionally allows
-    'master' through since master builds should always run these jobs.
+    The tag matches after any of the `-`, `~` and `.` separators, so it is found in the short RC
+    spellings (2026.4.0-rc1, 2026.4.0~rc1, 2026.4.0.rc1) and in the dotted full RC tag
+    (2026.3.0.rc1.0.20260730.726f67a532e2). It must not be followed by a digit, so rc1 does not
+    match rc10. 'master' always passes, since master builds should always run these jobs.
 
     Args:
         scylla_version: Original version (e.g., "master:latest", "2025.1:latest").
@@ -154,4 +157,4 @@ def _is_pre_release_match(scylla_version: str, resolved_version: str, pre_releas
 
     if original == "master":
         return True
-    return any(f"-{tag}" in resolved_version for tag in pre_release)
+    return any(re.search(rf"[.~-]{re.escape(tag)}(?!\d)", resolved_version) for tag in pre_release)

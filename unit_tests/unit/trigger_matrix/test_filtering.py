@@ -12,6 +12,8 @@
 # Copyright (c) 2026 ScyllaDB
 
 
+import pytest
+
 from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.models import JobConfig
 
@@ -148,6 +150,27 @@ def test_pre_release_non_rc_blocked():
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-0.20250525.abc")
     assert len(result) == 0
+
+
+@pytest.mark.parametrize(
+    "resolved_version",
+    [
+        "2026.4.0-rc1",
+        "2026.4.0~rc1",
+        "2026.4.0.rc1",
+        "2026.3.0.rc1.0.20260730.726f67a532e2",
+        "2026.4.0~rc1-0.20261026.09174ad4a5a7",
+    ],
+)
+def test_pre_release_matches_any_separator(resolved_version):
+    jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
+    assert len(filter_jobs(jobs, scylla_version=resolved_version, resolved_version=resolved_version)) == 1
+
+
+@pytest.mark.parametrize("resolved_version", ["2026.4.0-rc10", "2026.4.0~rc11-0.20261026.abc", "2026.4.0.rc13"])
+def test_pre_release_tag_does_not_match_longer_number(resolved_version):
+    jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
+    assert len(filter_jobs(jobs, scylla_version=resolved_version, resolved_version=resolved_version)) == 0
 
 
 def test_pre_release_rc2_not_in_list_blocked():

@@ -99,6 +99,10 @@ RELEASE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+
 # A short version that names a line rather than a build: 2025.4, 2025.4.0, 5.2.1
 SIMPLE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?$")
 
+# A release candidate named without its build: 2026.4.0-rc1, as promote-release passes it.
+# Also accepts the `~` and `.` separators: 2026.4.0~rc1, 2026.4.0.rc1
+RC_SHORT_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.\d+[.~-]rc\d+$")
+
 # branch:qualifier, as accepted by the trigger matrix: master:latest, branch-2019.1:all
 BRANCH_VERSION_RE = re.compile(r"^(?P<branch>[a-zA-Z0-9._-]+):(?P<qualifier>.+)$")
 
