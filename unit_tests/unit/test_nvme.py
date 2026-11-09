@@ -130,6 +130,39 @@ NVME_LIST_JSON_FLAT = json.dumps(
 
 NVME_LIST_EMPTY_JSON = json.dumps({"Devices": []})
 
+# `nvme list -o json` on a GCE z4d-highmem-16-standardlssd db node: nvme-cli reports
+# "Firmware" as null for the Titanium local SSD and for the Hyperdisk boot disk
+NVME_LIST_JSON_GCE_Z4D = json.dumps(
+    {
+        "Devices": [
+            {
+                "NameSpace": 1,
+                "DevicePath": "/dev/nvme0n1",
+                "GenericPath": "/dev/ng0n1",
+                "Firmware": None,
+                "ModelNumber": "nvme_card0",
+                "SerialNumber": "nvme_card0",
+                "UsedBytes": 3758096384000,
+                "MaximumLBA": 917504000,
+                "PhysicalSize": 3758096384000,
+                "SectorSize": 4096,
+            },
+            {
+                "NameSpace": 1,
+                "DevicePath": "/dev/nvme1n1",
+                "GenericPath": "/dev/ng1n1",
+                "Firmware": None,
+                "ModelNumber": "nvme_card-pd",
+                "SerialNumber": "0nvme_card-pd0",
+                "UsedBytes": 53687091200,
+                "MaximumLBA": 104857600,
+                "PhysicalSize": 53687091200,
+                "SectorSize": 512,
+            },
+        ]
+    }
+)
+
 # nvme-cli pads the entry index and prints hex values with a "0x" prefix
 ERROR_LOG_TEXT_PADDED_OUTPUT = """\
 Error Log Entries for device:nvme1n1 entries:2
@@ -224,6 +257,31 @@ def test_parse_nvme_list_output_flat_format():
     assert devices[0].sector_size == 512
     assert devices[1].device_path == "/dev/nvme1n1"
     assert devices[1].sector_size == 4096
+
+
+def test_parse_nvme_list_output_gce_z4d_null_firmware():
+    """GCE z4d reports "Firmware": null; the devices still parse, with an empty firmware."""
+    devices = parse_nvme_list_output(NVME_LIST_JSON_GCE_Z4D)
+    assert [(d.device_path, d.model, d.serial, d.firmware) for d in devices] == [
+        ("/dev/nvme0n1", "nvme_card0", "nvme_card0", ""),
+        ("/dev/nvme1n1", "nvme_card-pd", "0nvme_card-pd0", ""),
+    ]
+    assert devices[0].size_bytes == 3758096384000
+    assert devices[0].sector_size == 4096
+
+
+def test_parse_nvme_list_output_null_string_fields_fall_back():
+    """A null field falls back to its alternative key, then to an empty string."""
+    entry = {
+        "DevicePath": "/dev/nvme0n1",
+        "ModelNumber": None,
+        "Model": "  Fallback Model  ",
+        "SerialNumber": None,
+        "Firmware": None,
+        "FirmwareRevision": "1.0",
+    }
+    [device] = parse_nvme_list_output(json.dumps([entry]))
+    assert (device.model, device.serial, device.firmware) == ("Fallback Model", "", "1.0")
 
 
 def test_parse_nvme_list_output_empty_devices():
