@@ -288,6 +288,18 @@ def parse_nvme_list_output(json_output: str) -> list[NvmeDevice]:
     return devices
 
 
+def _entry_str(entry: dict, *keys: str) -> str:
+    """Return the first non-null value of `keys` in `entry`, stripped, or "".
+
+    nvme-cli can report a field as JSON null rather than leaving it out: on GCE
+    z4d, `nvme list -o json` gives `"Firmware": null` for every device.
+    """
+    for key in keys:
+        if (value := entry.get(key)) is not None:
+            return str(value).strip()
+    return ""
+
+
 def _parse_device_entry(entry: dict) -> NvmeDevice | None:
     """Parse a single device entry from nvme list JSON output."""
     device_path = entry.get("DevicePath", entry.get("NameSpace", ""))
@@ -296,9 +308,9 @@ def _parse_device_entry(entry: dict) -> NvmeDevice | None:
 
     return NvmeDevice(
         device_path=device_path,
-        model=entry.get("ModelNumber", entry.get("Model", "")).strip(),
-        serial=entry.get("SerialNumber", entry.get("Serial", "")).strip(),
-        firmware=entry.get("Firmware", entry.get("FirmwareRevision", "")).strip(),
+        model=_entry_str(entry, "ModelNumber", "Model"),
+        serial=_entry_str(entry, "SerialNumber", "Serial"),
+        firmware=_entry_str(entry, "Firmware", "FirmwareRevision"),
         size_bytes=entry.get("PhysicalSize", entry.get("Size", 0)),
         used_bytes=entry.get("UsedBytes", entry.get("Used", 0)),
         sector_size=entry.get("SectorSize", entry.get("LbaSize", 512)),
