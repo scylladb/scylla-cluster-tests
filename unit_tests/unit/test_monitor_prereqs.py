@@ -40,6 +40,7 @@ def commands(node: MagicMock) -> list[str]:
 def test_host_with_everything_gets_no_install_and_no_docker_restart():
     node = run_prereqs("")
 
+    node.update_repo_cache.assert_not_called()
     node.install_package.assert_not_called()
     node.remoter.sudo.assert_not_called()
     assert commands(node) == [], "only the marker check and the probe should run"
@@ -48,6 +49,7 @@ def test_host_with_everything_gets_no_install_and_no_docker_restart():
 def test_only_missing_packages_are_installed():
     node = run_prereqs("unzip\n")
 
+    node.update_repo_cache.assert_not_called()  # node_setup already refreshed it
     node.install_package.assert_called_once_with("unzip")
     node.remoter.sudo.assert_not_called()
 
