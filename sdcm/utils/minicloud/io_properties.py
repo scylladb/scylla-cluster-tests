@@ -12,12 +12,6 @@ from sdcm.utils.minicloud.preflight import db_guest_count
 IO_PROPERTY_KEYS = ("read_iops", "read_bandwidth", "write_iops", "write_bandwidth")
 
 
-def check_io_properties_margin(margin) -> None:
-    """Fail unless ``margin`` is a number from 0 up to, but not including, 1."""
-    if not isinstance(margin, (int, float)) or not 0 <= margin < 1:
-        raise ValueError(f"minicloud_io_properties_margin must be at least 0 and below 1, got {margin!r}")
-
-
 def scale_io_properties(text: str, guests: int, margin: float) -> str:
     """Split the host io_properties yaml evenly between ``guests`` db guests.
 
@@ -27,7 +21,6 @@ def scale_io_properties(text: str, guests: int, margin: float) -> str:
     if guests < 1:
         raise ValueError(f"cannot share io_properties between {guests} db guests")
 
-    check_io_properties_margin(margin)
     share = (1 - Fraction(str(margin))) / guests
     disks = []
     for disk in yaml.safe_load(text)["disks"]:

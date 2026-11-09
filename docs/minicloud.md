@@ -91,7 +91,7 @@ Params (defaults in `defaults/test_default.yaml`, reference in
   [Reactor polling on shared host CPUs](#reactor-polling-on-shared-host-cpus).
 - `minicloud_io_properties_margin` (default `0.05`) - fraction of the `io_properties.yaml` figures
   kept for the loader, the monitor and the host; the rest is split between the db guests. Must be
-  at least 0 and below 1, or the run fails before the container starts.
+  at least 0 and below 1, or the configuration fails to load.
 
 S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test sstables) are configured via
 `minicloud_s3_passthrough_buckets`; this is why minicloud runs still need the

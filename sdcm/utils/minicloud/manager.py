@@ -27,7 +27,6 @@ from sdcm.utils.minicloud.config import (
 )
 from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS
 from sdcm.utils.minicloud.gcp import prepare_gce_network, setup_gcp_credentials
-from sdcm.utils.minicloud.io_properties import check_io_properties_margin
 from sdcm.utils.minicloud.log_collection import _decode_exit, redact_docker_inspect
 from sdcm.utils.minicloud.networking import setup_host_networking
 from sdcm.utils.minicloud.preflight import (
@@ -96,7 +95,6 @@ class MinicloudManager:
         if params is not None:
             self._check_host_memory(params)
             self._check_scylla_memory_budget(params)
-            check_io_properties_margin(params.get("minicloud_io_properties_margin"))
             if enforce_overlay:
                 validate_minicloud_params(params)
             else:

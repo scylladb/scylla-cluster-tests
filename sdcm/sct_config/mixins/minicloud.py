@@ -65,6 +65,8 @@ class MinicloudConfigMixin(BaseModel):
         "<project>-minicloud-staging and create it on demand",
     )
     minicloud_io_properties_margin: float = SctField(
+        ge=0,
+        lt=1,
         description="Share of the host disk figure in configurations/minicloud/scylla.d/io_properties.yaml "
         "held back for the loader, the monitor and the host itself before the rest is divided between "
         "the db guests of the run (a fraction, 0.05 = 5%)",
