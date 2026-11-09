@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "gce",
-    gce_datacenter: "us-central1",
+    gce_datacenter: "us-east4",
     availability_zone: "c",
     provision_type: 'on_demand',
     gce_project: 'gcp-local-ssd-latency',
