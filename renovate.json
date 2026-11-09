@@ -195,7 +195,9 @@
     }
   ],
   "vulnerabilityAlerts": {
-    "enabled": true
+    "enabled": true,
+    "groupName": "security updates",
+    "groupSlug": "security-updates"
   },
   "osvVulnerabilityAlerts": true,
   "github-actions": {
