@@ -8,12 +8,39 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 
 **Entry criteria**: PR URL or diff is available.
 
+In CI there is no `gh`: the prompt names the files that hold the pull request data, the threads, the
+comments, and the checks. Read those files where the steps below say `gh`.
+
 1. Read the PR title, description, and linked issues
    - Read `REVIEW.md` at the repository root for the three review passes
    - When the PR carries or links a flow directory `docs/plans/<feature>/<change>/`, read the `intent.md`, `spec.md`, and `plan.md` that exist (SKILL.md Check 11)
-2. Identify the category of change: bug fix, feature, refactor, test, config, CI
-3. List the files modified and which SCT subsystems they touch
-4. Note the backends involved (AWS, GCE, Azure, Docker, K8S, baremetal)
+2. Read the existing review threads and bot reviews, so that you do not repeat them:
+   `gh api repos/<repo>/pulls/<N>/comments --paginate` and `gh api repos/<repo>/pulls/<N>/reviews`
+3. Read the whole changed files, not only the hunks, and the callers and callees of each changed function
+4. Read the CI status from two sources:
+   - **Checks**: `gh pr checks <N>` lists the GitHub Actions checks and the Jenkins statuses
+     (`jenkins/precommit`, `jenkins/unittests`, `jenkins/collect_tests`, `jenkins/lint_test_cases`,
+     `continuous-integration/jenkins/pr-merge` or `pr-head`)
+   - **Test summary comment**: Jenkins posts one comment that starts with `<!-- sct-test-summary -->`
+     and updates it on each run. It names each failed test, with its message, its traceback, and the
+     build link:
+     `gh api repos/<repo>/issues/<N>/comments --jq '.[] | select(.body | contains("sct-test-summary")) | .body'`
+   - The summary is current only when its build link has the same build number as the
+     `continuous-integration/jenkins/*` status of the head commit. Otherwise it is from an older build:
+     say so, and do not report its failures as current. A pending status means the build still runs
+   - For each failure, decide whether this PR caused it: the PR touches the failed test, or a file in
+     its traceback. A failure that the PR caused gets an inline 🚫 or 🔧 on the responsible line. A
+     failure that it did not cause (a network error, a flaky test, a break on master) goes in the
+     summary's `CI:` line as "not caused by this PR"
+   - The `CI:` line names only failures, pending builds, and checks that did not run. Never list the
+     checks that passed. A summary that says FAILED next to a green status still reports its failures
+5. Identify the category of change: bug fix, feature, refactor, test, config, CI
+6. List the files modified and which SCT subsystems they touch
+7. Note the backends involved (AWS, GCE, Azure, Docker, K8S, baremetal)
+
+**Prove a finding when it is cheap.** Run the changed tests, run a short script, or grep for the
+callers. A finding that you did not prove or trace in the code is a ❓ question, with what would
+confirm it. In CI, never run code from the pull request: trace it in the code instead.
 
 **Exit criteria**: You can explain in one sentence what the PR does and why.
 
@@ -70,67 +97,46 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 3. **Missing changes**: Are there files that SHOULD have been modified but weren't? (Other backends, test stubs, config defaults)
 4. **Commit message**: Follows Conventional Commits format with valid type, scope (3+ chars), subject (10-120 chars), and body (30+ chars)
 5. **Spec compliance**: When the PR carries a flow directory, the change matches its documents (SKILL.md Check 11)
+6. **Scope**: The main change is in its own commit. Unrelated reformatting and pieces outside the plan are findings
+7. **Size**: Ask what could be deleted and still work: a reinvented helper, an abstraction with one user, test scaffolding larger than the code it tests
+8. **Ownership and merge order**: The change belongs to the team that owns the code (`CODEOWNERS`). When it depends on another PR, the description says "merge only after #N". A real bug outside the scope is a 📌 follow-up that asks for a Jira link, not a request to fix it in this PR
 
 **Exit criteria**: Review is complete. All findings documented with specific file/line references.
 
 ---
 
-## Phase 6: Write Review Feedback
+
+## Phase 6: Write the Review
 
 **Entry criteria**: All checks complete.
 
-### Output Format
+Write one GitHub review with inline comments. Follow
+[writing-review-comments.md](../references/writing-review-comments.md) for the tags, the comment
+layout, and the summary. Follow the volume rule of `REVIEW.md`.
 
-Post a **single top-level PR comment** using `gh pr comment`. Do NOT post inline review comments or use the GitHub review API.
+1. Anchor each inline comment on a line inside a diff hunk, in the file at the head commit. Check the
+   line with `grep -n` on that file, never on the saved diff. A finding outside the diff goes in the
+   summary.
+2. Write the review as JSON, in the shape of the GitHub API
+   (`POST /repos/<repo>/pulls/<N>/reviews`):
 
-**Comment structure:**
+   ```json
+   {
+     "commit_id": "<headRefOid>",
+     "event": "COMMENT",
+     "body": "<summary>",
+     "comments": [
+       {"path": "sdcm/foo.py", "line": 42, "side": "RIGHT", "body": "🔧 **important:** ..."},
+       {"path": "sdcm/foo.py", "start_line": 10, "line": 14, "side": "RIGHT", "body": "⛏ **nit:** ..."}
+     ]
+   }
+   ```
 
-```markdown
-## 🤖 Claude Code Review
+3. The event is always `COMMENT`. Never `APPROVE` or `REQUEST_CHANGES`: a maintainer decides the merge.
+4. Post it:
+   - **In CI** (the `claude-review` workflow): write the JSON to the path that the prompt gives. Do not
+     post. A later step of the workflow checks the file and posts it.
+   - **Locally**: show the draft to the user. On approval, check that `headRefOid` did not change, then
+     post it with `gh api repos/<repo>/pulls/<N>/reviews -X POST --input review.json`.
 
-**PR**: #<number> — <title>
-**Status**: <LGTM ✅ | Issues Found ⚠️ | Blocking Issues 🚫>
-
-### Summary
-
-<1-2 sentence summary of what the PR does>
-
-### Pass outcomes
-
-The three passes of `REVIEW.md`. Write `pass`, or name the findings below.
-
-- **Bugs and logic**: <pass | findings>
-- **Security**: <pass | findings>
-- **Compliance**: <pass | findings>
-
-### Findings
-
-<If no issues: "No issues found. The change looks correct and follows SCT conventions.">
-
-<If issues found, group by severity:>
-
-#### 🔴 Blocking
-- **<file>:<line>** — <description>. Fix: <suggestion>
-
-#### 🟡 Should Fix
-- **<file>:<line>** — <description>. Fix: <suggestion>
-
-#### 🟢 Suggestions
-- **<file>:<line>** — <description>
-
-### Good Patterns
-<Note any well-structured code, good test coverage, or clever solutions. Omit section if nothing notable.>
-
----
-<sub>🔗 [Action run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) · Automated review by Claude Code</sub>
-```
-
-### Posting Rules
-
-1. **Never post inline comments** — all findings go in the single top-level comment
-2. **Never use `gh api` to create review comments** — only use `gh pr comment`
-3. **Always include the action run link** using `$GITHUB_REPOSITORY` and `$GITHUB_RUN_ID` env vars
-4. **Use the exact command**: `gh pr comment <PR_NUMBER> --body "<body>"`
-5. **If the PR has no issues**, still post the comment with "LGTM ✅" status
-
-**Exit criteria**: Single top-level comment posted with all findings, attribution header, and action link footer.
+**Exit criteria**: One review with the outcome of each pass in the summary and each finding on its line.
