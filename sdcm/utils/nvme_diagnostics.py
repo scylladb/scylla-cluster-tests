@@ -504,6 +504,7 @@ def parse_identify_controller(buf: bytes) -> NvmeControllerInfo:
 _BOOT_DEVICE_INDICATORS = [
     "Amazon Elastic Block Store",  # AWS EBS model name
     "Google PersistentDisk",  # GCE PD model name
+    "nvme_card-pd",  # GCE Hyperdisk/PD model name on Titanium machine types (z4d)
     "Msft Virtual Disk",  # Azure managed disk model name
 ]
 
