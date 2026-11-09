@@ -18,9 +18,6 @@ def scale_io_properties(text: str, guests: int, margin: float) -> str:
     ``margin`` is the fraction of each value kept back for the loader, the monitor and the host.
     The rest is divided by ``guests`` and rounded down.
     """
-    if guests < 1:
-        raise ValueError(f"cannot share io_properties between {guests} db guests")
-
     share = (1 - Fraction(str(margin))) / guests
     disks = []
     for disk in yaml.safe_load(text)["disks"]:
