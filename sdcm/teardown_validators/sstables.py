@@ -16,6 +16,8 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 
 LOGGER = logging.getLogger(__name__)
+WAIT_DB_UP_TIMEOUT = 300
+WAIT_SCRUB_LOGS_TIMEOUT = 300
 
 
 @contextmanager
@@ -66,7 +68,7 @@ class SstablesValidator(TeardownValidator):
 
     def _run_nodetool_scrub(self, node: BaseNode, keyspace: str, table: str, timeout=1200):
         try:
-            node.wait_db_up(timeout=300)
+            node.wait_db_up(timeout=WAIT_DB_UP_TIMEOUT)
         except WaitForTimeoutError as ex:
             # sometimes node can boot very long after last nemesis (e.g. bootstrap new node).
             LOGGER.error(
@@ -81,6 +83,7 @@ class SstablesValidator(TeardownValidator):
             timeout=timeout,
             coredump_on_timeout=False,
             ignore_status=True,
+            retry=0,  # a retry after a timeout restarts the scrub from the beginning
         )
         if not result.ok:
             ValidatorEvent(
@@ -92,7 +95,7 @@ class SstablesValidator(TeardownValidator):
             func=lambda: list(finish_scrub_follower),
             step=10,
             text="Waiting for 'Finished scrubbing in validate mode' logs",
-            timeout=300,
+            timeout=WAIT_SCRUB_LOGS_TIMEOUT,
             throw_exc=False,
         )
         if not scrub_finish_lines:
@@ -117,7 +120,10 @@ class SstablesValidator(TeardownValidator):
             run_scrub.__name__ = run_scrub.func.__name__
             try:
                 LOGGER.info("Running nodetool scrub on all nodes in validation mode")
-                parallel_obj = ParallelObject(objects=cluster.nodes, timeout=timeout)
+                # let the nodetool timeout fire first, it names the scrub in the error
+                parallel_obj = ParallelObject(
+                    objects=cluster.nodes, timeout=timeout + WAIT_DB_UP_TIMEOUT + WAIT_SCRUB_LOGS_TIMEOUT
+                )
                 with severity_change_context():
                     parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
                 LOGGER.info("Nodetool scrub validation finished")
