@@ -85,10 +85,21 @@ reviews:
 
     - path: "unit_tests/**"
       instructions: |
-        Unit test conventions (AGENTS.md "Unit Testing Guidelines" and skills/writing-unit-tests/SKILL.md):
-        - Must use pytest style (top-level def test_*, NOT class-based)
-        - Use fixtures, parametrize, simple assert statements
-        - No unittest.TestCase subclasses
+        Unit test conventions. The canonical list is "Success Criteria" in skills/writing-unit-tests/SKILL.md; the UT-n rules are in its references/:
+        - pytest style: top-level def test_*, no classes, no unittest.TestCase subclasses (UT-7)
+        - Tests that differ only in literals are one test with pytest.param(id=...) cases (UT-5)
+        - Mocks, patches and collaborators are built in fixtures or fixture factories, not in the test body; the test body is act and assert. Pure data builders may stay plain functions (UT-6)
+        - No new underscore-prefixed names; tests use public names only (UT-8)
+        - Fixtures come before tests; every test and fixture has a docstring (UT-7, UT-8)
+        - A mock call that is the effect under test is checked with assert_called_once_with and every argument, not call_count or assert_called_once() (UT-21)
+        - Every assert checks a value produced for this case, not a precondition the test arranged (UT-22)
+        - Inputs are real SCT types and plain data, not MagicMock, SimpleNamespace or simulators; a mock that stands in for a collaborator has spec=RealClass (UT-12, UT-13)
+        - No tests of constants, nemesis flags, registry discovery or __all__ (UT-3)
+        - A bug found in a test run uses the real log lines or output of that run as input; expected values are literals worked out from the intended behavior, not copied from the code's output or recomputed with its formula (UT-24)
+        - Every branch and changed argument the PR adds has a case; bug-fix cases fail on the pre-fix code (UT-1, UT-25)
+        - The subject is built through its constructor, never __new__; no production logic is copied into the test (UT-10)
+        - pytest.raises names the concrete exception and a match=, never Exception (UT-21)
+        - No wall-clock asserts or unpatched sleeps; Singletons cleared before and after yield (UT-17, UT-18)
 
     - path: "**/*.py"
       instructions: |
@@ -144,6 +155,7 @@ knowledge_base:
       - "docs/sct-configuration.md"
       - "skills/code-review/SKILL.md"
       - "skills/writing-unit-tests/SKILL.md"
+      - "skills/writing-unit-tests/references/*.md"
       - "skills/package-installation/SKILL.md"
       - "skills/writing-nemesis/SKILL.md"
 

@@ -42,7 +42,7 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 1. **Imports**: Verify no inline imports, correct grouping (stdlib / third-party / internal), alphabetical order
 2. **Error handling**: No empty `except` blocks, appropriate use of `silence()`, context in error messages
 3. **Code style**: Google docstrings on new public methods, no `as any` / type suppression
-4. **Tests**: New logic has corresponding tests in `unit_tests/`, pytest style (not unittest)
+4. **Tests**: New logic has corresponding tests in `unit_tests/`, pytest style (not unittest); a diff under `unit_tests/` meets the Success Criteria of the `writing-unit-tests` skill (SKILL.md Check 5)
 
 **Exit criteria**: All convention checks pass or violations are flagged with specific line references.
 

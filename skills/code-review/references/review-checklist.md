@@ -141,10 +141,12 @@ Any non-trivial code change (new functions, modified logic, bug fixes).
 4. **Use fixtures** via `@pytest.fixture`, not class-level setup
 5. **Use parametrize** for testing multiple inputs: `@pytest.mark.parametrize`
 6. **Mock at boundaries** — mock cloud APIs, not internal logic
+7. **Unit test rules** — for a diff under `unit_tests/`, go through the Success Criteria in `skills/writing-unit-tests/SKILL.md` and cite the `UT-n` rule in each finding
 
 ### What to Look For
 
 - PR adds a new method but no corresponding test file or test function
+- PR adds parsing, validation, or data-transformation logic, an `SctField`, or nemesis logic with no test (a simple property accessor needs none)
 - PR fixes a bug but has no test that would have caught the original bug
 - Tests use `self.assertEqual` instead of plain `assert`
 

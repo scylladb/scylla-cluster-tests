@@ -263,9 +263,9 @@ High-risk methods with 5+ overrides: `add_nodes`, `_create_instances`, `wait_for
 
 All unit tests in `unit_tests/` should follow pytest conventions:
 
-**❌ DON'T:** Use `class Test*` groupings — whether `unittest.TestCase` subclasses or plain pytest classes. Avoid `setUp()`, `self.assertEqual()`, and class methods for shared logic.
+Write top-level `def test_*` functions with fixtures and plain `assert` statements. Tests are not grouped in classes: no `class Test*`, no `unittest.TestCase`, no `setUp()` or `self.assertEqual()`. Shared setup goes in fixtures or fixture factories.
 
-**✅ DO:** Use top-level `def test_*` functions, fixtures, and simple `assert` statements. Use module-level helper functions for shared setup logic.
+The full rules are in the `writing-unit-tests` skill. Its Success Criteria checklist is the one-line form of each rule.
 
 **Key Principles:**
 
