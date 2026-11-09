@@ -19,6 +19,18 @@ from sdcm.utils.distro import Distro, DistroError
 
 
 DISTROS_OS_RELEASE = {
+    "Debian 13": """\
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.1
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+""",
     "Debian 12": """\
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 NAME="Debian GNU/Linux"
@@ -292,6 +304,13 @@ class TestDistro(unittest.TestCase):
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 12"])
         self.assertTrue(distro.is_debian12)
         self.assertTrue(distro.is_debian)
+
+    def test_debian13(self):
+        self.assertTrue(Distro.DEBIAN13.is_debian13)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 13"])
+        self.assertTrue(distro.is_debian13)
+        self.assertTrue(distro.is_debian)
+        self.assertTrue(distro.is_debian_like)
 
     def test_centos7(self):
         self.assertTrue(Distro.CENTOS7.is_centos7)
