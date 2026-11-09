@@ -198,7 +198,10 @@
     "enabled": true,
     "groupName": "security updates",
     "groupSlug": "security-updates",
-    "separateMajorMinor": false
+    "separateMajorMinor": false,
+    "commitMessageAction": "apply",
+    "commitMessageTopic": "security fixes",
+    "commitMessageExtra": ""
   },
   "osvVulnerabilityAlerts": true,
   "github-actions": {
