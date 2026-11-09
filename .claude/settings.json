@@ -8,6 +8,10 @@
       "Bash(git fetch:*)",
       "Bash(git grep:*)",
       "Bash(gh pr view:*)"
+    ],
+    "ask": [
+      "mcp__jenkins__build_item",
+      "Bash(gh pr create*)"
     ]
   },
   "hooks": {
