@@ -383,6 +383,12 @@ def test_filter_data_disks_excludes_gce_pd():
     assert data_disks[0].device_path == "/dev/nvme1n1"
 
 
+def test_filter_data_disks_excludes_gce_z4d_hyperdisk_boot():
+    """On z4d, the Hyperdisk boot disk reports model "nvme_card-pd"; only the local SSD is a data disk."""
+    data_disks = filter_data_disks(parse_nvme_list_output(NVME_LIST_JSON_GCE_Z4D))
+    assert [d.device_path for d in data_disks] == ["/dev/nvme0n1"]
+
+
 def test_filter_data_disks_excludes_azure_managed():
     """Azure managed disks are excluded."""
     devices = [
