@@ -211,6 +211,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 |------|---------|
 | [review-checklist.md](references/review-checklist.md) | Full review checklist with per-check details and examples |
 | [common-issues.md](references/common-issues.md) | Catalog of real incidents with root cause analysis and prevention |
+| [writing-review-comments.md](references/writing-review-comments.md) | Severity tags, comment layout, and the review summary |
 
 | Workflow | Purpose |
 |----------|---------|
@@ -232,3 +233,5 @@ A complete code review:
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
 - [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`
 - [ ] Spec compliance checked — when the PR carries a flow directory, the change matches its `spec.md`
+- [ ] Each finding proven, or tagged ❓ question
+- [ ] One review posted, with inline comments and the outcome of each `REVIEW.md` pass
