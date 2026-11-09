@@ -109,5 +109,6 @@ knowledge_base:
       - "REVIEW.md"
       - "docs/standards/**/*.md"
       - "skills/code-review/SKILL.md"
+      - "skills/writing-unit-tests/SKILL.md"
 
 tone_instructions: "Be extremely concise. No pleasantries, no summaries, no follow-up suggestions. Only report actionable issues found in the code."
