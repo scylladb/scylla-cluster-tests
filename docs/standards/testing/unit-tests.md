@@ -4,8 +4,7 @@
 
 Write top-level `def test_*` functions with plain `assert` statements. Do not
 write `class Test*` groups, `unittest.TestCase` subclasses, `setUp()`, or
-`self.assertEqual()`. Put shared setup in module-level helper functions or
-fixtures.
+`self.assertEqual()`. Put shared setup in fixtures or fixture factories.
 
 ### Fixtures and Parametrize
 
