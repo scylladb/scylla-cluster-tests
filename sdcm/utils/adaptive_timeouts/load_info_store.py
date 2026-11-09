@@ -45,25 +45,20 @@ _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC = 69
 _I4I_LARGE_SHARD_COUNT = 2
 
 
-def convert_to_mb(value) -> int:
-    pattern = re.compile(r"^(\d+(\.\d+)?) *([KMGT]?B)$")
-    match = pattern.match(value)
-    if match:
-        number = float(match.group(1))
-        suffix = match.group(3)
-        match suffix:
-            case "B":
-                number /= 1024 * 1024
-            case "KB":
-                number /= 1024
-            case "GB":
-                number *= 1024
-            case "TB":
-                number *= 1024 * 1024
-            case "PB":
-                number *= 1024 * 1024 * 1024
-        return int(number)
-    raise ValueError(f"Couldn't parse value {value} to MB")
+BINARY_PREFIX_EXPONENTS = {"K": 1, "M": 2, "G": 3, "T": 4, "P": 5}
+NODETOOL_SIZE_PATTERN = re.compile(rf"^(\d+(?:\.\d+)?) *(?:bytes|B|([{''.join(BINARY_PREFIX_EXPONENTS)}])i?B)$")
+
+
+def nodetool_size_to_mb(value) -> int:
+    """Convert a nodetool size such as "6.50 GiB", "100.00 GB" or "512 bytes" to MiB.
+
+    nodetool divides by 1024 for the IEC labels (KiB, GiB) and the legacy labels (KB, GB) alike.
+    """
+    match = NODETOOL_SIZE_PATTERN.match(value)
+    if not match:
+        raise ValueError(f"Couldn't parse value {value} to MB")
+    number, prefix = match.groups()
+    return int(float(number) * 1024 ** (BINARY_PREFIX_EXPONENTS.get(prefix, 0) - 2))
 
 
 class NodeLoadInfoService:
@@ -140,7 +135,7 @@ class NodeLoadInfoService:
     def node_data_size_mb(self) -> int:
         for line in self._get_nodetool_info().splitlines():
             if line.startswith("Load"):
-                return convert_to_mb(line.split(":")[1].strip())
+                return nodetool_size_to_mb(line.split(":")[1].strip())
         raise ValueError("Couldn't find Load in nodetool info response")
 
     @property
@@ -160,7 +155,7 @@ class NodeLoadInfoService:
         for prefix in ("node_filesystem_size_bytes", "node_filesystem_size"):
             for key, value in metrics.items():
                 if key.startswith(prefix) and 'mountpoint="/var/lib/scylla"' in key:
-                    return convert_to_mb(f"{int(float(value))} B")
+                    return int(float(value)) // 1024**2
         raise ValueError("Couldn't find node_filesystem_size_bytes for /var/lib/scylla in node_exporter metrics")
 
     @property
