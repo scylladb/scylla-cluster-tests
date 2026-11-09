@@ -34,7 +34,7 @@ The auto-discovery mechanism at the bottom of `sdcm/nemesis/__init__.py` uses `p
 
 ### Write Unit Tests
 
-**Every new nemesis must have unit tests in `unit_tests/nemesis/`.** Unit tests catch flag misconfigurations, logic errors, and regressions in seconds — far faster than any integration or Docker test. The existing test suite at `unit_tests/nemesis/` provides patterns for testing registry filtering, disruption logic, node allocation, and lifecycle events. Follow those patterns to keep the test suite consistent.
+**Every new nemesis must have unit tests in `unit_tests/unit/nemesis/monkey/`.** Unit tests catch logic errors and regressions in seconds, far faster than any integration or Docker test. Test what `disrupt()` and `precheck()` do: the commands and CQL they run, the nodes they pick, the errors they raise. Flags, registry discovery, and `__all__` are declarations, not behavior, so they get no per-nemesis tests (see the `writing-unit-tests` skill, AP-8). Follow the `writing-unit-tests` skill for fixtures, parametrization, and asserts.
 
 ## When to Use
 
@@ -177,50 +177,63 @@ These are consumed by `NemesisJobGenerator` to create per-nemesis Jenkins pipeli
 
 ### Step 6: Write unit tests
 
-Add tests in `unit_tests/nemesis/`. The existing test infrastructure provides reusable fakes and patterns:
+Add tests in `unit_tests/unit/nemesis/monkey/`. The existing test infrastructure provides reusable fakes and patterns:
 
-**Test infrastructure** (`unit_tests/nemesis/__init__.py`, `fake_cluster.py`):
+**Test infrastructure** (`unit_tests/unit/nemesis/__init__.py`, `fake_cluster.py`, `monkey/conftest.py`):
 - `TestRunner` — lightweight mock runner with `MagicMock` attributes (`target_node`, `cluster`, `session`, etc.)
 - `FakeTester`, `Cluster`, `Node` — dataclass-based fakes providing the minimal interface for `NemesisRunner.__init__`
 - `TestBaseClass` — parallel ABC with custom flags for testing registry filtering in isolation
 
-**Testing disruption logic** — instantiate your nemesis with `TestRunner`, call `disrupt()`, assert on side effects:
+**Testing disruption logic**: instantiate your nemesis with the `runner` fixture, call it, and assert the exact calls it makes:
 
 ```python
+from unittest.mock import patch
+
 import pytest
 
-from sdcm.nemesis.monkey import DiskCorruptionMonkey
-from unit_tests.nemesis import TestRunner
+from sdcm.nemesis.monkey.modify_table import ModifyTableCommentMonkey
+
+MODULE = "sdcm.nemesis.monkey.modify_table"
+
+pytestmark = pytest.mark.usefixtures("events")
 
 
-@pytest.fixture
-def runner():
-    return TestRunner()
+@pytest.fixture()
+def runner(base_runner):
+    """``base_runner`` with a single non-system table for modify-table tests."""
+    base_runner.cluster.get_non_system_ks_cf_list.return_value = ["ks1.tbl1"]
+    return base_runner
 
 
-@pytest.fixture
-def nemesis(runner):
-    return DiskCorruptionMonkey(runner)
+def test_modify_table_property_forwards_filter_out_counter(runner):
+    """filter_out_table_with_counter is forwarded to get_non_system_ks_cf_list."""
+    monkey = ModifyTableCommentMonkey(runner)
+    monkey.modify_table_property(name="x", val=1, filter_out_table_with_counter=True)
 
-
-def test_disrupt_restarts_scylla(nemesis):
-    nemesis.disrupt()
-    nemesis.runner.target_node.restart_scylla.assert_called_once()
-    nemesis.runner.target_node.wait_db_up.assert_called_once()
+    runner.cluster.get_non_system_ks_cf_list.assert_called_once_with(
+        db_node=runner.target_node,
+        filter_out_table_with_counter=True,
+        filter_out_mv=True,
+    )
 ```
 
-**Testing CQL generation** — capture executed statements via `TestRunner.executed`:
+`base_runner` comes from `unit_tests/unit/nemesis/monkey/conftest.py`: a `TestRunner` with two data nodes and deterministic `random.choice`.
+
+**Testing CQL generation**: compare the statement captured in `TestRunner.executed`:
 
 ```python
-def test_nemesis_executes_expected_cql(nemesis):
-    nemesis.disrupt()
-    assert any("ALTER TABLE" in stmt for stmt in nemesis.runner.executed)
+def test_comment_monkey(runner):
+    """disrupt() applies a random comment with ALTER TABLE."""
+    with patch(f"{MODULE}.generate_random_string", return_value="abc123"):
+        ModifyTableCommentMonkey(runner).disrupt()
+
+    assert runner.executed[-1] == "ALTER TABLE ks1.tbl1 WITH comment = 'abc123';"
 ```
 
 Run tests:
 
 ```bash
-uv run sct.py unit-tests -t unit_tests/nemesis/
+uv run sct.py unit-tests -t unit/nemesis/
 ```
 
 ## Nemesis Flags Reference
@@ -253,7 +266,7 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 | Where do I put my file? | `sdcm/nemesis/monkey/` — anywhere in this directory tree |
 | New file or existing? | New file for standalone/group; `monkey/__init__.py` for simple additions |
 | Should I call `self.runner.disrupt_*()`? | No — write self-contained logic in `disrupt()` |
-| How do I test it? | Unit tests in `unit_tests/nemesis/` using `TestRunner` |
+| How do I test it? | Unit tests in `unit_tests/unit/nemesis/monkey/` using the `base_runner` fixture |
 | How does CI find it? | Auto-discovery via `pkgutil.walk_packages()` — no registration needed |
 
 ## Success Criteria
@@ -264,7 +277,7 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 - [ ] Static skip conditions (config, backend, version, feature flags) placed in `precheck()`, not `raise UnsupportedNemesis` in `disrupt()`
 - [ ] Dynamic skip conditions (data presence, live node counts, target-node state) remain in `disrupt()` as `raise UnsupportedNemesis`
 - [ ] Disruption logic is self-contained in `disrupt()` — no `self.runner.disrupt_*()` delegation
-- [ ] Unit tests in `unit_tests/nemesis/` covering disruption logic
+- [ ] Unit tests in `unit_tests/unit/nemesis/monkey/` covering disruption logic (no flag or discovery tests)
 - [ ] No inline imports (SCT convention)
 - [ ] Google-style docstring on the class
 - [ ] CI config added if nemesis needs extra YAML or Jenkins params
