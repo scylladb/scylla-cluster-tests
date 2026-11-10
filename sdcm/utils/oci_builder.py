@@ -281,7 +281,8 @@ class OciBuilder:
 
         except requests.RequestException as e:
             click.secho(
-                f"Error adding cloud configuration to Jenkins: {e}\n{response.text}",
+                # e.response is None when the request itself failed (connection, timeout)
+                f"Error adding cloud configuration to Jenkins: {e}\n{getattr(e.response, 'text', '')}",
                 fg="red",
                 err=True,
             )
