@@ -1,0 +1,136 @@
+name: Claude Review
+# An org member comments "@claude review" on a pull request. Claude reviews it with the
+# code-review skill and REVIEW.md from master, and a separate job posts one COMMENT review.
+# Design: docs/plans/ai-tooling/claude-review/spec.md
+#
+# issue_comment runs this file from master, with secrets, also for fork pull requests. So:
+# - the review job holds a read-only token; Claude cannot push, comment, approve, or label;
+# - the skill, REVIEW.md, and the scripts come from master; the PR code is only read, never run;
+# - Claude has no tool that reaches the network, cannot read /proc (its own environment holds
+#   the API key), and its commands run without the key; the posted review is the only way out;
+# - only the post job can write, and it posts through .github/scripts/post_review.py, which
+#   refuses a review that holds a key or a token.
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  review:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '@claude review') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # On the job, not the workflow: each comment on the PR starts a run, and a skipped
+    # run in a workflow-level group would cancel a queued review.
+    concurrency:
+      group: claude-review-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read
+      checks: read
+      statuses: read
+    outputs:
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      review: ${{ steps.result.outputs.review }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      # Remove the API key and the tokens from the environment of the commands Claude runs.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+    steps:
+      - name: Find the head commit
+        id: pr
+        run: echo "head_sha=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout master (skill, REVIEW.md)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout the pull request into pr-code/
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          path: pr-code
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Claude gets no gh: gh can send a request to any host, so a prompt injection could
+      # send data out. This step reads what the review needs into files. The files and
+      # review.json stay in the workspace, the working directory of Claude.
+      - name: Collect the pull request data
+        run: |
+          mkdir -p pr-data
+          cd pr-data
+          gh pr view "$PR_NUMBER" --json title,body,author,baseRefName,headRefName,labels,files,commits,comments,reviews > pr.json
+          gh pr diff "$PR_NUMBER" > pr.diff
+          gh api --paginate --slurp "repos/$GH_REPO/pulls/$PR_NUMBER/comments" > review-comments.json
+          # Exits non-zero when a check fails or is pending; the output is what the review needs.
+          gh pr checks "$PR_NUMBER" > checks.txt || true
+
+      - name: Review
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe  # v1.0.269
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The job token is read-only; passing it also skips the OIDC exchange that fails
+          # for some actors (anthropics/claude-code-action#1017).
+          github_token: ${{ github.token }}
+          claude_args: >-
+            --model claude-sonnet-5-5
+            --max-turns 40
+            --allowedTools "Read,Grep,Glob,Write,Bash(git -C pr-code diff:*),Bash(git -C pr-code log:*),Bash(git -C pr-code show:*),Bash(git -C pr-code blame:*)"
+            --disallowedTools "Read(//proc/**),Bash(git *--no-index*),Bash(git *--contents*)"
+          prompt: |
+            Review pull request #${{ env.PR_NUMBER }} in ${{ env.GH_REPO }} with the code-review skill:
+            follow skills/code-review/workflows/review-a-pr.md and REVIEW.md.
+            The pull request code is in pr-code/ at commit ${{ steps.pr.outputs.head_sha }}.
+            Read it, but never run code from it. Each repository path in the skill means pr-code/<path>.
+            You have no gh. The pull request data is in pr-data/: pr.json (description,
+            files, commits, issue comments with the Jenkins test summary, reviews), pr.diff,
+            review-comments.json (inline threads), and checks.txt (gh pr checks).
+            Write the review JSON to review.json, with commit_id ${{ steps.pr.outputs.head_sha }}.
+            Do not post it; a later step posts it.
+
+      - name: Pass the review to the post job
+        id: result
+        run: echo "review=$(base64 -w0 review.json)" >> "$GITHUB_OUTPUT"
+
+  post:
+    needs: review
+    if: always() && needs.review.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      HEAD_SHA: ${{ needs.review.outputs.head_sha }}
+      REVIEW_B64: ${{ needs.review.outputs.review }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Checkout master (post script)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Post the review
+        if: needs.review.result == 'success' && env.REVIEW_B64 != ''
+        run: |
+          base64 -d <<<"$REVIEW_B64" > "$RUNNER_TEMP/review.json"
+          python3 .github/scripts/post_review.py --repo "$GH_REPO" --pr "$PR_NUMBER" \
+            --head-sha "$HEAD_SHA" --review-file "$RUNNER_TEMP/review.json"
+
+      - name: Report a failed review
+        if: failure() || needs.review.result != 'success' || env.REVIEW_B64 == ''
+        run: gh pr comment "$PR_NUMBER" --body "Claude review failed. See the [workflow run]($RUN_URL)."
