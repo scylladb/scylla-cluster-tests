@@ -62,3 +62,6 @@ The full flow, with the boot check per cloud and the failures seen in past rollo
     ./sct.py configure-jenkins-builders -c gce
     ./sct.py configure-jenkins-builders -c oci
     ```
+   Run all three before the label change merges, then check in Jenkins that every label of
+   `vars/getJenkinsLabels.groovy` has a cloud or template. OCI builders are on-demand clouds,
+   so a missing OCI cloud shows up only as OCI jobs waiting forever for their label.

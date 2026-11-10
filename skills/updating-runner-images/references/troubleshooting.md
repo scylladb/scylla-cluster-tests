@@ -99,3 +99,44 @@ groovy maps to that isn't in `SUPPORTED_PROJECTS` (`gce_project: gcp` maps to
 `gcp-skilled-adapter-452`).
 
 **Fix:** run the label cross-check of Phase 5 and fix the label, or configure that project too.
+
+## OCI jobs wait forever after the label commit merged
+
+**Symptom:** OCI jobs log `There are no nodes with the label 'oci-sct-builders-<region>-<version>'`
+and sit in the queue until their timeout. Jobs that wait on them time out too.
+
+**Cause:** Jenkins has no OCI cloud with the new label. Either `configure-jenkins-builders -c oci`
+never ran for the new version, or it ran and failed silently (next entry). OCI builders are
+on-demand clouds, so no node looks missing until a job asks for one.
+
+**Seen (runner 1.20, OCI builder v3):** the labels moved to `-v3` on master while only the v1 and
+v2 OCI clouds existed. `artifacts-oci-image-test` waited for a phoenix node, `next-machine-image`
+hit its 4h timeout, and the scylla-machine-image promotion stopped.
+
+**Fix:** run Phase 6 for OCI and check the clouds with its script. Queued jobs get a node by
+themselves once the cloud exists.
+
+## `configure-jenkins-builders -c oci` says complete, but no cloud exists
+
+**Symptom:** every region logs `Instance pool configuration complete`, yet the Jenkins clouds list
+has no `oci-compute-oci-<region>-qa-builder-<version>-1`.
+
+**Cause:** the cloud is created by a groovy script posted to the Jenkins script console, which
+answers 200 even when the script throws. The script calls the OCI plugin's
+`BaremetalCloudAgentTemplate` constructor by its exact signature, so a plugin upgrade that adds a
+parameter breaks it with `NoSuchMethodException`. Plugin 1.0.21 added `disableLegacyImdsEndpoint`
+and `maxTotalUses`.
+
+**Diagnose:** read the constructor in the script console:
+
+```groovy
+def p = Jenkins.get().pluginManager.getPlugin("oracle-cloud-infrastructure-compute")
+println(p.version)
+Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloudAgentTemplate", true, p.classLoader)
+  .declaredConstructors.each { c -> c.parameters.each { println("${it.type.simpleName} ${it.name}") } }
+```
+
+**Fix:** add the new parameters to both the type list and the argument list in
+`sdcm/utils/builder_setup_groovy/oci_jenkind_plugin_config.groovy.tmpl`, with the values the
+existing templates have, and rerun Phase 6. `OciBuilder` now fails on a script console error, so
+a newer mismatch shows up as an error instead of a silent pass.

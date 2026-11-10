@@ -121,6 +121,8 @@ uv run sct.py create-runner-image -c oci -r us-ashburn-1 -z a
    and confirm each label in the groovy file is one of them. `lint-pipelines` does not parse the
    groovy files, so nothing else catches a typo.
 4. Commit the builder versions and the labels together.
+5. Phase 6 must finish on every cloud before this commit merges. Master jobs ask for the new labels
+   as soon as it merges, and a label without a cloud or template makes them wait forever.
 
 **Exit:** one commit, cross-check finds no label the builders don't create.
 
@@ -139,11 +141,30 @@ image from Phase 3 first.
 
 1. Azure has no builders (`configure-jenkins-builders -c azure` raises): Azure jobs run on AWS
    builders in `us-east-1`.
-2. The OCI step builds the image in a region that lacks it, so phoenix and frankfurt get theirs
-   here.
-3. Leave the old clouds and templates in place.
+2. Don't skip OCI. It is the easiest cloud to forget: no Jenkins node carries an OCI label until a
+   job asks for one, so nothing looks missing until OCI jobs hang (see
+   [troubleshooting.md](../references/troubleshooting.md)).
+3. The OCI step copies the image into each region that lacks it (phoenix and frankfurt), so it
+   runs longer than the others. It loops over `get_all_regions("oci")`; a failed region is logged
+   and skipped, not fatal, so read the whole log and rerun with `-r <region>` for any that failed.
+4. Leave the old clouds and templates in place.
+5. Check Jenkins, not the command's exit code. OCI and GCE builders are on-demand clouds, so
+   `get_all_nodes` lists no node for a new label until a job runs on it. List the clouds and
+   their template labels in the Jenkins script console:
 
-**Exit:** the new clouds and templates exist in Jenkins next to the old ones.
+   ```groovy
+   Jenkins.get().clouds.each { c ->
+     def labels = c.metaClass.respondsTo(c, "getTemplates") ? c.templates*.labelString : []
+     println("${c.name}: ${labels}")
+   }
+   ```
+
+   Every label of `vars/getJenkinsLabels.groovy` must appear: the OCI ones as clouds
+   `oci-compute-oci-<region>-qa-builder-<version>-1` with label `oci-sct-builders-<region>-<version>`,
+   one per OCI region. AWS groups appear as EC2 fleet clouds.
+
+**Exit:** the new clouds and templates exist in Jenkins next to the old ones, and every label in
+the groovy file has one.
 
 ## Phase 7: Validate on Jenkins and backport
 
