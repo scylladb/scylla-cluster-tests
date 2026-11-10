@@ -198,23 +198,24 @@ def _get_compaction_timeout(
 def _get_cleanup_timeout(
     node_info_service: NodeLoadInfoService, timeout: int | float = None
 ) -> tuple[tuple[int | float, int | float], dict[str, Any]]:
-    """Calculate the soft and hard timeouts of 'nodetool cleanup' from the node data size.
+    """Calculate the soft and hard timeouts of 'nodetool cleanup' from the vnode data of the node.
 
-    Cleanup is a compaction in the maintenance scheduling group, far slower than streaming.
+    Cleanup flushes all tables, then rewrites the sstables of the vnode keyspaces, skipping the tablet ones.
+    The rewrite is a compaction in the maintenance scheduling group, far slower than streaming.
     In 424 cleanups of 2026.3 longevities it ran as slow as 2.5 MB/s per shard on loaded nodes.
+    With no vnode data, cleanups on loaded nodes took up to 110 s.
 
-        soft = (data_size_mb / shards) / 5 MB/s + 120 s
+        soft = (vnodes_data_size_mb / shards) / 5 MB/s + 300 s
         hard = soft * 2, i.e. 2.5 MB/s per shard
 
     Falls back to the caller timeout when the node info is unavailable.
     """
     CLEANUP_SPEED = 5  # MB/s per shard
-    FIXED_OVERHEAD = 120  # seconds
+    FIXED_OVERHEAD = 300  # seconds
     try:
-        data_size = node_info_service.node_data_size_mb
         shards = node_info_service.shards_count
-        if data_size and shards:
-            timeout = int(data_size / shards / CLEANUP_SPEED) + FIXED_OVERHEAD
+        if shards:
+            timeout = int(node_info_service.vnodes_data_size_mb / shards / CLEANUP_SPEED) + FIXED_OVERHEAD
         return (timeout, timeout * 2), node_info_service.as_dict()
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to calculate cleanup timeout: \n%s \nDefaulting to %s seconds", exc, timeout)
