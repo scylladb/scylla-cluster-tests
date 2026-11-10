@@ -136,6 +136,7 @@ lazy from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_p
 lazy from sdcm.utils.get_username import get_username
 lazy from sdcm.utils.git import clone_repo, get_git_commit_id, get_git_status_info
 lazy from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+lazy from sdcm.utils.jenkins_builder_labels import GROOVY_LABELS_FILE, builder_labels, unserved_labels
 lazy from sdcm.utils.jepsen import JepsenResults
 lazy from sdcm.utils.lint.docs_linter import lint_test_metadata
 lazy from sdcm.utils.lint.env_builder import build_env
@@ -3388,6 +3389,24 @@ def configure_jenkins_builders(cloud_provider, regions):
             OciBuilder.configure_in_all_region(regions=regions)
         case "azure":
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
+
+
+@cli.command(
+    "check-jenkins-builder-labels",
+    help="Fail if a builder label in vars/getJenkinsLabels.groovy has no Jenkins node or cloud to serve it",
+)
+@click.option(
+    "--groovy-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="getJenkinsLabels.groovy to check (default: this checkout's), e.g. one exported from a release branch",
+)
+def check_jenkins_builder_labels(groovy_file):
+    add_file_logger()
+    groovy_file = groovy_file or GROOVY_LABELS_FILE
+    if missing := unserved_labels(builder_labels(groovy_file.read_text())):
+        click.secho("Labels with no Jenkins node or cloud:\n  " + "\n  ".join(missing), fg="red")
+        sys.exit(1)
+    click.secho("Every builder label has a Jenkins node or cloud", fg="green")
 
 
 @cli.command("nemesis-list", help="get the list of select disrupt function for SisyphusMonkey")
