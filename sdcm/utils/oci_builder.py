@@ -275,6 +275,9 @@ class OciBuilder:
                 timeout=30,
             )
             response.raise_for_status()
+            # The script console answers 200 even when the script throws; the error is in the body.
+            if "OCI cloud configured programmatically" not in response.text:
+                raise RuntimeError(f"Jenkins script console failed to configure {self.name}:\n{response.text}")
 
         except requests.RequestException as e:
             click.secho(

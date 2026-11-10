@@ -89,7 +89,9 @@ def ctor = tmplClass.getDeclaredConstructor(
     String,                    // instanceNamePrefix
     String,                    // memoryInGBs
     Boolean,                   // doNotDisable
-    String                     // retryTimeoutMins
+    String,                    // retryTimeoutMins
+    Boolean,                   // disableLegacyImdsEndpoint (plugin 1.0.21+)
+    int                        // maxTotalUses (plugin 1.0.21+)
 )
 
 def tmpl = ctor.newInstance(
@@ -130,7 +132,9 @@ def tmpl = ctor.newInstance(
     "oci-builder",                 // instanceNamePrefix
     "$memory_gb",                  // memoryInGBs (required for flex shapes — null breaks template save)
     false,                          // doNotDisable
-    "30"                           // retryTimeoutMins
+    "30",                          // retryTimeoutMins
+    false,                          // disableLegacyImdsEndpoint
+    0                               // maxTotalUses (0 = unlimited)
 )
 
 println("Successfully created BaremetalCloudAgentTemplate")
