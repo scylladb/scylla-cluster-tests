@@ -2,11 +2,19 @@
 
 import json
 import stat
+import threading
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from sdcm.cluster_oci import CreateOciNodeError, OciCluster, OciNode
+from sdcm.cluster_oci import (
+    SPOT_TERMINATION_CHECK_DELAY,
+    SSH_CHECK_TIMEOUT,
+    CreateOciNodeError,
+    OciCluster,
+    OciNode,
+)
+from sdcm.remote.remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
 from sdcm.utils.oci_utils import SECONDARY_VNICS_SCRIPT_PATH
 from unit_tests.lib.oci_test_helpers import (
     MOCK_CREDENTIALS,
@@ -687,3 +695,150 @@ def test_fix_scylla_server_systemd_config_reloads_systemd_daemon(_oci_node_for_s
     node.fix_scylla_server_systemd_config()
     sudo_cmd = node.remoter.sudo.call_args.args[0]
     assert "daemon-reload" in sudo_cmd
+
+
+# --- OciNode.check_spot_termination() ---
+
+RUNNING_METADATA = json.dumps({"id": "ocid1.instance.oc1.iad.node", "state": "Running", "metadata": {"user_data": "x"}})
+
+
+def _spot_oci_node(lifecycle_state="RUNNING", instance_metadata=RUNNING_METADATA, ssh_up=True):
+    """OciNode whose OCI API returns `lifecycle_state` and whose instance metadata returns `instance_metadata`."""
+    vm_provider = Mock()
+    vm_provider._resolve_instance.return_value = Mock(lifecycle_state=lifecycle_state)
+    parent_cluster = Mock(params={"simulated_regions": 0}, provisioners=[Mock(_vm_provider=vm_provider)])
+    node = OciNode(make_cloud_instance(), MOCK_CREDENTIALS, parent_cluster)
+    node.termination_event = threading.Event()
+    node.remoter = Mock(**{"is_up.return_value": ssh_up})
+    node.query_oci_metadata = Mock(return_value=instance_metadata)
+    node._get_oci_instance_id = Mock(return_value="ocid1.instance.oc1.iad.node")
+    return node, vm_provider
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_reports_nothing_while_running(mock_event):
+    node, vm_provider = _spot_oci_node()
+
+    assert node.check_spot_termination() == SPOT_TERMINATION_CHECK_DELAY
+
+    mock_event.assert_not_called()
+    node.query_oci_metadata.assert_called_once_with("")
+    # The OCID, not the name, so the state comes from the OCI API and not from the provisioner cache
+    vm_provider._resolve_instance.assert_called_once_with("ocid1.instance.oc1.iad.node")
+
+
+@pytest.mark.parametrize("lifecycle_state", ["TERMINATING", "TERMINATED"])
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_reports_preemption_seen_in_oci_api(mock_event, lifecycle_state):
+    """A preempted instance goes to TERMINATING minutes before the VM stops (seen in PR-15584 build 22)."""
+    node, _ = _spot_oci_node(lifecycle_state=lifecycle_state)
+
+    node.check_spot_termination()
+
+    mock_event.assert_called_once()
+    assert lifecycle_state in mock_event.call_args.kwargs["message"]
+    mock_event.return_value.publish.assert_called_once()
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_uses_oci_api_without_ssh(mock_event):
+    """A preempted VM may already be unreachable, so the API check must not wait for SSH."""
+    node, _ = _spot_oci_node(lifecycle_state="TERMINATING", ssh_up=False)
+
+    node.check_spot_termination()
+
+    node.remoter.is_up.assert_called_once_with(timeout=SSH_CHECK_TIMEOUT)
+    node.query_oci_metadata.assert_not_called()
+    mock_event.assert_called_once()
+
+
+def test_ssh_check_timeout_checks_the_libssh2_connection():
+    """With `is_up(timeout=0)` the libssh2 remoter never checked SSH, so the metadata was never read (PR-16977 build 6)."""
+    connection = Mock(**{"check_if_alive.return_value": True})
+    remoter = RemoteLibSSH2CmdRunner.__new__(RemoteLibSSH2CmdRunner)
+    with patch.object(RemoteLibSSH2CmdRunner, "connection", new=connection):
+        assert remoter.is_up(timeout=SSH_CHECK_TIMEOUT)
+
+    connection.check_if_alive.assert_called_once_with(SSH_CHECK_TIMEOUT)
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_reports_preemption_notice_from_metadata(mock_event):
+    preemption_action = {"type": "TERMINATE", "timeCreated": "2026-11-10T16:28:24Z"}
+    instance_metadata = json.dumps(
+        {"state": "Running", "instancePreemptionAction": preemption_action, "metadata": {"user_data": "secret"}}
+    )
+    node, vm_provider = _spot_oci_node(instance_metadata=instance_metadata)
+
+    node.check_spot_termination()
+
+    assert str(preemption_action) in mock_event.call_args.kwargs["message"]
+    vm_provider._resolve_instance.assert_not_called()
+    logged_metadata = node.log.warning.call_args_list[0].args[1]
+    assert logged_metadata["instancePreemptionAction"] == preemption_action
+    assert "metadata" not in logged_metadata, "user_data and ssh keys must not be logged"
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_logs_metadata_not_running_without_notice(mock_event):
+    """A not-running metadata state is logged to show how OCI reports a preemption, but only the API state decides."""
+    instance_metadata = json.dumps({"state": "Terminating", "metadata": {"user_data": "secret"}})
+    node, _ = _spot_oci_node(instance_metadata=instance_metadata)
+
+    node.check_spot_termination()
+
+    mock_event.assert_not_called()
+    logged_metadata = node.log.warning.call_args.args[1]
+    assert logged_metadata == {"state": "Terminating"}
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_falls_back_to_oci_api_on_unreadable_metadata(mock_event):
+    node, _ = _spot_oci_node(lifecycle_state="TERMINATING", instance_metadata="<html>404 Not Found</html>")
+
+    node.check_spot_termination()
+
+    mock_event.assert_called_once()
+    assert "TERMINATING" in mock_event.call_args.kwargs["message"]
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_ignores_termination_by_the_test(mock_event):
+    """`destroy` sets termination_event before the test terminates the instance."""
+    node, vm_provider = _spot_oci_node(lifecycle_state="TERMINATING")
+    node.termination_event.set()
+
+    node.check_spot_termination()
+
+    mock_event.assert_not_called()
+    vm_provider._resolve_instance.assert_not_called()
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_reports_once(mock_event):
+    node, _ = _spot_oci_node(lifecycle_state="TERMINATING")
+
+    node.check_spot_termination()
+    node.check_spot_termination()
+
+    mock_event.assert_called_once()
+
+
+@patch("sdcm.cluster_oci.SpotTerminationEvent")
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_check_spot_termination_survives_oci_api_errors(mock_event):
+    node, vm_provider = _spot_oci_node()
+    vm_provider._resolve_instance.side_effect = RuntimeError("OCI API unavailable")
+
+    assert node.check_spot_termination() == SPOT_TERMINATION_CHECK_DELAY
+
+    mock_event.assert_not_called()
+    node.log.warning.assert_called_once()
