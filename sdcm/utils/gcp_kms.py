@@ -15,7 +15,7 @@ import logging
 import os
 
 from google.api_core.client_options import ClientOptions
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud import kms
 from google.cloud.exceptions import GoogleCloudError
 from google.oauth2 import service_account
@@ -50,12 +50,16 @@ class GcpKms:
             self.client.get_key_ring(name=self.keyring_path)
             LOGGER.info("Using the existing GCP KMS key ring")
         except NotFound:
-            self.client.create_key_ring(
-                parent=f"projects/{self.project_id}/locations/{self.location}",
-                key_ring_id=self.keyring_name,
-                key_ring={},
-            )
-            LOGGER.info("Created the GCP KMS key ring")
+            try:
+                self.client.create_key_ring(
+                    parent=f"projects/{self.project_id}/locations/{self.location}",
+                    key_ring_id=self.keyring_name,
+                    key_ring={},
+                )
+                LOGGER.info("Created the GCP KMS key ring")
+            except AlreadyExists:
+                # runs sharing one minicloud can race between get and create
+                LOGGER.info("GCP KMS key ring was created concurrently, using it")
 
     def create_test_key(self):
         self.client.create_crypto_key(
