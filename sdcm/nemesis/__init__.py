@@ -2571,7 +2571,7 @@ class NemesisRunner:
                 if len(keyspaces) == 1:
                     ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
                     keyspaces = {ks.split(".")[0] for ks in ks_cf}
-                keyspace = ",".join(keyspaces)
+                keyspace = ",".join(random.sample(sorted(keyspaces), k=min(len(keyspaces), MAX_NAMES_IN_CMD)))
 
             if not keyspace:
                 # it's unexpected situation. We have system keyspaces, so the keyspace(s) should be found always.
