@@ -30,6 +30,7 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     NodeLoadInfoServices,
     _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
     _I4I_LARGE_SHARD_COUNT,
+    nodetool_size_to_mb,
 )
 from sdcm.utils.adaptive_timeouts import (
     _STREAMING_OVERHEAD,
@@ -119,7 +120,7 @@ ID                     : aa7409d6-4129-4e6a-96f8-e571abdabe7c
 Gossip active          : true
 Thrift active          : true
 Native Transport active: true
-Load                   : 100.00 GB
+Load                   : 100.00 GiB
 Generation No          : 1678343052
 Uptime (seconds)       : 35061
 Heap Memory (MB)       : 40.31 / 247.50
@@ -365,6 +366,48 @@ def test_node_disk_size_mb(fake_node):
     )
     # 107374182400 bytes / 1024 / 1024 == 102400 MB
     assert service.node_disk_size_mb == 102400
+
+
+@pytest.mark.parametrize(
+    "value,expected_mb",
+    [
+        ("524288 bytes", 0),
+        ("1048576 B", 1),
+        ("2048.00 KiB", 2),
+        ("512.00 MiB", 512),
+        ("6.50 GiB", 6656),
+        ("1.55 TiB", 1625292),
+        ("1.00 PiB", 1073741824),
+    ],
+)
+def test_nodetool_size_to_mb(value, expected_mb):
+    assert nodetool_size_to_mb(value) == expected_mb
+
+
+# Legacy nodetool divides sizes by 1024 but labels them KB, MB, GB.
+# Since scylladb 7941b5a99b it prints the same values with the IEC labels KiB, MiB, GiB.
+@pytest.mark.parametrize(
+    "prefix,expected_mb",
+    [("K", 10), ("M", 10240), ("G", 10240 * 1024), ("T", 10240 * 1024**2), ("P", 10240 * 1024**3)],
+)
+def test_nodetool_size_to_mb_treats_legacy_and_iec_labels_alike(prefix, expected_mb):
+    assert nodetool_size_to_mb(f"10240.00 {prefix}B") == nodetool_size_to_mb(f"10240.00 {prefix}iB") == expected_mb
+
+
+@pytest.mark.parametrize("value", ["", "GiB", "1.55", "1.55 iB", "1.55 XiB", "1.55 gib", "-1.00 GiB"])
+def test_nodetool_size_to_mb_rejects_invalid_value(value):
+    with pytest.raises(ValueError, match="Couldn't parse value"):
+        nodetool_size_to_mb(value)
+
+
+def test_node_data_size_mb(fake_node):
+    service = NodeLoadInfoService(
+        remoter=fake_node.remoter,
+        name=fake_node.name,
+        scylla_version=fake_node.scylla_version_detailed,
+        node_idx="0",
+    )
+    assert service.node_data_size_mb == 102400
 
 
 def _make_service(fake_node, scylla_yaml_content: str) -> NodeLoadInfoService:
