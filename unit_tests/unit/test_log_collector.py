@@ -13,15 +13,19 @@
 
 import logging
 import uuid
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from sdcm.cluster_aws import AWSNode
 from sdcm.logcollector import (
     BaseSCTLogCollector,
     Collector,
     FailureStatisticsCollector,
     GrafanaScreenShot,
+    LoaderLogCollector,
     LogCollector,
     MonitoringStack,
     PrometheusSnapshots,
@@ -573,3 +577,66 @@ def test_archive_log_remotely_tolerates_files_changing_while_read(exit_status, a
 
     assert archive == ("/tmp/collected/perf-data.tar.zst" if archived else None)
     assert mock_check.called == archived
+
+
+def _aws_node_with_ssh_down():
+    node = AWSNode.__new__(AWSNode)
+    node.name = "loader-node-1"
+    node._instance = Mock(id="i-028fa089cded5826b")
+    node._ec2_service = Mock()
+    node._ec2_service.meta.client.meta.region_name = "eu-west-1"
+    node.remoter = Mock(is_up=Mock(return_value=False))
+    return node
+
+
+def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
+    """SCT-1439: the in-test AWSNode had no aws_ssm_runner, so the SSM fallback raised AttributeError."""
+    node = _aws_node_with_ssh_down()
+    log_file = str(tmp_path / "node" / "system.log")
+
+    with patch("sdcm.cluster_aws.SSMCommandRunner") as ssm_runner:
+        ssm_runner.return_value.run_command_and_save_output.return_value = Mock(ok=True)
+        assert LogCollector.collect_log_remotely(node, "journalctl", log_file) == (log_file, False)
+
+    ssm_runner.assert_called_once_with(region_name="eu-west-1", instance_id="i-028fa089cded5826b")
+    ssm_runner.return_value.run_command_and_save_output.assert_called_once()
+
+
+def test_collect_log_remotely_without_ssh_or_ssm_collects_nothing(tmp_path):
+    node = SimpleNamespace(remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
+
+    assert LogCollector.collect_log_remotely(node, "journalctl", str(tmp_path / "system.log")) == (None, True)
+
+
+def test_collect_logs_logs_the_failure_of_a_node(tmp_path, caplog):
+    """ParallelObject ignores the exceptions, so a broken node used to leave only "Directory is empty"."""
+    node = SimpleNamespace(name="loader-node-1", remoter=Mock(is_up=Mock(side_effect=RuntimeError("boom"))))
+    collector = LogCollector([node], test_id="4f7398ef", storage_dir=str(tmp_path), params=None)
+
+    assert collector.collect_logs() == []
+    assert "Failed to collect logs on host loader-node-1: RuntimeError('boom')" in caplog.text
+
+
+def test_cluster_log_type_argument_leaves_the_class_alone(tmp_path):
+    collector = ScyllaLogCollector(
+        [], test_id="4f7398ef", storage_dir=str(tmp_path), params=None, cluster_log_type="db-node-1"
+    )
+
+    assert collector.local_dir.endswith("db-node-1-4f7398ef")
+    assert ScyllaLogCollector.cluster_log_type == "db-cluster"
+
+
+def test_collect_node_logs_copies_the_local_files_of_a_node_once(tmp_path):
+    """terminate_node: collect_logs() also scanned the node dir as an inactive cluster dir, so each local file came twice."""
+    node_name = "longevity-loader-node-88976c04-1"
+    node_logdir = tmp_path / "longevity-loader-set-88976c04" / node_name
+    node_logdir.mkdir(parents=True)
+    (node_logdir / "console_output.log").write_text("[   10.42] cloud-init[408]: ...")
+    node = SimpleNamespace(name=node_name, remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
+    collector = LoaderLogCollector([node], test_id="88976c04", storage_dir=str(tmp_path / "collected_logs"), params={})
+
+    with patch.object(LoaderLogCollector, "archive_to_tarfile", return_value=None):
+        collector.collect_node_logs(local_search_path=str(node_logdir))
+
+    collected = sorted(p.relative_to(collector.local_dir).as_posix() for p in Path(collector.local_dir).rglob("*.log"))
+    assert collected == [f"{node_name}/console_output.log"]

@@ -79,16 +79,22 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2", defau
 
     def is_up(self, timeout: float = 30) -> bool:
         end_time = time.perf_counter() + timeout
+        last_error = None
         while time.perf_counter() <= end_time:
             try:
                 if self.connection.check_if_alive(timeout):
+                    self.last_is_up_error = None
                     return True
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
                 try:
                     self.connection.close()
                     self.connection.open(timeout)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as open_exc:  # noqa: BLE001
+                    last_error = open_exc
+        # Without the reason, a refused key, a closed port and a dead host all look the same: "False"
+        self.last_is_up_error = last_error
+        self.log.debug("SSH to %s@%s is not up after %ss: %r", self.user, self.hostname, timeout, last_error)
         return False
 
     def _record_minicloud_channel_timeout(self) -> None:

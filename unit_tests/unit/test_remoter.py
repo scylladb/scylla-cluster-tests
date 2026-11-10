@@ -733,3 +733,47 @@ def test_receive_files_retries_when_sshd_refuses_the_connection(remoter_type, tm
 
     assert local_runner.return_value.run.call_count == 4
     sleep.assert_called_once()
+
+
+class _RefusingConnection:
+    """A libssh2 connection whose host answers, but rejects the key."""
+
+    def __init__(self):
+        self.opened = 0
+
+    def check_if_alive(self, timeout):
+        raise ConnectionError("not connected")
+
+    def close(self):
+        pass
+
+    def open(self, timeout):
+        self.opened += 1
+        raise PermissionError("userauth_publickey_fromfile")
+
+
+def _libssh2_runner(connection):
+    return SimpleNamespace(connection=connection, user="ubuntu", hostname="10.4.0.201", log=getLogger(__name__))
+
+
+def test_libssh2_is_up_keeps_and_logs_why_ssh_is_down(caplog):
+    """SCT-1439: 24 probes logged only "False", the AuthenticationError surfaced much later."""
+    connection = _RefusingConnection()
+    runner = _libssh2_runner(connection)
+
+    with caplog.at_level("DEBUG"):
+        assert RemoteLibSSH2CmdRunner.is_up(runner, timeout=0.01) is False
+
+    assert connection.opened >= 1
+    assert isinstance(runner.last_is_up_error, PermissionError)
+    assert "SSH to ubuntu@10.4.0.201 is not up" in caplog.text
+    assert "userauth_publickey_fromfile" in caplog.text
+
+
+def test_libssh2_is_up_clears_the_last_error_once_ssh_is_up():
+    connection = SimpleNamespace(check_if_alive=lambda timeout: True)
+    runner = _libssh2_runner(connection)
+    runner.last_is_up_error = PermissionError("old")
+
+    assert RemoteLibSSH2CmdRunner.is_up(runner, timeout=0.01) is True
+    assert runner.last_is_up_error is None

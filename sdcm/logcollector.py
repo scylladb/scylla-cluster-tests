@@ -803,9 +803,11 @@ class LogCollector:
     def current_run(self):
         return LogCollector._current_run
 
-    def __init__(self, nodes, test_id, storage_dir, params):
+    def __init__(self, nodes, test_id, storage_dir, params, cluster_log_type: str | None = None):
         self.test_id = test_id
         self.nodes = nodes
+        if cluster_log_type:
+            self.cluster_log_type = cluster_log_type
         self.local_dir = self.create_local_storage_dir(storage_dir)
         self.params = params
         for entity in self.log_entities:
@@ -842,7 +844,7 @@ class LogCollector:
                 ssm_result = ssm_runner.run(f"mkdir -p {remote_dir}", ignore_status=True)
                 ok = ssm_result.ok
                 if not ok:
-                    LOGGER.error("SSM command failed for instance %s: mkdir", node._instance.get("InstanceId"))
+                    LOGGER.error("SSM command failed for instance %s: mkdir", ssm_runner.instance_id)
 
             except (ClientError, AttributeError) as e:
                 LOGGER.error("Failed to run SSM command: %s", e)
@@ -858,6 +860,7 @@ class LogCollector:
             return None, False
 
         is_file_remote = True
+        ok = False
 
         if ssh_connected := node.remoter.is_up():
             try:
@@ -886,11 +889,9 @@ class LogCollector:
                 )
                 ok = ssm_result.ok
                 if not ssm_result.ok:
-                    LOGGER.error(
-                        "SSM command failed for instance %s: %s ", node._instance.get("InstanceId"), collect_log_command
-                    )
+                    LOGGER.error("SSM command failed for instance %s: %s ", ssm_runner.instance_id, collect_log_command)
                     return None, is_file_remote
-            except (ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
+            except (ClientError, ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
                 LOGGER.error("Failed to run SSM command: %s", e)
                 return None, is_file_remote
         return log_filename if ok else None, is_file_remote
@@ -942,6 +943,11 @@ class LogCollector:
         return local_dir
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        return self.collect_node_logs(local_search_path)
+
+    def collect_node_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        """Collect the logs of `self.nodes` only, without the subclasses' scan for inactive nodes."""
+
         def collect_logs_per_node(node):
             LOGGER.info("Collecting logs on host: %s", node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
@@ -968,9 +974,12 @@ class LogCollector:
         if workers_number := len(self.nodes):
             workers_number = min(workers_number, 30)
             try:
-                ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
+                results = ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                     collect_logs_per_node, ignore_exceptions=True
                 )
+                for result in results:
+                    if result.exc:
+                        LOGGER.error("Failed to collect logs on host %s: %r", result.obj.name, result.exc)
             except Exception as details:  # noqa: BLE001
                 LOGGER.error("Error occured during collecting logs %s", details)
 
