@@ -65,6 +65,8 @@ class RetryMixin:
 
 class CommandRunner(metaclass=ABCMeta):
     _connection = None
+    # Why the last is_up() call returned False, for the caller's error message
+    last_is_up_error: Exception | None = None
 
     def __init__(self, hostname: str, user: str = "root", password: str = None):
         self.hostname = hostname
