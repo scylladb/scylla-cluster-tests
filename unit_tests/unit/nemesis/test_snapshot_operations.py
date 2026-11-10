@@ -22,3 +22,20 @@ def test_few_tables_snapshot_caps_table_count():
     assert cmd.startswith("snapshot ks -cf ")
     tables = cmd.removeprefix("snapshot ks -cf ").split(",")
     assert len(set(tables)) == MAX_NAMES_IN_CMD
+
+
+def test_few_keyspaces_snapshot_caps_keyspace_count():
+    runner = TestRunner(ks_cfs=[f"ks{i}.t" for i in range(5000)])
+    runner.target_node.run_nodetool.return_value.stdout = ""
+
+    # last snapshot option: few keyspaces
+    with (
+        mock.patch("sdcm.nemesis.random.choice", side_effect=lambda seq: seq[-1]),
+        pytest.raises(Exception, match="Snapshot name wasn't found"),
+    ):
+        NemesisRunner.disrupt_snapshot_operations(runner)
+
+    cmd = runner.target_node.run_nodetool.call_args.args[0]
+    assert cmd.startswith("snapshot -kc ")
+    keyspaces = cmd.removeprefix("snapshot -kc ").split(",")
+    assert len(set(keyspaces)) == MAX_NAMES_IN_CMD
