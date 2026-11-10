@@ -16,14 +16,17 @@ import tempfile
 import time
 import unittest.mock
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseMonitorSet, BaseNode
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode
 from sdcm.cluster_docker import VectorStoreDockerNode, VectorStoreSetDocker
 from sdcm.db_log_reader import DbLogReader
+from sdcm.exceptions import WaitForTimeoutError
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
+from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
@@ -1067,3 +1070,91 @@ def test_get_ks_cf_with_most_sstables_falls_back_to_default():
     node.remoter.sudo.return_value.stdout = ""
 
     assert db_cluster.get_ks_cf_with_most_sstables(db_node=node) == "keyspace1.standard1"
+
+
+def _node_to_terminate(tmp_path, node_type, **kwargs):
+    # No scylla_shards attribute: reading it would mean SSH to a node that may be dead
+    return SimpleNamespace(
+        name=f"{node_type}-node-1",
+        node_type=node_type,
+        logdir=str(tmp_path / f"{node_type}-node-1"),
+        ip_address="10.4.0.201",
+        public_ip_address="63.34.198.130",
+        private_ip_address="10.4.0.201",
+        running_nemesis=None,
+        destroy=unittest.mock.Mock(),
+        **kwargs,
+    )
+
+
+def _cluster_terminating(node, tmp_path):
+    return SimpleNamespace(
+        dead_nodes_ip_address_list=[],
+        dead_nodes_list=[],
+        nodes=[node],
+        test_config=unittest.mock.Mock(),
+        logdir=str(tmp_path),
+        params={},
+        log=logging.getLogger(__name__),
+    )
+
+
+def test_terminate_node_of_a_node_that_failed_init_collects_loader_logs_without_ssh(tmp_path, caplog):
+    """SCT-1439: a loader that never got SSH lost its logs to `log_links[0]` and to SSH shard queries."""
+    node = _node_to_terminate(tmp_path, "loader")
+    cluster = _cluster_terminating(node, tmp_path)
+
+    with unittest.mock.patch("sdcm.cluster.LoaderLogCollector") as collector:
+        collector.return_value.collect_node_logs.return_value = []
+        BaseCluster.terminate_node(cluster, node, scylla_shards=0)
+
+    assert collector.call_args.kwargs["cluster_log_type"] == "loader-node-1"
+    collector.return_value.collect_node_logs.assert_called_once_with(local_search_path=node.logdir)
+    cluster.test_config.argus_client.return_value.submit_sct_logs.assert_not_called()
+    assert "No logs were collected for node loader-node-1" in caplog.text
+    assert cluster.dead_nodes_list[0].shards == 0
+    assert cluster.nodes == []
+    node.destroy.assert_called_once()
+
+
+def test_terminate_node_of_a_db_node_reads_its_shards_and_submits_the_logs(tmp_path):
+    node = _node_to_terminate(tmp_path, "db", scylla_shards=8)
+    cluster = _cluster_terminating(node, tmp_path)
+
+    with unittest.mock.patch("sdcm.cluster.ScyllaLogCollector") as collector:
+        collector.return_value.collect_node_logs.return_value = ["https://s3/db-node-1.tar.zst"]
+        BaseCluster.terminate_node(cluster, node)
+
+    assert cluster.dead_nodes_list[0].shards == 8
+    (log_link,) = cluster.test_config.argus_client.return_value.submit_sct_logs.call_args.args[0]
+    assert log_link.log_link == "https://s3/db-node-1.tar.zst"
+
+
+def test_wait_ssh_up_timeout_says_why_ssh_is_down():
+    remoter = SimpleNamespace(
+        user="ubuntu", hostname="10.4.0.201", is_up=lambda: False, last_is_up_error=PermissionError("publickey")
+    )
+    node = SimpleNamespace(name="loader-node-1", remoter=remoter)
+
+    with (
+        unittest.mock.patch("sdcm.cluster.adaptive_timeout"),
+        unittest.mock.patch("sdcm.cluster.wait.wait_for", side_effect=WaitForTimeoutError("timeout - 1500 seconds")),
+        pytest.raises(
+            WaitForTimeoutError, match=r"as ubuntu@10\.4\.0\.201, last SSH error: PermissionError\('publickey'\)"
+        ),
+    ):
+        BaseNode.wait_ssh_up(node)
+
+
+def test_wait_ssh_up_timeout_through_the_sct_agent_stays_a_timeout():
+    """The agent remoter records no SSH error: the timeout must not turn into AttributeError."""
+    node = SimpleNamespace(
+        name="loader-node-1", remoter=AgentCmdRunner(hostname="10.4.0.201", api_key="key", port=16000, user="ubuntu")
+    )
+
+    with (
+        unittest.mock.patch("sdcm.cluster.adaptive_timeout"),
+        unittest.mock.patch("sdcm.cluster.wait.wait_for", side_effect=WaitForTimeoutError("timeout - 1500 seconds")),
+        pytest.raises(WaitForTimeoutError, match=r"\(as ubuntu@10\.4\.0\.201\)$"),
+    ):
+        BaseNode.wait_ssh_up(node)
