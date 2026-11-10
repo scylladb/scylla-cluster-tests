@@ -89,6 +89,7 @@ from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.nemesis.utils.topology_ops import grow_cluster, shrink_cluster
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import TLSAssets, update_certificate
+from sdcm.remote.libssh2_client.exceptions import CommandTimedOut
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -2194,10 +2195,22 @@ class NemesisRunner:
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
             InfoEvent("NodetoolCleanupMonkey %s" % node).publish()
-            with adaptive_timeout(Operations.CLEANUP, node, timeout=60):
-                node.run_nodetool(sub_cmd="cleanup", long_running=True, retry=0)
+            with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC) as timeout:
+                try:
+                    node.run_nodetool(sub_cmd="cleanup", timeout=timeout, long_running=True, retry=0)
+                except CommandTimedOut:
+                    # A timeout leaves the cleanup running on the node, into the next nemesis
+                    self.log.warning("Stopping cleanup on %s, it didn't finish in %ss", node.name, timeout)
+                    try:
+                        node.run_nodetool("stop CLEANUP")
+                    except Exception:  # noqa: BLE001
+                        self.log.error("Failed to stop cleanup on %s", node.name, exc_info=True)
+                    raise
 
-        parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(32, len(self.cluster.nodes)), timeout=300)
+        # No timeout here: it would abandon the cleanups still running. Each one has its own.
+        parallel_objects = ParallelObject(
+            self.cluster.nodes, num_workers=min(32, len(self.cluster.nodes)), timeout=None
+        )
         with self.action_log_scope("Cleanup all nodes in parallel"):
             parallel_objects.run(_nodetool_cleanup)
 
