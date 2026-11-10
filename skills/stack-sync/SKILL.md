@@ -117,7 +117,7 @@ gh stack add -Am "feature(api-routes): add REST routes for cluster operations
 
 Expose the cluster API endpoints consumed by the next stack layer." api-routes
 ```
-Must be run from the topmost branch (or trunk, for the first layer). Branch names are used verbatim. Commit messages must pass SCT's commitlint rules (`type(scope): subject` header, body of 30+ characters - see `.github/copilot-instructions.md`).
+Must be run from the topmost branch (or trunk, for the first layer). Branch names are used verbatim. Commit messages must pass SCT's commitlint rules (`type(scope): subject` header, body of 30+ characters - see `docs/standards/global/commits-and-pull-requests.md`).
 
 ---
 

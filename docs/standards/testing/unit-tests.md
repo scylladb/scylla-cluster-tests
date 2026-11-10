@@ -33,7 +33,7 @@ New logic gets a unit test that asserts its behavior. A bug fix gets a test
 that fails before the fix and passes after it, when a test can reproduce the
 bug.
 
-Sources: `AGENTS.md` section Unit Testing Guidelines,
+Sources: the former `AGENTS.md` section Unit Testing Guidelines,
 `skills/writing-unit-tests/SKILL.md`, `skills/writing-integration-tests/SKILL.md`,
 `skills/code-review/SKILL.md` check 5, and the code: 349 test modules with
 top-level test functions.

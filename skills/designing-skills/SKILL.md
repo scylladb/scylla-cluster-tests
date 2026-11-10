@@ -87,7 +87,7 @@ Skill content must be platform-agnostic — no Claude-only or Copilot-only instr
 
 **Skills must follow SCT repository conventions.**
 
-All skills should be consistent with conventions in `AGENTS.md` and `.github/copilot-instructions.md`:
+All skills should be consistent with the coding standards in `docs/standards/` (index: `docs/INDEX.md`):
 - Python code examples use pytest (not unittest), Google docstrings, no inline imports
 - Test examples go in `unit_tests/`, use `@pytest.fixture` and `@pytest.mark.parametrize`
 - Commands reference SCT tools: `uv run sct.py unit-tests`, `uv run sct.py pre-commit`

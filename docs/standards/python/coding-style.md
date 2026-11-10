@@ -51,7 +51,7 @@ Do not write a bare `except:` or an `except` block that only passes. Catch the
 narrowest exception, and log or raise with enough context to debug the run.
 A custom exception subclasses the SCT exception of its area.
 
-Sources: `pyproject.toml`, `.pre-commit-config.yaml`, `AGENTS.md` sections
+Sources: `pyproject.toml`, `.pre-commit-config.yaml`, the former `AGENTS.md` sections
 Code Style Guidelines and Documentation Standards, `skills/code-review/SKILL.md`
 check 4, the review of pull request #16699, and the code: `LOGGER` in 212 of 238 `sdcm` modules with a module
 logger, lazy arguments in 1032 of 1142 `LOGGER.info`, `LOGGER.debug`, and
