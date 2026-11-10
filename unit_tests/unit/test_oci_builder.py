@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from sdcm.utils.oci_builder import OciBuilder
 
@@ -31,6 +32,15 @@ def test_script_console_error_with_http_200_fails(builder):
     with (
         patch("sdcm.utils.oci_builder.requests.post", return_value=response),
         pytest.raises(RuntimeError, match="NoSuchMethodException"),
+    ):
+        builder._add_cloud_configuration_to_jenkins()
+
+
+def test_connection_error_is_raised_as_is(builder):
+    """A failed request has no response; the handler must re-raise it, not hit an unbound name."""
+    with (
+        patch("sdcm.utils.oci_builder.requests.post", side_effect=requests.ConnectionError("refused")),
+        pytest.raises(requests.ConnectionError, match="refused"),
     ):
         builder._add_cloud_configuration_to_jenkins()
 
