@@ -12,6 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -44,6 +45,9 @@ LOGGER = logging.getLogger(__name__)
 _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC = 69
 _I4I_LARGE_SHARD_COUNT = 2
 
+
+VNODE_KEYSPACES_URL = "http://localhost:10000/storage_service/keyspaces?type=non_local_strategy&replication=vnodes"
+KEYSPACE_LABEL_PATTERN = re.compile(r'ks="([^"]*)"')
 
 BINARY_PREFIX_EXPONENTS = {"K": 1, "M": 2, "G": 3, "T": 4, "P": 5}
 NODETOOL_SIZE_PATTERN = re.compile(rf"^(\d+(?:\.\d+)?) *(?:bytes|B|([{''.join(BINARY_PREFIX_EXPONENTS)}])i?B)$")
@@ -137,6 +141,24 @@ class NodeLoadInfoService:
             if line.startswith("Load"):
                 return nodetool_size_to_mb(line.split(":")[1].strip())
         raise ValueError("Couldn't find Load in nodetool info response")
+
+    @property
+    def vnodes_data_size_mb(self) -> int:
+        """Live data size of the vnode keyspaces in MB, the only ones 'nodetool cleanup' processes.
+
+        Falls back to the whole node data size when Scylla exports no per-table metrics.
+        """
+        live_disk_space = [
+            (KEYSPACE_LABEL_PATTERN.search(key), float(value))
+            for key, value in self._get_scylla_metrics().items()
+            if key.startswith("scylla_column_family_live_disk_space{")
+        ]
+        if not live_disk_space:
+            return self.node_data_size_mb
+        keyspaces = json.loads(
+            self.remoter.run(curl_with_retry(f"'{VNODE_KEYSPACES_URL}'", retry=0, silent=True), verbose=False).stdout
+        )
+        return int(sum(size for ks, size in live_disk_space if ks and ks.group(1) in keyspaces) / 1024**2)
 
     @property
     def node_disk_size_mb(self) -> int:
