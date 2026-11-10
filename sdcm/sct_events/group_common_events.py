@@ -668,18 +668,19 @@ def ignore_aborted_snapshot_upload_storage_io_errors():
             issues="https://github.com/scylladb/scylladb/issues/24642",
             params=TestConfig().tester_obj().params,
         ):
+            # Older Scylla formats nested exceptions as "type (message)", newer as "type: message".
             stack.enter_context(
                 EventsSeverityChangerFilter(
                     new_severity=Severity.WARNING,
                     event_class=DatabaseLogEvent,
-                    regex=r".*std::runtime_error \(Failed to parse ETag list\. Aborting multipart upload\.\)",
+                    regex=r".*std::runtime_error(?: \(|: )Failed to parse ETag list\. Aborting multipart upload\.",
                 )
             )
             stack.enter_context(
                 EventsSeverityChangerFilter(
                     new_severity=Severity.WARNING,
                     event_class=DatabaseLogEvent,
-                    regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
+                    regex=r".*storage_io_error(?: \(|: )S3 error \(seastar::abort_requested_exception(?: \(|: )abort requested",
                 )
             )
         yield

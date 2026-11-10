@@ -22,6 +22,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.group_common_events import (
+    ignore_aborted_snapshot_upload_storage_io_errors,
     ignore_drop_table_during_repair_errors,
     oversized_allocation_filter,
 )
@@ -195,6 +196,69 @@ def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa:
     assert db_events_filter.eval_filter(matching_event)
     assert not db_events_filter.eval_filter(other_database_error_event)
     assert not db_events_filter.eval_filter(other_event_class_with_same_line)
+
+
+@pytest.fixture
+def aborted_snapshot_upload_filters():
+    published = []
+    with (
+        unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"),
+        unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues", return_value=True),
+        unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append),
+        ignore_aborted_snapshot_upload_storage_io_errors(),
+    ):
+        # the filters expire when the context exits, so the test runs while it is open
+        yield list(published)
+    # `publish` is mocked - see published_filters
+    for events_filter in published:
+        events_filter.dont_publish()
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        pytest.param(
+            "storage_io_error (S3 error (seastar::abort_requested_exception (abort requested)))",
+            True,
+            id="s3-abort-old-format",
+        ),
+        pytest.param(
+            "storage_io_error: S3 error (seastar::abort_requested_exception: abort requested)",
+            True,
+            id="s3-abort-new-format",
+        ),
+        pytest.param(
+            "std::runtime_error (Failed to parse ETag list. Aborting multipart upload.)",
+            True,
+            id="etag-old-format",
+        ),
+        pytest.param(
+            "std::runtime_error: Failed to parse ETag list. Aborting multipart upload.",
+            True,
+            id="etag-new-format",
+        ),
+        pytest.param(
+            "storage_io_error: S3 error (std::system_error: Connection refused)",
+            False,
+            id="other-s3-error",
+        ),
+    ],
+)
+def test_ignore_aborted_snapshot_upload_storage_io_errors(aborted_snapshot_upload_filters, error, expected):
+    """Scylla 2026.4+ formats nested exceptions as "type: message" instead of "type (message)"."""
+    event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+        node="node-1",
+        line_number=1,
+        line="2026-11-10T12:19:02.101+00:00 node-1 !ERR | scylla[9182]  [shard  2:bckp] snapshots - Error uploading "
+        "/var/lib/scylla/data/system_schema/keyspaces-abac5682dea631c5b535b3d6cffd0fb6/snapshots/"
+        f"sm_20261110121856UTC/mt-3h5e_0y37_0r7xs2rszw4thfq2wv-big-Data.db: {error}",
+    )
+
+    assert len(aborted_snapshot_upload_filters) == 2
+    for events_filter in aborted_snapshot_upload_filters:
+        events_filter.eval_filter(event)
+
+    assert (event.severity == Severity.WARNING) is expected
 
 
 # Decoded backtrace of a real SCYLLADB-3114 event (rolling-upgrade-oci-image-test #5), trimmed: the symbol the
