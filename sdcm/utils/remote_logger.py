@@ -19,6 +19,7 @@ import os
 import socket
 import subprocess
 import time
+import uuid
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -147,13 +148,20 @@ class SSHLoggerBase(LoggerBase):
     def _is_ready_to_retrieve(self) -> bool:
         return self._remoter.is_up()
 
+    @cached_property
+    def _remote_files_id(self) -> str:
+        # Unique per logger: several loggers of one SCT process can follow files on the same node at the
+        # same moment (one HDR logger per stress command), and with a shared name one overwrites the
+        # script of another before it runs, so both follow the same file.
+        return f"{os.getpid()}_{uuid.uuid4().hex}"
+
     @property
     def remote_pid(self) -> str:
         """
         Returns the PID of the remote logger process.
         This is used to ensure that the logger is running and to manage its lifecycle.
         """
-        remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+        remote_pid_file = f"/tmp/logger_{self._remote_files_id}.pid"
         if not self._remoter.run(f"test -f {remote_pid_file}", ignore_status=True).ok:
             return ""
         return self._remoter.run(f"cat {remote_pid_file}").stdout.strip()
@@ -164,11 +172,12 @@ class SSHLoggerBase(LoggerBase):
         )
         try:
             # Write the remote PID to a file before running the logger command
-            remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+            remote_pid_file = f"/tmp/logger_{self._remote_files_id}.pid"
+            remote_cmd_file = f"/tmp/logger_cmd_{self._remote_files_id}.sh"
             cmd = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else "")
             remote_cmd = (
-                f"cat <<'EOF' > /tmp/logger_cmd_{os.getpid()}.sh\n{cmd}\nEOF\n"
-                f"setsid bash /tmp/logger_cmd_{os.getpid()}.sh & echo $! > {remote_pid_file}; wait"
+                f"cat <<'EOF' > {remote_cmd_file}\n{cmd}\nEOF\n"
+                f"setsid bash {remote_cmd_file} & echo $! > {remote_pid_file}; wait"
             )
             self._remoter.run(
                 cmd=remote_cmd,
