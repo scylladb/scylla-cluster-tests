@@ -629,6 +629,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 self["oci_image_db"] = " ".join(image[2] for image in scylla_oci_images)
             elif self.get("cluster_backend") == "xcloud" and ":" in scylla_version:
                 self._resolve_xcloud_version_tag(self.get("scylla_version"))
+            elif self._restored_from_placement("ami_id_db_scylla") and self.get("use_preinstalled_scylla"):
+                # region fallback in the provisioning step already resolved scylla_version to AMIs
+                # and handed them over via resolved placement; nothing is left to look up.
+                # A handoff-restored base-OS AMI (use_preinstalled_scylla: false) still needs the
+                # repo below, as scylla_repo isn't part of the handoff.
+                self.log.info(
+                    "scylla_version='%s' already resolved to ami_id_db_scylla=%s by the provisioning step",
+                    scylla_version,
+                    self.get("ami_id_db_scylla"),
+                )
             elif not self.get("scylla_repo"):
                 self["scylla_repo"] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
@@ -687,7 +697,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
-            if not self.get("ami_id_db_oracle") and self.get("cluster_backend") == "aws":
+            if self.get("cluster_backend") == "aws" and self._restored_from_placement("ami_id_db_oracle"):
+                pass  # already resolved by the provisioning step, see scylla_version above
+            elif not self.get("ami_id_db_oracle") and self.get("cluster_backend") == "aws":
                 ami_list = []
                 for region in region_names:
                     aws_arch = get_arch_from_instance_type(self.get("instance_type_db_oracle"), region_name=region)
@@ -739,7 +751,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 raise ValueError("'oracle_scylla_version' and 'oci_image_db_oracle' can't used together")
 
         # 6.2) handle vector_store_version if exists
-        if vs_version := self.get("vector_store_version"):
+        if (vs_version := self.get("vector_store_version")) and not self._restored_from_placement(
+            "ami_id_vector_store"
+        ):
             if self.get("ami_id_vector_store"):
                 raise ValueError("'vector_store_version' can't be used together with 'ami_id_vector_store'")
             if self.get("cluster_backend") == "aws":
@@ -1017,6 +1031,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         The behavior can be disabled with `SCT_IGNORE_RESOLVED_PLACEMENT`.
         """
         self._resolved_placement_source_region = None
+        self._resolved_placement_amis: dict[str, str] = {}
         if os.environ.get("SCT_IGNORE_RESOLVED_PLACEMENT"):
             return
 
@@ -1046,6 +1061,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 if amis:
                     for key, value in amis.items():
                         self[key] = value
+                    self._resolved_placement_amis = dict(amis)
                 elif original_region_list and region_name != original_region_list:
                     self._resolved_placement_source_region = original_first_region
         if availability_zone:
@@ -1059,6 +1075,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
             availability_zone,
             bool(amis),
         )
+
+    def _restored_from_placement(self, key: str) -> bool:
+        """True when `key` was restored by `_apply_resolved_placement` from a previous provisioning step."""
+        return key in self._resolved_placement_amis
 
     def resolve_amis(self, region_names: List[str], source_region: str | None = None) -> None:
         """Re-resolve region-bound AWS AMI IDs for the given regions `region_names`."""
