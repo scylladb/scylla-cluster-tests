@@ -50,6 +50,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
+from sdcm.utils.aws_ssm_runner import SSMCommandRunner
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTANCES_TIMEOUT, list_instances_aws
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
@@ -809,6 +810,13 @@ class AWSNode(cluster.BaseNode):
             region=self._ec2_service.meta.client.meta.region_name,
             host=self.external_address,
             logdir=self.logdir,
+        )
+
+    @cached_property
+    def aws_ssm_runner(self) -> SSMCommandRunner:
+        """Run commands through the SSM agent, for log collection when SSH is down."""
+        return SSMCommandRunner(
+            region_name=self._ec2_service.meta.client.meta.region_name, instance_id=self._instance.id
         )
 
     def wait_for_cloud_init(self):
