@@ -328,6 +328,7 @@ class OciBuilder:
             regions: List of region names to configure. If None, uses all supported OCI regions.
         """
         regions = regions or get_all_regions(cloud_provider="oci")
+        failed = []
         for region_name in regions:
             try:
                 click.secho(f"\nConfiguring OCI builder in region: {region_name}", fg="cyan")
@@ -343,8 +344,10 @@ class OciBuilder:
                     err=True,
                 )
                 LOGGER.exception(f"Exception configuring OCI builder in {region_name}")
-                # Continue with next region instead of failing completely
-                continue
+                # Continue with the next region, and fail once all were tried
+                failed.append(region_name)
+        if failed:
+            raise RuntimeError(f"Failed to configure OCI builders in: {', '.join(failed)}")
 
     @staticmethod
     def validate_jenkins_connectivity(jenkins_info: dict) -> bool:
