@@ -183,6 +183,8 @@ from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
 from sdcm.logcollector import (
     GrafanaScreenShot,
+    LoaderLogCollector,
+    MonitorLogCollector,
     PrometheusSnapshots,
     upload_archive_to_s3,
     save_kallsyms_map,
@@ -219,6 +221,7 @@ from sdcm.exceptions import (
     KillNemesis,
     NodeNotReady,
     SstablesNotFound,
+    WaitForTimeoutError,
 )
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCenterTopologyRfControl
 
@@ -534,6 +537,11 @@ class BaseNode(AutoSshContainerMixin):
                         "Encountered an unhadled exception while changing 'perf_event_paranoid' value", exc_info=True
                     )
         self._add_node_to_argus()
+
+    @property
+    def aws_ssm_runner(self):
+        """No SSM outside AWS: the log collector falls back to it when SSH is down."""
+        return None
 
     def _add_node_to_argus(self):
         try:
@@ -1517,13 +1525,19 @@ class BaseNode(AutoSshContainerMixin):
 
         ssh_timeout_multiplier = 3
         with adaptive_timeout(Operations.SSH_CONNECTIVITY, node=self, timeout=timeout, node_available=False):
-            wait.wait_for(
-                func=self.remoter.is_up,
-                step=10 * ssh_timeout_multiplier,
-                text=text,
-                timeout=timeout * ssh_timeout_multiplier,
-                throw_exc=True,
-            )
+            try:
+                wait.wait_for(
+                    func=self.remoter.is_up,
+                    step=10 * ssh_timeout_multiplier,
+                    text=text,
+                    timeout=timeout * ssh_timeout_multiplier,
+                    throw_exc=True,
+                )
+            except WaitForTimeoutError as exc:
+                reason = f"as {self.remoter.user}@{self.remoter.hostname}"
+                if (last_error := self.remoter.last_is_up_error) is not None:
+                    reason += f", last SSH error: {last_error!r}"
+                raise WaitForTimeoutError(f"{exc} ({reason})") from exc
 
     def is_port_used(self, port: int, service_name: str) -> bool:
         """Wait for the port to be used for the specified timeout. Returns True if used and False otherwise."""
@@ -4114,7 +4128,7 @@ class BaseCluster:
         for node in self.nodes:
             node.destroy()
 
-    def terminate_node(self, node: BaseNode, scylla_shards: int = 0) -> None:
+    def terminate_node(self, node: BaseNode, scylla_shards: int | None = None) -> None:
         # NOTE: BaseNode.scylla_shards uses SSH commands to get actual numbers which is not possible on a dead node.
         #       In such cases, a caller needs to get the number of shards before the node dies and provide it.
         if node.ip_address not in self.dead_nodes_ip_address_list:
@@ -4125,22 +4139,30 @@ class BaseCluster:
                     private_ip=node.private_ip_address,
                     ipv6_ip=node.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
                     ip_address=node.ip_address,
-                    shards=scylla_shards or node.scylla_shards,
+                    shards=node.scylla_shards if scylla_shards is None else scylla_shards,
                     termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
                     terminated_by_nemesis=node.running_nemesis,
                 )
             )
         if node in self.nodes:
             self.nodes.remove(node)
+        collector_class = {"loader": LoaderLogCollector, "monitor": MonitorLogCollector}.get(
+            node.node_type, ScyllaLogCollector
+        )
         try:
-            ScyllaLogCollector.cluster_log_type = node.name
-            log_links = ScyllaLogCollector(
+            # local_search_path: pick up what SCT saved locally without SSH.
+            # collect_node_logs: the inactive-node scan of collect_logs() would copy those files a second time.
+            log_links = collector_class(
                 [node],
                 test_id=self.test_config.test_id(),
                 storage_dir=os.path.join(self.logdir, "collected_logs"),
                 params=self.params,
-            ).collect_logs()
-            self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
+                cluster_log_type=node.name,
+            ).collect_node_logs(local_search_path=node.logdir)
+            if log_links:
+                self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
+            else:
+                self.log.warning("No logs were collected for node %s", node.name)
         except Exception as exc:  # noqa: BLE001
             self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
         with DbNodeLogger(self.nodes, "terminate node", target_node=node):
