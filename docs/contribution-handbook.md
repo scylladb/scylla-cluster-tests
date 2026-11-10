@@ -481,6 +481,12 @@ one reviewer will run automatically, also skipping them; the design and the sele
 These reviews supplement, but do not replace, human review: treat bot findings as
 suggestions to verify against the code, not as rulings.
 
+To run a reviewer on your machine before you push, or without a PR comment,
+follow the [`running-ai-reviewers`](../skills/running-ai-reviewers/SKILL.md) skill.
+It runs Claude (the `code-review` skill, with your Claude team login) or the
+CodeRabbit CLI (free login) with the same `REVIEW.md`, and posts nothing.
+Qodo and Copilot run only on the PR; for a branch without one, open a draft PR.
+
 **On-demand task execution** — mentioning `@claude` in a PR comment or issue
 triggers the [`claude`](../.github/workflows/claude.yml) workflow, except a
 comment that starts with `@claude review`, which requests a review (see above). This is
