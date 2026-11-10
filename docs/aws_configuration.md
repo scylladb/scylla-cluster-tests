@@ -11,6 +11,8 @@ hydra configure-aws-peering [-r <region_name> -r <region_name>]
 hydra configure-jenkins-builders [-r <region_name> -r <region_name>]
 ```
 
+To change existing builders, see [Changing builder configuration](jenkins-builders.md#changing-builder-configuration).
+
 ## Creating new sct-runner images
 
 SCT can run locally and on remote Runner instance.

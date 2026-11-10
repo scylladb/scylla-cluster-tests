@@ -23,7 +23,7 @@ from google.cloud import compute_v1
 from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
-from sdcm.sct_runner import GceSctRunner
+from sdcm.sct_runner import BUILDER_KEEP_HOURS, GceSctRunner
 from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS
@@ -216,14 +216,16 @@ class GceBuilder:
         metadata = compute_v1.Metadata()
         metadata.items += [{"key": "RunByUser", "value": "QA"}]
         metadata.items += [{"key": "NodeType", "value": "builder"}]
-        metadata.items += [{"key": "keep", "value": "alive"}]
+        metadata.items += [{"key": "keep", "value": BUILDER_KEEP_HOURS}]
+        metadata.items += [{"key": "keep_action", "value": "terminate"}]
         metadata.items += [{"key": "billing_project", "value": "sct-runners"}]
         template.properties.metadata = metadata
 
         template.properties.labels = {
             "runbyuser": "qa",
             "nodetype": "builder",
-            "keep": "alive",
+            "keep": BUILDER_KEEP_HOURS,
+            "keep_action": "terminate",
             "billing_project": "sct-runners",
         }
 

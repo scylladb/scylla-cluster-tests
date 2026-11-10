@@ -16,6 +16,10 @@ def call() {
                 NodeType: "builder",
                 keep_action: "terminate",
                 billing_project:"${GetBillingProjectTag()}"]
+    // Builders launch with a one-week keep; a test that runs longer raises it here
+    if (params.builder_keep) {
+        tags.keep = params.builder_keep
+    }
     applyTagsWithCreds(cloudInfo, tags)
 }
 
@@ -356,13 +360,27 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
         withCredentials([ociCredentials(credentialsId: 'oci-sct-user')]) {
             withEnv(["OCI_CLI_REGION=${cloudInfo.region}", "OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True"]) {
                 def jsonTag = tags.collect { k, v -> "\"${k}\": \"${normalizeValueLength(v, maxTagLength)}\"" }.join(',')
+                def definedTagsArg = ""
+                if (tags.keep) {
+                    // clean_oci reads keep only from the sct.* defined tags; --defined-tags replaces them
+                    // all, so merge into what the builder launched with
+                    def current = sh(script: "oci compute instance get --instance-id ${cloudInfo.instanceId} --query 'data.\"defined-tags\"'", returnStdout: true).trim()
+                    definedTagsArg = "--defined-tags '${withSctKeep(current, tags.keep)}'"
+                }
                 def script = """
-                    oci compute instance update --instance-id ${cloudInfo.instanceId} --freeform-tags '{${jsonTag}}' --force
+                    oci compute instance update --instance-id ${cloudInfo.instanceId} --freeform-tags '{${jsonTag}}' ${definedTagsArg} --force
                 """
                 sh script
             }
         }
     }
+}
+
+@NonCPS
+String withSctKeep(String definedTagsJson, String keep) {
+    def definedTags = definedTagsJson ? new groovy.json.JsonSlurperClassic().parseText(definedTagsJson) : [:]
+    definedTags.sct = (definedTags.sct ?: [:]) + [keep: keep]
+    return groovy.json.JsonOutput.toJson(definedTags)
 }
 
 /**
