@@ -195,37 +195,30 @@ def _get_compaction_timeout(
         return timeout, {}
 
 
-def _get_cleanup_timeout(node_info_service, timeout=None):
-    """Calculate cleanup timeout based on node data size.
-    After decommission/topology change, cleanup removes data that no longer
-    belongs to a node. The amount of data to process is proportional to total
-    node data size divided by the number of nodes (since only the reshuffled
-    portion needs cleanup).
+def _get_cleanup_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None
+) -> tuple[tuple[int | float, int | float], dict[str, Any]]:
+    """Calculate the soft and hard timeouts of 'nodetool cleanup' from the node data size.
 
-    Ref: https://scylladb.atlassian.net/browse/SCT-247
+    Cleanup is a compaction in the maintenance scheduling group, far slower than streaming.
+    In 424 cleanups of 2026.3 longevities it ran as slow as 2.5 MB/s per shard on loaded nodes.
 
-    Formula:
-        timeout = max(MIN_CLEANUP_TIMEOUT, data_size_mb / throughput_mb_s * safety_factor)
-    Where:
-        - data_size_mb: total data on the node (from node_info_service)
-        - throughput_mb_s: expected I/O throughput for the instance type
-        - safety_factor: 2.0 (accounts for compaction contention, I/O variability)
-        - MIN_CLEANUP_TIMEOUT: 120 seconds (floor for small datasets)
+        soft = (data_size_mb / shards) / 5 MB/s + 120 s
+        hard = soft * 2, i.e. 2.5 MB/s per shard
+
+    Falls back to the caller timeout when the node info is unavailable.
     """
-    MIN_CLEANUP_TIMEOUT = 120  # seconds
-    SAFETY_FACTOR = 2.0
+    CLEANUP_SPEED = 5  # MB/s per shard
+    FIXED_OVERHEAD = 120  # seconds
     try:
-        data_size_mb = node_info_service.node_data_size_mb
-        throughput = node_info_service.expected_throughput  # MB/s
-        if data_size_mb and throughput:
-            calculated = (data_size_mb / throughput) * SAFETY_FACTOR
-            timeout = max(MIN_CLEANUP_TIMEOUT, calculated)
-        else:
-            timeout = timeout or MIN_CLEANUP_TIMEOUT
-        return timeout, node_info_service.as_dict()
+        data_size = node_info_service.node_data_size_mb
+        shards = node_info_service.shards_count
+        if data_size and shards:
+            timeout = int(data_size / shards / CLEANUP_SPEED) + FIXED_OVERHEAD
+        return (timeout, timeout * 2), node_info_service.as_dict()
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("Failed to calculate cleanup timeout: \n%s \nDefaulting to %s seconds", exc, MIN_CLEANUP_TIMEOUT)
-        return timeout or MIN_CLEANUP_TIMEOUT, {}
+        LOGGER.warning("Failed to calculate cleanup timeout: \n%s \nDefaulting to %s seconds", exc, timeout)
+        return (timeout, timeout * 2), {}
 
 
 class Operations(Enum):
@@ -359,12 +352,8 @@ def adaptive_timeout(  # noqa: PLR0914
         metrics = {}
     if tablet_sensitive_op:
         args["tablets_enabled"] = tablets_enabled
-    result = timeout_func(node_info_service=metrics, **args)
-    if tablet_sensitive_op:
-        (soft_timeout, hard_timeout), load_metrics = result
-    else:
-        soft_timeout, load_metrics = result
-        hard_timeout = None
+    timeouts, load_metrics = timeout_func(node_info_service=metrics, **args)
+    soft_timeout, hard_timeout = timeouts if isinstance(timeouts, tuple) else (timeouts, None)
     if store_metrics:
         load_metrics.update(TestInfoServices.get(node))
 

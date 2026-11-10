@@ -298,6 +298,32 @@ def test_tablet_migration_timeout_fallback_uses_caller_timeout(
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+def test_cleanup_timeout_is_calculated_from_data_size_per_shard(soft_timeout_mock, fake_node, adaptive_timeout_store):
+    """Cleanup gets a soft timeout from its data per shard and a hard one twice as long, both stored."""
+    with adaptive_timeout(
+        operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        # soft = int(102400 MB / 3 shards / 5 MB/s) + 120 s = 6946; hard = soft * 2
+        assert timeout == 13892
+
+    soft_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.CLEANUP.name)
+    assert metrics[0]["timeout"] == 6946
+    assert metrics[0]["hard_timeout"] == 13892
+
+
+def test_cleanup_timeout_fallback_doubles_caller_timeout(fake_node, adaptive_timeout_store):
+    """Without the node data size, cleanup still gets a hard timeout: twice the caller timeout."""
+    with mock.patch.object(
+        NodeLoadInfoService, "node_data_size_mb", new_callable=mock.PropertyMock, side_effect=ValueError("no load")
+    ):
+        with adaptive_timeout(
+            operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+        ) as timeout:
+            assert timeout == 7200
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
 def test_tablet_migration_uses_formula_when_tablets_disabled(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
