@@ -21,6 +21,6 @@ strategy, the compression, or a `scylla.yaml` option. Exclude that nemesis by
 name in `nemesis_selector`. Otherwise the nemesis undoes the setting during
 the run.
 
-Sources: `.github/copilot-instructions.md` section Configuration Changes,
+Sources: the former `.github/copilot-instructions.md` section Configuration Changes,
 `AGENTS.md` sections Test Configuration and Documentation Standards,
 `skills/code-review/SKILL.md` check 6, `docs/nemesis.md`.
