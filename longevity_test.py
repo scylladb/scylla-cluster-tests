@@ -493,7 +493,12 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         prepare_write_cmd = self.params.get("prepare_write_cmd")
         if not prepare_write_cmd:
             return None
-        return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
+        return max(
+            [
+                self._get_columns_num_of_single_stress(single_stress_cmd=self.render_stress_cmd(stress))
+                for stress in prepare_write_cmd
+            ]
+        )
 
     def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None):
         """
