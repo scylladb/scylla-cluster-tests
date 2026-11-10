@@ -176,9 +176,9 @@ exit-137 failure mode above if you were wrong.
 
 ## What minicloud does not implement
 
-- **Azure Key Vault** - the overlay keeps KMS off on every backend. minicloud emulates AWS KMS
-  and GCP Cloud KMS, so an aws or gce run may opt in with `SCT_ENTERPRISE_DISABLE_KMS=false`;
-  the preflight check rejects KMS on azure. No pipeline knows about KMS.
+- **KMS on azure, in SCT** - the overlay keeps KMS off on every backend. An aws or gce run may opt
+  in with `SCT_ENTERPRISE_DISABLE_KMS=false`. minicloud also emulates Azure Key Vault, but SCT does
+  not wire it up yet, so the preflight check rejects KMS on azure. No pipeline knows about KMS.
 - **Spot** - `instance_provision` must stay `on_demand`.
 - **Local SSDs / NVMe passthrough** - guests get qcow2-backed disks.
 - Anything not in the emulated API surface fails closed with an explicit error rather than
