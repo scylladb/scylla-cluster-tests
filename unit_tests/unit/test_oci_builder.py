@@ -44,3 +44,22 @@ def test_script_console_success(builder):
     script = post.call_args.kwargs["data"]["script"]
     assert "oci-sct-builders-us-phoenix-1-v3" in script
     assert "maxTotalUses" in script
+
+
+def test_configure_in_all_region_fails_after_trying_every_region():
+    configured = []
+
+    def fake_configure(self):
+        configured.append(self.region.region_name)
+        if self.region.region_name == "us-phoenix-1":
+            raise RuntimeError("script console error")
+
+    with (
+        patch("sdcm.utils.oci_builder.OciRegion", side_effect=lambda region_name: MagicMock(region_name=region_name)),
+        patch.object(OciBuilder, "__init__", lambda self, region: setattr(self, "region", region)),
+        patch.object(OciBuilder, "configure", fake_configure),
+        pytest.raises(RuntimeError, match="in: us-phoenix-1$"),
+    ):
+        OciBuilder.configure_in_all_region(regions=["us-ashburn-1", "us-phoenix-1", "eu-frankfurt-1"])
+
+    assert configured == ["us-ashburn-1", "us-phoenix-1", "eu-frankfurt-1"]
