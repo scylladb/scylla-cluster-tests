@@ -26,7 +26,7 @@ A 6-phase process for creating a skill from scratch in the SCT repository.
 
 5. **Define 3-5 essential principles.** These are non-negotiable rules for every invocation. Ask: "What mistake would ruin the output if the LLM made it?" Each principle guards against a specific failure mode. Every principle must explain WHY — reasoning helps the LLM generalize to cases the rule didn't explicitly cover.
 
-6. **Verify SCT alignment.** Check that your scope aligns with SCT conventions in `AGENTS.md` and `.github/copilot-instructions.md`.
+6. **Verify SCT alignment.** Check that your scope aligns with the SCT coding standards in `docs/standards/` (index: `docs/INDEX.md`).
 
 **Exit:** Example prompts collected, draft description, When to Use, When NOT to Use, and essential principles documented.
 
@@ -116,7 +116,7 @@ A 6-phase process for creating a skill from scratch in the SCT repository.
    @skills/<skill-name>/SKILL.md
    ```
 
-3. **Verify no other files need updating.** Check if `.github/copilot-instructions.md` references the skill's domain — if so, add a cross-reference to the skill.
+3. **Verify no other files need updating.** Check if a standard in `docs/standards/` covers the skill's domain — if so, add a cross-reference to the skill.
 
 **Exit:** Skill is discoverable by both Copilot and Claude Code.
 
