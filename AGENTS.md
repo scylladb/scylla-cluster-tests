@@ -283,6 +283,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
+| running-ai-reviewers | Runs Claude or CodeRabbit locally with the `REVIEW.md` rules; prints the review, posts nothing. Use to review a branch or PR before or without a PR comment. | `skills/running-ai-reviewers/SKILL.md` |
 | discovering-standards | Discovers the coding standards of SCT, writes `docs/standards/` and `docs/INDEX.md`, and updates `REVIEW.md`. Use when the standards must be discovered or refreshed. | `skills/discovering-standards/SKILL.md` |
 | updating-standards | Adds or changes one coding standard in `docs/standards/` and its `docs/INDEX.md` entry. Use when a convention is stated or settled in a review. | `skills/updating-standards/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
