@@ -74,12 +74,12 @@ Do these steps one time.
    sudo usermod -aG kvm,docker "$USER"
    ```
    Log out and log in again after `usermod`.
-2. Give your user passwordless sudo. The first start of minicloud runs `minicloud-setup.sh` with `sudo -n` to create the `minicloud0` device. On a firewalld host, for example Fedora, the script also runs `sudo -n firewall-cmd`. Without it, the guests boot but do not get their SSH key:
+2. Give your user passwordless sudo. Each start of minicloud without the `minicloud0` device, for example after a reboot, runs `minicloud-setup.sh` with `sudo -n` to create the device. If the setup fails, minicloud does not start. On a firewalld host, for example Fedora, the start also runs `sudo -n firewall-cmd` to put `minicloud0` in the `trusted` zone. If that step fails, the run stops:
    ```bash
    echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/minicloud
    sudo -n true && echo ok
    ```
-   To use minicloud without sudo at run time, create `minicloud0` with a boot-time unit. See [Agent prerequisites](minicloud.md#agent-prerequisites).
+   To use minicloud without sudo at run time, create `minicloud0` with a boot-time unit. See [Running locally](minicloud.md#running-locally).
 3. Make sure that `$HOME` has 80 GiB free. The guest disk cache goes to `~/.cache/minicloud`.
 4. Make sure that the host has 22 GiB of free memory for the `provision` flavor. Each guest gets 4 GiB, and the flavor starts 5 guests on x86_64. The preflight check stops the run if the memory is not sufficient.
 
@@ -158,8 +158,7 @@ SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5050 SCT_ENABLE_ARGUS=false \
 ```
 
 Do not give `--logdir`. `collect-logs` finds the run directory under `~/sct-results` by the run ID.
-`collect-logs` uploads the SCT logs of the run. On Linux, it also uploads the `docker logs minicloud` output, so minicloud must still run.
-The run destroys the guests at teardown, so `collect-logs` gets no node logs by default. To get the node logs, start the test with `SCT_POST_BEHAVIOR_DB_NODES=keep`, and collect the logs before you stop minicloud.
+`collect-logs` uploads the SCT logs of the run, gets the node logs over SSH from the guests that still run, and copies the serial console of each guest. On Linux, it also uploads the `docker logs minicloud` output. minicloud must still run on both platforms.
 If you upload the logs after you publish the run, replay the run again. Argus then attaches the new logs.
 
 ## Stop minicloud
@@ -195,30 +194,7 @@ Without `--test`, the test name is the name of the first config file of the run.
 
 To find your runs in Argus, open the `local-runs` release, then the group with your username.
 
-## Compare two runs
-
-Replay each run with its own command, and give the same `--test`:
-
-```bash
-argus run replay --dir ~/sct-results/<baseline> --run-id <baseline_run_id> --test my-feature
-argus run replay --dir ~/sct-results/<candidate> --run-id <candidate_run_id> --test my-feature
-```
-
-The two runs become build `#1` and build `#2` of `local-runs/<you>/my-feature`.
-
-## Useful flags
-
-| Flag | Effect |
-| ---- | ------ |
-| `--dry-run` | Validate the log and show the build. Apply nothing. |
-| `--test <name>` | File the run under `local-runs/<you>/<name>`. |
-| `--file <path>` | Replay one log file or a `.tar.zst` archive, in place of `--dir`. |
-| `--keep-run` | Replay the run under its recorded path, in place of `local-runs`. You cannot use it with `--test`. |
-| `--as-me=false` | Keep the recorded starter and assignee. |
-| `--backfill-logs=false` | Attach only the logs that the replay log records. |
-| `--report json` | Write the summary and the links as JSON. |
-
-The [Argus CLI README](https://github.com/scylladb/argus/blob/cli/v0.4.0/cli/README.md#replaying-a-run) has the full reference.
+Replay several runs with the same `--test`, and they become `#1`, `#2`, and so on, of one test. For all the flags, see `argus run replay --help` or the [Argus CLI README](https://github.com/scylladb/argus/blob/cli/v0.4.0/cli/README.md#replaying-a-run).
 
 ## Troubleshooting
 
