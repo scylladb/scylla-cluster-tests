@@ -1914,6 +1914,7 @@ class ClusterTester(unittest.TestCase):
                     test_id=test_id,
                     region=region,
                     availability_zone=self.params.get("availability_zone"),
+                    fallback_to_next_availability_zone=is_az_fallback_enabled(self.params),
                 )
             )
         if db_info["n_nodes"] is None:
