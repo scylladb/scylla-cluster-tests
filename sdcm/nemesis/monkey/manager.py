@@ -32,6 +32,7 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.object_storage import backup_bucket_region
 
 LOGGER = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ def mgmt_backup(runner, backup_specific_tables):
             raise UnsupportedNemesis("backup bucket location configuration is not defined!")
 
         backup_bucket_backend = runner.cluster.params.get("backup_bucket_backend")
-        region = next(iter(runner.cluster.params.region_names), "")
+        region = backup_bucket_region(runner.cluster.params)
         backup_bucket_location = runner.cluster.params.get("backup_bucket_location")[0].format(region=region)
         location = f"{backup_bucket_backend}:{backup_bucket_location}"
     delete_existing_backups(runner, mgr_cluster)
@@ -368,7 +369,7 @@ class MgmtRestore(ManagerMonkeyBase):
             cluster_backend = "aws"
 
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        region = next(iter(runner.cluster.params.region_names), "")
+        region = backup_bucket_region(runner.cluster.params)
         target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
         chosen_snapshot_tag, chosen_snapshot_info = choose_snapshot(
             runner, snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=region
