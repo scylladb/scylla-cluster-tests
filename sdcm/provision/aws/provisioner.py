@@ -14,7 +14,7 @@
 import contextlib
 import datetime
 import logging
-from typing import List, Union
+from typing import Dict, List, Union
 
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
@@ -27,6 +27,7 @@ from sdcm.provision.aws.constants import (
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import (
+    count_instance_types_by_id,
     create_spot_instance_request,
     ec2_clients,
     ec2_services,
@@ -83,6 +84,14 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             instance_parameters=instance_parameters,
             count=count,
             tags=tags,
+        )
+
+    def count_instance_types(
+        self, provision_parameters: ProvisionParameters, instances: List[Instance]
+    ) -> Dict[str, int]:
+        return count_instance_types_by_id(
+            region_name=provision_parameters.region_name,
+            instance_ids=[instance.instance_id for instance in instances],
         )
 
     @staticmethod

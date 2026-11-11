@@ -27,6 +27,7 @@ from sdcm.provision.aws.constants import (
 )
 from sdcm.provision.aws.utils import (
     build_launch_template_data,
+    count_instance_types_by_id,
     create_ec2_fleet_instance_request,
     create_launch_template,
     delete_ec2_fleet,
@@ -429,3 +430,25 @@ def test_delete_ec2_fleet_ignores_missing_fleet_id(mock_ec2_client):
     delete_ec2_fleet(region_name="us-east-1", fleet_id=None, terminate_instances=True)
 
     mock_client.delete_fleets.assert_not_called()
+
+
+def test_count_instance_types_by_id_reads_all_pages_in_one_paginated_call(mock_ec2_client):
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.get_paginator.return_value.paginate.return_value = [
+        {"Reservations": [{"Instances": [{"InstanceType": "i7i.large"}, {"InstanceType": "i3en.large"}]}]},
+        {"Reservations": [{"Instances": [{"InstanceType": "i7i.large"}]}]},
+    ]
+
+    counts = count_instance_types_by_id("us-east-1", ["i-1", "i-2", "i-3"])
+
+    assert counts == {"i7i.large": 2, "i3en.large": 1}
+    mock_client.get_paginator.assert_called_once_with("describe_instances")
+    mock_client.get_paginator.return_value.paginate.assert_called_once_with(InstanceIds=["i-1", "i-2", "i-3"])
+
+
+def test_count_instance_types_by_id_never_raises(mock_ec2_client):
+    """It only feeds reporting, so an AWS error must yield an empty result rather than fail provisioning."""
+    mock_ec2_client.__getitem__.return_value.get_paginator.side_effect = Exception("throttled")
+
+    assert count_instance_types_by_id("us-east-1", ["i-1"]) == {}

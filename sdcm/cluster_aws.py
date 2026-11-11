@@ -34,7 +34,11 @@ from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
-from sdcm.provision.aws.utils import configure_set_preserve_hostname_script, split_instance_types
+from sdcm.provision.aws.utils import (
+    configure_set_preserve_hostname_script,
+    count_instance_types_by_id,
+    split_instance_types,
+)
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
@@ -268,6 +272,20 @@ class AWSCluster(cluster.BaseCluster):
             return []
         return split_instance_types(self.params.get("aws_instance_type_db_alternatives"))
 
+    def _fleet_instance_type_counts(self, instances, dc_idx, instance_type=None) -> list[tuple[str, int]]:
+        """(instance type, count) for each type an EC2 Fleet launch actually used.
+
+        Asks AWS only when alternatives were offered - otherwise every instance is the requested type - and
+        falls back to the requested type if the lookup fails, since this only feeds reporting.
+        """
+        requested_type = instance_type or self._ec2_instance_type
+        if self._fleet_alternative_instance_types({"instance_type": requested_type}):
+            if counts := count_instance_types_by_id(
+                self.region_names[dc_idx], [instance.instance_id for instance in instances]
+            ):
+                return list(counts.items())
+        return [(requested_type, len(instances))]
+
     def _create_instances(
         self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
     ):
@@ -339,15 +357,16 @@ class AWSCluster(cluster.BaseCluster):
                 ami_id=ami_id,
             )
             # spot or nothing, whatever the count: no ladder, so a failure raises out of here rather than
-            # downgrading to on-demand
-            self._publish_provision_outcome(
-                requested=INSTANCE_PROVISION_SPOT_FLEET,
-                realized=INSTANCE_PROVISION_SPOT_FLEET,
-                dc_idx=dc_idx,
-                az_idx=az_idx,
-                instance_type=instance_type,
-                count=count,
-            )
+            # downgrading to on-demand. One record per type EC2 Fleet actually launched.
+            for realized_type, realized_count in self._fleet_instance_type_counts(instances, dc_idx, instance_type):
+                self._publish_provision_outcome(
+                    requested=INSTANCE_PROVISION_SPOT_FLEET,
+                    realized=INSTANCE_PROVISION_SPOT_FLEET,
+                    dc_idx=dc_idx,
+                    az_idx=az_idx,
+                    instance_type=realized_type,
+                    count=realized_count,
+                )
         else:
             instances = self.fallback_provision_type(
                 count,

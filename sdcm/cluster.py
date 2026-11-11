@@ -1061,7 +1061,11 @@ class BaseNode(AutoSshContainerMixin):
     def db_node_instance_type(self) -> Optional[str]:
         backend, instance_type, params = self.parent_cluster.cluster_backend, None, self.parent_cluster.params
         if backend in ("aws", "aws-siren"):
-            if self._is_zero_token_node:
+            if self._instance_type not in (None, "", "N/A"):
+                # The type EC2 actually launched: with `aws_instance_type_db_alternatives`, EC2 Fleet may have
+                # picked an alternative rather than instance_type_db.
+                instance_type = self._instance_type
+            elif self._is_zero_token_node:
                 instance_type = params.get("zero_token_instance_type_db") or params.get("instance_type_db")
             else:
                 instance_type = params.get("instance_type_db")

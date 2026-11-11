@@ -157,6 +157,28 @@ def find_instance_by_id(region_name: str, instance_id: str) -> Instance:
     return ec2_resources[region_name].Instance(id=instance_id)
 
 
+def count_instance_types_by_id(region_name: str, instance_ids: List[str]) -> Dict[str, int]:
+    """Count launched instances per instance type, with one batched `DescribeInstances`.
+
+    For reporting what EC2 Fleet actually launched when it was offered several interchangeable types. Never
+    raises: a reporting failure must not fail provisioning, so any error yields an empty result.
+    """
+    counts: Dict[str, int] = {}
+    if not instance_ids:
+        return counts
+    try:
+        paginator = ec2_clients[region_name].get_paginator("describe_instances")
+        for page in paginator.paginate(InstanceIds=list(instance_ids)):
+            for reservation in page.get("Reservations", []):
+                for instance in reservation.get("Instances", []):
+                    instance_type = instance.get("InstanceType")
+                    counts[instance_type] = counts.get(instance_type, 0) + 1
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Could not read the instance types of %s in %s: %s", instance_ids, region_name, exc)
+        return {}
+    return counts
+
+
 def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsType):
     end_time = time.perf_counter() + 20
     while end_time > time.perf_counter():

@@ -31,3 +31,7 @@ class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):
         names: List[str] = None,
     ) -> List[Any]:
         pass
+
+    def count_instance_types(self, provision_parameters: ProvisionParameters, instances: List[Any]) -> Dict[str, int]:
+        """Count `instances` per instance type actually launched; empty when the provisioner can't tell."""
+        return {}

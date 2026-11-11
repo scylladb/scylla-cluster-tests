@@ -57,6 +57,7 @@ def cluster():
         patch.object(AWSCluster, "instance_profile_name", new_callable=PropertyMock, return_value=None),
         patch("sdcm.cluster_aws.network_interfaces_count", return_value=1),
         patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent"),
+        patch("sdcm.cluster_aws.count_instance_types_by_id", return_value={}),
     ):
         yield cluster
 
@@ -66,7 +67,9 @@ def ec2_wrapper():
     with patch("sdcm.cluster_aws.ec2_client.EC2ClientWrapper") as wrapper_cls:
         wrapper = wrapper_cls.return_value
         wrapper.get_subnet_info.return_value = {"AvailabilityZone": "eu-west-1a"}
-        wrapper.create_spot_fleet.side_effect = lambda count, **_: [f"i-{n}" for n in range(count)]
+        wrapper.create_spot_fleet.side_effect = lambda count, **_: [
+            MagicMock(instance_id=f"i-{n}") for n in range(count)
+        ]
         yield wrapper
 
 
@@ -96,6 +99,32 @@ def test_spot_fleet_add_nodes_is_one_request_with_the_db_alternatives(cluster, e
     assert call["count"] == 50
     assert call["instance_type"] == "i7i.large"
     assert call["alternative_instance_types"] == ALTERNATIVES
+
+
+def test_spot_fleet_add_nodes_reports_each_launched_instance_type(cluster, ec2_wrapper):
+    """EC2 Fleet may fill the request from the alternatives, so the outcome is recorded per type it launched."""
+    with (
+        patch("sdcm.cluster_aws.count_instance_types_by_id", return_value={"i7i.large": 30, "i3en.large": 20}),
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,
+    ):
+        cluster._create_instances(count=50)
+
+    reported = {call.kwargs["instance_type"]: call.kwargs["count"] for call in event.call_args_list}
+    assert reported == {"i7i.large": 30, "i3en.large": 20}
+    assert {call.kwargs["realized"] for call in event.call_args_list} == {INSTANCE_PROVISION_SPOT_FLEET}
+
+
+def test_spot_fleet_add_nodes_without_alternatives_needs_no_type_lookup(cluster, ec2_wrapper):
+    cluster.params["aws_instance_type_db_alternatives"] = []
+    with (
+        patch("sdcm.cluster_aws.count_instance_types_by_id") as lookup,
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,
+    ):
+        cluster._create_instances(count=5)
+
+    lookup.assert_not_called()
+    event.assert_called_once()
+    assert (event.call_args.kwargs["instance_type"], event.call_args.kwargs["count"]) == ("i7i.large", 5)
 
 
 @pytest.mark.parametrize(
