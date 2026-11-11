@@ -200,46 +200,11 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.run_prepare_write_cmd()
 
-        # Grow cluster to target size if requested
-        if cluster_target_size := self.params.get("cluster_target_size"):
-
-            def is_target_reached(current: list[int], target: list[int]) -> bool:
-                return all([x >= y for x, y in zip(current, target)])
-
-            add_node_cnt = self.params.get("add_node_cnt")
-            nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
-            current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
-
-            InfoEvent(
-                message=f"Starting to grow cluster from {self.params.get('n_db_nodes')} to {cluster_target_size}"
-            ).publish()
-
-            while not is_target_reached(current_cluster_size, cluster_target_size):
-                added_nodes = []
-                for dcx, target in enumerate(cluster_target_size):
-                    if current_cluster_size[dcx] < target:
-                        add_nodes_num = (
-                            add_node_cnt
-                            if (target - current_cluster_size[dcx]) >= add_node_cnt
-                            else target - current_cluster_size[dcx]
-                        )
-                        InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
-                        added_nodes.extend(
-                            self.db_cluster.add_nodes(
-                                count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx, rack=None
-                            )
-                        )
-
-                self.monitors.reconfigure_scylla_monitoring()
-                up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
-                with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
-                    self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
-                self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
-                # node_cnt = len(self.db_cluster.data_nodes)
-                nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
-                current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
-
-            InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
+        # By default the cluster is grown before the main load starts. With `grow_cluster_during_stress`
+        # the main load is started first and the nodes are added under it.
+        grow_during_stress = self.params.get("grow_cluster_during_stress")
+        if not grow_during_stress:
+            self._grow_cluster_to_target_size()
 
         # Collect data about partitions and their rows amount
         if self.partitions_attrs and self.partitions_attrs.validate_partitions:
@@ -267,6 +232,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                             if not skip_optional_stage("main_load"):
                                 self._run_all_stress_cmds(stress_queue, params)
 
+        # The stress threads above are already running; add the nodes under them, before any nemesis starts.
+        if grow_during_stress:
+            self._grow_cluster_to_target_size()
+
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
@@ -288,6 +257,48 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 for node in self.db_cluster.data_nodes:
                     self._run_validate_large_collections_in_system(node)
                     self._run_validate_large_collections_warning_in_logs(node)
+
+    def _grow_cluster_to_target_size(self) -> None:
+        """Add nodes in batches of `add_node_cnt` per DC until every DC reaches `cluster_target_size`."""
+        if not (cluster_target_size := self.params.get("cluster_target_size")):
+            return
+
+        def is_target_reached(current: list[int], target: list[int]) -> bool:
+            return all([x >= y for x, y in zip(current, target)])
+
+        add_node_cnt = self.params.get("add_node_cnt")
+        nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+        current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+
+        InfoEvent(
+            message=f"Starting to grow cluster from {self.params.get('n_db_nodes')} to {cluster_target_size}"
+        ).publish()
+
+        while not is_target_reached(current_cluster_size, cluster_target_size):
+            added_nodes = []
+            for dcx, target in enumerate(cluster_target_size):
+                if current_cluster_size[dcx] < target:
+                    add_nodes_num = (
+                        add_node_cnt
+                        if (target - current_cluster_size[dcx]) >= add_node_cnt
+                        else target - current_cluster_size[dcx]
+                    )
+                    InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
+                    added_nodes.extend(
+                        self.db_cluster.add_nodes(
+                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx, rack=None
+                        )
+                    )
+
+            self.monitors.reconfigure_scylla_monitoring()
+            up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+            with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
+                self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+            nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+            current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+
+        InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
 
     def test_batch_custom_time(self):
         """
