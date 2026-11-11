@@ -29,8 +29,10 @@ SPOT_PRICE_TOO_LOW = "price-too-low"
 SPOT_CAPACITY_NOT_AVAILABLE_ERROR = "capacity-not-available"
 # Spot request event type that is signaling that it won't be processed due to the lack of resources on AWS side
 
-EC2_FLEET_LIMIT = 500
-# Limit of instances that AWS API can handle with single EC2 Fleet request
+EC2_FLEET_MAX_TARGET_CAPACITY = 1000
+# Most instances one all-or-nothing EC2 Fleet request can launch: `SpotOptions.MinTargetCapacity` (and its
+# on-demand twin) accepts at most 1000. SCT requests each AZ's nodes in a single request rather than in batches,
+# so this is a per-AZ ceiling.
 
 EC2_FLEET_LAUNCH_TEMPLATE_PREFIX = "sct-fleet-"
 # Name prefix of the throwaway launch templates backing EC2 Fleet requests. clean-resources only

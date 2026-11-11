@@ -282,7 +282,12 @@ def test_create_ec2_fleet_request_diversifies_across_instance_types(mock_ec2_cli
     # plain `capacity-optimized` ignores priorities, which would make the primary type no more
     # likely to be picked than any alternative
     assert EC2_FLEET_ALLOCATION_STRATEGY == "capacity-optimized-prioritized"
-    assert request["SpotOptions"] == {"AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY}
+    # all-or-nothing: AWS launches all 3 or none, instead of SCT launching a partial set and rolling it back
+    assert request["SpotOptions"] == {
+        "AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY,
+        "MinTargetCapacity": 3,
+        "SingleAvailabilityZone": True,
+    }
     launch_template_config = request["LaunchTemplateConfigs"][0]
     assert launch_template_config["LaunchTemplateSpecification"]["LaunchTemplateId"] == "lt-1234"
     # list order is preference order: the primary (first) type gets the highest priority, 0
@@ -305,6 +310,7 @@ def test_create_ec2_fleet_request_on_demand_has_no_spot_options(mock_ec2_client)
     request = mock_client.create_fleet.call_args.kwargs
     assert request["TargetCapacitySpecification"]["DefaultTargetCapacityType"] == "on-demand"
     assert "SpotOptions" not in request
+    assert request["OnDemandOptions"] == {"MinTargetCapacity": 1, "SingleAvailabilityZone": True}
 
 
 def test_create_ec2_fleet_request_returns_partial_fulfillment_with_errors(mock_ec2_client):

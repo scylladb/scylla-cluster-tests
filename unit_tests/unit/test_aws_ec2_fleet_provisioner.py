@@ -20,6 +20,7 @@ import pytest
 from sdcm.provision.aws.constants import (
     EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
     EC2_FLEET_MAX_ATTEMPTS,
+    EC2_FLEET_MAX_TARGET_CAPACITY,
     EC2_FLEET_RETRY_BACKOFF,
 )
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
@@ -46,16 +47,16 @@ def provision_parameters() -> ProvisionParameters:
 def fleet_mocks():
     """Patch every AWS-facing call used by the EC2 Fleet path."""
     with (
-        patch("sdcm.provision.aws.provisioner.create_launch_template", return_value="lt-1234") as create_template,
-        patch("sdcm.provision.aws.provisioner.delete_launch_template") as delete_template,
-        patch("sdcm.provision.aws.provisioner.create_ec2_fleet_instance_request") as create_fleet,
-        patch("sdcm.provision.aws.provisioner.delete_ec2_fleet") as delete_fleet,
+        patch("sdcm.provision.aws.utils.create_launch_template", return_value="lt-1234") as create_template,
+        patch("sdcm.provision.aws.utils.delete_launch_template") as delete_template,
+        patch("sdcm.provision.aws.utils.create_ec2_fleet_instance_request") as create_fleet,
+        patch("sdcm.provision.aws.utils.delete_ec2_fleet") as delete_fleet,
         patch("sdcm.provision.aws.provisioner.set_tags_on_instances"),
         patch(
             "sdcm.provision.aws.provisioner.find_instance_by_id",
             side_effect=lambda region_name, instance_id: instance_id,
         ),
-        patch("sdcm.provision.aws.provisioner.time.sleep") as sleep,
+        patch("sdcm.provision.aws.utils.time.sleep") as sleep,
     ):
         yield {
             "create_template": create_template,
@@ -152,7 +153,7 @@ def test_partial_fulfillment_is_rolled_back(provision_parameters, fleet_mocks):
 
 
 def test_transient_fleet_errors_are_retried(provision_parameters, fleet_mocks):
-    """A throttled batch is rolled back and requested again instead of failing the provisioning."""
+    """A throttled request is rolled back and requested again instead of failing the provisioning."""
     fleet_mocks["create_fleet"].side_effect = [
         ("fleet-1", ["i-1"], [{"ErrorCode": "RequestLimitExceeded", "ErrorMessage": "throttled"}]),
         ("fleet-2", ["i-2", "i-3"], []),
@@ -250,39 +251,73 @@ def test_small_batches_still_use_plain_spot_requests(provision_parameters):
     assert spot_request.call_args.kwargs["instance_parameters"].InstanceType == "i7i.large"
 
 
-def test_multi_batch_partial_fulfillment_rolls_back_earlier_batches(provision_parameters):
-    """A later fleet batch returning [] must not leave earlier batches provisioned.
-
-    Otherwise ProvisionPlan would treat the earlier non-empty batch as full success and skip
-    AZ/region/on-demand fallback, silently under-provisioning the cluster.
-    """
+def test_large_request_is_one_fleet_request_for_the_whole_count(provision_parameters):
+    """No batches: the whole count goes into one all-or-nothing request, so there is nothing to roll back."""
     provisioner = AWSInstanceProvisioner()
-    first_batch = [MagicMock(instance_id="i-1"), MagicMock(instance_id="i-2")]
-    with (
-        # count=12 (> SPOT_CNT_LIMIT) routes to the fleet path; a 2-instance limit forces
-        # the request to be split into batches, the second of which comes back empty.
-        patch("sdcm.provision.aws.provisioner.EC2_FLEET_LIMIT", 2),
-        patch.object(
-            provisioner,
-            "_execute_ec2_fleet_instance_request",
-            side_effect=[first_batch, []],
-        ),
-        patch("sdcm.provision.aws.provisioner.ec2_clients") as ec2_clients,
-    ):
-        client = MagicMock()
-        ec2_clients.__getitem__.return_value = client
-
-        instances = provisioner._provision_spot_instances(
+    with patch.object(provisioner, "_execute_ec2_fleet_instance_request", return_value=["i"] * 600) as fleet_request:
+        provisioner._provision_spot_instances(
             provision_parameters=provision_parameters,
-            instance_parameters=[make_instance_parameters("i7i.large"), make_instance_parameters("i4i.large")],
-            count=12,
-            tags=[{"NodeIndex": str(idx)} for idx in range(12)],
+            instance_parameters=[make_instance_parameters("i7i.large")],
+            count=600,
+            tags=[{"NodeIndex": str(idx)} for idx in range(600)],
         )
 
-    # the whole request is rejected so fallback can run ...
+    fleet_request.assert_called_once()
+    assert fleet_request.call_args.kwargs["count"] == 600
+
+
+def test_request_above_all_or_nothing_limit_fails_loudly(provision_parameters, fleet_mocks):
+    provisioner = AWSInstanceProvisioner()
+
+    with pytest.raises(ValueError, match=f"at most {EC2_FLEET_MAX_TARGET_CAPACITY} instances"):
+        provisioner._execute_ec2_fleet_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large")],
+            count=EC2_FLEET_MAX_TARGET_CAPACITY + 1,
+            tags=[{"NodeIndex": "1"}],
+        )
+
+    # rejected before anything was created in AWS
+    fleet_mocks["create_template"].assert_not_called()
+    fleet_mocks["create_fleet"].assert_not_called()
+
+
+def test_partial_plain_spot_request_is_rolled_back(provision_parameters):
+    """ProvisionPlan treats any non-empty result as success, so a partial set must become [] for fallback to run."""
+    provisioner = AWSInstanceProvisioner()
+    partial = [MagicMock(instance_id="i-1"), MagicMock(instance_id="i-2")]
+    with (
+        patch.object(provisioner, "_execute_spot_instance_request", return_value=partial),
+        patch("sdcm.provision.aws.provisioner.terminate_instances_by_id") as terminate,
+    ):
+        instances = provisioner._provision_spot_instances(
+            provision_parameters=provision_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large")],
+            count=3,
+            tags=[{"NodeIndex": str(idx)} for idx in range(3)],
+        )
+
     assert instances == []
-    # ... and the two instances from the successful first batch are terminated, not leaked
-    client.terminate_instances.assert_called_once_with(InstanceIds=["i-1", "i-2"])
+    terminate.assert_called_once_with(region_name="us-east-1", instance_ids=["i-1", "i-2"])
+
+
+def test_fleet_instances_are_terminated_when_tagging_them_fails(provision_parameters, fleet_mocks):
+    """Launched instances belong to no cluster until they are handed back, so a failure here must not leak them."""
+    fleet_mocks["create_fleet"].return_value = ("fleet-1", ["i-1", "i-2"], [])
+    provisioner = AWSInstanceProvisioner()
+    with (
+        patch("sdcm.provision.aws.provisioner.set_tags_on_instances", side_effect=RuntimeError("CreateTags failed")),
+        patch("sdcm.provision.aws.provisioner.terminate_instances_by_id") as terminate,
+        pytest.raises(RuntimeError, match="CreateTags failed"),
+    ):
+        provisioner._execute_ec2_fleet_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large")],
+            count=2,
+            tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+        )
+
+    terminate.assert_called_once_with(region_name="us-east-1", instance_ids=["i-1", "i-2"])
 
 
 def test_on_demand_uses_preferred_instance_type_only(provision_parameters):
