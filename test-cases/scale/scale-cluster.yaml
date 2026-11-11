@@ -1,9 +1,10 @@
 test_metadata:
   description: >-
-    Cluster-growth scale test: a 15-node cluster holding a 244GB dataset of 128KB rows is grown
-    towards a target size in batches while cassandra-stress mixed workloads and fullscans run under
-    SisyphusMonkey. Parameterised by the pipelines into the 15-25, 40-60, 180-200 and 450-500 node
-    growth jobs.
+    Cluster-growth scale test: a 15-node cluster gets a small sanity dataset (5M rows of 1KB), then a
+    cassandra-stress write load and a read load over that dataset start, and the cluster is grown
+    towards a target size in batches while they run, with fullscans throughout. SisyphusMonkey starts
+    once the cluster reaches its target size. Parameterised by the pipelines into the 15-25, 40-60,
+    180-200 and 450-500 node growth jobs.
   test_type: scale
   tier: tier2
   duration_class: medium
@@ -17,16 +18,19 @@ test_metadata:
   team_ownership: core-test-infra
 
 test_duration: 600
-# 128KB row (16 * 8192), 244GB dataset (2M rows * 128KB)
-prepare_write_cmd:  [ "cassandra-stress write cl=ALL n=1000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..1000000          -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
-                      "cassandra-stress write cl=ALL n=1000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1000001..2000000   -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5"
+# Quick sanity dataset: 5M rows of 1KB (1 column * 1024B), split over the two loaders.
+prepare_write_cmd:  [ "cassandra-stress write cl=ALL n=2500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..2500000         -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
+                      "cassandra-stress write cl=ALL n=2500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=2500001..5000000   -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5"
                     ]
 
-stress_cmd: [ "cassandra-stress mixed cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..1000000          -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
-              "cassandra-stress mixed cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1000001..2000000   -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5"
+# Started right before the cluster grows (see grow_cluster_during_stress): one loader writes over
+# 1..10M (overwriting the 5M sanity rows and adding 5M more), the other reads back the 5M sanity rows.
+stress_cmd: [ "cassandra-stress write cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..10000000 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
+              "cassandra-stress read cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..5000000   -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5"
              ]
 
 round_robin: true
+grow_cluster_during_stress: true
 
 n_db_nodes: 15
 add_node_cnt: 5
