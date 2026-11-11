@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.cluster import BaseScyllaCluster, BaseCluster
+from sdcm.cluster import BaseCluster, BaseScyllaCluster
 
 
 def _make_nodes(count):
