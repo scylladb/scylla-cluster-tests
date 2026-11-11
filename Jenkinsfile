@@ -27,7 +27,7 @@ def createRunConfiguration(String backend) {
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
     } else if (backend == 'oci') {
-        configuration.oci_region_name = 'us-ashburn-1'
+        configuration.oci_region_name = 'us-phoenix-1'
         configuration.availability_zone = 'a,b,c'
         configuration.simulated_racks = 0
         configuration.oci_instance_type_db = 'VM.Standard3.Flex:4:32'
