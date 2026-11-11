@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+import concurrent.futures
 import contextlib
 import itertools
 import json
@@ -211,7 +212,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.partitions_attrs.collect_initial_partitions_info()
 
         stress_cmd = self.params.get("stress_cmd")
+        stress_round_start = len(stress_queue)
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
+        stress_round = stress_queue[stress_round_start:]
 
         customer_profiles = self.params.get("cs_user_profiles")
         if customer_profiles:
@@ -234,7 +237,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         # The stress threads above are already running; add the nodes under them, before any nemesis starts.
         if grow_during_stress:
-            self._grow_cluster_to_target_size()
+            self._grow_cluster_under_stress(stress_queue, stress_round, keyspace_num)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
@@ -257,6 +260,27 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 for node in self.db_cluster.data_nodes:
                     self._run_validate_large_collections_in_system(node)
                     self._run_validate_large_collections_warning_in_logs(node)
+
+    def _grow_cluster_under_stress(self, stress_queue: list, stress_round: list, keyspace_num: int) -> None:
+        """Grow the cluster in the background, re-running stress_cmd whenever it ends before the growth does.
+
+        `stress_round` holds the stress_cmd threads that are already running. Each new round is appended to
+        `stress_queue` too, so every round is verified with the rest of the load.
+        """
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="GrowCluster") as executor:
+            growth = executor.submit(self._grow_cluster_to_target_size)
+            # An empty round (no stress_cmd, or main_load skipped) has nothing to re-run: just wait for the growth.
+            while stress_round:
+                concurrent.futures.wait([future for thread in stress_round for future in thread.results_futures])
+                if growth.done():
+                    break
+                InfoEvent(
+                    message="stress_cmd finished before the cluster reached its target size, running it again"
+                ).publish()
+                stress_round_start = len(stress_queue)
+                self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get("stress_cmd"), keyspace_num)
+                stress_round = stress_queue[stress_round_start:]
+        growth.result()
 
     def _grow_cluster_to_target_size(self) -> None:
         """Add nodes in batches of `add_node_cnt` per DC until every DC reaches `cluster_target_size`."""

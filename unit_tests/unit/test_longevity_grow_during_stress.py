@@ -13,10 +13,14 @@
 
 """Where `test_custom_time` grows the cluster relative to the main load (`grow_cluster_during_stress`).
 
-The scale test is meant to add nodes while the stress runs. By default the cluster is grown first and
-the stress starts after it, which every other `cluster_target_size` user keeps.
+The scale test is meant to add nodes while the stress runs, and to keep the stress running until the
+cluster reaches its target size. By default the cluster is grown first and the stress starts after it,
+which every other `cluster_target_size` user keeps.
 """
 
+import threading
+from concurrent.futures import Future
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -112,6 +116,123 @@ def test_grow_adds_batches_until_target(monkeypatch):
     assert [call.kwargs["count"] for call in test.db_cluster.add_nodes.call_args_list] == [3, 2]
     assert len(test.db_cluster.data_nodes) == 7
     assert test.monitors.reconfigure_scylla_monitoring.call_count == 2
+
+
+# ------------------------------------------------------------------ re-running stress_cmd during growth
+
+
+def _stress_thread(done: bool = True) -> SimpleNamespace:
+    """A stand-in for a stress thread: only `results_futures` is read while the cluster grows."""
+    future = Future()
+    if done:
+        future.set_result(None)
+    return SimpleNamespace(results_futures=[future])
+
+
+def _finish_after_growth(thread: SimpleNamespace, growth_returned: threading.Event) -> None:
+    """End `thread` shortly after the growth returned, so that the growth is already done by then."""
+
+    def finish():
+        growth_returned.wait(timeout=10)
+        threading.Event().wait(0.3)
+        thread.results_futures[0].set_result(None)
+
+    threading.Thread(target=finish, daemon=True).start()
+
+
+def _no_rerun_expected(number):
+    raise AssertionError(f"stress_cmd was run again (round {number + 1}) although the growth had finished")
+
+
+class _RoundsLongevityTest(LongevityTest):
+    def __init__(self, grow, make_round):  # skip the full ClusterTester.__init__
+        self.params = {"stress_cmd": ["cassandra-stress write duration=1m"]}
+        self.rounds = 0
+        self._grow = grow
+        self._make_round = make_round
+
+    def assemble_and_run_all_stress_cmd(self, stress_queue, stress_cmd, keyspace_num):
+        self.rounds += 1
+        stress_queue.append(self._make_round(self.rounds))
+
+    def _grow_cluster_to_target_size(self):
+        self._grow()
+
+
+@pytest.fixture(autouse=True)
+def _no_events(monkeypatch):
+    monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
+
+
+def test_stress_is_run_again_until_the_growth_finishes():
+    third_round_started, growth_returned = threading.Event(), threading.Event()
+    last_round = _stress_thread(done=False)
+
+    def grow():
+        third_round_started.wait(timeout=10)  # the growth outlasts two re-runs of stress_cmd
+        growth_returned.set()
+
+    def make_round(number):
+        if number == 1:
+            return _stress_thread()
+        if number == 2:
+            third_round_started.set()
+            _finish_after_growth(last_round, growth_returned)
+            return last_round
+        return _no_rerun_expected(number)
+
+    test = _RoundsLongevityTest(grow, make_round)
+    first_round = [_stress_thread()]
+    stress_queue = list(first_round)
+
+    test._grow_cluster_under_stress(stress_queue, first_round, keyspace_num=1)
+
+    # the first round ended twice before the growth did; the round that outlived the growth is the last one
+    assert test.rounds == 2
+    assert len(stress_queue) == 3  # every round stays queued, to be verified with the rest of the load
+    assert stress_queue[-1] is last_round
+
+
+def test_stress_is_not_run_again_once_the_growth_finished():
+    growth_returned = threading.Event()
+    first_round = [_stress_thread(done=False)]
+    _finish_after_growth(first_round[0], growth_returned)
+    test = _RoundsLongevityTest(growth_returned.set, make_round=_no_rerun_expected)
+
+    test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
+
+    assert test.rounds == 0
+
+
+def test_growth_failure_is_raised_once_the_running_round_ends():
+    growth_returned = threading.Event()
+    first_round = [_stress_thread(done=False)]
+    _finish_after_growth(first_round[0], growth_returned)
+
+    def grow():
+        growth_returned.set()
+        raise RuntimeError("add_nodes failed")
+
+    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
+
+    with pytest.raises(RuntimeError, match="add_nodes failed"):
+        test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
+    assert test.rounds == 0
+
+
+def test_without_a_stress_round_the_growth_is_awaited_and_nothing_is_re_run():
+    grown = threading.Event()
+
+    def grow():
+        threading.Event().wait(0.2)
+        grown.set()
+
+    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
+
+    test._grow_cluster_under_stress([], [], keyspace_num=1)
+
+    assert grown.is_set()
+    assert test.rounds == 0
 
 
 def test_grow_without_target_is_noop():

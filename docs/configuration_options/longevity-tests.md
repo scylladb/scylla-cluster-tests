@@ -22,7 +22,7 @@ Used for scale test: max size of the cluster
 
 ## **grow_cluster_during_stress** / SCT_GROW_CLUSTER_DURING_STRESS
 
-Used with [`cluster_target_size`](#cluster_target_size) in longevity_test.test_custom_time. When true, the [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd)<br>load is started first and the cluster is grown to [`cluster_target_size`](#cluster_target_size) while it runs. When<br>false, the cluster is grown before [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) starts.
+Used with [`cluster_target_size`](#cluster_target_size) in longevity_test.test_custom_time. When true, the [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd)<br>load is started first and the cluster is grown to [`cluster_target_size`](#cluster_target_size) while it runs; if<br>[`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) ends before the cluster reaches its target size, it is run again. When false,<br>the cluster is grown before [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) starts.
 
 **default:** False
 

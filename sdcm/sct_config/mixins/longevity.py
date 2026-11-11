@@ -37,8 +37,9 @@ class LongevityConfigMixin(BaseModel):
     grow_cluster_during_stress: Boolean = SctField(
         description="""
             Used with cluster_target_size in longevity_test.test_custom_time. When true, the stress_cmd
-            load is started first and the cluster is grown to cluster_target_size while it runs. When
-            false, the cluster is grown before stress_cmd starts.
+            load is started first and the cluster is grown to cluster_target_size while it runs; if
+            stress_cmd ends before the cluster reaches its target size, it is run again. When false,
+            the cluster is grown before stress_cmd starts.
         """,
     )
     compaction_strategy: String = SctField(
