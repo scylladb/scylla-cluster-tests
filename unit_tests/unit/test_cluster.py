@@ -1161,3 +1161,27 @@ def test_vector_store_address_follows_the_re_created_container():
         assert node.private_ip_address == "172.17.0.2"
         assert node.vector_store_uri == "http://172.17.0.2:6080"
         assert node.get_vector_store_api_client().base_url == "http://172.17.0.2:6080"
+
+
+def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path):
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster(nodes=[node])
+    node.parent_cluster.params["region_name"] = "eu-west-1 us-east-1"
+    node.parent_cluster.params["append_scylla_yaml"] = {
+        "object_storage_endpoints": [
+            {"name": "s3.{region}.amazonaws.com", "port": 443, "https": True, "aws_region": "{region}"},
+        ],
+    }
+    with unittest.mock.patch.object(
+        BaseNode, "_proposed_scylla_yaml_properties", new_callable=unittest.mock.PropertyMock, return_value={}
+    ):
+        scylla_yaml = node.proposed_scylla_yaml
+
+    assert scylla_yaml.object_storage_endpoints == [
+        {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
+    ]
