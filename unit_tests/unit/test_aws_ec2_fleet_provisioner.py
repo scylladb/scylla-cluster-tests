@@ -251,6 +251,27 @@ def test_small_batches_still_use_plain_spot_requests(provision_parameters):
     assert spot_request.call_args.kwargs["instance_parameters"].InstanceType == "i7i.large"
 
 
+def test_spot_fleet_uses_ec2_fleet_even_for_a_single_node():
+    """instance_provision: spot_fleet goes through EC2 Fleet - and so gets the alternatives - at any count."""
+    provisioner = AWSInstanceProvisioner()
+    fleet_parameters = ProvisionParameters(
+        name="Spot Fleet", region_name="us-east-1", availability_zone="a", spot=True, fleet=True
+    )
+    with (
+        patch.object(provisioner, "_execute_ec2_fleet_instance_request", return_value=["i-1"]) as fleet_request,
+        patch.object(provisioner, "_execute_spot_instance_request") as spot_request,
+    ):
+        provisioner._provision_spot_instances(
+            provision_parameters=fleet_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large"), make_instance_parameters("i4i.large")],
+            count=1,
+            tags=[{"NodeIndex": "1"}],
+        )
+
+    spot_request.assert_not_called()
+    assert fleet_request.call_args.kwargs["count"] == 1
+
+
 def test_large_request_is_one_fleet_request_for_the_whole_count(provision_parameters):
     """No batches: the whole count goes into one all-or-nothing request, so there is nothing to roll back."""
     provisioner = AWSInstanceProvisioner()

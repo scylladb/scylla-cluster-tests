@@ -173,7 +173,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         count: int,
         tags: Union[List[TagsType], TagsType],
     ) -> List[Instance]:
-        if self._is_provision_type_fleet(count):
+        if provision_parameters.fleet or self._is_provision_type_fleet(count):
             # One all-or-nothing request for the whole count - no batches, so there is never a partial set of
             # earlier batches to roll back when a later one fails.
             return self._execute_ec2_fleet_instance_request(

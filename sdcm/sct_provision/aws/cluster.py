@@ -37,7 +37,6 @@ from sdcm.sct_provision.aws.instance_parameters_builder import (
     ScyllaZeroTokenParamsBuilder,
 )
 from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder, ScyllaUserDataBuilder
-from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
 
 
@@ -158,8 +157,7 @@ class ClusterBase(BaseModel):
 
     @property
     def _instance_provision(self):
-        instance_provision = self.params.get("instance_provision")
-        return INSTANCE_PROVISION_SPOT if instance_provision == INSTANCE_PROVISION_SPOT_FLEET else instance_provision
+        return self.params.get("instance_provision")
 
     @property
     @abc.abstractmethod
