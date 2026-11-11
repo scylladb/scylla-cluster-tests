@@ -13,6 +13,7 @@
 
 import base64
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -46,6 +47,14 @@ lazy from sdcm.utils.oci_region import OciRegion  # lazy, or it closes a cycle: 
 
 LOGGER = logging.getLogger(__name__)
 
+AZ_FALLBACK_TIMEOUT = 15 * 60
+AZ_FALLBACK_ROUND_DELAY = 30
+
+
+def _is_retryable_launch_error(error: Optional[BaseException]) -> bool:
+    """Errors which the SDK retries: 429 and 5xx, 'Out of host capacity' is a 500."""
+    return isinstance(error, oci.exceptions.ServiceError) and (error.status == 429 or error.status >= 500)
+
 
 @dataclass
 class VirtualMachineProvider:
@@ -54,6 +63,7 @@ class VirtualMachineProvider:
     _az: str
     _oci_service: OciService = OciService()
     _raw_cache: Dict[str, Instance] = field(default_factory=dict)  # Map DisplayName -> Instance Object
+    _az_fallback: bool = False  # Launch in any availability domain in scope which has capacity
 
     def __post_init__(self):
         self._compute_client = self._oci_service.get_compute_client(self._region)
@@ -151,7 +161,18 @@ class VirtualMachineProvider:
             f"in region {self._region}. Available domains: {[ad.name for ad in ads]}"
         )
 
-    def _create_volumes(self, definition: InstanceDefinition) -> list[str]:
+    def _fallback_availability_domains(self, preferred: str) -> List[str]:
+        """The availability domains this provider is responsible for, starting from `preferred`.
+
+        The order is rotated, not sorted, so the nodes of an exhausted availability domain go to different ones.
+        """
+        ads = sorted(self._availability_domains_in_scope()) or [ad.name for ad in self._list_availability_domains()]
+        if preferred not in ads:
+            return [preferred, *ads]
+        start = ads.index(preferred)
+        return ads[start:] + ads[:start]
+
+    def _create_volumes(self, definition: InstanceDefinition, availability_domain: str) -> list[str]:
         """
         Useful for non-dense shapes (instance types)
         """
@@ -171,7 +192,6 @@ class VirtualMachineProvider:
             vpus_per_gb = 30  # Start of ultra range
         else:
             raise ProvisionError(f"Got unexpected value for the 'data_volume_disk_type' config option: {disk_type}")
-        availability_domain = self._get_availability_domain(definition)
         created_volume_ids = []
         for i in range(disk_num):
             vol_name = f"{definition.name}-vol-{i}"
@@ -346,7 +366,6 @@ class VirtualMachineProvider:
         shape_config_obj = LaunchInstanceShapeConfigDetails(**shape_config) if shape_config else None
         launch_details = {
             "compartment_id": self._compartment_id,
-            "availability_domain": self._get_availability_domain(definition),
             "display_name": definition.name,
             "source_details": build_image_source_details(
                 image_id=definition.image_id, root_disk_size_gb=definition.root_disk_size, name=definition.name
@@ -361,7 +380,54 @@ class VirtualMachineProvider:
             "metadata": metadata,
             "defined_tags": {TAG_NAMESPACE: self._get_tags(definition)},
         }
-        if created_volume_ids := self._create_volumes(definition):
+        if pricing_model == PricingModel.SPOT:
+            launch_details["preemptible_instance_config"] = PreemptibleInstanceConfigDetails(
+                preemption_action=PreemptionAction(type="TERMINATE"),
+            )
+        availability_domain = self._get_availability_domain(definition)
+        if self._az_fallback:
+            return self._launch_instance_in_any_availability_domain(definition, launch_details, availability_domain)
+        return self._launch_instance(definition, launch_details, availability_domain)
+
+    def _launch_instance_in_any_availability_domain(
+        self, definition: InstanceDefinition, launch_details: dict, preferred_availability_domain: str
+    ) -> Instance:
+        """Launch the instance in the first availability domain which has capacity for it.
+
+        Capacity of a shape, especially spot capacity, runs out per availability domain and comes back
+        in minutes. So each availability domain gets one attempt per round, without the SDK retries,
+        which spend about 6 minutes on an exhausted one, and the rounds go on for AZ_FALLBACK_TIMEOUT.
+        """
+        availability_domains = self._fallback_availability_domains(preferred_availability_domain)
+        deadline = time.monotonic() + AZ_FALLBACK_TIMEOUT
+        while True:
+            for availability_domain in availability_domains:
+                try:
+                    return self._launch_instance(definition, launch_details, availability_domain, sdk_retries=False)
+                except ProvisionError as error:
+                    if not _is_retryable_launch_error(error.__cause__):
+                        raise
+            if time.monotonic() >= deadline:
+                raise ProvisionError(
+                    f"No capacity for {definition.name} in {availability_domains} for {AZ_FALLBACK_TIMEOUT} seconds"
+                )
+            LOGGER.warning(
+                "No capacity for %s in %s, next round in %s seconds",
+                definition.name,
+                availability_domains,
+                AZ_FALLBACK_ROUND_DELAY,
+            )
+            time.sleep(AZ_FALLBACK_ROUND_DELAY)
+
+    def _launch_instance(
+        self,
+        definition: InstanceDefinition,
+        launch_details: dict,
+        availability_domain: str,
+        sdk_retries: bool = True,
+    ) -> Instance:
+        launch_details = {**launch_details, "availability_domain": availability_domain}
+        if created_volume_ids := self._create_volumes(definition, availability_domain):
             launch_details["launch_volume_attachments"] = [
                 LaunchAttachParavirtualizedVolumeDetails(
                     type="paravirtualized",
@@ -370,16 +436,15 @@ class VirtualMachineProvider:
                 )
                 for vol_id in created_volume_ids
             ]
-        if pricing_model == PricingModel.SPOT:
-            launch_details["preemptible_instance_config"] = PreemptibleInstanceConfigDetails(
-                preemption_action=PreemptionAction(type="TERMINATE"),
-            )
 
         # Launch an instance with the prepared parameters
         instance = None
         LOGGER.info("Going to create an instance with the following launch params: %s", launch_details)
         try:
-            instance = self._compute_client.launch_instance(LaunchInstanceDetails(**launch_details)).data
+            retry_kwargs = {} if sdk_retries else {"retry_strategy": oci.retry.NoneRetryStrategy()}
+            instance = self._compute_client.launch_instance(
+                LaunchInstanceDetails(**launch_details), **retry_kwargs
+            ).data
             LOGGER.info("Launched instance %s (OCID: %s). Waiting for RUNNING state...", definition.name, instance.id)
             instance = self._wait_for_state(instance.id, Instance.LIFECYCLE_STATE_RUNNING)
 
@@ -402,7 +467,7 @@ class VirtualMachineProvider:
                         self._bs_client.delete_volume(vid)
                     except Exception as ve:  # noqa: BLE001
                         LOGGER.warning("Failed to delete volume %s during cleanup: %s", vid, ve)
-            raise ProvisionError(f"Failed to launch OCI instance: {e}")
+            raise ProvisionError(f"Failed to launch OCI instance: {e}") from e
 
     def create_instances(
         self, oci_region: OciRegion, definitions: List[InstanceDefinition], pricing_model: PricingModel
