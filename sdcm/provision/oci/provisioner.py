@@ -37,7 +37,13 @@ class OciProvisioner(Provisioner):
     """Provides API for VM provisioning in Oracle Cloud Infrastructure (OCI), tuned for Scylla QA."""
 
     def __init__(
-        self, test_id: str, region: str, availability_zone: str, oci_service: OciService = OciService(), **config
+        self,
+        test_id: str,
+        region: str,
+        availability_zone: str,
+        oci_service: OciService = OciService(),
+        fallback_to_next_availability_zone: bool = False,
+        **config,
     ):
         availability_zone = self._convert_az_to_zone(availability_zone)
         region = OCI_REGION_NAMES_MAPPING.get(region, region)
@@ -45,7 +51,13 @@ class OciProvisioner(Provisioner):
         self._oci_service: OciService = oci_service
         self._cache: Dict[str, VmInstance] = {}
         self._compartment_id = get_oci_compartment_id()
-        self._vm_provider = VirtualMachineProvider(self._compartment_id, self._region, self._az, self._oci_service)
+        self._vm_provider = VirtualMachineProvider(
+            self._compartment_id,
+            self._region,
+            self._az,
+            self._oci_service,
+            _az_fallback=fallback_to_next_availability_zone,
+        )
         for instance_data in self._vm_provider.list_instances(test_id=self.test_id):
             try:
                 vm_instance = self._vm_provider.convert_to_vm_instance(instance_data, self)
