@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2026 ScyllaDB
 import logging
-from typing import Dict
+from typing import Any, Dict
 
+from sdcm.provision.common.fallback import is_az_fallback_enabled
 from sdcm.utils.oci_utils import (
     get_arch_from_oci_shape,
     get_oci_compartment_id,
@@ -60,6 +61,9 @@ class OciDefinitionBuilder(DefinitionBuilder):
     BACKEND = "oci"
     SCT_PARAM_MAPPER = mapper
     REGION_MAP = "oci_region_name"
+
+    def get_provisioner_config(self) -> Dict[str, Any]:
+        return {"fallback_to_next_availability_zone": is_az_fallback_enabled(self.params)}
 
     def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0) -> str:
         """Generate instance name for the OCI backend.
