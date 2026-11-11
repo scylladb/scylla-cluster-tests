@@ -265,11 +265,11 @@ class CassandraStressThread(DockerBasedStressThread):
         stress_cmd = self.adjust_cmd_connection_options(stress_cmd, loader, cmd_runner)
 
         if "skip-unsupported-columns" in self._get_available_suboptions(cmd_runner, "-errors"):
-            stress_cmd = self._add_errors_option(stress_cmd, ["skip-unsupported-columns"])
+            stress_cmd = self.add_errors_option(stress_cmd, ["skip-unsupported-columns"])
         return stress_cmd
 
     @staticmethod
-    def _add_errors_option(stress_cmd: str, to_add: list) -> str:
+    def add_errors_option(stress_cmd: str, to_add: list) -> str:
         """
         Add suboption to -errors option, if such suboption is there, does not add or change it
         """

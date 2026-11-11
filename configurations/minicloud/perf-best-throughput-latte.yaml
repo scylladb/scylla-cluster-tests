@@ -1,0 +1,263 @@
+# Shrinks the best-throughput run (SCT-580, rate search with latte) of
+# test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml for a local minicloud run.
+# Layer it after the launcher's default stack, with configurations/minicloud.yaml last:
+#
+#   -c test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml
+#   -c configurations/performance/latte_gradual_load_steps_enterprise.yaml
+#   -c configurations/disable_kms.yaml
+#   -c configurations/disable_speculative_retry.yaml
+#   -c configurations/performance/best-throughput/sized_dataset.yaml
+#   -c configurations/performance/best-throughput/latte_time_bound_write.yaml
+#   -c configurations/performance/best-throughput/best_throughput.yaml
+#   -c configurations/minicloud/perf-best-throughput-latte.yaml
+#   -c configurations/minicloud.yaml
+#
+# Guest budget: 1 db x 3GiB + 1 loader x 1.5GiB + 1 monitor x 1.5GiB + ~2GiB host headroom = 8GiB, for a host
+# with ~8.4GiB available. Three DB nodes don't fit, so this runs a single DB node with RF=1.
+#
+# Run on GCE (-b gce), with SCT_SCYLLA_VERSION set to a released version.
+#
+# What it keeps: the rate search, latte concurrency from the rate, the time-bound writes, the sized dataset and
+# the one-command-per-loader split of latte commands, the best-throughput result and an overload step.
+# What it does not: any throughput or latency number. Guests have 1 vCPU, so the search finds the limit of a
+# single emulated shard.
+
+n_db_nodes: 1
+n_loaders: 1
+# The read and read_disk_only workloads wait for compactions to end through Prometheus, so they need a monitor.
+n_monitor_nodes: 1
+# 3GiB is the floor for Scylla on a lightweight guest. latte is light, and a short run's monitor needs little.
+minicloud_lightweight_memory: '3GiB'
+minicloud_lightweight_memory_loader: '1.5GiB'
+minicloud_lightweight_memory_monitor: '1.5GiB'
+
+test_duration: 240
+user_prefix: 'minicloud-perf-best-throughput-latte'
+enable_argus: false
+
+collect_nvme_diagnostics: false
+teardown_validators:
+  nvme:
+    enabled: false
+use_placement_group: false
+use_capacity_reservation: false
+
+# The GCE path: the AWS path can't read the public Ubuntu loader AMI. Lightweight guests are 1 vCPU / 3GiB
+# whatever the type.
+gce_instance_type_db: 'n2-highmem-16'
+gce_instance_type_loader: 'n2-standard-8'
+gce_n_local_ssd_disk_db: 1
+
+latte_schema_parameters:
+  keyspace: 'keyspace1'
+  table: 'standard1'
+  replication_factor: 1
+  column_count: 1
+  column_size: 1024
+  speculative_retry: 'NONE'
+
+# Bounds for one emulated shard: the production 1k op/s minimum may already be over 10 ms on 1 vCPU. The read
+# search narrows to ~42k op/s (2026.3.2), so a step fails well before the maximum.
+perf_best_throughput_search:
+  default:
+    min_rate_per_shard: 200
+    max_rate_per_shard: 100000
+perf_gradual_step_duration: {"read": '2m', "write": '2m', "mixed": '2m', "read_disk_only": '2m'}
+# The search takes only the threads of each workload's first step; 32 threads don't suit a 1-vCPU loader.
+perf_gradual_throttle_steps:
+  read: [{threads: 2, concurrency: 8, rate: '1000'}]
+  mixed: [{threads: 2, concurrency: 8, rate: '1000'}]
+  write: [{threads: 2, concurrency: 8, rate: '1000'}]
+  read_disk_only: [{threads: 2, concurrency: 8, rate: '1000'}]
+perf_overload_steps:
+  default:
+    factors: [1.3]
+
+# The dataset below is the size for a 6GiB / 800GB node; sizing scales it to the guest (~3GiB RAM, a 402GB local
+# SSD, so x0.5 for both).
+# Same functions, consistency levels and key layout as the test-case (4 commands, split into one per loader),
+# ~2,600x fewer rows.
+perf_dataset_sizing:
+  reference_ram_gib: 6
+  reference_disk_gb: 800
+  scale_step: 0.25
+
+prepare_write_cmd:
+  - >-
+    latte run --function write --consistency ALL --duration 62500
+    --threads 2 --concurrency 8 --rate 2000
+    --start-cycle 1 --end-cycle 62500
+    -P row_count=250000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 62500
+    --threads 2 --concurrency 8 --rate 2000
+    --start-cycle 62501 --end-cycle 125000
+    -P row_count=250000 -P offset=62500
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 62500
+    --threads 2 --concurrency 8 --rate 2000
+    --start-cycle 125001 --end-cycle 187500
+    -P row_count=250000 -P offset=125000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 62500
+    --threads 2 --concurrency 8 --rate 2000
+    --start-cycle 187501 --end-cycle 250000
+    -P row_count=250000 -P offset=187500
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_w:
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 150000
+    -P row_count=600000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 150001 --end-cycle 300000
+    -P row_count=600000 -P offset=150000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 300001 --end-cycle 450000
+    -P row_count=600000 -P offset=300000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 450001 --end-cycle 600000
+    -P row_count=600000 -P offset=450000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_r:
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 2000
+    -P row_count=8000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 2001 --end-cycle 4000
+    -P row_count=8000 -P offset=2000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 4001 --end-cycle 6000
+    -P row_count=8000 -P offset=4000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 6001 --end-cycle 8000
+    -P row_count=8000 -P offset=6000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_cache_warmup:
+  - >-
+    latte run --function read --consistency ALL --duration 2000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 1 --end-cycle 2000
+    -P row_count=8000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 2000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 2001 --end-cycle 4000
+    -P row_count=8000 -P offset=2000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 2000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 4001 --end-cycle 6000
+    -P row_count=8000 -P offset=4000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 2000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 6001 --end-cycle 8000
+    -P row_count=8000 -P offset=6000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_m:
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 2000
+    -P row_count=8000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 2001 --end-cycle 4000
+    -P row_count=8000 -P offset=2000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 4001 --end-cycle 6000
+    -P row_count=8000 -P offset=4000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 6001 --end-cycle 8000
+    -P row_count=8000 -P offset=6000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_read_disk:
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 62500
+    -P row_count=250000 -P offset=0
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 62501 --end-cycle 125000
+    -P row_count=250000 -P offset=62500
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 125001 --end-cycle 187500
+    -P row_count=250000 -P offset=125000
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 187501 --end-cycle 250000
+    -P row_count=250000 -P offset=187500
+    -P column_count=1 -P column_size=1024
+    data_dir/latte/latte_cs_alike.rn

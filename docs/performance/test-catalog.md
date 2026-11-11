@@ -84,6 +84,87 @@ threshold YAML must use:
 - Thread counts vary per step -> step name is `<rate>_<threads>_threads`.
 - A name repeats -> suffixed with an occurrence counter (`unthrottled_1`, `unthrottled_2`).
 
+**Best-throughput search** (SCT-580). When `perf_best_throughput_search` is set for a sub-test, the
+sub-test runs no step of `perf_gradual_throttle_steps`/`perf_gradual_threads`. It runs fixed-rate steps whose
+rate a search picks (`sdcm/utils/rate_search.py`):
+
+1. Run the middle, on a log scale, of `min_rate_per_shard` and `max_rate_per_shard` x the DB nodes' shard count
+   (default 1000 and 60000 per shard): `sqrt(min x max)`. With a baseline in
+   `perf_best_throughput_baselines` for the DB instance family (`i8g` for `i8g.4xlarge`) and the sub-test, the
+   first step runs at the baseline x the shards instead, and the bounds are `baseline_range_pct` (25%) below and
+   above it, within the minimum and maximum rates.
+2. Bisect between the highest passing and the lowest failing rate until they are within `precision_pct` (5), or `max_steps` (10, the bounds included)
+   is used up: 7 steps with the default bounds, about 4 from a baseline. Between the minimum and maximum rates,
+   which are about 60 times apart, the middle is on a log scale, `sqrt(low x high)`, so the first steps don't go
+   to the top. Around a baseline, it is the plain middle, `(low + high) / 2`. Until a step passes, the minimum rate,
+   or the baseline's lower bound, counts as the highest passing rate without being run, since almost every run
+   passes it. Until a step fails, the maximum rate, or the baseline's upper bound, counts as the lowest failing
+   rate without being run: a step at it overloads the cluster and leaves a compaction backlog for every later
+   step.
+3. Run the minimum or maximum rate only when the search narrows to it, or the minimum as the last step of the
+   budget when no step passed. The minimum must pass there, else the
+   search stops with `min rate fails` and the run reports an error. The maximum must fail there, which ends the
+   search as `narrowed`; else the search stops with `max rate passes`: the best throughput is only a lower bound,
+   and the run reports an error. A baseline bound runs the same way when the search narrows to it; when it is crossed,
+   it moves out by another `baseline_range_pct`.
+
+A step passes when the P99 of every operation is within `perf_gradual_latency_limit` (default 10 ms) and its
+HDR-measured throughput is at least `min_sent_ratio` (0.98) of its rate. A step that measured less fails,
+whatever its P99: latte measures the latency from each request's scheduled start, so a loader that lags goes
+over the limit too. A loader over `max_loader_cpu_pct` (90%) CPU during a step, read from its node_exporter on
+the monitor, stops the search with an error and no best-throughput row: the step measured the loaders, not the
+cluster. Raise `n_loaders`. Without a monitor, the check is skipped with a warning, as is a loader the monitor has
+no CPU samples for. Each step gets `rate x P99 limit` requests in flight (Little's law), split over the commands:
+latte keeps the threads of the sub-test's first `perf_gradual_throttle_steps` entry and gets the requests split
+over them as its concurrency, which is per thread; other tools get them as threads. The cache warmup uses the threads
+and concurrency of that first entry.
+
+A step that collected no results (e.g. a failed latency collection) runs once more at the same rate, named
+`rate_<rate>_retry`; the rerun doesn't use the step budget. If that has no results either, the search stops
+with `no results`, the run reports an error, and no best-throughput row goes to Argus.
+
+Steps are named `rate_<rate>`; the best passing one is reported as `BestThroughputResult`.
+`configurations/performance/best-throughput/best_throughput.yaml` turns the search on for every sub-test with
+no per-step P99 limits (steps over the limit are expected), and sets 30-minute steps for write and mixed and
+10-minute steps for read and read_disk_only. On the
+latte test-case, `latte_time_bound_write.yaml` makes the write steps time-bound too, so a step writes
+rate x duration rows instead of the whole 1.6B-row key range.
+
+**Goodput under overload** (`perf_overload_steps`, `sdcm/utils/overload.py`, SCYLLADB-3267). After the
+best step, one throttled step per factor (`overload_1.3x`, `overload_2x`) offers that multiple of the best
+throughput; the goodput (successful operations) is reported as a ratio of the best throughput, and a ratio
+under `min_goodput_ratio` (0.9) fails the run. Each step also reports the rate it really attempted; a
+closed-loop tool can fall short of the target, and a step under 0.95 of it logs a warning. See
+[results-and-regression.md](results-and-regression.md#goodput-under-overload-table).
+
+**Dataset sizing** (`perf_dataset_sizing`, `sdcm/utils/dataset_sizing.py`). The predefined-steps
+test-case's stress commands are the dataset of a reference node: 128 GiB RAM and a 3750 GB data disk
+(i4i.4xlarge, i8g.4xlarge). With `perf_dataset_sizing` set, `setUp` reads the smallest DB node's
+`MemTotal` and `/var/lib/scylla` size and scales each command's dataset by them, rounded to `scale_step`
+(0.25), so the reference instance types keep today's dataset exactly. For cassandra-stress that is `n=` and
+the `-pop seq=` range; for latte, the `--start-cycle`/`--end-cycle` range, `-P row_count`, `-P offset` and a
+`--duration` given as a cycle count:
+
+| Commands | Scale | Why |
+|---|---|---|
+| `stress_cmd_r`, `stress_cmd_m`, `stress_cmd_cache_warmup` | RAM | The hot range must keep fitting in cache |
+| `prepare_write_cmd`, `stress_cmd_read_disk` | smaller of RAM and disk | Several times RAM so disk reads miss the cache, but never outgrowing the disk |
+| `stress_cmd_w` | disk | Leaves the same share of the disk free for compaction |
+
+The preload's literal `throttle=` and `threads=` (latte: `--rate` and `--threads`) scale with its rows, so it takes as long as on the
+reference node (~72 minutes) and fits `prepare_stress_duration` and the test's setup allowance on any
+node size; per DB shard it writes at about the reference rate, as i4i and i8g have the same RAM per vCPU.
+When the disk limits the preload below the RAM scale, the run logs a warning: disk-only reads then
+cover less data per GiB of RAM than on the reference node.
+`configurations/performance/best-throughput/sized_dataset.yaml` turns sizing on.
+
+**One command per loader** (`split_stress_commands`). The test-case's 4 commands of a workload split one
+key range for 4 loaders, and round-robin runs one command per loader. When the rate search runs on
+another `n_loaders`, the workload's commands and its cache warmup are split again over the same range, one
+command per loader, so every loader generates load and a step's rate, divided by the number of loaders, adds
+up to what it asks. A split latte command gets the offset and the cycle-count duration of its own range.
+Commands that differ in more than their range run as written, with a warning.
+
 ### `performance_regression_alternator_test.py`
 
 `PerformanceRegressionAlternatorTest(PerformanceRegressionTest)` — DynamoDB API via YCSB. All

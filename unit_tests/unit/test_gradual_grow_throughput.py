@@ -251,6 +251,17 @@ def test_check_latency_during_steps_tolerates_an_unfilled_results_file(tmp_path,
     assert results_file.exists()
 
 
+def test_check_latency_during_steps_tolerates_a_missing_results_file(tmp_path):
+    """Processing a step's results removes the file, and TestConfig creates it only once. When the next step
+    collects nothing, the file is missing: that step must be reported without latencies, so the search reruns
+    it, rather than end the run on FileNotFoundError."""
+    instance = SimpleNamespace(latency_results_file=str(tmp_path / "missing.json"), log=logging.getLogger(__name__))
+
+    result = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.check_latency_during_steps(instance, "step")
+
+    assert result == {"step": {"step": "step", "legend": "", "cycles": []}}
+
+
 def test_check_latency_during_steps_still_processes_collected_results(tmp_path):
     """The happy path is untouched: the results are processed and the file is consumed."""
     collected = {"unthrottled": {"legend": "Gradual test step unthrottled op/s", "cycles": [{"duration": "0:10:00"}]}}
@@ -330,6 +341,25 @@ def test_run_step_skips_a_queue_that_carries_no_tags():
         instance, ["cmd-0", "cmd-1", "cmd-2"], {}, None
     )
     assert decorator_input == {"hdr_tags": ["WRITE-st"]}
+
+
+@pytest.mark.parametrize("stop_test_on_failure", [True, False])
+def test_run_step_passes_stop_test_on_failure_to_every_stress_command(stop_test_on_failure):
+    started = []
+
+    def run_stress_thread(**params):
+        started.append(params)
+        return SimpleNamespace(hdr_tags=["WRITE-st"])
+
+    instance = SimpleNamespace(
+        log=logging.getLogger(__name__),
+        run_stress_thread=run_stress_thread,
+        get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+    )
+    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
+        instance, ["cmd-0", "cmd-1"], {}, None, stop_test_on_failure=stop_test_on_failure
+    )
+    assert [params["stop_test_on_failure"] for params in started] == [stop_test_on_failure] * 2
 
 
 def test_latency_decorator_finds_the_tags_run_step_returns():

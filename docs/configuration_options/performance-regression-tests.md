@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**19 options.**
+**24 options.**
 
 
 <a id="max_deviation"></a>
@@ -52,6 +52,50 @@ Number of threads which should be added on per step
 **type:** int
 
 
+<a id="perf_best_throughput_search"></a>
+
+## **perf_best_throughput_search** / SCT_PERF_BEST_THROUGHPUT_SEARCH
+
+Rate search of the gradual performance test, which looks for the best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). When set, the sub-test runs fixed-rate steps whose rate the search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Each step gets rate x the P99 limit requests in flight: latte keeps the threads of the sub-test's first [`perf_gradual_throttle_steps`](#perf_gradual_throttle_steps) entry and gets them split over its threads as its concurrency, which is per thread; other tools get them as threads. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: min_rate_per_shard and max_rate_per_shard (the bounds, times the DB shards; without a baseline the first step runs at their middle on the log scale; each bound runs only when the search narrows to it, and there the minimum must pass and the maximum must fail, else the run reports an error), precision_pct (stop when the passing and failing rates are this close), max_steps (step budget per sub-test, the bounds included), min_sent_ratio (a step passes only when it measured at least this share of its rate, whatever its P99), baseline_range_pct (with a baseline in [`perf_best_throughput_baselines`](#perf_best_throughput_baselines), the search starts at it, between bounds this far below and above it, and moves a bound out by as much again when the result is past it), max_loader_cpu_pct (a loader over this CPU use during a step stops the search with an error and no Argus result, as the step measured the loaders). The search bisects the rate on the plain middle with a baseline, and on the log scale between the bounds. A step that collected no results is run once more; a second miss stops the search with an error and no Argus result. Example: {'default': {'min_rate_per_shard': 1000, 'max_rate_per_shard': 60000, 'precision_pct': 5, 'max_steps': 10, 'min_sent_ratio': 0.98, 'baseline_range_pct': 25, 'max_loader_cpu_pct': 90}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_best_throughput_baselines"></a>
+
+## **perf_best_throughput_baselines** / SCT_PERF_BEST_THROUGHPUT_BASELINES
+
+Known best throughput per DB shard, for the rate search of [`perf_best_throughput_search`](#perf_best_throughput_search) to start from instead of the middle of its bounds. Keyed by DB instance family (the instance type before the dot, such as 'i8g') or by a full instance type, then by sub-test, in op/s per shard; the full type wins. A sub-test without a baseline for the DB instance type searches between the bounds. Example: {'i8g': {'read': 40000, 'write': 15000}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_dataset_sizing"></a>
+
+## **perf_dataset_sizing** / SCT_PERF_DATASET_SIZING
+
+Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The test-case's stress commands define the dataset for a reference node; on other nodes their row counts (n=) and key ranges (-pop seq=) are scaled by the smallest node's RAM and disk relative to the reference, each rounded to scale_step: read/mixed hot ranges and cache warmup by RAM, the write dataset by disk, the preload and disk-only reads by the smaller of the two. The preload's throttle and threads scale with its rows, so it takes as long as on the reference node. Keys: reference_ram_gib, reference_disk_gb, scale_step. Not set: the commands run as written. Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_gradual_latency_limit"></a>
+
+## **perf_gradual_latency_limit** / SCT_PERF_GRADUAL_LATENCY_LIMIT
+
+P99 latency limit of the best-throughput search, in ms under the 'percentile_99' key: a gradual performance test step must stay within it to count as passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests not listed. Only 'percentile_99' is supported. It is the search's limit only: the best-throughput overlay sets the P99 fixed_limit of [`latency_decorator_error_thresholds`](general-and-provisioning.md#latency_decorator_error_thresholds) to null, because a search always has steps over the limit and those must not fail the run. Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}
+
+**default:** {'default': {'percentile_99': 10}}
+
+**type:** dict | YAML/JSON string → dict
+
+
 <a id="perf_gradual_step_duration"></a>
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
@@ -94,6 +138,17 @@ If true, preload data (via [`prepare_write_cmd`](stress-commands-and-load-genera
 **default:** False
 
 **type:** bool
+
+
+<a id="perf_overload_steps"></a>
+
+## **perf_overload_steps** / SCT_PERF_OVERLOAD_STEPS
+
+Goodput under overload, run after the gradual performance test found its best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). One throttled step per factor offers factor x the best throughput, with the best step's requests in flight times the factor (its concurrency for latte, else its threads); the goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. Example: {'default': {'factors': [1.3, 2], 'min_goodput_ratio': 0.9}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
 
 
 <a id="perf_simple_query_extra_command"></a>

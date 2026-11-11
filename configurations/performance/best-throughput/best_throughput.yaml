@@ -1,0 +1,51 @@
+# Best-throughput run (SCT-580): every step runs at a fixed rate that a search picks, looking for the highest
+# rate with P99 within perf_gradual_latency_limit (default 10 ms). The result is the BestThroughputResult Argus
+# table. Used on top of a predefined-steps test-case; its perf_gradual_throttle_steps only give each workload's
+# latte threads, and perf_gradual_threads are ignored while the search is set.
+
+# The bounds are per DB shard, so they fit any cluster size: 3 x i8g.4xlarge (~42 shards) searches 42k-2.5M op/s.
+# They are a first guess, to check on i4i, i8g and z4d: each runs only when the search narrows to it, and there
+# the minimum must pass and the maximum must fail. A loader over max_loader_cpu_pct during a step stops the search
+# with an error: the step measured the loaders, not Scylla.
+perf_best_throughput_search:
+  default:
+    min_rate_per_shard: 1000
+    max_rate_per_shard: 60000
+    precision_pct: 5
+    max_steps: 10
+    min_sent_ratio: 0.98
+    baseline_range_pct: 25
+    max_loader_cpu_pct: 90
+
+# Per-shard best throughput by DB instance family and sub-test, from the first runs on each family. With a
+# baseline the search starts at it, within +-25%, and takes about 4 steps instead of 7. Results that don't scale
+# with the shards move the bounds out and show in the Argus history.
+perf_best_throughput_baselines: {}
+
+# Write and mixed get 30 minutes, so that compactions and tablet splits run within a step. Read and
+# read_disk_only don't write, and get 10. First values: the shortest durations that still give a stable result
+# are to be measured on i8g.
+perf_gradual_step_duration: {"read": '10m', "write": '30m', "mixed": '30m', "read_disk_only": '10m'}
+
+# Steps over the latency limit are expected here: they bound the search. Drop the per-step P99 limits of
+# test_default.yaml so they don't fail the run. The search uses perf_gradual_latency_limit (default 10 ms)
+# instead, so only one limit applies.
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P99 write:
+        fixed_limit: null
+  read:
+    default:
+      P99 read:
+        fixed_limit: null
+  read_disk_only:
+    default:
+      P99 read:
+        fixed_limit: null
+  mixed:
+    default:
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null

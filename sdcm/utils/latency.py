@@ -10,11 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import logging
 import statistics
+from dataclasses import dataclass
 from typing import Any
 
 from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS
 from sdcm.db_stats import PrometheusDBStats
+
+LOGGER = logging.getLogger(__name__)
 
 
 def avg(values):
@@ -167,3 +171,83 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
                         results["color"].update({"percentile_99": ""})
 
     return result_stats
+
+
+@dataclass(frozen=True)
+class BestThroughputStep:
+    name: str
+    throughput: int
+    p99: dict[str, float]
+    threads: int | None = None
+    rate: int | None = None
+    concurrency: int | None = None
+
+
+def step_latency(name: str, step: dict[str, Any]) -> tuple[dict[str, float], int] | None:
+    """Return a gradual step's worst P99 per HDR key and its average HDR-measured throughput.
+
+    Keys are '<operation>--<HDR tag>'. Every key any cycle reported is included, each with the worst P99 of
+    the cycles that reported it, so an operation that shows up only in a later cycle is not let through
+    unchecked. Returns None when the step has no usable HDR results.
+    """
+    if not (cycles := [cycle for cycle in step.get("cycles") or [] if cycle.get("hdr_summary")]):
+        LOGGER.debug("Step %s: no HDR results", name)
+        return None
+    try:
+        hdr_keys = dict.fromkeys(hdr_key for cycle in cycles for hdr_key in cycle["hdr_summary"])
+        p99 = {
+            hdr_key: max(
+                cycle["hdr_summary"][hdr_key]["percentile_99"] for cycle in cycles if hdr_key in cycle["hdr_summary"]
+            )
+            for hdr_key in hdr_keys
+        }
+        throughput = round(avg([cycle["cycle_hdr_throughput"] for cycle in cycles]))
+    except (KeyError, TypeError) as exc:
+        LOGGER.debug("Step %s: incomplete HDR results (%r)", name, exc)
+        return None
+    return p99, throughput
+
+
+def p99_violations(name: str, p99: dict[str, float], p99_limit_ms: float) -> dict[str, float]:
+    """Return the HDR keys of a step whose P99 is over the limit; an empty dict means the step passed."""
+    if over_limit := {hdr_key: value for hdr_key, value in p99.items() if value > p99_limit_ms}:
+        LOGGER.debug("Step %s: P99 over the %s ms limit: %s", name, p99_limit_ms, over_limit)
+    return over_limit
+
+
+def find_best_throughput(
+    total_summary: dict[str, Any], p99_limit_ms: float, min_sent_ratio: float | None = None
+) -> BestThroughputStep | None:
+    """Pick the gradual step with the highest measured throughput whose P99 is within the limit.
+
+    `total_summary` is the per-step summary of the gradual test, keyed by step name. A step passes when the HDR
+    P99 of every operation, in every cycle that reported it, is within `p99_limit_ms` (for mixed, both read and
+    write). With `min_sent_ratio`, a step with a fixed 'rate' must also have measured at least that share of
+    it: a step the loaders held back can't be the best one.
+    Steps without HDR results are skipped.
+
+    Passing steps are ranked by HDR-measured throughput. The step's 'threads', 'rate' and 'concurrency' entries,
+    when present, are reported as is. Returns None when no step passed.
+    """
+    passed = []
+    for name, step in total_summary.items():
+        if (latency := step_latency(name, step)) is None:
+            continue
+        p99, throughput = latency
+        if p99_violations(name, p99, p99_limit_ms):
+            continue
+        if min_sent_ratio and (rate := step.get("rate")) and throughput < rate * min_sent_ratio:
+            LOGGER.debug("Step %s: sent %s op/s, under %s of its %s op/s rate", name, throughput, min_sent_ratio, rate)
+            continue
+        passed.append(
+            BestThroughputStep(
+                name=name,
+                throughput=throughput,
+                p99=p99,
+                threads=step.get("threads"),
+                rate=step.get("rate"),
+                concurrency=step.get("concurrency"),
+            )
+        )
+
+    return max(passed, key=lambda step: step.throughput, default=None)

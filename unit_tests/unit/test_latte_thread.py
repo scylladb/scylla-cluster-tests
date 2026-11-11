@@ -77,6 +77,27 @@ def test_05_latte_parse_final_output():
     assert parsed_output["latency mean"] == "2.272"
     assert "op rate" in parsed_output
     assert parsed_output["op rate"] == "160100"
+    assert parsed_output["total errors"] == "0"
+    assert parsed_output["total operation time"] == "00:12:00"
+
+
+def test_latte_parse_final_output_errors():
+    stress_result = type(
+        "FakeStressResult",
+        (),
+        {
+            "stdout": "SUMMARY STATS ══════\n"
+            "    Elapsed time       [s]   3725.4    \n"
+            "          Errors      [op]       1234    \n"
+            "      Throughput    [op/s]      25999 ± 23    \n"
+        },
+    )
+
+    parsed_output = LatteStressThread.parse_final_output(stress_result)
+
+    assert parsed_output["total errors"] == "1234"
+    assert parsed_output["total operation time"] == "01:02:05"
+    assert parsed_output["op rate"] == "25999"
 
 
 @pytest.mark.parametrize(

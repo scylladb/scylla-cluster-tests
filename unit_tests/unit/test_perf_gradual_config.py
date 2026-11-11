@@ -179,3 +179,183 @@ def test_rate_unthrottled_string():
         }
     )
     config.verify_configuration()
+
+
+def test_latency_limit_default():
+    """Test that the default latency limit is P99 of 10 ms for every sub-test."""
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert config.get("perf_gradual_latency_limit") == {"default": {"percentile_99": 10}}
+
+
+def test_latency_limit_per_workload_override():
+    """Test that a sub-test can have its own latency limit next to the default."""
+    config = SCTConfiguration()
+    config.update(
+        {"perf_gradual_latency_limit": {"default": {"percentile_99": 10}, "read_disk_only": {"percentile_99": 15.5}}}
+    )
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "latency_limit, match",
+    [
+        pytest.param({"default": 10}, "single 'percentile_99' key", id="not_a_dict"),
+        pytest.param({"default": {"percentile_90": 5}}, "single 'percentile_99' key", id="wrong_percentile"),
+        pytest.param(
+            {"default": {"percentile_99": 10, "percentile_90": 5}}, "single 'percentile_99' key", id="extra_key"
+        ),
+        pytest.param({"default": {"percentile_99": 0}}, "positive number", id="zero"),
+        pytest.param({"default": {"percentile_99": -1}}, "positive number", id="negative"),
+        pytest.param({"default": {"percentile_99": "10"}}, "positive number", id="string"),
+        pytest.param({"default": {"percentile_99": True}}, "positive number", id="bool"),
+    ],
+)
+def test_invalid_latency_limit(latency_limit, match):
+    """Test that malformed latency limits are rejected with clear error messages."""
+    config = SCTConfiguration()
+    config.update({"perf_gradual_latency_limit": latency_limit})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
+
+
+def test_best_throughput_search_is_off_by_default():
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert not config.get("perf_best_throughput_search")
+
+
+def test_best_throughput_search_valid():
+    config = SCTConfiguration()
+    config.update(
+        {
+            "perf_best_throughput_search": {
+                "default": {
+                    "min_rate_per_shard": 1000,
+                    "max_rate_per_shard": 60000,
+                    "max_steps": 8,
+                    "precision_pct": 5,
+                },
+                "read_disk_only": {
+                    "max_rate_per_shard": 20000,
+                    "min_sent_ratio": 0.9,
+                    "baseline_range_pct": 20,
+                    "max_loader_cpu_pct": 85,
+                },
+            },
+            "perf_best_throughput_baselines": {"i8g": {"read": 40000}, "i4i.4xlarge": {"write": 15000}},
+        }
+    )
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "search, match",
+    [
+        pytest.param({"default": 16}, "should be a dict with keys from", id="not_a_dict"),
+        pytest.param({"default": {"threads": 16}}, "should be a dict with keys from", id="unknown_key"),
+        pytest.param({"default": {"min_rate_per_shard": 0}}, "positive integer", id="zero_min_rate"),
+        pytest.param({"default": {"max_rate_per_shard": 1.5}}, "positive integer", id="float_max_rate"),
+        pytest.param({"default": {"max_steps": True}}, "positive integer", id="bool_steps"),
+        pytest.param({"default": {"max_steps": 1}}, "at least 2", id="one_step"),
+        pytest.param({"default": {"precision_pct": -5}}, "positive number", id="negative_precision"),
+        pytest.param({"read": {"min_sent_ratio": "0.9"}}, "positive number", id="string_sent_ratio"),
+        pytest.param({"read": {"min_sent_ratio": 1.5}}, "at most 1", id="sent_ratio_above_one"),
+        pytest.param({"default": {"min_rate_per_shard": 60000}}, "should be below", id="min_not_below_default_max"),
+        pytest.param({"default": {"baseline_range_pct": 100}}, "below 100", id="baseline_range_too_wide"),
+        pytest.param({"default": {"max_loader_cpu_pct": 120}}, "at most 100", id="loader_cpu_above_100"),
+        pytest.param({"default": {"max_loader_cpu_pct": 0}}, "positive number", id="zero_loader_cpu"),
+        pytest.param(
+            {"default": {"max_rate_per_shard": 5000}, "read": {"min_rate_per_shard": 5000}},
+            "for read: 'min_rate_per_shard'",
+            id="merged_bounds_of_a_workload",
+        ),
+    ],
+)
+def test_invalid_best_throughput_search(search, match):
+    config = SCTConfiguration()
+    config.update({"perf_best_throughput_search": search})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "baselines",
+    [
+        pytest.param({"i8g": 40000}, id="no_sub_test"),
+        pytest.param({"i8g": {"read": 0}}, id="zero"),
+        pytest.param({"i8g": {"read": 4.5e4}}, id="float"),
+    ],
+)
+def test_invalid_best_throughput_baselines(baselines):
+    config = SCTConfiguration()
+    config.update({"perf_best_throughput_baselines": baselines})
+    with pytest.raises(ValueError, match="should map sub-tests to a positive integer rate per shard"):
+        config.verify_configuration()
+
+
+def test_dataset_sizing_is_off_by_default():
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert config.get("perf_dataset_sizing") is None
+
+
+def test_dataset_sizing_valid():
+    config = SCTConfiguration()
+    config.update({"perf_dataset_sizing": {"reference_ram_gib": 128, "reference_disk_gb": 3750, "scale_step": 0.25}})
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "sizing, match",
+    [
+        pytest.param({"ram_gib": 128}, "should be a dict with keys from", id="unknown_key"),
+        pytest.param({"scale_step": 0}, "positive number", id="zero_step"),
+        pytest.param({"reference_ram_gib": "128"}, "positive number", id="string"),
+        pytest.param({"reference_disk_gb": True}, "positive number", id="bool"),
+    ],
+)
+def test_invalid_dataset_sizing(sizing, match):
+    config = SCTConfiguration()
+    config.update({"perf_dataset_sizing": sizing})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
+
+
+def test_overload_steps_are_off_by_default():
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert not config.get("perf_overload_steps")
+
+
+def test_overload_steps_valid():
+    config = SCTConfiguration()
+    config.update(
+        {
+            "perf_overload_steps": {
+                "default": {"factors": [1.3, 2], "min_goodput_ratio": 0.9},
+                "write": {"factors": [1.5]},
+            }
+        }
+    )
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "overload, match",
+    [
+        pytest.param({"default": [1.3]}, "should be a dict with keys from", id="not_a_dict"),
+        pytest.param({"default": {"rates": [1.3]}}, "should be a dict with keys from", id="unknown_key"),
+        pytest.param({"default": {"factors": []}}, "non-empty list of numbers above 1", id="no_factors"),
+        pytest.param({"default": {"factors": [0.8]}}, "non-empty list of numbers above 1", id="factor_below_1"),
+        pytest.param({"default": {"factors": "1.3"}}, "non-empty list of numbers above 1", id="factors_string"),
+        pytest.param({"default": {"max_threads_multiplier": 4}}, "should be a dict with keys from", id="thread_cap"),
+        pytest.param({"default": {"min_goodput_ratio": 1.5}}, r"in \(0, 1\]", id="ratio_above_1"),
+        pytest.param({"read": {"min_goodput_ratio": 0}}, r"in \(0, 1\]", id="zero_ratio"),
+    ],
+)
+def test_invalid_overload_steps(overload, match):
+    config = SCTConfiguration()
+    config.update({"perf_overload_steps": overload})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
