@@ -46,8 +46,10 @@ MAX_PROVISION_WAIT_WORKERS = 50
 # NOTE: ParallelObject applies this per future, not as a strict global wall-clock deadline
 # (see sdcm/utils/parallel_object.py). For clusters larger than MAX_PROVISION_WAIT_WORKERS the
 # overflow nodes are queued, so the effective ceiling can be higher than this value.
-# wait_cloud_init_completes itself retries for up to ~20*10s plus a 5min SSH is_up per node.
-CLOUD_INIT_WAIT_TIMEOUT = 30 * 60
+# This is only a backstop: wait_cloud_init_completes bounds itself. Each attempt waits up to 5min
+# for SSH and then up to CLOUD_INIT_WAIT_TIMEOUT (sdcm/provision/helpers/cloud_init.py) for
+# cloud-init, and an attempt that ends in CloudInitError is retried up to 20 times, 10s apart.
+PROVISION_WAIT_TIMEOUT = 30 * 60
 
 
 @retrying(n=3, sleep_time=5, allowed_exceptions=(ProvisionError,))
@@ -147,7 +149,7 @@ def provision_instances_with_fallback(
         # if a node did not come up correctly), while ParallelObject surfaces it after all workers run.
         ParallelObject(
             objects=instance_pairs,
-            timeout=CLOUD_INIT_WAIT_TIMEOUT,
+            timeout=PROVISION_WAIT_TIMEOUT,
             num_workers=min(len(instance_pairs), MAX_PROVISION_WAIT_WORKERS),
         ).run(wait_instance_ready, ignore_exceptions=False)
     return provisioned_instances

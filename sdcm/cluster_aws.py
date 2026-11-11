@@ -1418,8 +1418,9 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 node=node,
             )
 
-        # Waiting for each node serially takes up to N * timeout; wait for all nodes in
-        # parallel so the whole cluster converges within a single timeout window (SCT-730).
+        # Waiting for each node serially takes up to N * timeout, so wait for the nodes in
+        # parallel (SCT-730). run_func_parallel uses the default ThreadPoolExecutor size, so a
+        # cluster larger than that pool is waited on in batches, not in one timeout window.
         self.run_func_parallel(func=_wait_for_node_db_up, node_list=node_list)
 
 
