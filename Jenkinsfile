@@ -181,6 +181,9 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         dockerLogin(params)
+                        // The provision tests check SCT out into '<backend>/scylla-cluster-tests' of this workspace.
+                        // Left over from an earlier build, an 'oci/' or 'azure/' directory makes ruff sort those imports as first-party
+                        sh "git clean -ffdx -- ${target_backends.join(' ')}"
                         // also check the commit-message for the rules we want
                         sh 'touch ./.git/COMMIT_EDITMSG'
                         sh '''#!/bin/bash
