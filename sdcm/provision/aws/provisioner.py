@@ -14,8 +14,6 @@
 import contextlib
 import datetime
 import logging
-import time
-import uuid
 from typing import List, Union
 
 from mypy_boto3_ec2 import EC2Client
@@ -23,27 +21,19 @@ from mypy_boto3_ec2.service_resource import Instance
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
-    EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
-    EC2_FLEET_LIMIT,
-    EC2_FLEET_MAX_ATTEMPTS,
-    EC2_FLEET_RETRY_BACKOFF,
     SPOT_CNT_LIMIT,
     SPOT_REQUEST_TIMEOUT,
 )
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import (
-    create_ec2_fleet_instance_request,
-    create_launch_template,
     create_spot_instance_request,
-    delete_ec2_fleet,
-    delete_launch_template,
     ec2_clients,
     ec2_services,
     find_instance_by_id,
-    is_ec2_fleet_retryable,
-    log_ec2_fleet_errors,
+    provision_ec2_fleet,
     set_tags_on_instances,
+    terminate_instances_by_id,
     wait_for_provision_request_done,
 )
 from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters, TagsType
@@ -112,9 +102,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
     @staticmethod
     def _is_provision_type_fleet(count: int) -> bool:
         return count > SPOT_CNT_LIMIT
-
-    def _provision_instance_limit(self, count: int) -> int:
-        return EC2_FLEET_LIMIT if self._is_provision_type_fleet(count) else SPOT_CNT_LIMIT
 
     @property
     def _spot_valid_until(self) -> datetime.datetime:
@@ -186,62 +173,37 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         count: int,
         tags: Union[List[TagsType], TagsType],
     ) -> List[Instance]:
-        rest_to_provision = count
-        provisioned_instances = []
-        while rest_to_provision:
-            if rest_to_provision // self._provision_instance_limit(count):
-                instances_to_provision = self._provision_instance_limit(count)
-            else:
-                instances_to_provision = rest_to_provision
-
-            if self._is_provision_type_fleet(count) and instances_to_provision > 1:
-                new_instances = self._execute_ec2_fleet_instance_request(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters,
-                    count=instances_to_provision,
-                    tags=tags,
-                )
-            else:
-                new_instances = self._execute_spot_instance_request(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters[0],
-                    count=instances_to_provision,
-                    tags=tags,
-                )
-            if len(new_instances) < instances_to_provision:
-                # A batch under-fulfilled (the fleet path already rolled its own batch back and
-                # returned []; the plain-spot path may return a partial set). Returning the earlier
-                # successful batches would silently under-provision the cluster, since ProvisionPlan
-                # treats any non-empty result as success and skips AZ/region/on-demand fallback.
-                # Roll everything provisioned in this request back and return [] so the fallback
-                # provision steps get a chance to satisfy the exact requested count.
-                leftover = provisioned_instances + new_instances
-                if leftover:
-                    LOGGER.error(
-                        "Spot batch in %s provisioned %d of %d requested instances; "
-                        "rolling back %d instance(s) already provisioned in this request.",
-                        provision_parameters.region_name,
-                        len(new_instances),
-                        instances_to_provision,
-                        len(leftover),
-                    )
-                    self._terminate_instances(provision_parameters.region_name, leftover)
-                return []
-            provisioned_instances.extend(new_instances)
-            rest_to_provision -= instances_to_provision
-        return provisioned_instances
-
-    @staticmethod
-    def _terminate_instances(region_name: str, instances: List[Instance]) -> None:
-        """Best-effort termination of instances from a rolled-back multi-batch spot request."""
-        instance_ids = [instance.instance_id for instance in instances if getattr(instance, "instance_id", None)]
-        if not instance_ids:
-            return
-        try:
-            ec2_clients[region_name].terminate_instances(InstanceIds=instance_ids)
-            LOGGER.info("Rolled back spot instances %s in region %s", instance_ids, region_name)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Failed to roll back spot instances %s in region %s: %s", instance_ids, region_name, exc)
+        if self._is_provision_type_fleet(count):
+            # One all-or-nothing request for the whole count - no batches, so there is never a partial set of
+            # earlier batches to roll back when a later one fails.
+            return self._execute_ec2_fleet_instance_request(
+                provision_parameters=provision_parameters,
+                instance_parameters=instance_parameters,
+                count=count,
+                tags=tags,
+            )
+        instances = self._execute_spot_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=instance_parameters[0],
+            count=count,
+            tags=tags,
+        )
+        if 0 < len(instances) < count:
+            # Plain spot requests can be partially fulfilled. Returning that partial set would silently
+            # under-provision the cluster, since ProvisionPlan treats any non-empty result as success and skips
+            # AZ/region/on-demand fallback; roll it back so the fallback gets a chance at the exact count.
+            LOGGER.error(
+                "Spot request in %s provisioned %d of %d requested instances; rolling them back.",
+                provision_parameters.region_name,
+                len(instances),
+                count,
+            )
+            terminate_instances_by_id(
+                region_name=provision_parameters.region_name,
+                instance_ids=[instance.instance_id for instance in instances],
+            )
+            return []
+        return instances
 
     def _execute_ec2_fleet_instance_request(
         self,
@@ -250,21 +212,17 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         count: int,
         tags: List[TagsType],
     ) -> List[Instance]:
-        """Provision `count` spot instances with a single EC2 Fleet request.
+        """Provision exactly `count` spot instances with one all-or-nothing EC2 Fleet request.
 
-        All entries of `instance_parameters` are expected to be identical except for their
-        `InstanceType`: the shared part becomes a throwaway launch template and each distinct
-        instance type becomes a fleet override, so AWS can satisfy the request from whichever
-        instance pool has capacity. Overrides keep the list order as their priority, so the
-        preferred (first) instance type wins whenever its pool can take the request. This is what
-        Spot Fleet could not do for us -- SCT always sent it a single-type launch specification, so
-        one exhausted pool failed the whole batch.
+        All entries of `instance_parameters` are expected to be identical except for their `InstanceType`: the
+        shared part becomes the fleet's launch template and each distinct instance type becomes an override, so
+        AWS can satisfy the request from whichever instance pool has capacity. Overrides keep the list order as
+        their priority, so the preferred (first) instance type wins whenever its pool can take the request. This
+        is what Spot Fleet could not do for us -- SCT always sent it a single-type launch specification, so one
+        exhausted pool failed the whole request.
         """
-        base_parameters = instance_parameters[0]
-        instance_types = list(dict.fromkeys(params.InstanceType for params in instance_parameters))
         region_name = provision_parameters.region_name
-
-        instance_parameters_dict = base_parameters.model_dump(
+        instance_parameters_dict = instance_parameters[0].model_dump(
             exclude_none=True,
             exclude_unset=True,
             exclude_defaults=True,
@@ -275,61 +233,19 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         instance_parameters_dict["TagSpecifications"] = [
             {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}
         ]
-        # The launch template and the fleet get the same tags (minus the per-node Name), so that if this
-        # process is killed mid-request -- e.g. a Jenkins stage timeout, see SCT-779 -- clean-resources
-        # can still find them by tag, like every other SCT resource.
-        resource_tags = tags_as_ec2_tags({key: value for key, value in tags[0].items() if key != "Name"})
-
-        template_name = f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}{uuid.uuid4()}"
-        template_id = create_launch_template(
+        instance_ids = provision_ec2_fleet(
             region_name=region_name,
-            template_name=template_name,
             instance_parameters=instance_parameters_dict,
-            tags=resource_tags,
+            instance_types=list(dict.fromkeys(params.InstanceType for params in instance_parameters)),
+            count=count,
+            # the per-node Name is not a property of the shared fleet and launch template
+            resource_tags=tags_as_ec2_tags({key: value for key, value in tags[0].items() if key != "Name"}),
+            spot=provision_parameters.spot,
         )
-        fleet_id = None
-        instance_ids: List[str] = []
+        if not instance_ids:
+            return []
+        LOGGER.info("EC2 Fleet instances: %s", instance_ids)
         try:
-            for attempt in range(1, EC2_FLEET_MAX_ATTEMPTS + 1):
-                fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
-                    region_name=region_name,
-                    count=count,
-                    template_id=template_id,
-                    instance_types=instance_types,
-                    spot=provision_parameters.spot,
-                    tag_specifications=[{"ResourceType": "fleet", "Tags": resource_tags}],
-                )
-                log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
-                if len(instance_ids) >= count:
-                    break
-                # Partial fulfillment is useless to SCT: the cluster needs the exact node count,
-                # and leaving the extra instances around would leak them. Roll the whole batch back,
-                # then retry if the errors were transient, or else let the caller's AZ/region/on-demand
-                # fallback take over.
-                retry = attempt < EC2_FLEET_MAX_ATTEMPTS and is_ec2_fleet_retryable(errors)
-                LOGGER.error(
-                    "EC2 Fleet %s in %s provisioned %d of %d requested instances (attempt %d/%d). Rolling back%s.",
-                    fleet_id,
-                    region_name,
-                    len(instance_ids),
-                    count,
-                    attempt,
-                    EC2_FLEET_MAX_ATTEMPTS,
-                    " and retrying, the errors are transient" if retry else "",
-                )
-                delete_ec2_fleet(
-                    region_name=region_name,
-                    fleet_id=fleet_id,
-                    terminate_instances=True,
-                    instance_ids=instance_ids,
-                )
-                # already rolled back, so the error handler below must not touch them again
-                fleet_id, instance_ids = None, []
-                if not retry:
-                    return []
-                time.sleep(EC2_FLEET_RETRY_BACKOFF * attempt)
-
-            LOGGER.info("EC2 Fleet instances: %s", instance_ids)
             for ind, instance_id in enumerate(instance_ids):
                 instance_tags = tags.pop()
                 set_tags_on_instances(
@@ -337,27 +253,13 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                     instance_ids=[instance_id],
                     tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
                 )
-            # `instant` fleets are one-shot: they never maintain or replace capacity, and AWS does
-            # not allow deleting the fleet record while keeping its instances
-            # (`DeleteFleets(TerminateInstances=False)` is rejected for `instant` fleets). The
-            # launched instances are fully independent of the now-inert fleet record, so we hand
-            # them off and leave the record for AWS to reap. Clearing `fleet_id` keeps the error
-            # handler below from terminating the instances we just provisioned.
-            fleet_id = None
             return [
                 find_instance_by_id(region_name=region_name, instance_id=instance_id) for instance_id in instance_ids
             ]
         except Exception:
-            if fleet_id:
-                delete_ec2_fleet(
-                    region_name=region_name,
-                    fleet_id=fleet_id,
-                    terminate_instances=True,
-                    instance_ids=instance_ids,
-                )
+            # Never hand back half-initialized nodes, and never leak them: they belong to no cluster yet.
+            terminate_instances_by_id(region_name=region_name, instance_ids=instance_ids)
             raise
-        finally:
-            delete_launch_template(region_name=region_name, template_id=template_id)
 
     def _execute_spot_instance_request(
         self,
