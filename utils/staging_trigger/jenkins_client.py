@@ -1,12 +1,15 @@
 """Low-level Jenkins API client for staging trigger operations."""
 
 import fnmatch
+import logging
 import xml.etree.ElementTree as ET
 
 import jenkins
 
 from sdcm.keystore import KeyStore
 from utils.staging_trigger.constants import ParamDefinition
+
+logger = logging.getLogger(__name__)
 
 
 class JenkinsJobTrigger:
@@ -63,7 +66,15 @@ class JenkinsJobTrigger:
         return {}
 
     def trigger(self, job_name: str, parameters: dict) -> int:
-        """Trigger a job and return the expected build number."""
+        """Trigger a job and return the expected build number.
+
+        Parameters the job does not define are dropped: Jenkins rejects the
+        whole build with 400 Bad Request when it gets one.
+        """
+        if defined := self.get_job_parameter_definitions(job_name):
+            if unknown := sorted(set(parameters) - set(defined)):
+                logger.warning("Dropping parameters that %s does not define: %s", job_name, ", ".join(unknown))
+            parameters = {k: v for k, v in parameters.items() if k in defined}
         job_info = self.jenkins.get_job_info(job_name)
         build_number = job_info["nextBuildNumber"]
         self.jenkins.build_job(name=job_name, parameters=parameters)

@@ -32,7 +32,7 @@ from utils.staging_trigger.interactive import (
     generate_yaml_config,
     maybe_set_docker_image,
 )
-from utils.staging_trigger.jenkins_client import parse_parameter_definitions
+from utils.staging_trigger.jenkins_client import JenkinsJobTrigger, parse_parameter_definitions
 from utils.staging_trigger.job_generation import _collect_folder_tree
 from utils.staging_trigger.trigger import (
     StagingTrigger,
@@ -1232,3 +1232,42 @@ class TestAutoSetDockerImageTrigger:
         params = {"scylla_version": "master:latest", "scylla_docker_image": "custom"}
         _auto_set_docker_image(params)
         assert params["scylla_docker_image"] == "custom"
+
+
+JOB_CONFIG_XML = """<flow-definition><properties><hudson.model.ParametersDefinitionProperty>
+<parameterDefinitions>
+  <hudson.model.StringParameterDefinition><name>backend</name><defaultValue>aws</defaultValue></hudson.model.StringParameterDefinition>
+  <hudson.model.StringParameterDefinition><name>scylla_version</name><defaultValue></defaultValue></hudson.model.StringParameterDefinition>
+</parameterDefinitions>
+</hudson.model.ParametersDefinitionProperty></properties></flow-definition>"""
+
+
+class TestJenkinsJobTriggerTrigger:
+    """trigger() must not send parameters the job lacks: Jenkins answers 400 to the whole build."""
+
+    @staticmethod
+    def _client(config_xml):
+        client = JenkinsJobTrigger.__new__(JenkinsJobTrigger)
+        client.jenkins = MagicMock()
+        client.jenkins.get_job_config.return_value = config_xml
+        client.jenkins.get_job_info.return_value = {"nextBuildNumber": 7}
+        return client
+
+    def test_drops_undefined_parameters(self):
+        client = self._client(JOB_CONFIG_XML)
+        params = {"scylla_version": "master:latest", "scylla_docker_image": "scylladb/scylla-nightly"}
+
+        assert client.trigger("folder/job", params) == 7
+
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={"scylla_version": "master:latest"}
+        )
+
+    def test_keeps_parameters_when_definitions_unknown(self):
+        client = self._client(None)
+        client.jenkins.get_job_config.side_effect = Exception("no config")
+        params = {"scylla_version": "master:latest", "scylla_docker_image": "x"}
+
+        client.trigger("folder/job", params)
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters=params)
