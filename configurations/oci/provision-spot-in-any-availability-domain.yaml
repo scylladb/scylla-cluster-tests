@@ -1,0 +1,5 @@
+# Spot capacity of a shape runs out per availability domain,
+# so each node goes to any availability domain which has it,
+# and the racks are simulated to not depend on where the nodes land.
+fallback_to_next_availability_zone: true
+simulated_racks: 3

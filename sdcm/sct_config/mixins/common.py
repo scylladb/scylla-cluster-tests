@@ -144,7 +144,8 @@ class CommonConfigMixin(BaseModel):
     )
     fallback_to_next_availability_zone: Boolean = SctField(
         description="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
-        "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
+        "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`. "
+        "On OCI, each node goes to any configured AD which has capacity, so use it with `simulated_racks`.",
     )
     fallback_to_next_region: Boolean = SctField(
         description="On capacity errors, after all AZs/zones in the configured region are exhausted, relocate to the next "

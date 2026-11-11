@@ -225,7 +225,7 @@ How to select number of shards of Scylla. Expected values: default/random.<br>De
 
 ## **fallback_to_next_availability_zone** / SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
 
-On capacity errors, automatically retry provisioning in the next available AZ in the same region. Backend-agnostic parameter; supersedes [`aws_fallback_to_next_availability_zone`](aws-backend.md#aws_fallback_to_next_availability_zone).
+On capacity errors, automatically retry provisioning in the next available AZ in the same region. Backend-agnostic parameter; supersedes [`aws_fallback_to_next_availability_zone`](aws-backend.md#aws_fallback_to_next_availability_zone). On OCI, each node goes to any configured AD which has capacity, so use it with [`simulated_racks`](#simulated_racks).
 
 **default:** False
 
