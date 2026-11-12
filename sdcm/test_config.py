@@ -52,6 +52,7 @@ class TestConfig(metaclass=Singleton):
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
+    GEMINI_STARTED = False  # set by GeminiStressThread, gates the Gemini Grafana screenshot
     MULTI_REGION = False
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False

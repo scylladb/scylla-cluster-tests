@@ -8020,9 +8020,9 @@ class BaseMonitorSet:
     def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
         screenshot_links = []
         grafana_extra_dashboards = []
-        if "alternator_port" in self.params:
+        if self.params.get("alternator_port"):
             grafana_extra_dashboards = [AlternatorDashboard()]
-        if self.params.get("gemini_cmd"):
+        if self.test_config.GEMINI_STARTED:
             grafana_extra_dashboards.append(GeminiDashboard())
         date_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
