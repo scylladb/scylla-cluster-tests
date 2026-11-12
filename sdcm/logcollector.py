@@ -22,6 +22,7 @@ import datetime
 import tempfile
 import traceback
 from collections import OrderedDict
+from contextvars import ContextVar
 from typing import Optional, Tuple, List
 from pathlib import Path
 from functools import cached_property
@@ -77,6 +78,16 @@ from sdcm.keystore import KeyStore
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
+
+# SSH state of the node whose logs this thread collects, checked once per node:
+# on a node without SSH each is_up() waits 30s, and every log entity used to ask again.
+_NODE_SSH_UP: ContextVar[bool | None] = ContextVar("node_ssh_up", default=None)
+
+
+def _node_ssh_up(node) -> bool:
+    if (ssh_up := _NODE_SSH_UP.get()) is None:
+        ssh_up = node.remoter.is_up()
+    return ssh_up
 
 
 def _create_retry_session(retries: int = 3) -> requests.Session:
@@ -707,7 +718,7 @@ class LogCollector:
             path = node.name
         remote_dir = os.path.join(self.node_remote_dir, path)
 
-        if ssh_connected := node.remoter.is_up():
+        if ssh_connected := _node_ssh_up(node):
             try:
                 result = node.remoter.run(f"mkdir -p {remote_dir}", ignore_status=True)
 
@@ -742,7 +753,7 @@ class LogCollector:
         is_file_remote = True
         ok = False
 
-        if ssh_connected := node.remoter.is_up():
+        if ssh_connected := _node_ssh_up(node):
             try:
                 collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
                 node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
@@ -808,21 +819,29 @@ class LogCollector:
 
         def collect_logs_per_node(node):
             LOGGER.info("Collecting logs on host: %s", node.name)
-            remote_node_dir = self.create_remote_storage_dir(node)
-            local_node_dir = os.path.join(self.local_dir, node.name)
-            local_parent_dir = self.local_dir
-            for log_entity in self.log_entities:
-                try:
-                    log_entity.collect(
-                        node=node,
-                        local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
-                        remote_dst=remote_node_dir,
-                        local_search_path=local_search_path,
-                    )
-                except Exception as details:  # noqa: BLE001
-                    LOGGER.error(
-                        "Error occured during collecting of %s on host: %s\n%s", log_entity.name, node.name, details
-                    )
+            # Set in the worker thread, so each node keeps its own answer
+            ssh_up_token = _NODE_SSH_UP.set(bool(node.remoter and node.remoter.is_up()))
+            try:
+                remote_node_dir = self.create_remote_storage_dir(node)
+                local_node_dir = os.path.join(self.local_dir, node.name)
+                local_parent_dir = self.local_dir
+                for log_entity in self.log_entities:
+                    try:
+                        log_entity.collect(
+                            node=node,
+                            local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
+                            remote_dst=remote_node_dir,
+                            local_search_path=local_search_path,
+                        )
+                    except Exception as details:  # noqa: BLE001
+                        LOGGER.error(
+                            "Error occured during collecting of %s on host: %s\n%s",
+                            log_entity.name,
+                            node.name,
+                            details,
+                        )
+            finally:
+                _NODE_SSH_UP.reset(ssh_up_token)
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 
