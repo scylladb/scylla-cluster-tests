@@ -2560,6 +2560,15 @@ At the end of prepare stage, run major compaction and wait for this time (in min
 **type:** int
 
 
+## **prepare_wait_no_compactions_trigger_major** / SCT_PREPARE_WAIT_NO_COMPACTIONS_TRIGGER_MAJOR
+
+Trigger a major compaction ('nodetool compact') on every node before waiting for compactions to finish at the end of the prepare stage. When false, only wait for the regular compactions to drain, e.g. the debt of a population which outran compaction. Takes effect only with 'prepare_wait_no_compactions_timeout'.
+
+**default:** True
+
+**type:** boolean
+
+
 ## **compaction_strategy** / SCT_COMPACTION_STRATEGY
 
 Choose a specific compaction strategy to pre-create schema with.
