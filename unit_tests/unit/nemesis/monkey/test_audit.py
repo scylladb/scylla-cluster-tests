@@ -132,7 +132,7 @@ def audit_log_rows(count, category, operation):
     [
         pytest.param(lambda r: setattr(r.target_node, "is_enterprise", False), "Scylla Enterprise", id="oss"),
         pytest.param(lambda r: r._is_it_on_kubernetes.configure_mock(return_value=True), "Kubernetes", id="k8s"),
-        pytest.param(lambda r: setattr(r.target_node, "scylla_version", "2024.2.0"), "2025.2", id="old-version"),
+        pytest.param(lambda r: setattr(r.target_node, "scylla_version", "2025.1.3"), "2025.2", id="old-version"),
     ],
 )
 def test_unsupported_setups_skip_before_configuring_audit(runner, audit, monkey_class, setup, match):
@@ -141,6 +141,18 @@ def test_unsupported_setups_skip_before_configuring_audit(runner, audit, monkey_
     with pytest.raises(UnsupportedNemesis, match=match):
         monkey_class(runner).disrupt()
     audit.configure.assert_not_called()
+
+
+@pytest.mark.parametrize("monkey_class", [pytest.param(ToggleAuditNemesisSyslog, id="categories")])
+@pytest.mark.parametrize(
+    "scylla_version",
+    [pytest.param("2025.2.0-dev", id="2025.2-dev"), pytest.param("2025.2.0~rc1", id="2025.2-rc1")],
+)
+def test_2025_2_pre_releases_run(runner, monkey_class, configured_audits, expected_configs):
+    """2025.2 dev and rc builds already have the new audit log format, so the version gate lets them run."""
+    monkey_class(runner).disrupt()
+
+    assert configured_audits == expected_configs
 
 
 @pytest.mark.parametrize(
