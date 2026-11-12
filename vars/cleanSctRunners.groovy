@@ -15,6 +15,7 @@ def call(Map params, RunWrapper currentBuild){
         params."post_behavior_${it}" == 'keep'
     }
 
+    withEnv(pipelineEnv(params: params)) {
     sh """#!/bin/bash
 
     set -xe
@@ -45,4 +46,5 @@ def call(Map params, RunWrapper currentBuild){
 
     echo "Finished cleaning runner instances."
     """
+    }
 }

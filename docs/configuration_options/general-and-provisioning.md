@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**74 options.**
+**76 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -526,6 +526,17 @@ Before provisioning, probe capacity by launching and terminating one on-demand i
 **type:** bool
 
 
+<a id="pytest_addopts"></a>
+
+## **pytest_addopts** / SCT_PYTEST_ADDOPTS
+
+Extra pytest options for `run-pytest` (passed to pytest as PYTEST_ADDOPTS)
+
+**default:** N/A
+
+**type:** str
+
+
 <a id="raid_level"></a>
 
 ## **raid_level** / SCT_RAID_LEVEL
@@ -549,6 +560,17 @@ Cloud region(s) to run in. A space-separated list or YAML list provisions a mult
 
 **backend overrides:**
 - `['eu-west-1']`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+
+
+<a id="requested_by_user"></a>
+
+## **requested_by_user** / SCT_REQUESTED_BY_USER
+
+The user a service account triggered the job for; reported as the user of the run instead of the service account (also read from BUILD_USER_REQUESTED_BY)
+
+**default:** N/A
+
+**type:** str
 
 
 <a id="reuse_cluster"></a>

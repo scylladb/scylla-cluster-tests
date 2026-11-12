@@ -16,6 +16,7 @@
 - ``fake_remoter``: ensures all unit tests use FakeRemoter, not real SSH.
 - ``drain_spot_provision_outcomes``: clears the class-level outcome buffer between
   tests, so a recorded outcome cannot reach the next test in the same worker.
+- ``no_job_git_branch``: hides the CI job's ``GIT_BRANCH``, which changes the user prefix.
 - ``mock_cloud_services``: mocks AWS/GCE/Azure APIs so no real credentials
   are needed.  Both are autouse so unit tests get them automatically without
   any marker or explicit declaration.
@@ -46,6 +47,12 @@ def drain_spot_provision_outcomes():
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
     yield
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+
+@pytest.fixture(autouse=True)
+def no_job_git_branch(monkeypatch):
+    """Hide the CI job's ``GIT_BRANCH`` (``PR-123``): the configuration derives the user prefix from it."""
+    monkeypatch.delenv("GIT_BRANCH", raising=False)
 
 
 @pytest.fixture(autouse=True)

@@ -8,7 +8,6 @@ def call(Map params, Integer test_duration, String region) {
         cloud_provider = params.xcloud_provider
     }
 
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     // artifactsPipeline has no test_name parameter - omitting the option makes
     // create-runner-instance fall back to tagging the runner with the test id. Omitted rather
     // than passed empty: hydra does not preserve empty-string arguments, so `--test-name ""`
@@ -36,24 +35,13 @@ def call(Map params, Integer test_duration, String region) {
     }
 
     println(params)
+    withEnv(pipelineEnv(params: params, region: region)) {
     sh """#!/bin/bash
     set -xe
     env
 
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" || "$cloud_provider" == "oci" ]]; then
         rm -fv sct_runner_ip
-
-        export SCT_CLUSTER_BACKEND="${params.backend}"
-        export SCT_CONFIG_FILES=${test_config}
-
-        if [[ "${params.backend}" == "xcloud" ]] ; then
-            export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
-            export SCT_XCLOUD_ENV="${params.xcloud_env}"
-        fi
-
-        if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
-            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
-        fi
 
         if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
             echo "Reuse mode: looking up existing SCT runner for test_id=${params.reuse_cluster}"
@@ -75,4 +63,5 @@ def call(Map params, Integer test_duration, String region) {
         echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
     fi
     """
+    }
 }

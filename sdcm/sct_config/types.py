@@ -384,6 +384,9 @@ class SctField(FieldInfo):
                                  appendable by default. Other types like version strings
                                  or region names should set appendable=False.
                                  See merge_dicts_append_strings() for implementation.
+            - jenkins_param (str | tuple[str, ...]): the Jenkins job parameter(s) that set this option,
+                                 only when their name differs from the option name. A job parameter
+                                 named like the option needs nothing. See sdcm/utils/pipeline_env.py.
             - Other Pydantic Field parameters (validation_alias, etc.)
 
     Example:
@@ -398,7 +401,7 @@ class SctField(FieldInfo):
     def __init__(self, *args, **kwargs):
         """Default the field to None and move SCT-specific keys into `json_schema_extra`."""
         kwargs.setdefault("default", None)
-        extra = {k: v for k, v in kwargs.items() if k in ("appendable",)}
+        extra = {k: v for k, v in kwargs.items() if k in ("appendable", "jenkins_param")}
         kwargs.setdefault("json_schema_extra", extra)
         # remove extra keys from kwargs since we moved them to json_schema_extra
         for key in extra:

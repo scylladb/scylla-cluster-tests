@@ -16,7 +16,6 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID           = UUID.randomUUID().toString()
-            SCT_BILLING_PROJECT   = "${params.billing_project}"
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
@@ -190,42 +189,13 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         timeout(time: testRunTimeout, unit: 'MINUTES') {
+                            def sctEnv
+                            dir('scylla-cluster-tests') {
+                                sctEnv = pipelineEnv(params: params, region: builder.region)
+                            }
+                            withEnv(sctEnv) {
                             sctScript """
                                 rm -fv ./latest
-
-                                export SCT_CONFIG_FILES=${params.test_config}
-                                export SCT_COLLECT_LOGS=false
-                                if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
-                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
-                                fi
-
-                                if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
-                                    export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
-                                fi
-                                if [[ ! -z "${params.scylla_version}" ]]; then
-                                    export SCT_SCYLLA_VERSION="${params.scylla_version}"
-                                elif [[ ! -z "${params.scylla_repo}" ]]; then
-                                    export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                elif [[ ! -z "${params.gce_image_db}" ]]; then
-                                    export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-                                else
-                                    echo "need to choose one of SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_GCE_IMAGE_DB"
-                                    exit 1
-                                fi
-
-                                if [[ -n "${params.jepsen_scylla_repo}" ]]; then
-                                    export SCT_JEPSEN_SCYLLA_REPO="${params.jepsen_scylla_repo}"
-                                fi
-
-                                if [[ -n "${params.jepsen_test_cmd}" ]]; then
-                                    export SCT_JEPSEN_TEST_CMD="${params.jepsen_test_cmd}"
-                                fi
-
-                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
 
                                 echo "start test ......."
                                 RUNNER_IP=\$(cat sct_runner_ip||echo "")
@@ -236,6 +206,7 @@ def call(Map pipelineParams) {
                                 fi
                                 echo "end test ....."
                             """
+                            }
                         }
                     }
                 }
