@@ -1647,6 +1647,15 @@ class SCTConfiguration(dict):
             ", Should be use only for when facing issue like compaction is affect the test or load",
         ),
         dict(
+            name="prepare_wait_no_compactions_trigger_major",
+            env="SCT_PREPARE_WAIT_NO_COMPACTIONS_TRIGGER_MAJOR",
+            type=boolean,
+            help="Trigger a major compaction ('nodetool compact') on every node before waiting for compactions "
+            "to finish at the end of the prepare stage. When false, only wait for the regular compactions "
+            "to drain, e.g. the debt of a population which outran compaction. "
+            "Takes effect only with 'prepare_wait_no_compactions_timeout'.",
+        ),
+        dict(
             name="compaction_strategy",
             env="SCT_COMPACTION_STRATEGY",
             type=str,
