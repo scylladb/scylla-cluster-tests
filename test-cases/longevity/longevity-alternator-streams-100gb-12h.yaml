@@ -77,3 +77,6 @@ dynamodb_primarykey_type: HASH
 docker_network: 'ycsb_net'
 
 use_mgmt: false # just to make setup quicker for now
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"

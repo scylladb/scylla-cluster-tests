@@ -68,3 +68,6 @@ experimental_features:
   - alternator-ttl
 append_scylla_yaml:
   alternator_ttl_period_in_seconds: 420
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"

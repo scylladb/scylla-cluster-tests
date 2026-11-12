@@ -660,8 +660,6 @@ class GrafanaEntity(BaseMonitoringEntity):
             # set test start time previous 6 hours
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split(".", maxsplit=1)[0] + "000"
-        extra = kwargs.pop("extra_entities", [])
-        self.grafana_dashboards = self.base_grafana_dashboards + extra
         super().__init__(*args, **kwargs)
 
     def get_version(self, node):
@@ -685,7 +683,7 @@ class GrafanaScreenShot(GrafanaEntity):
     @property
     def dashboards(self) -> list:
         """The static dashboards plus any panels configured via `grafana_screenshot_panels`."""
-        return list(self.grafana_dashboards) + list(self._params.get("grafana_screenshot_panels") or [])
+        return self.base_grafana_dashboards + list(self._params.get("grafana_screenshot_panels") or [])
 
     def get_grafana_screenshot(self, node, local_dst):
         """Take a screenshot of each configured Grafana dashboard (or panel) and return local paths."""

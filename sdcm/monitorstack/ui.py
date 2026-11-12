@@ -24,17 +24,3 @@ class ServerMetricsNemesisDashboard(Dashboard):
     title = "Scylla Per Server Metrics Nemesis"
     path = "dashboard/db/{dashboard_name}-{version}"
     resolution = (1920, 15000)
-
-
-class AlternatorDashboard(Dashboard):
-    name = "alternator"
-    title = "Alternator"
-    path = "d/alternator-{version}/{dashboard_name}"
-    resolution = (1920, 4000)
-
-
-class GeminiDashboard(Dashboard):
-    name = "gemini"
-    title = "Gemini"
-    path = "d/gemini-{version}/{dashboard_name}"
-    resolution = (1920, 4000)

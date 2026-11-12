@@ -14,7 +14,7 @@
 import pytest
 from pydantic import ValidationError
 
-from sdcm.logcollector import MonitoringStack
+from sdcm.logcollector import GrafanaScreenShot, MonitoringStack
 from sdcm.sct_config.types import GrafanaPanelScreenshot
 
 # =============================================================================
@@ -43,11 +43,11 @@ def test_grafana_panel_screenshot_missing_dashboard_title():
     assert "dashboard_title" in str(exc_info.value)
 
 
-def test_grafana_panel_screenshot_missing_panel_title():
-    """Test that GrafanaPanelScreenshot raises ValidationError when panel_title is missing."""
-    with pytest.raises(ValidationError) as exc_info:
-        GrafanaPanelScreenshot(dashboard_title="Detailed")
-    assert "panel_title" in str(exc_info.value)
+def test_grafana_panel_screenshot_without_panel_title_is_whole_dashboard():
+    """Without panel_title the entry captures the whole dashboard, named after the dashboard only."""
+    panel = GrafanaPanelScreenshot(dashboard_title="Gemini")
+    assert panel.panel_title is None
+    assert panel.name == "gemini"
 
 
 def test_grafana_panel_screenshot_invalid_resolution_type():
@@ -317,3 +317,19 @@ def test_grafana_panel_screenshot_resolution_extraction(resolution, expected_wid
     width, height = panel.resolution
     assert width == expected_width
     assert height == expected_height
+
+
+@pytest.mark.parametrize(
+    "panels,expected_names",
+    [
+        ([], ["overview", "per-server-metrics-nemesis"]),
+        ([GrafanaPanelScreenshot(dashboard_title="Gemini")], ["overview", "per-server-metrics-nemesis", "gemini"]),
+    ],
+)
+def test_grafana_screenshot_dashboards_extra_only_when_configured(panels, expected_names):
+    """Only Overview and Per Server Metrics Nemesis are captured unless a test opts in to more."""
+    collector = GrafanaScreenShot(name="grafana-screenshot", test_start_time=0)
+    collector.set_params({"grafana_screenshot_panels": panels})
+    names = [dashboard.name for dashboard in collector.dashboards]
+    assert len(names) == len(expected_names)
+    assert all(name.endswith(expected) for name, expected in zip(names, expected_names))

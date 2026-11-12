@@ -90,3 +90,6 @@ append_scylla_yaml:
   alternator_ttl_period_in_seconds: 3600
 
 post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 43200;"
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"
