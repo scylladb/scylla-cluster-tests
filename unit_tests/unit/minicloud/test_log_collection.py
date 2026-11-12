@@ -1,12 +1,38 @@
 """Tests for minicloud log collection: guest serial consoles and docker-inspect redaction."""
 
+import shutil
 import subprocess
+from unittest.mock import MagicMock
 
 from sdcm.utils.minicloud.log_collection import (
     collect_minicloud_guest_serial_logs,
     collect_minicloud_logs,
+    collect_native_minicloud_log,
     redact_docker_inspect,
 )
+
+
+def test_collect_native_log_copies_into_logdir(tmp_path):
+    native_log = tmp_path / "state" / "minicloud-native.log"
+    native_log.parent.mkdir()
+    native_log.write_text("minicloud output\n")
+    logdir = tmp_path / "run"
+
+    assert collect_native_minicloud_log(str(logdir), str(native_log))
+    assert (logdir / "minicloud-native.log").read_text() == "minicloud output\n"
+
+
+def test_collect_native_log_without_log_file(tmp_path):
+    assert not collect_native_minicloud_log(str(tmp_path / "run"), str(tmp_path / "missing.log"))
+    assert not (tmp_path / "run").exists()
+
+
+def test_collect_native_log_into_its_own_dir(tmp_path):
+    native_log = tmp_path / "minicloud-native.log"
+    native_log.write_text("minicloud output\n")
+
+    assert collect_native_minicloud_log(str(tmp_path), str(native_log))
+    assert native_log.read_text() == "minicloud output\n"
 
 
 def test_redact_docker_inspect_strips_credentials():
@@ -112,3 +138,14 @@ def test_collect_logs_leaves_streamed_copy_alone_when_container_is_gone(tmp_path
 
     assert (logdir / "minicloud.log").read_bytes() == b"streamed\n"
     assert not (logdir / "minicloud-teardown.log").exists()
+
+
+def test_collect_logs_skips_container_logs_without_docker(tmp_path, monkeypatch):
+    """A native minicloud on macOS runs without Docker: collection must not raise."""
+    logdir = tmp_path / "run"
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(subprocess, "run", MagicMock(side_effect=FileNotFoundError("docker")))
+
+    collect_minicloud_logs(str(logdir))
+
+    assert not (logdir / "minicloud.log").exists()

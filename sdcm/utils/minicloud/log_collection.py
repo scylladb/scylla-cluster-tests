@@ -92,6 +92,32 @@ def collect_minicloud_guest_serial_logs(logdir: str, state_dir: str = MINICLOUD_
     return copied
 
 
+def collect_native_minicloud_log(logdir: str, native_log_file: str) -> bool:
+    """Copy the log of the native minicloud process into the test logdir.
+
+    The native process writes its whole output to ``native_log_file`` in the state dir. The
+    next start of minicloud truncates that file, so the run dir must keep its own copy. The
+    copy also holds the shutdown output, which the `tail -F` streamer stops short of.
+
+    Returns True when the log was copied. Never raises, for the same reason as
+    collect_minicloud_guest_serial_logs().
+    """
+    if not os.path.isfile(native_log_file):
+        LOGGER.debug("No native minicloud log at %s - nothing to collect", native_log_file)
+        return False
+    destination = os.path.join(logdir, os.path.basename(native_log_file))
+    try:
+        os.makedirs(logdir, exist_ok=True)
+        shutil.copyfile(native_log_file, destination)
+    except shutil.SameFileError:
+        return True
+    except OSError as exc:
+        LOGGER.warning("Could not collect the native minicloud log %s: %s", native_log_file, exc)
+        return False
+    LOGGER.info("Collected native minicloud log %s (%d bytes)", destination, os.path.getsize(destination))
+    return True
+
+
 def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINER_NAME) -> None:
     """Dump minicloud container logs and inspect state into the test logdir.
 
@@ -109,6 +135,10 @@ def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINE
     anywhere that has one, or the collector inspects the wrong container.
     """
     os.makedirs(logdir, exist_ok=True)
+    if shutil.which("docker") is None:
+        # A native minicloud on macOS runs without Docker, so no container exists to collect.
+        LOGGER.info("docker is not on PATH - skipping the minicloud container logs")
+        return
 
     # 1. Collect container logs (works on stopped/exited containers, fails only if removed)
     #

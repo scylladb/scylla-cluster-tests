@@ -10,6 +10,7 @@ from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.minicloud.preflight import (
     check_scylla_memory_budget,
     container_mem_in_use_gib,
+    host_available_memory_gib,
     scylla_reserve_memory,
 )
 from unit_tests.unit.minicloud.conftest import _meminfo_path_patch
@@ -381,3 +382,54 @@ def test_preflight_check_rejects_an_impossible_request(tmp_path):
             with patch("sdcm.utils.minicloud.manager.shutil.which", return_value="/usr/bin/docker"):
                 with pytest.raises(MinicloudError, match="does not fit"):
                     manager.preflight_check(skip_aws_creds=True, params=params)
+
+
+VM_STAT_OUTPUT = """Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                    65536.
+Pages active:                                 681336.
+Pages inactive:                               196608.
+Pages speculative:                             31319.
+"""
+
+
+def _no_meminfo_path_patch():
+    """Patch sdcm.utils.minicloud.preflight.Path so /proc/meminfo does not exist, as on macOS."""
+    mock_meminfo = MagicMock()
+    mock_meminfo.exists.return_value = False
+    return patch(
+        "sdcm.utils.minicloud.preflight.Path",
+        side_effect=lambda arg: mock_meminfo if str(arg) == "/proc/meminfo" else Path(arg),
+    )
+
+
+def test_host_available_memory_reads_vm_stat_on_macos():
+    # (65536 free + 196608 inactive) pages x 16 KiB = 4 GiB
+    with (
+        _no_meminfo_path_patch(),
+        patch("sdcm.utils.minicloud.preflight.sys.platform", "darwin"),
+        patch(
+            "sdcm.utils.minicloud.preflight.subprocess.run",
+            return_value=MagicMock(returncode=0, stdout=VM_STAT_OUTPUT),
+        ),
+    ):
+        assert host_available_memory_gib() == 4.0
+
+
+def test_check_host_memory_fails_on_macos_when_guests_exceed_available(tmp_path):
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    params = {"n_db_nodes": 3, "n_loaders": 1, "n_monitor_nodes": 0}
+    with (
+        _no_meminfo_path_patch(),
+        patch("sdcm.utils.minicloud.preflight.sys.platform", "darwin"),
+        patch(
+            "sdcm.utils.minicloud.preflight.subprocess.run",
+            return_value=MagicMock(returncode=0, stdout=VM_STAT_OUTPUT),
+        ),
+    ):
+        with pytest.raises(MinicloudError, match="4 guest.*4.0GiB"):
+            manager._check_host_memory(params)
+
+
+def test_host_available_memory_is_none_without_a_source():
+    with _no_meminfo_path_patch(), patch("sdcm.utils.minicloud.preflight.sys.platform", "freebsd"):
+        assert host_available_memory_gib() is None

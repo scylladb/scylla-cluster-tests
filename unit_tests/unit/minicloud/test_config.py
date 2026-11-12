@@ -16,13 +16,14 @@ from sdcm.utils.minicloud.config import (
     MinicloudError,
     default_minicloud_image,
 )
+from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT
 
 DEFAULT_BUCKETS = ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com", "scylla-qa-team"]
 
 
 def test_minicloud_config_defaults():
     config = MinicloudConfig()
-    assert config.port == 5000
+    assert config.port == MINICLOUD_PORT
     assert config.lightweight is True
     assert config.lightweight_memory == MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
     assert config.s3_passthrough_buckets == DEFAULT_BUCKETS
@@ -40,7 +41,7 @@ def test_default_minicloud_image_comes_from_values_file():
 def test_minicloud_config_from_env_defaults():
     config = MinicloudConfig.from_env()
     assert config.docker_image == default_minicloud_image()
-    assert config.port == 5000
+    assert config.port == MINICLOUD_PORT
     assert config.lightweight is True
     assert config.lightweight_memory == MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
     assert config.s3_passthrough_buckets == DEFAULT_BUCKETS
@@ -64,7 +65,7 @@ def test_minicloud_config_ignores_bare_minicloud_env_vars(monkeypatch):
 
     config = MinicloudConfig.from_env()
     assert config.docker_image == default_minicloud_image()
-    assert config.port == 5000
+    assert config.port == MINICLOUD_PORT
     assert config.lightweight is True
     assert config.lightweight_memory == MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
     assert config.regions == AWS_SUPPORTED_REGIONS

@@ -146,7 +146,11 @@ lazy from sdcm.utils.minicloud.activation import check_minicloud_reachability, s
 lazy from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
 lazy from sdcm.utils.minicloud.config import MinicloudConfig
 lazy from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, get_minicloud_endpoint, is_minicloud_active
-lazy from sdcm.utils.minicloud.log_collection import collect_minicloud_guest_serial_logs, collect_minicloud_logs
+lazy from sdcm.utils.minicloud.log_collection import (
+    collect_minicloud_guest_serial_logs,
+    collect_minicloud_logs,
+    collect_native_minicloud_log,
+)
 lazy from sdcm.utils.minicloud.manager import MinicloudManager
 lazy from sdcm.utils.minicloud.tls import ca_bundle_for
 lazy from sdcm.utils.net import get_sct_runner_ip
@@ -2775,7 +2779,10 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         # Collect only — never ensure_minicloud_ready() here: its auto-start does
         # `docker rm -f` on a crashed container, destroying the very evidence
         # (exit code, container logs) this command exists to collect.
-        collect_minicloud_logs(minicloud_logdir, container_name=minicloud_config.container_name)
+        if minicloud_config.native:
+            collect_native_minicloud_log(minicloud_logdir, minicloud_config.native_log_file)
+        else:
+            collect_minicloud_logs(minicloud_logdir, container_name=minicloud_config.container_name)
         # The guests' serial consoles: the only record of a node SCT could never reach,
         # and the emulator keeps them after the instance is gone.
         collect_minicloud_guest_serial_logs(minicloud_logdir, state_dir=minicloud_config.state_dir)
