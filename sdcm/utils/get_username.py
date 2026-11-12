@@ -34,7 +34,7 @@ def is_service_user(user: str | None) -> bool:
 
 def get_username() -> str:  # noqa: PLR0911
     # First we check if user is being impersonated by an api call
-    actual_user_from_request = os.environ.get("BUILD_USER_REQUESTED_BY")
+    actual_user_from_request = os.environ.get("BUILD_USER_REQUESTED_BY") or os.environ.get("SCT_REQUESTED_BY_USER")
     if actual_user_from_request and not is_service_user(actual_user_from_request):
         return actual_user_from_request
 
