@@ -6,9 +6,11 @@ module must not import anything from the package.
 """
 
 import os
+import sys
 from urllib.parse import urlparse
 
-MINICLOUD_PORT = 5000
+# AirPlay Receiver holds port 5000 on macOS.
+MINICLOUD_PORT = 5050 if sys.platform == "darwin" else 5000
 MINICLOUD_GUEST_CA_URL = "http://169.254.169.254/minicloud/ca.pem"
 # the Azure SDK refuses plain http, so minicloud serves its Azure API over TLS on a separate port
 MINICLOUD_TLS_PORT = 5443
@@ -18,6 +20,8 @@ MINICLOUD_AZURE_TENANT = "00000000-0000-0000-0000-000000000000"
 MINICLOUD_AZURE_CLIENT_ID = "minicloud"
 MINICLOUD_AZURE_CLIENT_SECRET = "minicloud"
 AZURE_BACKENDS = ("azure",)
+# The variables that point SCT and its cloud SDKs at minicloud.
+SCT_ENDPOINT_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL")
 
 
 class MinicloudActivationError(RuntimeError):

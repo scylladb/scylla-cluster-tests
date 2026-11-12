@@ -3,6 +3,7 @@
 import logging
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from sdcm.utils.minicloud.config import (
@@ -202,6 +203,39 @@ def _guest_memory_gib(config: MinicloudConfig, params, guests: int) -> tuple[flo
     )
 
 
+def _vm_stat_available_gib() -> float | None:
+    """Free plus inactive memory from macOS `vm_stat`, in GiB, else None."""
+    try:
+        result = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10, check=False)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        LOGGER.debug("cannot run vm_stat: %s", exc)
+        return None
+    if result.returncode != 0:
+        return None
+    page_size = re.search(r"page size of (\d+) bytes", result.stdout)
+    pages = dict(re.findall(r"^Pages (free|inactive):\s+(\d+)\.", result.stdout, re.MULTILINE))
+    if not page_size or len(pages) != 2:
+        return None
+    return (int(pages["free"]) + int(pages["inactive"])) * int(page_size.group(1)) / 1024**3
+
+
+def host_available_memory_gib() -> float | None:
+    """Memory that the host can give to new guests, in GiB, else None.
+
+    Linux reports MemAvailable in /proc/meminfo. macOS runs the native minicloud, and its
+    `vm_stat` gives the free and the inactive pages, the same figure that psutil uses there.
+    """
+    meminfo = Path("/proc/meminfo")
+    if meminfo.exists():
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1024 / 1024
+        return None
+    if sys.platform == "darwin":
+        return _vm_stat_available_gib()
+    return None
+
+
 def check_host_memory(config: MinicloudConfig, params) -> None:
     """Fail before start when the test's guests cannot fit into this host's free memory.
 
@@ -258,15 +292,8 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         budget_source = f"the minicloud_container_memory cap ({config.container_memory})"
         headroom_note = ""
     else:
-        meminfo = Path("/proc/meminfo")
-        if not meminfo.exists():  # non-Linux dev box; the container will not run here anyway
-            return
-        available_gib = None
-        for line in meminfo.read_text().splitlines():
-            if line.startswith("MemAvailable:"):
-                available_gib = int(line.split()[1]) / 1024 / 1024
-                break
-        if available_gib is None:  # a /proc/meminfo without MemAvailable: nothing to size against
+        available_gib = host_available_memory_gib()
+        if available_gib is None:  # the host does not report its free memory: nothing to size against
             return
 
         mem_in_use_gib = container_mem_in_use_gib(config.container_name)

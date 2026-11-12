@@ -14,7 +14,12 @@ from sdcm.utils.minicloud.activation import (
     validate_minicloud_params,
 )
 from sdcm.utils.minicloud.config import MinicloudError
-from sdcm.utils.minicloud.endpoint import MinicloudActivationError, get_minicloud_endpoint, is_minicloud_active
+from sdcm.utils.minicloud.endpoint import (
+    MINICLOUD_PORT,
+    MinicloudActivationError,
+    get_minicloud_endpoint,
+    is_minicloud_active,
+)
 from unit_tests.unit.minicloud.conftest import _patch_probe_session
 
 
@@ -82,7 +87,7 @@ def test_get_minicloud_endpoint_from_gce_env(monkeypatch):
 
 
 def test_get_minicloud_endpoint_default():
-    assert get_minicloud_endpoint() == "http://localhost:5000"
+    assert get_minicloud_endpoint() == f"http://localhost:{MINICLOUD_PORT}"
 
 
 def test_check_minicloud_reachability_success():
