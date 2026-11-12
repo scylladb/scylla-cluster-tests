@@ -36,7 +36,7 @@ Everything else here is loader-side and applies whatever the tool: [`stress_imag
 the [`stress_multiplier`](#stress_multiplier) options, [`stress_duration`](#stress_duration), [`prepare_stress_duration`](#prepare_stress_duration) and
 [`stop_test_on_stress_failure`](#stop_test_on_stress_failure).
 
-**72 options.**
+**73 options.**
 
 
 <a id="add_cs_user_profiles_extra_tables"></a>
@@ -312,6 +312,17 @@ Time to wait for compaction to finish at the end of prepare stage. Use only when
 **default:** N/A
 
 **type:** int
+
+
+<a id="prepare_wait_no_compactions_trigger_major"></a>
+
+## **prepare_wait_no_compactions_trigger_major** / SCT_PREPARE_WAIT_NO_COMPACTIONS_TRIGGER_MAJOR
+
+Trigger a major compaction ('nodetool compact') on every node before waiting for compactions<br>to finish at the end of the prepare stage. When false, only wait for the regular compactions<br>to drain, e.g. the debt of a population which outran compaction.<br>Takes effect only with [`prepare_wait_no_compactions_timeout`](#prepare_wait_no_compactions_timeout).
+
+**default:** True
+
+**type:** bool
 
 
 <a id="prepare_write_cmd"></a>
