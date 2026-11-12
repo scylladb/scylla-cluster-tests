@@ -82,13 +82,16 @@ def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
 
     cmd, kwargs = dist_upgrade_calls[0]
     assert "DPkg::Lock::Timeout" in cmd, f"dist-upgrade command missing dpkg lock-wait option: {cmd!r}"
+    assert "fuser -k -TERM" in cmd, f"dist-upgrade retry must kill a stale lock holder: {cmd!r}"
+    assert cmd.startswith("DEBIAN_FRONTEND=noninteractive bash -c '"), cmd
     assert kwargs.get("retry") == 3, f"dist-upgrade command missing retry=3: {kwargs!r}"
     assert kwargs.get("timeout") == 600, f"dist-upgrade command missing timeout=600: {kwargs!r}"
 
     # the 'apt-get update' preceding it should also go through the shared apt_cmd() helper
-    update_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if cmd.split()[-1] == "update"]
+    update_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if cmd.split()[-1].strip("'") == "update"]
     assert update_calls, f"expected an 'apt-get ... update' call, got: {package_manager_calls!r}"
     assert "DPkg::Lock::Timeout" in update_calls[0][0]
+    assert "fuser -k -TERM" in update_calls[0][0]
 
 
 def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
@@ -113,5 +116,6 @@ def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
 
     cmd, kwargs = install_calls[0]
     assert "DPkg::Lock::Timeout" in cmd, f"install command missing dpkg lock-wait option: {cmd!r}"
+    assert "fuser -k -TERM" in cmd, f"install retry must kill a stale lock holder: {cmd!r}"
     assert kwargs.get("retry") == 3, f"install command missing retry=3: {kwargs!r}"
     assert kwargs.get("timeout") == 600, f"install command missing timeout=600: {kwargs!r}"
