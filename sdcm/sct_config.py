@@ -408,7 +408,15 @@ class SCTConfiguration(dict):
             help="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
             "e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`",
         ),
-        dict(name="scylla_apt_keys", env="SCT_SCYLLA_APT_KEYS", type=str_or_list, help="APT keys for ScyllaDB repos"),
+        dict(
+            name="scylla_apt_keys",
+            env="SCT_SCYLLA_APT_KEYS",
+            type=str_or_list,
+            help=(
+                "APT keys for ScyllaDB repos. A key that ScyllaDB publishes on downloads.scylladb.com is"
+                " fetched from there first; any other key comes from public keyservers"
+            ),
+        ),
         dict(
             name="unified_package",
             env="SCT_UNIFIED_PACKAGE",

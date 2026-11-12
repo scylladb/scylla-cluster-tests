@@ -1,11 +1,14 @@
+from pathlib import Path
 from unittest import mock
 
 import pytest
+import yaml
 from invoke.runners import Result
 
-from sdcm.cluster import BaseNode, NodeSetupFailed
+from sdcm.cluster import SCYLLA_APT_KEY_URLS, BaseNode, NodeSetupFailed
 from sdcm.remote import shell_script_cmd
-
+from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.curl import curl_with_retry
 
 APT_KEY = "AABBCCDD11223344"
 HKP_KEYSERVERS = [
@@ -37,22 +40,29 @@ def _gpg_recv_call(temp_keyring, keyserver, apt_key):
     )
 
 
-def _https_fallback_call(temp_keyring, apt_key):
-    https_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
+def _https_import_call(temp_keyring, url, apt_key):
+    curl_cmd = curl_with_retry(
+        f"'{url}'", silent=True, follow_redirects=True, fail_early=True, retry=3, retry_max_time=60, extra_flags="-S"
+    )
+    gpg_temp = f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring}"
     return mock.call(
-        shell_script_cmd(
-            f"curl --retry 3 --retry-max-time 60 --connect-timeout 10 -fsSL '{https_url}' | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
-        ),
+        shell_script_cmd(f"{curl_cmd} | {gpg_temp} --import && {gpg_temp} --list-keys {apt_key}"),
         retry=1,
         ignore_status=True,
         timeout=120,
     )
 
 
-def _export_call(temp_keyring):
+def _https_fallback_call(temp_keyring, apt_key):
+    return _https_import_call(
+        temp_keyring, f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr", apt_key
+    )
+
+
+def _export_call(temp_keyring, apt_keys=(APT_KEY,)):
     return mock.call(
         shell_script_cmd(
-            f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --export --armor | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg"
+            f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --export --armor {' '.join(apt_keys)} | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg"
         ),
         retry=3,
     )
@@ -161,3 +171,80 @@ def test_fetch_apt_keys_all_sources_fail_raises_exception(node):
         ]
     )
     assert node.remoter.sudo.call_count == 6
+
+
+PUBLISHED_KEY = "C503C686B007F39E"
+PUBLISHED_URL = SCYLLA_APT_KEY_URLS[PUBLISHED_KEY]
+
+
+def test_fetch_apt_keys_published_key_skips_keyservers(node):
+    node.parent_cluster.params.get.return_value = [PUBLISHED_KEY]
+    node.remoter.sudo.side_effect = [
+        None,  # mkdir
+        _make_result(True),  # download + import + key id check succeeds
+        None,  # export
+        None,  # cleanup
+    ]
+
+    with mock.patch("sdcm.cluster.uuid.uuid4", return_value="test-uuid"):
+        BaseNode.fetch_apt_keys(node)
+
+    temp_keyring = "/tmp/temp-test-uuid.gpg"
+    node.remoter.sudo.assert_has_calls(
+        [
+            mock.call("mkdir -m 0755 -p /etc/apt/keyrings"),
+            _https_import_call(temp_keyring, PUBLISHED_URL, PUBLISHED_KEY),
+            _export_call(temp_keyring, [PUBLISHED_KEY]),
+            mock.call(f"rm -f {temp_keyring}", ignore_status=True),
+        ]
+    )
+    assert node.remoter.sudo.call_count == 4
+
+
+def test_fetch_apt_keys_published_key_failure_falls_back_to_keyserver(node):
+    node.parent_cluster.params.get.return_value = [PUBLISHED_KEY]
+    node.remoter.sudo.side_effect = [
+        None,  # mkdir
+        _make_result(False),  # download or key id check fails
+        _make_result(True),  # first keyserver succeeds
+        None,  # export
+        None,  # cleanup
+    ]
+
+    with mock.patch("sdcm.cluster.uuid.uuid4", return_value="test-uuid"):
+        BaseNode.fetch_apt_keys(node)
+
+    temp_keyring = "/tmp/temp-test-uuid.gpg"
+    node.remoter.sudo.assert_has_calls(
+        [
+            _https_import_call(temp_keyring, PUBLISHED_URL, PUBLISHED_KEY),
+            _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[0], PUBLISHED_KEY),
+            _export_call(temp_keyring, [PUBLISHED_KEY]),
+        ]
+    )
+    assert node.remoter.sudo.call_count == 5
+
+
+def test_every_default_apt_key_has_a_published_url():
+    """A default key without a published URL puts every node back on the public keyservers."""
+    defaults = yaml.safe_load((Path(get_sct_root_path()) / "defaults" / "test_default.yaml").read_text())
+    # 2025.1 still needs the 2022 key (upgrades from 2024.1); Releng doesn't publish it yet (RELENG-1172)
+    not_published = {"D0A112E067426AB2"}
+    assert set(defaults["scylla_apt_keys"]) - not_published <= set(SCYLLA_APT_KEY_URLS)
+
+
+def test_fetch_apt_keys_exports_only_the_requested_keys(node):
+    two_keys = [APT_KEY, PUBLISHED_KEY]
+    node.parent_cluster.params.get.return_value = two_keys
+    node.remoter.sudo.side_effect = [
+        None,  # mkdir
+        _make_result(True),  # APT_KEY from the first keyserver
+        _make_result(True),  # PUBLISHED_KEY from its published URL
+        None,  # export
+        None,  # cleanup
+    ]
+
+    with mock.patch("sdcm.cluster.uuid.uuid4", return_value="test-uuid"):
+        BaseNode.fetch_apt_keys(node)
+
+    assert _export_call("/tmp/temp-test-uuid.gpg", two_keys) in node.remoter.sudo.mock_calls
