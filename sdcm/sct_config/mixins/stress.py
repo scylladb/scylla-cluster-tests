@@ -169,6 +169,12 @@ class StressConfigMixin(BaseModel):
     prepare_wait_no_compactions_timeout: int = SctField(
         description="Time to wait for compaction to finish at the end of prepare stage. Use only when compaction affects the test or load",
     )
+    prepare_wait_no_compactions_trigger_major: Boolean = SctField(
+        description="""Trigger a major compaction ('nodetool compact') on every node before waiting for compactions
+                       to finish at the end of the prepare stage. When false, only wait for the regular compactions
+                       to drain, e.g. the debt of a population which outran compaction.
+                       Takes effect only with 'prepare_wait_no_compactions_timeout'.""",
+    )
     prepare_write_cmd: StringOrList = SctField(
         description="Stress command(s) that pre-load the dataset before the test's own load starts. See 'stress_cmd' for the format.",
     )
