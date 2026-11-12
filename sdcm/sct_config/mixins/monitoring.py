@@ -69,11 +69,13 @@ class MonitoringConfigMixin(BaseModel):
     )
     grafana_screenshot_panels: list[GrafanaPanelScreenshot] = SctField(
         default=[],
-        description="Extra single-panel Grafana screenshots to capture at log-collection time, "
-        "on top of the dashboards SCT always captures. Dashboard and panel titles are both "
-        "matched as substrings, and `resolution` defaults to (1920, 4000).<br>"
+        description="Extra Grafana screenshots to capture at log-collection time, "
+        "on top of the Overview and Per Server Metrics Nemesis dashboards SCT always captures. "
+        "Omit `panel_title` to capture the whole dashboard (e.g. Alternator or Gemini). "
+        "Dashboard and panel titles are both matched as substrings, and `resolution` defaults to (1920, 4000).<br>"
         "YAML example:<br>"
         "grafana_screenshot_panels:<br>"
+        '&nbsp;&nbsp;- dashboard_title: "Gemini"<br>'
         '&nbsp;&nbsp;- dashboard_title: "Detailed"<br>'
         '&nbsp;&nbsp;&nbsp;&nbsp;panel_title: "LSA total memory"<br>'
         '&nbsp;&nbsp;- dashboard_title: "Overview"<br>'

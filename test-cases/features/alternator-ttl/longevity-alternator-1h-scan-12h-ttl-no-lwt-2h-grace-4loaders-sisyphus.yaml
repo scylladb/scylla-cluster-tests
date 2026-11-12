@@ -95,3 +95,6 @@ append_scylla_yaml:
 
 # Set 'gc_grace_seconds' for 2 hours
 post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 7200;"
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"
