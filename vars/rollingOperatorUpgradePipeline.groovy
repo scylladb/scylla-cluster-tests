@@ -12,7 +12,6 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
-            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             choice(choices: ["${pipelineParams.get('backend', 'k8s-gke')}", 'k8s-eks', 'k8s-gke'],

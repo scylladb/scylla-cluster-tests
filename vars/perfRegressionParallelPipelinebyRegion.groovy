@@ -46,7 +46,6 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
 
         parameters {
@@ -375,9 +374,13 @@ def call(Map pipelineParams) {
                             def unique_keys_list = unique_keys.keySet().collect()  // copy to serializable ArrayList
                             println("Unique image keys to look up: ${unique_keys_list}")
                             // Lookup images once per unique combination
+                            def sctEnv = pipelineEnv(params: params)
                             for (String image_cache_key in unique_keys_list) {
                                 def params_map = unique_keys[image_cache_key]
-                                def output = sh(script: "./docker/env/hydra.sh list-images -c ${params_map.cloud_provider} -r ${params_map.region} -a ${params_map.arch} -o json", returnStdout: true).trim()
+                                def output
+                                withEnv(sctEnv) {
+                                    output = sh(script: "./docker/env/hydra.sh list-images -c ${params_map.cloud_provider} -r ${params_map.region} -a ${params_map.arch} -o json", returnStdout: true).trim()
+                                }
                                 println("Output from hydra list-images (arch: ${params_map.arch}): $output")
                                 def image_name_json = output.split('\n')[-1].trim()
                                 println("Image name json: $image_name_json")

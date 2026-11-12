@@ -1,17 +1,16 @@
 #!groovy
 
 def call(Map params){
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     // Bound the journal to this build. On an ephemeral builder the journal is minutes old so the
     // bound changes nothing, but on a long-lived agent it is weeks of other jobs' history, and
     // unbounded this used to tar and upload the entire host journal every build.
     def sinceEpoch = (long) (currentBuild.startTimeInMillis / 1000)
+    withEnv(pipelineEnv(params: params)) {
     sh """#!/bin/bash
 
 	set -xe
 
 	echo "${params.test_config}"
-	export SCT_CONFIG_FILES=${test_config}
 	SHORT_SCT_TEST_ID=\$(echo \$SCT_TEST_ID | cut -c1-8)
     # sudo -n so an agent without passwordless sudo fails fast instead of hanging on a password
     # prompt. Then fall back to an unprivileged read before giving up: on a static agent that is
@@ -33,4 +32,5 @@ def call(Map params){
         ./docker/env/hydra.sh upload --test-id \$SCT_TEST_ID builder-\$SHORT_SCT_TEST_ID.log.tar.gz
     fi
     """
+    }
 }

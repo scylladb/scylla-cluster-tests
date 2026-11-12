@@ -1,66 +1,12 @@
 #!groovy
 
 def call(Map params, String region){
-    def current_region = initAwsRegionParam(params.region, region)
-    def current_gce_datacenter = params.gce_datacenter ?: ""
-    def current_oci_region = ""
-    if (params.oci_region_name) {
-        current_oci_region = initAwsRegionParam(params.oci_region_name, region)
-    }
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def cloud_provider = getCloudProviderFromBackend(params.backend)
 
+    withEnv(pipelineEnv(params: params, region: region)) {
     sh """#!/bin/bash
 
     set -xe
     env
-
-    export SCT_CONFIG_FILES=${test_config}
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-
-    if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
-        export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
-    fi
-
-    if [[ "${params.backend}" == "xcloud" ]] ; then
-        export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
-        export SCT_XCLOUD_ENV="${params.xcloud_env}"
-    fi
-
-    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
-        export SCT_INSTANCE_PROVISION="${params.provision_type}"
-    fi
-
-    if [[ -n "${params.region ? params.region : ''}" ]] ; then
-        export SCT_REGION_NAME=${current_region}
-    fi
-    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER='${current_gce_datacenter}'
-    fi
-    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
-    fi
-    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-        export SCT_OCI_REGION_NAME=${current_oci_region}
-    fi
-    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-    fi
-    if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-    fi
-    if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-    fi
-    if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-    fi
-    if [[ -n "${params.post_behavior_vector_store_nodes ? params.post_behavior_vector_store_nodes : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_VECTOR_STORE_NODES="${params.post_behavior_vector_store_nodes}"
-    fi
-    if [[ -n "${params.n_vector_store_nodes ? params.n_vector_store_nodes : ''}" ]] ; then
-        export SCT_N_VECTOR_STORE_NODES="${params.n_vector_store_nodes}"
-    fi
 
     echo "Starting to clean resources ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
@@ -72,4 +18,5 @@ def call(Map params, String region){
     fi
     echo "Finished cleaning resources."
     """
+    }
 }

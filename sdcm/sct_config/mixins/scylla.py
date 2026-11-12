@@ -66,6 +66,7 @@ class ScyllaConfigMixin(BaseModel):
     )
     client_encrypt: Boolean = SctField(
         description="when enable scylla will use encryption on the client side",
+        jenkins_param="use_client_encryption",
     )
     client_encrypt_mtls: Boolean = SctField(
         description="when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled",
@@ -136,6 +137,7 @@ class ScyllaConfigMixin(BaseModel):
     scylla_linux_distro: String = SctField(
         description="Distro and family for the DB node image, e.g. 'ubuntu-jammy' or 'debian-bookworm'.",
         appendable=False,
+        jenkins_param="linux_distro",
     )
     scylla_network_config: list = SctField(
         description="""Configure Scylla networking with single or multiple NIC/IP combinations.

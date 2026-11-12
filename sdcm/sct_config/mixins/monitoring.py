@@ -61,6 +61,7 @@ class MonitoringConfigMixin(BaseModel):
     )
     email_subject_postfix: String = SctField(
         description="Text appended to the subject of the test result email, to tell similar runs apart.",
+        jenkins_param="test_email_title",
     )
     enable_argus: Boolean = SctField(description="Control reporting to argus")
     enable_kernel_panic_checker: Boolean = SctField(

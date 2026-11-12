@@ -348,4 +348,5 @@ def test_build_env_pytest_addopts():
         }
     )
     env = build_env(config)
-    assert env["PYTEST_ADDOPTS"] == "-k test_something"
+    # the pytest_addopts option; `run-pytest` hands it to pytest as PYTEST_ADDOPTS
+    assert env["SCT_PYTEST_ADDOPTS"] == "-k test_something"

@@ -43,6 +43,7 @@ class PerformanceConfigMixin(BaseModel):
     )
     num_threads_step: int = SctField(
         description="Number of threads which should be added on per step",
+        jenkins_param="add_num_threads_step",
     )
     perf_gradual_step_duration: DictOrStr = SctField(
         description="Step duration of c-s load for gradual performance test per sub-test. "
