@@ -159,7 +159,7 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.test_config import TestConfig
 from sdcm.utils import cdc, properties
 from sdcm.utils.adaptive_timeouts import AdaptiveTimeoutStore, Operations, adaptive_timeout
-from sdcm.utils.apt import apt_cmd
+from sdcm.utils.apt import apt_cmd, apt_lock_wait
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
@@ -7817,24 +7817,7 @@ class BaseMonitorSet:
 
         node.update_repo_cache()
 
-        prereqs_script = dedent("""
-            # Function to wait for apt locks to be released
-            wait_for_apt_lock() {
-                echo "Waiting for apt locks to be released..."
-                local max_attempts=60
-                local attempt=0
-                while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock >/dev/null 2>&1; do
-                    if [ $attempt -ge $max_attempts ]; then
-                        echo "Timeout waiting for apt lock after $max_attempts attempts"
-                        exit 1
-                    fi
-                    echo "Apt is locked by another process, waiting... (attempt $((attempt+1))/$max_attempts)"
-                    sleep 10
-                    attempt=$((attempt+1))
-                done
-                echo "Apt locks are free, proceeding..."
-            }
-
+        prereqs_script = f"wait_for_apt_lock() {{ {apt_lock_wait(lock_timeout=600)}; }}\n" + dedent("""
             # Function to install Docker and Python basics on Debian/Ubuntu
             install_debian_pkgs() {
                 echo "Detected Debian/Ubuntu system..."
