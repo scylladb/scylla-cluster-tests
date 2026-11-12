@@ -304,9 +304,9 @@ When defined true, will install and start saslauthd service
 
 ## **scylla_apt_keys** / SCT_SCYLLA_APT_KEYS
 
-APT keys for ScyllaDB repos
+APT keys for ScyllaDB repos. A key that ScyllaDB publishes on downloads.scylladb.com is fetched from there first; any other key comes from public keyservers
 
-**default:** ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2', '491C93B9DE7496A7', 'A43E06657BAC99E3', 'C503C686B007F39E']
+**default:** ['A43E06657BAC99E3', 'C503C686B007F39E']
 
 **type:** str | list[str] → list[str] (appendable)
 
