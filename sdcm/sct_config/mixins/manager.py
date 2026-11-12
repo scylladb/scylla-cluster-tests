@@ -66,6 +66,10 @@ class ManagerConfigMixin(BaseModel):
     mgmt_docker_image: String = SctField(
         description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
     )
+    mgmt_flush_and_wait_for_compactions: Boolean = SctField(
+        description="Flush and wait for compactions to finish after writing the backup dataset, "
+        "so they don't slow down the backup",
+    )
     mgmt_nodetool_refresh_flags: String = SctField(
         description="Nodetool refresh extra options like --load-and-stream or --primary-replica-only",
     )

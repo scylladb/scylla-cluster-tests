@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**26 options.**
+**27 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -115,6 +115,17 @@ Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 **default:** scylladb/scylla-manager:3.12.0
 
 **type:** str (appendable)
+
+
+<a id="mgmt_flush_and_wait_for_compactions"></a>
+
+## **mgmt_flush_and_wait_for_compactions** / SCT_MGMT_FLUSH_AND_WAIT_FOR_COMPACTIONS
+
+Flush and wait for compactions to finish after writing the backup dataset, so they don't slow down the backup
+
+**default:** False
+
+**type:** bool
 
 
 <a id="mgmt_nodetool_refresh_flags"></a>

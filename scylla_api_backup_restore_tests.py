@@ -35,6 +35,7 @@ from sdcm.cluster import HOUR_IN_SEC
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.cluster_tools import flush_nodes
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy
 from sdcm.utils.time_utils import ExecutionTimer
 
@@ -310,10 +311,20 @@ class ScyllaApiBackupRestoreTests(ManagerTestFunctionsMixIn):
         self._repair()
         self._assert_tablets_repaired()
 
+    def _flush_and_wait_for_compactions(self) -> None:
+        if not self.params.get("mgmt_flush_and_wait_for_compactions"):
+            return
+        # flush first, otherwise the backup snapshot flushes memtables and triggers new compactions
+        for keyspace in self.keyspaces:
+            flush_nodes(cluster=self.db_cluster, keyspace=keyspace)
+        self.wait_no_compactions_running(n=240)
+
     def _write_data(self) -> None:
         """Write `mgmt_prepare_snapshot_size` GB, the first `mgmt_backup_repaired_percent` of it repaired.
 
         Data is split evenly between `user_profile_table_count` tables, created first, each one repaired the same way.
+        Then, if `mgmt_flush_and_wait_for_compactions` is set, flush and wait for compactions to settle,
+        so they don't slow down the backup.
         """
         size, num_of_rows = self.params.get("mgmt_prepare_snapshot_size"), self.rows_per_table
         repaired_percent = self.params.get("mgmt_backup_repaired_percent")
@@ -328,6 +339,7 @@ class ScyllaApiBackupRestoreTests(ManagerTestFunctionsMixIn):
             self.run_and_verify_stress_in_threads(
                 cs_cmds=self._cs_write_cmds(repaired_rows + 1, num_of_rows), stop_on_failure=True
             )
+        self._flush_and_wait_for_compactions()
 
     def _cs_write_cmds(self, first_row: int, last_row: int) -> list[str]:
         """C-S write commands of the rows (inclusive) of every table.

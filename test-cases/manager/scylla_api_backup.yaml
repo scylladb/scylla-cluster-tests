@@ -12,6 +12,7 @@ n_loaders: 4
 mgmt_prepare_snapshot_size: 1000  # GB
 mgmt_backup_repaired_percent: 85
 user_profile_table_count: 1
+mgmt_flush_and_wait_for_compactions: true
 
 user_prefix: scylla-api-backup-restore
 
