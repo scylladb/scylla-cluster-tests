@@ -217,6 +217,14 @@ from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCente
 # are supposed to run longer than 24 hours from being killed
 SCYLLA_DIR = "/var/lib/scylla"
 
+# Key files Releng publishes next to the repos (scylla-pkg create_repo.py and the RPM .repo files
+# use the same URLs). import_published_apt_key() tries these before the public keyserver.
+# Not mapped: downloads/gpg/scylladb-2024.gpg (491C93B9DE7496A7) is a stale copy that expired 2026-01-31.
+SCYLLA_APT_KEY_URLS = {
+    "A43E06657BAC99E3": "https://downloads.scylladb.com/downloads/gpg/scylladb-2024-rsa.gpg",
+    "C503C686B007F39E": "https://downloads.scylladb.com/downloads/gpg/scylladb-2026-rsa.gpg",
+}
+
 DB_LOG_PATTERN_RESHARDING_START = "(?i)database - Resharding"
 DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in NORMAL"
 
@@ -2060,6 +2068,8 @@ class BaseNode(AutoSshContainerMixin):
             self.install_package("gnupg2")
             self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+                if self.import_published_apt_key(apt_key):
+                    continue
                 self.remoter.sudo(
                     f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                     f"--keyserver hkp://keyserver.ubuntu.com:80 --keyserver-options timeout=10 --recv-keys {apt_key}",
@@ -2067,6 +2077,31 @@ class BaseNode(AutoSshContainerMixin):
                 )
             self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
         self.update_repo_cache()
+
+    def import_published_apt_key(self, apt_key: str) -> bool:
+        """Import apt_key from the key file Releng publishes on downloads.scylladb.com (SCT-871).
+
+        Returns False when the key has no published URL or the import fails, so the caller falls
+        back to the keyserver. --list-keys fails unless the file held the key we asked for.
+        """
+        url = SCYLLA_APT_KEY_URLS.get(apt_key)
+        if not url:
+            return False
+        gpg = "gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg"
+        curl_cmd = curl_with_retry(
+            f"'{url}'",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            retry=3,
+            retry_max_time=60,
+            extra_flags="-S",
+        )
+        result = self.remoter.sudo(
+            shell_script_cmd(f"{curl_cmd} | {gpg} --import && {gpg} --list-keys {apt_key}"),
+            ignore_status=True,
+        )
+        return result.ok
 
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
         if self.distro.is_rhel_like:
@@ -2085,6 +2120,8 @@ class BaseNode(AutoSshContainerMixin):
         if self.distro.is_debian_like:
             self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+                if self.import_published_apt_key(apt_key):
+                    continue
                 self.remoter.sudo(
                     f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                     f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}",
