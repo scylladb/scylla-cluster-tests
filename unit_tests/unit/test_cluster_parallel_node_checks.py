@@ -231,6 +231,23 @@ def test_wait_all_nodes_un_unexpected_error_is_not_retried():
     assert nodes[1].run_nodetool.call_count == GET_NODETOOL_STATUS_RETRIES
 
 
+def test_wait_all_nodes_un_failed_check_stops_checks_of_other_nodes(monkeypatch):
+    monkeypatch.setattr("sdcm.cluster.NODES_CHECK_MAX_WORKERS", 2)
+    nodes = _make_nodes(6)
+    # the two checks that run first fail at the same time, as when no node sees the cluster as ready
+    barrier = threading.Barrier(2, timeout=OVERLAP_TIMEOUT)
+    for node in nodes:
+        node.run_nodetool.side_effect = _run_together(barrier, _nodetool_status(nodes, down=("node-5",)))
+
+    with pytest.raises(ClusterNodesNotReady):
+        DummyScyllaCluster(nodes).wait_all_nodes_un()
+
+    for node in nodes[:2]:
+        assert node.run_nodetool.call_count == WAIT_ALL_NODES_UN_RETRIES
+    for node in nodes[2:]:
+        node.run_nodetool.assert_not_called()
+
+
 def test_wait_all_nodes_un_no_nodes_does_nothing():
     DummyScyllaCluster([]).wait_all_nodes_un()
 
