@@ -77,3 +77,6 @@ append_scylla_yaml:
   # which hurt performance and cause timing (things take too much time) issues in the test. Workaround,
   # problem is known to tablets team.
   tablets_initial_scale_factor: 1
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"

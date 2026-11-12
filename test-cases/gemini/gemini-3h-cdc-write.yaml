@@ -16,3 +16,6 @@ gemini_table_options:
 gemini_log_cql_statements: true
 
 db_type: scylla
+
+grafana_screenshot_panels:
+  - dashboard_title: "Gemini"

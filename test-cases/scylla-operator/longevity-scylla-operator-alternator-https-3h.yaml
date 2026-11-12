@@ -69,3 +69,6 @@ alternator_secret_access_key: "password"
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 # NOTE: 'alternator_use_dns_routing' is not applicable in K8S case and will be ignored.
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"
