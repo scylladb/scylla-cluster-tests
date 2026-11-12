@@ -319,6 +319,8 @@ class ScyllaApiBackupRestoreTests(ManagerTestFunctionsMixIn):
         """Write `mgmt_prepare_snapshot_size` GB, the first `mgmt_backup_repaired_percent` of it repaired.
 
         Data is split evenly between `user_profile_table_count` tables, created first, each one repaired the same way.
+        Then, if `mgmt_flush_and_wait_for_compactions` is set, flush and wait for compactions to settle,
+        so they don't slow down the backup.
         """
         size, num_of_rows = self.params.get("mgmt_prepare_snapshot_size"), self.rows_per_table
         repaired_percent = self.params.get("mgmt_backup_repaired_percent")
@@ -333,6 +335,7 @@ class ScyllaApiBackupRestoreTests(ManagerTestFunctionsMixIn):
             self.run_and_verify_stress_in_threads(
                 cs_cmds=self._cs_write_cmds(repaired_rows + 1, num_of_rows), stop_on_failure=True
             )
+        self.flush_and_wait_for_compactions(self.keyspaces)
 
     def _cs_write_cmds(self, first_row: int, last_row: int) -> list[str]:
         """C-S write commands of the rows (inclusive) of every table.

@@ -4792,9 +4792,10 @@ class ClusterTester(unittest.TestCase):
         now = time.time()
         results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
         self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
-        assert results or results == [], "No results from Prometheus"
+        # an empty result is an AssertionError too, so the waiters retry instead of trusting missing samples
+        assert results, "No results from Prometheus"
         # if any result values is not zero - there are running compactions.
-        return any((float(v[1]) for v in results[0]["values"]))
+        return any(float(v[1]) for result in results for v in result["values"])
 
     def wait_compactions_are_running(self, n=20, sleep_time=60):
         # Wait until there are running compactions

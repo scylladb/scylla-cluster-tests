@@ -1113,6 +1113,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
         ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
+        self.flush_and_wait_for_compactions([ks_name])
 
         self.log.info("Run backup and wait for it to finish")
         backup_task = self.backup_with_manager_task(
