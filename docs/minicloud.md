@@ -215,6 +215,41 @@ does the same work in `sdcm/utils/minicloud/networking.py`.
 If you configure networking with a boot-time unit, that unit must include:
 `firewall-cmd --zone=trusted --change-interface=minicloud0`.
 
+### Running on macOS
+
+Docker on macOS cannot give a container access to Hypervisor.framework (HVF). On macOS, SCT
+starts the native `minicloud` binary as a host process instead of the container. The process keeps
+its PID in `~/.cache/minicloud/minicloud.pid` and writes its log to
+`~/.cache/minicloud/minicloud-native.log`.
+
+1. Install QEMU and minicloud with Homebrew:
+   ```bash
+   brew install qemu
+   brew tap scylladb/minicloud https://github.com/scylladb/minicloud
+   brew install --HEAD minicloud
+   ```
+   Do not start the `brew services` minicloud. SCT cannot check or stop a minicloud that it did not
+   start, so the run stops when that service holds the port.
+2. Install the `minicloud-tund` helper one time. It holds the `utun` device and the routes to the
+   guests:
+   ```bash
+   sudo MINICLOUD_VPC_ROUTES=10.160.0.0/11,172.31.0.0/16 "$(brew --prefix)/bin/minicloud-setup.sh" \
+     --tund "$(brew --prefix)/bin/minicloud-tund"
+   ```
+   The helper listens on `/var/run/minicloud-tund.sock`. Set `MINICLOUD_TUND_SOCKET` to use a
+   different path.
+3. Run the test in direct mode:
+   ```bash
+   SCT_SCYLLA_VERSION=2026.1 scripts/run-minicloud-test.sh -f provision -m direct
+   ```
+
+On macOS, `scripts/run-minicloud-test.sh` accepts only `-m direct`, because the native minicloud and
+its `utun` device are on the host, outside the hydra container. minicloud uses port 5050 on macOS,
+because AirPlay Receiver holds port 5000. The script also layers `configurations/minicloud/arm64.yaml`
+and `configurations/minicloud/macos.yaml`. The first selects arm64 instance types and removes the
+monitor node, and the second turns off guest memory locking. An arm64 host supports only the `aws`
+backend. The memory preflight reads the free and inactive pages from `vm_stat`.
+
 ### Guest network ranges
 
 The emulated guest networks deliberately do NOT share CIDRs with any real cloud network, and
