@@ -68,7 +68,7 @@ gce image to use for monitor nodes
 **type:** str (appendable)
 
 **backend overrides:**
-- `https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-17-0-rc2-amd64-2026-11-03t11-07-22z`: gce, gce-siren, k8s-gke
+- `https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-17-0-amd64-2026-11-12t01-23-08z`: gce, gce-siren, k8s-gke
 
 
 <a id="gce_image_username"></a>
