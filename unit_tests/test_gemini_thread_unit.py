@@ -16,6 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
+from sdcm.test_config import TestConfig
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 
@@ -140,3 +141,8 @@ def test_generate_gemini_command_no_schema_by_default(gemini_thread_unit):
     """Without schema_path, --schema must not appear in the generated command."""
     cmd = gemini_thread_unit.generate_gemini_command()
     assert "--schema=" not in cmd, f"--schema should not appear by default: {cmd}"
+
+
+def test_gemini_thread_marks_gemini_started(gemini_thread_unit):
+    """Creating a GeminiStressThread enables the Gemini Grafana screenshot for the test."""
+    assert TestConfig.GEMINI_STARTED
