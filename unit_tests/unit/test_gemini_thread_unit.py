@@ -18,6 +18,7 @@ import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.sct_events import Severity
+from sdcm.test_config import TestConfig
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 
@@ -197,3 +198,8 @@ def test_parse_results_reports_an_unparsable_summary(gemini_thread_unit, tmp_pat
 
     assert not results
     assert "could not parse gemini summary" in errors["loader-1"][0][1]
+
+
+def test_gemini_thread_marks_gemini_started(gemini_thread_unit):
+    """Creating a GeminiStressThread enables the Gemini Grafana screenshot for the test."""
+    assert TestConfig.GEMINI_STARTED

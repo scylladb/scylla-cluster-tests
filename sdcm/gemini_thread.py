@@ -30,6 +30,7 @@ from sdcm.stress.base import ParseResults
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.reporting.tooling_reporter import GeminiVersionReporter
+from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class GeminiStressThread(DockerBasedStressThread):
             round_robin=round_robin,
             stop_test_on_failure=stop_test_on_failure,
         )
+        TestConfig.GEMINI_STARTED = True
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
         self.gemini_commands = []
