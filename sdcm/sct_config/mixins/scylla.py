@@ -124,7 +124,10 @@ class ScyllaConfigMixin(BaseModel):
         description="When defined true, will install and start saslauthd service",
     )
     scylla_apt_keys: StringOrList = SctField(
-        description="APT keys for ScyllaDB repos",
+        description=(
+            "APT keys for ScyllaDB repos. A key that ScyllaDB publishes on downloads.scylladb.com is"
+            " fetched from there first; any other key comes from public keyservers"
+        ),
     )
     scylla_d_overrides_files: StringOrList = SctField(
         description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
