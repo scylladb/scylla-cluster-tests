@@ -640,3 +640,16 @@ def test_collect_node_logs_copies_the_local_files_of_a_node_once(tmp_path):
 
     collected = sorted(p.relative_to(collector.local_dir).as_posix() for p in Path(collector.local_dir).rglob("*.log"))
     assert collected == [f"{node_name}/console_output.log"]
+
+
+def test_collect_node_logs_checks_ssh_of_a_dead_node_once(tmp_path):
+    """Each is_up() waits 30s on a node without SSH: asking once per log entity took minutes per node."""
+    node = SimpleNamespace(
+        name="longevity-loader-node-88976c04-1", remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None
+    )
+    collector = LoaderLogCollector([node], test_id="88976c04", storage_dir=str(tmp_path), params={})
+
+    with patch.object(LoaderLogCollector, "archive_to_tarfile", return_value=None):
+        collector.collect_node_logs()
+
+    node.remoter.is_up.assert_called_once()
