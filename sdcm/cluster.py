@@ -244,6 +244,14 @@ from sdcm.wait import wait_for_log_lines
 # are supposed to run longer than 24 hours from being killed
 SCYLLA_DIR = "/var/lib/scylla"
 
+# Key files Releng publishes next to the repos (scylla-pkg create_repo.py and the RPM .repo files
+# use the same URLs). fetch_apt_keys() tries these before any public keyserver.
+# Not mapped: downloads/gpg/scylladb-2024.gpg (491C93B9DE7496A7) is a stale copy that expired 2026-01-31.
+SCYLLA_APT_KEY_URLS = {
+    "A43E06657BAC99E3": "https://downloads.scylladb.com/downloads/gpg/scylladb-2024-rsa.gpg",
+    "C503C686B007F39E": "https://downloads.scylladb.com/downloads/gpg/scylladb-2026-rsa.gpg",
+}
+
 DB_LOG_PATTERN_RESHARDING_START = "(?i)database - Resharding"
 DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in NORMAL"
 
@@ -2793,77 +2801,68 @@ class BaseNode(AutoSshContainerMixin):
         The temporary keyring avoids polluting the system keyring and ensures the correct
         format for APT to use.
 
-        Tries multiple HKP keyservers in order, and falls back to HTTPS if all HKP attempts fail.
+        Each key is tried from these sources in order, until one works:
+        1. the key file Releng publishes on downloads.scylladb.com (SCYLLA_APT_KEY_URLS), the host
+           the packages come from, so the setup does not depend on a public keyserver (SCT-871:
+           a Canonical outage took keyserver.ubuntu.com down, and no other keyserver had the keys);
+        2. HKP keyservers;
+        3. keyserver.ubuntu.com over HTTPS.
+        An HTTPS import counts only when the keyring then holds the requested key id, and only the
+        requested keys are exported, so a file that carries an extra key cannot add it to apt.
         Every gpg invocation is followed by `gpgconf --kill all` so its forked helper daemons
         (`dirmngr`/`gpg-agent`) do not outlive the call inside the persistent SSH session.
         """
         self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
         temp_keyring = f"/tmp/temp-{uuid.uuid4()}.gpg"
+        gpg_temp = f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring}"
         # gpg forks dirmngr/gpg-agent, which then get stuck in the SSH session's systemd scope,
         # delaying session teardown and tripping SSH_CONNECTIVITY soft timeouts.
         kill_gpg_daemons = "gpgconf --homedir /tmp --kill all"
+        hkp_keyservers = ["hkp://keyserver.ubuntu.com:80", "hkp://keys.openpgp.org", "hkp://pgp.mit.edu"]
+        apt_keys = self.parent_cluster.params.get("scylla_apt_keys")
+
+        def https_import(url: str, apt_key: str) -> str:
+            curl_cmd = curl_with_retry(
+                f"'{url}'",
+                silent=True,
+                follow_redirects=True,
+                fail_early=True,
+                retry=3,
+                retry_max_time=60,
+                extra_flags="-S",
+            )
+            # --list-keys fails unless the file held the key we asked for
+            return shell_script_cmd(f"{curl_cmd} | {gpg_temp} --import && {gpg_temp} --list-keys {apt_key}")
+
         try:
-            # Import all keys into a temporary keyring
-            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                # List of HKP keyservers to try in order
-                hkp_keyservers = [
-                    "hkp://keyserver.ubuntu.com:80",
-                    "hkp://keys.openpgp.org",
-                    "hkp://pgp.mit.edu",
+            for apt_key in apt_keys:
+                published_url = SCYLLA_APT_KEY_URLS.get(apt_key)
+                sources = [(published_url, https_import(published_url, apt_key))] if published_url else []
+                sources += [
+                    (
+                        keyserver,
+                        f"timeout 30 {gpg_temp} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
+                    )
+                    for keyserver in hkp_keyservers
                 ]
-
-                key_fetched = False
-
-                # Try each HKP keyserver
-                for keyserver in hkp_keyservers:
-                    result = self.remoter.sudo(
-                        f"timeout 30 gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
-                        retry=1,
-                        ignore_status=True,
-                        timeout=120,
-                    )
+                lookup_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
+                sources.append((lookup_url, https_import(lookup_url, apt_key)))
+                for source, cmd in sources:
+                    result = self.remoter.sudo(cmd, retry=1, ignore_status=True, timeout=120)
                     self.remoter.sudo(kill_gpg_daemons, ignore_status=True, verbose=False, timeout=60)
                     if result.ok:
-                        LOGGER.debug("Fetched GPG key %s from %s", apt_key, keyserver)
-                        key_fetched = True
+                        LOGGER.debug("Fetched GPG key %s from %s", apt_key, source)
                         break
-
-                # If all HKP keyservers failed, try HTTPS fallback
-                if not key_fetched:
-                    https_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
-                    curl_cmd = curl_with_retry(
-                        f"'{https_url}'",
-                        silent=True,
-                        follow_redirects=True,
-                        fail_early=True,
-                        retry=3,
-                        retry_max_time=60,
-                        extra_flags="-S",
-                    )
-                    result = self.remoter.sudo(
-                        shell_script_cmd(
-                            f"{curl_cmd} | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
-                        ),
-                        retry=1,
-                        ignore_status=True,
-                        timeout=120,
-                    )
-                    self.remoter.sudo(kill_gpg_daemons, ignore_status=True, verbose=False, timeout=60)
-                    if result.ok:
-                        LOGGER.debug("Fetched GPG key %s from HTTPS fallback", apt_key)
-                        key_fetched = True
-
-                # If all sources failed, raise an error
-                if not key_fetched:
+                else:
                     raise NodeSetupFailed(
                         node=self,
                         error_msg=f"Failed to fetch GPG key {apt_key} from all keyservers and HTTPS fallback",
                     )
 
-            # Export all keys at once to the keyring file
+            # Export only the requested keys to the keyring file
             self.remoter.sudo(
                 shell_script_cmd(
-                    f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --export --armor | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg"
+                    f"{gpg_temp} --export --armor {' '.join(apt_keys)} | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg"
                 ),
                 retry=3,
             )
