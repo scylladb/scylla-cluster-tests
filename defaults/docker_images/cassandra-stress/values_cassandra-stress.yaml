@@ -1,2 +1,8 @@
 cassandra-stress:
+<<<<<<< HEAD
   image: scylladb/cassandra-stress:3.21.0
+||||||| parent of 486a04598 (chore(deps): update scylladb/cassandra-stress docker tag to v4)
+  image: scylladb/cassandra-stress:3.21.1
+=======
+  image: scylladb/cassandra-stress:4.2.0
+>>>>>>> 486a04598 (chore(deps): update scylladb/cassandra-stress docker tag to v4)
