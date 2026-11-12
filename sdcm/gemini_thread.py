@@ -28,6 +28,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.test_config import TestConfig
 from sdcm.reporting.tooling_reporter import GeminiVersionReporter
 
 LOGGER = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ class GeminiStressThread(DockerBasedStressThread):
         params=None,
     ):
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
+        TestConfig.GEMINI_STARTED = True
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
         self.gemini_commands = []
