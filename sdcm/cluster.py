@@ -191,7 +191,6 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
-from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
 from sdcm.logcollector import (
     GrafanaScreenShot,
     PrometheusSnapshots,
@@ -8466,16 +8465,9 @@ class BaseMonitorSet:
 
     def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
         screenshot_links = []
-        grafana_extra_dashboards = []
-        if "alternator_port" in self.params:
-            grafana_extra_dashboards = [AlternatorDashboard()]
-        if self.params.get("gemini_cmd"):
-            grafana_extra_dashboards.append(GeminiDashboard())
         date_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-        screenshot_collector = GrafanaScreenShot(
-            name="grafana-screenshot", test_start_time=test_start_time, extra_entities=grafana_extra_dashboards
-        )
+        screenshot_collector = GrafanaScreenShot(name="grafana-screenshot", test_start_time=test_start_time)
         screenshot_collector.set_params(self.params)
         screenshot_files = screenshot_collector.collect(node, self.logdir)
         for screenshot in screenshot_files:
