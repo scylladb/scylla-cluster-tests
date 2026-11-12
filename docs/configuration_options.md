@@ -28,14 +28,14 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-530 options across 29 groups.
+531 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 73 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 17 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
@@ -426,6 +426,7 @@ concerns first, then one page per backend, then one per test type.
 | [`prepare_stress_duration`](configuration_options/stress-commands-and-load-generation.md#prepare_stress_duration) | `SCT_PREPARE_STRESS_DURATION` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`prepare_verify_cmd`](configuration_options/stress-commands-and-load-generation.md#prepare_verify_cmd) | `SCT_PREPARE_VERIFY_CMD` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`prepare_wait_no_compactions_timeout`](configuration_options/stress-commands-and-load-generation.md#prepare_wait_no_compactions_timeout) | `SCT_PREPARE_WAIT_NO_COMPACTIONS_TIMEOUT` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
+| [`prepare_wait_no_compactions_trigger_major`](configuration_options/stress-commands-and-load-generation.md#prepare_wait_no_compactions_trigger_major) | `SCT_PREPARE_WAIT_NO_COMPACTIONS_TRIGGER_MAJOR` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`prepare_write_cmd`](configuration_options/stress-commands-and-load-generation.md#prepare_write_cmd) | `SCT_PREPARE_WRITE_CMD` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`prepare_write_stress`](configuration_options/stress-commands-and-load-generation.md#prepare_write_stress) | `SCT_PREPARE_WRITE_STRESS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`print_kernel_callstack`](configuration_options/monitoring-events-and-reporting.md#print_kernel_callstack) | `SCT_PRINT_KERNEL_CALLSTACK` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
