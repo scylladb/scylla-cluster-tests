@@ -40,6 +40,8 @@ gce_instance_type_monitor: 'n2-highmem-16'
 # 2023.1.4 image used for setting linux kernel as in the scylla 2023.1.4 release:
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/5918161085269747628'
 scylla_repo: 'http://downloads.scylladb.com/deb/debian/scylla-2023.1.list'
+# the 2023.1 repo is signed by the 2022 key, which is not in the default scylla_apt_keys
+scylla_apt_keys: ['++', 'D0A112E067426AB2']
 scylla_linux_distro: 'ubuntu-jammy'
 #------
 
