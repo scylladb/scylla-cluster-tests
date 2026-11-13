@@ -43,12 +43,18 @@ echo "sudo: a password is required" >&2
 exit 1
 """
 
+# no passwordless sudo, but a password typed at a prompt would work: only `sudo -n` fails
+FAKE_SUDO_PROMPTS = """#!/bin/bash
+[[ "$1" == "-n" ]] && { echo "sudo: a password is required" >&2; exit 1; }
+FAKE_CALLER=sudo exec "$@"
+"""
+
 FAKE_IP = """#!/bin/bash
 echo minicloud0
 """
 
 
-def _run(tmp_path, sudo=FAKE_SUDO_TRANSPARENT, **env):
+def _run(tmp_path, sudo=FAKE_SUDO_TRANSPARENT, stdin=None, **env):
     """Run the script against stub executables; returns (CompletedProcess, firewall-cmd calls)."""
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
@@ -62,6 +68,7 @@ def _run(tmp_path, sudo=FAKE_SUDO_TRANSPARENT, **env):
     call_log.touch()
     result = subprocess.run(
         [BASH, str(SCRIPT)],
+        stdin=stdin,
         capture_output=True,
         text=True,
         check=False,
@@ -103,3 +110,15 @@ def test_failure_to_apply_the_zone_is_loud(tmp_path, kwargs, expected_stderr):
     assert "could not move minicloud0" in result.stderr
     assert expected_stderr in result.stderr
     assert "AuthenticationError" in result.stderr
+
+
+def test_terminal_run_prompts_for_sudo_instead_of_failing(tmp_path):
+    # run from a terminal, the script must use plain sudo (which can prompt) rather than sudo -n
+    leader, follower = os.openpty()
+    try:
+        result, calls = _run(tmp_path, sudo=FAKE_SUDO_PROMPTS, stdin=follower)
+    finally:
+        os.close(leader)
+        os.close(follower)
+    assert result.returncode == 0, result.stderr
+    assert "firewall-cmd (sudo) --zone=trusted --change-interface=minicloud0" in calls
