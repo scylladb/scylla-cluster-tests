@@ -13,6 +13,8 @@
 
 from typing import Optional
 
+from sdcm.utils import package_lock
+
 # Cloud provider agents run their own apt commands at boot and may hold the apt locks for
 # minutes (e.g. the oracle-cloud-agent snap runs `apt update` on OCI instances), so wait
 # as long as the cloud-init apt configuration does (see sdcm/provision/user_data.py).
@@ -37,25 +39,29 @@ APT_DEFAULTS = {
 APT_CONFDEF = '-o Dpkg::Options::="--force-confdef"'
 
 
-def apt_lock_wait(lock_timeout: int = APT_LOCK_TIMEOUT) -> str:
+def apt_lock_wait(lock_timeout: int = APT_LOCK_TIMEOUT, kill_stale: bool = False) -> str:
     """Build a shell loop which waits for all the apt/dpkg locks to be released.
 
     `DPkg::Lock::Timeout` makes apt wait for the dpkg locks only: `apt-get clean` and
     `apt-get update` still fail immediately when the archives/lists locks are taken
     (checked on Ubuntu 24.04), so poll all of them with fuser the same way
-    sdcm/utils/rpm.py:rpm_lock_wait() does for the rpm lock.
+    sdcm/utils/rpm.py:rpm_lock_wait() does for the rpm lock. Logs the lock holders.
 
     Quote free (uses double quotes only), so it can be embedded both into ``bash -c '...'``
     commands and into the generated cloud-init scripts.
 
     Args:
         lock_timeout: Max seconds to wait for the apt locks (default 300, polls every 5s).
+        kill_stale: When the wait runs out, kill the lock holders and repair dpkg
+            (``dpkg --configure -a``), see sdcm/utils/package_lock.py:lock_wait().
     """
-    iterations = max(lock_timeout // 5, 1)
-    return (
-        f"for i in $(seq 1 {iterations}); do "
-        f"fuser {' '.join(APT_LOCK_FILES)} >/dev/null 2>&1 || break; "
-        f'echo "apt lock held, waiting... ($i/{iterations})"; sleep 5; done'
+    return package_lock.lock_wait(
+        name="apt",
+        lock_files=" ".join(APT_LOCK_FILES),
+        lock_timeout=lock_timeout,
+        poll=5,
+        kill_stale=kill_stale,
+        repair="dpkg --configure -a",
     )
 
 
@@ -64,6 +70,8 @@ def apt_cmd(
     options: Optional[dict[str, str]] = None,
     dpkg_options: bool = True,
     lock_wait: bool = False,
+    lock_timeout: int = APT_LOCK_TIMEOUT,
+    kill_stale: bool = False,
 ) -> str:
     """Build an apt-get command string with safe defaults for non-interactive use.
 
@@ -76,6 +84,9 @@ def apt_cmd(
         lock_wait: Prefix the command with apt_lock_wait(), i.e. wait for the apt locks which
             `DPkg::Lock::Timeout` does not cover. The result gets wrapped into ``bash -c '...'``,
             so do not use it where the result is embedded into another single quoted command.
+        lock_timeout: Max seconds the lock_wait prefix waits for the apt locks.
+        kill_stale: Make the lock_wait prefix kill the lock holders when the wait runs out, for
+            retries which may find their own previous attempt still running (implies lock_wait).
 
     Returns:
         Complete apt-get command string ready for remoter.sudo().
@@ -95,10 +106,10 @@ def apt_cmd(
         parts.append(subcommand)
 
     cmd = " ".join(parts)
-    if lock_wait:
+    if lock_wait or kill_stale:
         # Escape single quotes in the command portion to prevent shell injection.
         # The wait loop is static (no external input), only the apt options need escaping.
         cmd = cmd.replace("'", r"'\''")
-        cmd = f"bash -c '{apt_lock_wait()} && {cmd}'"
+        cmd = f"bash -c '{apt_lock_wait(lock_timeout, kill_stale)} && {cmd}'"
 
     return cmd
