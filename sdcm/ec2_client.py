@@ -12,6 +12,7 @@ from mypy_boto3_ec2.type_defs import TagSpecificationTypeDef
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.utils import provision_ec2_fleet, split_instance_types
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import list_placement_groups_aws
@@ -26,18 +27,6 @@ FLEET_LIMIT_EXCEEDED_ERROR = "spotInstanceCountLimitExceeded"
 SPOT_CAPACITY_NOT_AVAILABLE_ERROR = "capacity-not-available"
 MAX_SPOT_EXCEEDED_ERROR = "MaxSpotInstanceCountExceeded"
 REQUEST_TIMEOUT = 300
-
-
-def _spot_fleet_request_tag_specifications(instance_tag_specifications) -> list:
-    """Build ``spot-fleet-request`` tag specifications from the instance tag specifications.
-
-    The Spot Fleet Request resource is tagged with the same tags as the instances it launches, so
-    clean-resources can discover and cancel it by tag like any other resource. See SCT-779.
-    """
-    for tag_spec in instance_tag_specifications or []:
-        if tags := tag_spec.get("Tags"):
-            return [{"ResourceType": "spot-fleet-request", "Tags": tags}]
-    return []
 
 
 class GetSpotPriceHistoryError(Exception):
@@ -134,55 +123,6 @@ class EC2ClientWrapper:
         LOGGER.debug("Spot requests: %s", request_ids)
         return request_ids
 
-    def _request_spot_fleet(
-        self,
-        instance_type,
-        image_id,
-        region_name,
-        network_if,
-        key_pair="",
-        user_data="",
-        count=3,
-        block_device_mappings=None,
-        aws_instance_profile=None,
-        placement_group_name=None,
-        tag_specifications=Sequence[TagSpecificationTypeDef],
-    ):
-        assert tag_specifications, "Tag specifications is a must for all instances creation api"
-        fleet_config = {
-            "LaunchSpecifications": [
-                {
-                    "ImageId": image_id,
-                    "InstanceType": instance_type,
-                    "NetworkInterfaces": network_if,
-                    "Placement": {"AvailabilityZone": region_name},
-                    "TagSpecifications": tag_specifications,
-                },
-            ],
-            "IamFleetRole": "arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role",
-            "TargetCapacity": count,
-        }
-        self.add_placement_group_name_param(fleet_config["LaunchSpecifications"][0], placement_group_name)
-        if aws_instance_profile:
-            fleet_config["LaunchSpecifications"][0]["IamInstanceProfile"] = {"Name": aws_instance_profile}
-        if key_pair:
-            fleet_config["LaunchSpecifications"][0].update({"KeyName": key_pair})
-        if user_data:
-            fleet_config["LaunchSpecifications"][0].update({"UserData": self._encode_user_data(user_data)})
-        if block_device_mappings:
-            fleet_config["LaunchSpecifications"][0]["BlockDeviceMappings"] = block_device_mappings
-        # Tag the Spot Fleet Request itself (not only the instances it launches) so a request that
-        # outlives the process which created it (e.g. a Jenkins stage timeout) stays discoverable and
-        # cancellable by clean-resources via its tags, like every other SCT resource. See SCT-779.
-        if fleet_request_tags := _spot_fleet_request_tag_specifications(tag_specifications):
-            fleet_config["TagSpecifications"] = fleet_request_tags
-        LOGGER.info("Sending spot fleet request with params: %s", fleet_config)
-        resp = self._client.request_spot_fleet(DryRun=False, SpotFleetRequestConfig=fleet_config)
-
-        request_id = resp["SpotFleetRequestId"]
-        LOGGER.debug("Spot fleet request: %s", request_id)
-        return request_id
-
     def _is_request_fulfilled(self, request_ids):
         """Check request status"""
         resp = self._client.describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
@@ -238,27 +178,6 @@ class EC2ClientWrapper:
                             return False, error
                 return False, resp
         return True, resp
-
-    def _wait_for_fleet_request_done(self, request_id):
-        """
-        Wait for spot fleet request fulfilled
-        :param request_id: spot fleet request id
-        :return: list of spot instance id-s
-        """
-        LOGGER.info("Waiting for spot fleet...")
-        timeout = 0
-        status = False
-        while not status and timeout < self._timeout:
-            time.sleep(self._wait_interval)
-            status, resp = self._is_fleet_request_fulfilled(request_id)
-            if not status and resp in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
-                break
-            timeout += self._wait_interval
-        if not status:
-            self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=True)
-            return [], resp
-        resp = self._client.describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        return [inst["InstanceId"] for inst in resp["ActiveInstances"]], resp
 
     @staticmethod
     def _encode_user_data(user_data):
@@ -365,10 +284,11 @@ class EC2ClientWrapper:
         aws_instance_profile=None,
         placement_group_name=None,
         tag_specifications=Sequence[TagSpecificationTypeDef],
+        alternative_instance_types=None,
     ):
-        """
-        Create spot fleet
-        :param instance_type: instance type
+        """Create `count` spot instances with one all-or-nothing EC2 Fleet request.
+
+        :param instance_type: preferred instance type
         :param image_id: image id
         :param region_name: availability zone name
         :param network_if: network interfaces
@@ -379,47 +299,52 @@ class EC2ClientWrapper:
         :param aws_instance_profile: instance profile granting access to S3 objects
         :param placement_group_name: to create instances in the placement group
         :param tag_specifications: tags to be added to the instances
-        :return: list of instance id-s
+        :param alternative_instance_types: interchangeable instance types EC2 Fleet may use, at a lower priority,
+            when the preferred type's spot pool can't take the whole request
+        :return: list of EC2.Instance objects
         """
         assert tag_specifications, "Tag specifications is a must for all instances creation api"
+        instance_tags = tag_specifications[0]["Tags"]
+        instance_parameters = {
+            "ImageId": image_id,
+            "NetworkInterfaces": network_if,
+            "Placement": {"AvailabilityZone": region_name},
+            "TagSpecifications": [{"ResourceType": "instance", "Tags": instance_tags}],
+        }
+        self.add_placement_group_name_param(instance_parameters, placement_group_name)
+        if aws_instance_profile:
+            instance_parameters["IamInstanceProfile"] = {"Name": aws_instance_profile}
+        if key_pair:
+            instance_parameters["KeyName"] = key_pair
+        if user_data:
+            instance_parameters["UserData"] = self._encode_user_data(user_data)
+        if block_device_mappings:
+            instance_parameters["BlockDeviceMappings"] = block_device_mappings
 
-        # Tags here live inside the fleet's LaunchSpecifications[].TagSpecifications, where AWS only accepts
-        # ResourceType="instance". "spot-fleet-request" is only valid at the top level of the fleet request config
-        # and causes InvalidSpotFleetRequestConfig here.
-        tag_specifications[0]["ResourceType"] = "instance"
-
-        request_id = self._request_spot_fleet(
-            instance_type,
-            image_id,
-            region_name,
-            network_if,
-            key_pair,
-            user_data,
-            count,
-            block_device_mappings=block_device_mappings,
-            aws_instance_profile=aws_instance_profile,
-            placement_group_name=placement_group_name,
-            tag_specifications=tag_specifications,
+        instance_ids = provision_ec2_fleet(
+            region_name=self.region_name,
+            instance_parameters=instance_parameters,
+            instance_types=split_instance_types([instance_type, *(alternative_instance_types or [])]),
+            count=count,
+            # the fleet and its launch template carry the instances' tags (minus the per-node Name), so
+            # clean-resources finds a template left behind by a killed provisioning process (SCT-779)
+            resource_tags=[tag for tag in instance_tags if tag["Key"] != "Name"],
         )
-        instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
-            err_code = (
-                resp
-                if resp in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]
-                else SPOT_STATUS_UNEXPECTED_ERROR
-            )
             raise CreateSpotFleetError(
-                error_response={"Error": {"Code": err_code, "Message": resp}}, operation_name="create_spot_fleet"
+                error_response={
+                    "Error": {
+                        "Code": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+                        "Message": f"EC2 Fleet could not launch {count} spot instances in {region_name}",
+                    }
+                },
+                operation_name="create_spot_fleet",
             )
 
         LOGGER.info("Spot instances: %s", instance_ids)
         for ind, instance_id in enumerate(instance_ids):
             self.add_tags(instance_id, {"Name": f"spot_fleet_{instance_id}_{ind}"})
-
-        self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=False)
-
-        instances = [self.get_instance(instance_id) for instance_id in instance_ids]
-        return instances
+        return [self.get_instance(instance_id) for instance_id in instance_ids]
 
     def terminate_instances(self, instance_ids):
         """Terminate instances"""

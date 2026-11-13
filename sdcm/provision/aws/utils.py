@@ -16,6 +16,7 @@ import contextlib
 import datetime
 import logging
 import time
+import uuid
 from textwrap import dedent
 from typing import (
     Any,
@@ -24,6 +25,8 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Tuple,
+    Union,
 )
 
 import boto3
@@ -33,20 +36,22 @@ from mypy_boto3_ec2.service_resource import Instance
 from mypy_boto3_ec2.type_defs import (
     InstanceTypeDef,
     RequestSpotLaunchSpecificationTypeDef,
-    SpotFleetLaunchSpecificationTypeDef,
-    SpotFleetRequestConfigDataTypeDef,
     TagSpecificationTypeDef,
 )
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
-    FLEET_LIMIT_EXCEEDED_ERROR,
+    EC2_FLEET_ALLOCATION_STRATEGY,
+    EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
+    EC2_FLEET_MAX_ATTEMPTS,
+    EC2_FLEET_MAX_TARGET_CAPACITY,
+    EC2_FLEET_RETRY_BACKOFF,
+    EC2_FLEET_RETRYABLE_ERROR_CODES,
+    EC2_FLEET_TYPE_INSTANT,
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
-    SPOT_FLEET_ALLOCATION_STRATEGY,
     SPOT_PRICE_TOO_LOW,
     SPOT_REQUEST_TIMEOUT,
     SPOT_REQUEST_WAITING_TIME,
-    SPOT_STATUS_UNEXPECTED_ERROR,
     STATUS_FULFILLED,
 )
 from sdcm.provision.common.provisioner import TagsType
@@ -103,6 +108,21 @@ ec2_clients = Ec2ClientsDict()
 ec2_resources = Ec2ServiceResourcesDict()
 
 
+def split_instance_types(instance_type: Union[str, List[str], None]) -> List[str]:
+    """Parse an `instance_type_*` config value into an ordered list of interchangeable types.
+
+    Accepts either an actual list (e.g. `aws_instance_type_db_alternatives`, a ``StringOrList``
+    param) or a single/comma-separated string. The first entry is the preferred type; the rest
+    exist so EC2 Fleet can fall back to another instance pool when spot capacity for the preferred
+    type runs out. Order is preserved and duplicates removed.
+    """
+    if not instance_type:
+        return []
+    raw = instance_type if isinstance(instance_type, (list, tuple)) else [instance_type]
+    types = [part.strip() for item in raw for part in str(item).split(",") if part.strip()]
+    return list(dict.fromkeys(types))
+
+
 def get_subnet_info(region_name: str, subnet_id: str):
     resp = ec2_clients[region_name].describe_subnets(SubnetIds=[subnet_id])
     return [subnet for subnet in resp["Subnets"] if subnet["SubnetId"] == subnet_id][0]
@@ -149,102 +169,23 @@ def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsT
 def wait_for_provision_request_done(
     region_name: str,
     request_ids: List[str],
-    is_fleet: bool,
     timeout: float = SPOT_REQUEST_TIMEOUT,
     wait_interval: float = SPOT_REQUEST_WAITING_TIME,
 ):
+    """Poll one-time spot instance requests until they are fulfilled, fail, or time out.
+
+    EC2 Fleet requests do not go through here: `Type="instant"` fleets return their instance ids
+    from `create_fleet` itself, so there is nothing to wait for.
+    """
     waiting_time = 0
     provisioned_instance_ids = []
     while not provisioned_instance_ids and waiting_time < timeout:
         time.sleep(wait_interval)
-        if is_fleet:
-            provisioned_instance_ids = get_provisioned_fleet_instance_ids(
-                region_name=region_name, request_ids=request_ids
-            )
-        else:
-            provisioned_instance_ids = get_provisioned_spot_instance_ids(
-                region_name=region_name, request_ids=request_ids
-            )
+        provisioned_instance_ids = get_provisioned_spot_instance_ids(region_name=region_name, request_ids=request_ids)
         if provisioned_instance_ids is None:
             break
         waiting_time += wait_interval
     return provisioned_instance_ids
-
-
-def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
-    try:
-        resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-    except Exception as exc:  # noqa: BLE001
-        LOGGER.error(
-            "Failed to describe spot fleet requests in region %s for request IDs %s: %s", region_name, request_ids, exc
-        )
-        return []
-    for req in resp["SpotFleetRequestConfigs"]:
-        request_id = req.get("SpotFleetRequestId", "unknown")
-        fleet_state = req.get("SpotFleetRequestState", "unknown")
-        activity_status = req.get("ActivityStatus", None)
-
-        if fleet_state == "active" and activity_status == STATUS_FULFILLED:
-            continue
-        if activity_status == SPOT_STATUS_UNEXPECTED_ERROR:
-            current_time = datetime.datetime.now().timetuple()
-            search_start_time = datetime.datetime(current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
-            try:
-                history_resp = ec2_clients[region_name].describe_spot_fleet_request_history(
-                    SpotFleetRequestId=request_id,
-                    StartTime=search_start_time,
-                    MaxResults=10,
-                )
-                errors = [i["EventInformation"]["EventSubType"] for i in history_resp["HistoryRecords"]]
-                error_messages = [
-                    f"{i['EventType']}: {i['EventInformation'].get('EventDescription', 'No description')}"
-                    for i in history_resp["HistoryRecords"]
-                ]
-
-                for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
-                    if error in errors:
-                        LOGGER.error(
-                            "Critical spot fleet provisioning failure in region %s for fleet request %s: "
-                            "State='%s', ActivityStatus='%s', Error='%s'. "
-                            "Error history: %s. "
-                            "This request cannot be fulfilled and provisioning will not retry.",
-                            region_name,
-                            request_id,
-                            fleet_state,
-                            activity_status,
-                            error,
-                            "; ".join(error_messages),
-                        )
-                        return None
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.error(
-                    "Failed to retrieve spot fleet request history for %s in region %s: %s",
-                    request_id,
-                    region_name,
-                    exc,
-                )
-        LOGGER.warning(
-            "Spot fleet request not yet fulfilled in region %s for request %s: State='%s', ActivityStatus='%s'",
-            region_name,
-            request_id,
-            fleet_state,
-            activity_status,
-        )
-        return []
-    provisioned_instances = []
-    for request_id in request_ids:
-        try:
-            resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.error(
-                "Failed to describe spot fleet instances for fleet request %s in region %s: %s",
-                request_id,
-                region_name,
-                exc,
-            )
-            return None
-        provisioned_instances.extend([inst["InstanceId"] for inst in resp["ActiveInstances"]])
-    return provisioned_instances
 
 
 def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
@@ -299,35 +240,6 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     return provisioned
 
 
-def create_spot_fleet_instance_request(
-    region_name: str,
-    count: int,
-    fleet_role: str,
-    instance_parameters: SpotFleetLaunchSpecificationTypeDef,
-    valid_until: datetime.datetime = None,
-) -> str:
-    # `capacity-optimized` is what `ec2:GetSpotPlacementScores` assumes when it scores an AZ (see
-    # `sdcm/provision/aws/spot_placement_score.py`). Without it AWS picks the cheapest pool rather than the
-    # deepest one, so the scores we rank AZs by would over-predict our actual fulfillment rate.
-    params = SpotFleetRequestConfigDataTypeDef(
-        LaunchSpecifications=[instance_parameters],
-        IamFleetRole=fleet_role,
-        TargetCapacity=count,
-        AllocationStrategy=SPOT_FLEET_ALLOCATION_STRATEGY,
-    )
-    # Tag the Spot Fleet Request itself (not only the instances it launches) so a request that
-    # outlives the process which created it (e.g. a Jenkins stage timeout) stays discoverable and
-    # cancellable by clean-resources via its tags, like every other SCT resource. See SCT-779.
-    for tag_spec in instance_parameters.get("TagSpecifications") or []:
-        if tags := tag_spec.get("Tags"):
-            params["TagSpecifications"] = [{"ResourceType": "spot-fleet-request", "Tags": tags}]
-            break
-    if valid_until:
-        params["ValidUntil"] = valid_until
-    resp = ec2_clients[region_name].request_spot_fleet(DryRun=False, SpotFleetRequestConfig=params)
-    return resp["SpotFleetRequestId"]
-
-
 def create_spot_instance_request(
     region_name: str,
     count: int,
@@ -348,6 +260,281 @@ def create_spot_instance_request(
         params["ValidUntil"] = valid_until
     resp = ec2_clients[region_name].request_spot_instances(**params)
     return [req["SpotInstanceRequestId"] for req in resp["SpotInstanceRequests"]]
+
+
+EC2_FLEET_UNSUPPORTED_LAUNCH_TEMPLATE_KEYS = ("AddressingType", "SubnetId", "SecurityGroups")
+# Keys accepted by RunInstances/RequestSpotFleet launch specs but rejected by
+# CreateLaunchTemplate. SubnetId/SecurityGroups are already expressed through NetworkInterfaces
+# in every SCT instance parameter set, so dropping them here is lossless.
+
+
+def build_launch_template_data(instance_parameters: dict) -> dict:
+    """Convert a RunInstances-style parameter dict into CreateLaunchTemplate `LaunchTemplateData`.
+
+    EC2 Fleet, unlike Spot Fleet, cannot take an inline launch specification -- it only accepts a
+    reference to a launch template. Everything that is shared between the instance types
+    (AMI, key pair, user data, network interfaces, block devices, tags) lives in the template;
+    only `InstanceType` varies, and that is supplied per-override by the fleet request.
+    """
+    launch_template_data = {
+        key: value
+        for key, value in instance_parameters.items()
+        if key not in EC2_FLEET_UNSUPPORTED_LAUNCH_TEMPLATE_KEYS
+    }
+    # InstanceType is supplied per-override by the fleet request, so it must not be pinned here,
+    # otherwise a single-type template would silently win over the diversified overrides.
+    launch_template_data.pop("InstanceType", None)
+    return launch_template_data
+
+
+def create_launch_template(
+    region_name: str,
+    template_name: str,
+    instance_parameters: dict,
+    tags: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """Create a throwaway launch template backing a single EC2 Fleet request. Returns its id.
+
+    `tags` (EC2 format) are applied to the template itself, so a template left behind by a
+    provisioning process that was killed before its `finally` cleanup ran (e.g. a Jenkins stage
+    timeout, see SCT-779) can still be discovered and deleted by clean-resources.
+    """
+    params = {
+        "LaunchTemplateName": template_name,
+        "LaunchTemplateData": build_launch_template_data(instance_parameters),
+    }
+    if tags:
+        params["TagSpecifications"] = [{"ResourceType": "launch-template", "Tags": tags}]
+    resp = ec2_clients[region_name].create_launch_template(**params)
+    template_id = resp["LaunchTemplate"]["LaunchTemplateId"]
+    LOGGER.info("Created launch template %s (%s) in region %s", template_name, template_id, region_name)
+    return template_id
+
+
+def delete_launch_template(region_name: str, template_id: str) -> None:
+    """Best-effort cleanup of a throwaway launch template - never fail provisioning over this."""
+    try:
+        ec2_clients[region_name].delete_launch_template(LaunchTemplateId=template_id)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to delete launch template %s in region %s: %s", template_id, region_name, exc)
+
+
+def create_ec2_fleet_instance_request(
+    region_name: str,
+    count: int,
+    template_id: str,
+    instance_types: List[str],
+    spot: bool = True,
+    tag_specifications: Sequence[TagSpecificationTypeDef] = None,
+) -> Tuple[Optional[str], List[str], List[dict]]:
+    """Request exactly `count` instances via EC2 Fleet, diversified across `instance_types`.
+
+    The request is all-or-nothing: `MinTargetCapacity` equals `count`, so AWS launches every instance or
+    none of them, rather than SCT launching a partial set and terminating it again. AWS requires
+    `SingleAvailabilityZone` (or `SingleInstanceType`) alongside it; single-AZ is what SCT asks for anyway,
+    since the launch template's subnet pins the AZ.
+
+    `instance_types` is ordered by preference: with the `capacity-optimized-prioritized` Spot
+    strategy, AWS prefers earlier entries on a best-effort basis while still optimizing for capacity.
+
+    Uses `Type="instant"`, so the call is synchronous: the response already carries the provisioned
+    instance ids and there is nothing to poll. This is the key behavioural difference from Spot
+    Fleet, which required a describe/poll loop until the request became `fulfilled`.
+    `ValidUntil` is intentionally never sent: AWS rejects it outright for `instant` fleets
+    (`InvalidParameter: ValidUntil is not supported for given fleet type`) -- it's only valid for
+    the `request`/`maintain` fleet types SCT doesn't use.
+
+    Returns a `(fleet_id, instance_ids, errors)` tuple. `errors` is the raw `Errors` list from the
+    response and explains why nothing was launched.
+    """
+    # Priority follows list order (0 is the highest), so the preferred instance type comes first.
+    overrides = [
+        {"InstanceType": instance_type, "Priority": float(priority)}
+        for priority, instance_type in enumerate(instance_types)
+    ]
+    params = {
+        "LaunchTemplateConfigs": [
+            {
+                "LaunchTemplateSpecification": {"LaunchTemplateId": template_id, "Version": "$Latest"},
+                "Overrides": overrides,
+            }
+        ],
+        "TargetCapacitySpecification": {
+            "TotalTargetCapacity": count,
+            "DefaultTargetCapacityType": "spot" if spot else "on-demand",
+        },
+        "Type": EC2_FLEET_TYPE_INSTANT,
+    }
+    all_or_nothing = {"MinTargetCapacity": count, "SingleAvailabilityZone": True}
+    if spot:
+        params["SpotOptions"] = {"AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY} | all_or_nothing
+    else:
+        params["OnDemandOptions"] = all_or_nothing
+    if tag_specifications:
+        params["TagSpecifications"] = tag_specifications
+
+    LOGGER.info(
+        "Requesting EC2 Fleet in %s for %d instances across instance types %s",
+        region_name,
+        count,
+        ", ".join(instance_types),
+    )
+    resp = ec2_clients[region_name].create_fleet(**params)
+    fleet_id = resp.get("FleetId")
+    errors = resp.get("Errors", [])
+    instance_ids = []
+    for instance_group in resp.get("Instances", []):
+        instance_ids.extend(instance_group.get("InstanceIds", []))
+    return fleet_id, instance_ids, errors
+
+
+def is_ec2_fleet_retryable(errors: List[dict]) -> bool:
+    """True when at least one fleet error is transient, so the same request may succeed on a retry.
+
+    A mix of transient and capacity errors still counts: the pool that was throttled may well have
+    the capacity the others lacked.
+    """
+    return any(error.get("ErrorCode") in EC2_FLEET_RETRYABLE_ERROR_CODES for error in errors)
+
+
+def log_ec2_fleet_errors(region_name: str, fleet_id: Optional[str], errors: List[dict]) -> None:
+    if not errors:
+        return
+    for error in errors:
+        LOGGER.error(
+            "EC2 Fleet %s in region %s reported error: Code='%s', Message='%s', InstanceType='%s'",
+            fleet_id,
+            region_name,
+            error.get("ErrorCode"),
+            error.get("ErrorMessage"),
+            error.get("LaunchTemplateAndOverrides", {}).get("Overrides", {}).get("InstanceType"),
+        )
+
+
+def delete_ec2_fleet(
+    region_name: str,
+    fleet_id: Optional[str],
+    terminate_instances: bool,
+    instance_ids: Optional[List[str]] = None,
+) -> None:
+    """Delete an `instant` fleet record. Instances outlive it unless `terminate_instances` is set.
+
+    When `terminate_instances` is True this also guards against a leaked-instance rollback: if the
+    delete call raises or AWS reports the fleet in `UnsuccessfulFleetDeletions`, it falls back to
+    terminating `instance_ids` directly so a failed rollback can never leave spot instances running.
+    """
+    if not fleet_id:
+        return
+    try:
+        response = ec2_clients[region_name].delete_fleets(FleetIds=[fleet_id], TerminateInstances=terminate_instances)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to delete EC2 fleet %s in region %s: %s", fleet_id, region_name, exc)
+        if terminate_instances and instance_ids:
+            terminate_instances_by_id(region_name=region_name, instance_ids=instance_ids)
+        return
+    if unsuccessful := response.get("UnsuccessfulFleetDeletions"):
+        LOGGER.warning("EC2 fleet %s in region %s was not fully deleted: %s", fleet_id, region_name, unsuccessful)
+        if terminate_instances and instance_ids:
+            terminate_instances_by_id(region_name=region_name, instance_ids=instance_ids)
+
+
+def terminate_instances_by_id(region_name: str, instance_ids: List[str]) -> None:
+    """Best-effort direct termination of instances a provisioning attempt must not leave behind."""
+    try:
+        ec2_clients[region_name].terminate_instances(InstanceIds=list(instance_ids))
+        LOGGER.info("Terminated leftover EC2 fleet instances %s in region %s", instance_ids, region_name)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to terminate leftover instances %s in region %s: %s", instance_ids, region_name, exc)
+
+
+def provision_ec2_fleet(
+    region_name: str,
+    instance_parameters: dict,
+    instance_types: List[str],
+    count: int,
+    resource_tags: List[Dict[str, str]],
+    spot: bool = True,
+) -> List[str]:
+    """Launch exactly `count` instances with one all-or-nothing EC2 Fleet request.
+
+    This is the single EC2 Fleet entry point, shared by the upfront `provision-resources` path
+    (`AWSInstanceProvisioner`) and the in-test path (`EC2ClientWrapper.create_spot_fleet`, used by `add_nodes`).
+
+    Args:
+        region_name: AWS region to launch in.
+        instance_parameters: RunInstances-style parameters shared by every instance type (AMI, network
+            interfaces, user data already base64-encoded, block devices, instance tags, ...). They are staged in a
+            throwaway launch template, because EC2 Fleet can't take an inline launch specification.
+        instance_types: interchangeable instance types, preferred first.
+        count: number of instances; at most `EC2_FLEET_MAX_TARGET_CAPACITY`, AWS's all-or-nothing limit.
+        resource_tags: EC2-format tags for the fleet and its launch template, so clean-resources can find a
+            template left behind by a provisioning process that was killed mid-request (see SCT-779).
+        spot: request spot capacity (the default) or on-demand.
+
+    Returns:
+        The ids of the `count` launched instances, or an empty list when AWS could not launch them all. Transient
+        errors (throttling, AWS-side failures) are retried first. On success the `instant` fleet record is left
+        alone: AWS doesn't allow deleting it while keeping its instances, and removes it once they terminate.
+
+    Raises:
+        ValueError: if `count` exceeds what one all-or-nothing request can launch.
+    """
+    if count > EC2_FLEET_MAX_TARGET_CAPACITY:
+        raise ValueError(
+            f"EC2 Fleet can launch at most {EC2_FLEET_MAX_TARGET_CAPACITY} instances all-or-nothing in one request, "
+            f"{count} were requested in {region_name}; spread the nodes over more availability zones"
+        )
+    template_id = create_launch_template(
+        region_name=region_name,
+        template_name=f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}{uuid.uuid4()}",
+        instance_parameters=instance_parameters,
+        tags=resource_tags,
+    )
+    fleet_id = None
+    instance_ids: List[str] = []
+    try:
+        for attempt in range(1, EC2_FLEET_MAX_ATTEMPTS + 1):
+            fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
+                region_name=region_name,
+                count=count,
+                template_id=template_id,
+                instance_types=instance_types,
+                spot=spot,
+                tag_specifications=[{"ResourceType": "fleet", "Tags": resource_tags}] if resource_tags else None,
+            )
+            log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
+            if len(instance_ids) >= count:
+                return instance_ids
+            # MinTargetCapacity makes AWS launch all or nothing, so a partial set should never arrive. If one does,
+            # it is useless to SCT - the cluster needs the exact node count - and keeping it would leak instances:
+            # roll it back, then retry if the errors were transient, or else leave it to the caller's fallback.
+            retry = attempt < EC2_FLEET_MAX_ATTEMPTS and is_ec2_fleet_retryable(errors)
+            LOGGER.error(
+                "EC2 Fleet %s in %s provisioned %d of %d requested instances (attempt %d/%d)%s.",
+                fleet_id,
+                region_name,
+                len(instance_ids),
+                count,
+                attempt,
+                EC2_FLEET_MAX_ATTEMPTS,
+                ", retrying: the errors are transient" if retry else "",
+            )
+            delete_ec2_fleet(
+                region_name=region_name, fleet_id=fleet_id, terminate_instances=True, instance_ids=instance_ids
+            )
+            # already rolled back, so the error handler below must not touch them again
+            fleet_id, instance_ids = None, []
+            if not retry:
+                return []
+            time.sleep(EC2_FLEET_RETRY_BACKOFF * attempt)
+        return []
+    except Exception:
+        delete_ec2_fleet(
+            region_name=region_name, fleet_id=fleet_id, terminate_instances=True, instance_ids=instance_ids
+        )
+        raise
+    finally:
+        delete_launch_template(region_name=region_name, template_id=template_id)
 
 
 def sort_by_index(item: dict) -> str:

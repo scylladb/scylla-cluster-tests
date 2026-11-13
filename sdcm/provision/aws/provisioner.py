@@ -14,31 +14,26 @@
 import contextlib
 import datetime
 import logging
-import time
-from typing import List, Optional, Union
+from typing import List, Union
 
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
-    FLEET_LIMIT_EXCEEDED_ERROR,
-    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
     SPOT_CNT_LIMIT,
-    SPOT_FLEET_LIMIT,
     SPOT_REQUEST_TIMEOUT,
-    SPOT_STATUS_UNEXPECTED_ERROR,
-    STATUS_FULFILLED,
 )
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import (
-    create_spot_fleet_instance_request,
     create_spot_instance_request,
     ec2_clients,
     ec2_services,
     find_instance_by_id,
+    provision_ec2_fleet,
     set_tags_on_instances,
+    terminate_instances_by_id,
     wait_for_provision_request_done,
 )
 from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters, TagsType
@@ -50,12 +45,11 @@ LOGGER = logging.getLogger(__name__)
 class AWSInstanceProvisioner(InstanceProvisionerBase):
     # TODO: Make them configurable
     _wait_interval = 5
-    _iam_fleet_role = "arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role"
 
     def provision(
         self,
         provision_parameters: ProvisionParameters,
-        instance_parameters: AWSInstanceParams,
+        instance_parameters: Union[AWSInstanceParams, List[AWSInstanceParams]],
         count: int,
         tags: Union[List[TagsType], TagsType] = None,
         names: List[str] = None,
@@ -75,6 +69,8 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             tag = tags[node_id]
             tag["Name"] = name
 
+        instance_parameters = self._as_instance_parameters_list(instance_parameters)
+
         if provision_parameters.spot:
             return self._provision_spot_instances(
                 provision_parameters=provision_parameters,
@@ -90,11 +86,22 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         )
 
     @staticmethod
+    def _as_instance_parameters_list(
+        instance_parameters: Union[AWSInstanceParams, List[AWSInstanceParams]],
+    ) -> List[AWSInstanceParams]:
+        """Accept either a single instance parameter set or a list of interchangeable ones.
+
+        A list means "any of these instance types is acceptable" and only the EC2 Fleet path can
+        exploit that; every other path falls back to the first (preferred) entry.
+        """
+        if isinstance(instance_parameters, list):
+            assert instance_parameters, "At least one instance parameters set is required"
+            return instance_parameters
+        return [instance_parameters]
+
+    @staticmethod
     def _is_provision_type_fleet(count: int) -> bool:
         return count > SPOT_CNT_LIMIT
-
-    def _provision_instance_limit(self, count: int) -> int:
-        return SPOT_FLEET_LIMIT if self._is_provision_type_fleet(count) else SPOT_CNT_LIMIT
 
     @property
     def _spot_valid_until(self) -> datetime.datetime:
@@ -111,10 +118,13 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
     @staticmethod
     def _provision_on_demand_instances(
         provision_parameters: ProvisionParameters,
-        instance_parameters: AWSInstanceParams,
+        instance_parameters: List[AWSInstanceParams],
         count: int,
         tags: List[TagsType],
     ) -> List[Instance]:
+        # RunInstances takes exactly one instance type, so only the preferred (first) one is used.
+        # Diversification across several instance types is an EC2 Fleet-only capability.
+        instance_parameters = instance_parameters[0]
         instance_parameters_dict = instance_parameters.model_dump(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False
         )
@@ -159,142 +169,97 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
     def _provision_spot_instances(
         self,
         provision_parameters: ProvisionParameters,
-        instance_parameters: AWSInstanceParams,
+        instance_parameters: List[AWSInstanceParams],
         count: int,
         tags: Union[List[TagsType], TagsType],
     ) -> List[Instance]:
-        rest_to_provision = count
-        provisioned_instances = []
-        while rest_to_provision:
-            if rest_to_provision // self._provision_instance_limit(count):
-                instances_to_provision = self._provision_instance_limit(count)
-            else:
-                instances_to_provision = rest_to_provision
+        if provision_parameters.fleet or self._is_provision_type_fleet(count):
+            # One all-or-nothing request for the whole count - no batches, so there is never a partial set of
+            # earlier batches to roll back when a later one fails.
+            return self._execute_ec2_fleet_instance_request(
+                provision_parameters=provision_parameters,
+                instance_parameters=instance_parameters,
+                count=count,
+                tags=tags,
+            )
+        instances = self._execute_spot_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=instance_parameters[0],
+            count=count,
+            tags=tags,
+        )
+        if 0 < len(instances) < count:
+            # Plain spot requests can be partially fulfilled. Returning that partial set would silently
+            # under-provision the cluster, since ProvisionPlan treats any non-empty result as success and skips
+            # AZ/region/on-demand fallback; roll it back so the fallback gets a chance at the exact count.
+            LOGGER.error(
+                "Spot request in %s provisioned %d of %d requested instances; rolling them back.",
+                provision_parameters.region_name,
+                len(instances),
+                count,
+            )
+            terminate_instances_by_id(
+                region_name=provision_parameters.region_name,
+                instance_ids=[instance.instance_id for instance in instances],
+            )
+            return []
+        return instances
 
-            if self._is_provision_type_fleet(count) and instances_to_provision > 1:
-                new_instances = self._execute_spot_fleet_instance_request(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters,
-                    count=instances_to_provision,
-                    tags=tags,
-                )
-            else:
-                new_instances = self._execute_spot_instance_request(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters,
-                    count=instances_to_provision,
-                    tags=tags,
-                )
-            provisioned_instances.extend(new_instances)
-            rest_to_provision -= instances_to_provision
-        return provisioned_instances
-
-    def _execute_spot_fleet_instance_request(
+    def _execute_ec2_fleet_instance_request(
         self,
         provision_parameters: ProvisionParameters,
-        instance_parameters: AWSInstanceParams,
+        instance_parameters: List[AWSInstanceParams],
         count: int,
         tags: List[TagsType],
     ) -> List[Instance]:
-        instance_parameters_dict = instance_parameters.model_dump(
+        """Provision exactly `count` spot instances with one all-or-nothing EC2 Fleet request.
+
+        All entries of `instance_parameters` are expected to be identical except for their `InstanceType`: the
+        shared part becomes the fleet's launch template and each distinct instance type becomes an override, so
+        AWS can satisfy the request from whichever instance pool has capacity. Overrides keep the list order as
+        their priority, so the preferred (first) instance type wins whenever its pool can take the request. This
+        is what Spot Fleet could not do for us -- SCT always sent it a single-type launch specification, so one
+        exhausted pool failed the whole request.
+        """
+        region_name = provision_parameters.region_name
+        instance_parameters_dict = instance_parameters[0].model_dump(
             exclude_none=True,
             exclude_unset=True,
             exclude_defaults=True,
             encode_user_data=True,
         )
-
         # picks the tags of the first instance to apply to all instances upfront
         # later those would be updated with individual tags (Name, etc.)
         instance_parameters_dict["TagSpecifications"] = [
             {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}
         ]
-
-        request_id = create_spot_fleet_instance_request(
-            region_name=provision_parameters.region_name,
-            count=count,
-            fleet_role=self._iam_fleet_role,
+        instance_ids = provision_ec2_fleet(
+            region_name=region_name,
             instance_parameters=instance_parameters_dict,
-        )
-        instance_ids = wait_for_provision_request_done(
-            region_name=provision_parameters.region_name,
-            request_ids=[request_id],
-            is_fleet=True,
+            instance_types=list(dict.fromkeys(params.InstanceType for params in instance_parameters)),
+            count=count,
+            # the per-node Name is not a property of the shared fleet and launch template
+            resource_tags=tags_as_ec2_tags({key: value for key, value in tags[0].items() if key != "Name"}),
+            spot=provision_parameters.spot,
         )
         if not instance_ids:
-            with contextlib.suppress(Exception):
-                self._ec2_client(provision_parameters).cancel_spot_fleet_requests(
-                    SpotFleetRequestIds=[request_id], TerminateInstances=True
-                )
             return []
-        LOGGER.info("Spot fleet instances: %s", instance_ids)
-        for ind, instance_id in enumerate(instance_ids):
-            instance_tags = tags.pop()
-            set_tags_on_instances(
-                region_name=provision_parameters.region_name,
-                instance_ids=[instance_id],
-                tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
-            )
-        self._ec2_client(provision_parameters).cancel_spot_fleet_requests(
-            SpotFleetRequestIds=[request_id], TerminateInstances=False
-        )
-        return [
-            find_instance_by_id(region_name=provision_parameters.region_name, instance_id=instance_id)
-            for instance_id in instance_ids
-        ]
-
-    def _get_provisioned_fleet_instance_ids(
-        self, provision_parameters: ProvisionParameters, request_ids: List[str]
-    ) -> Optional[List[str]]:
+        LOGGER.info("EC2 Fleet instances: %s", instance_ids)
         try:
-            resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-            LOGGER.info("%s: - %s", request_ids, resp)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.info("%s: - failed to get status: %s", request_ids, exc)
-            return []
-        for req in resp["SpotFleetRequestConfigs"]:
-            if (
-                req["SpotFleetRequestState"] == "active"
-                and "ActivityStatus" not in req
-                and req["ActivityStatus"] == STATUS_FULFILLED
-            ):
-                continue
-            if "ActivityStatus" in req and req["ActivityStatus"] == SPOT_STATUS_UNEXPECTED_ERROR:
-                current_time = datetime.datetime.now().timetuple()
-                search_start_time = datetime.datetime(current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
-                resp = self._ec2_client(provision_parameters).describe_spot_fleet_request_history(
-                    SpotFleetRequestId=request_ids[0],
-                    StartTime=search_start_time,
-                    MaxResults=10,
+            for ind, instance_id in enumerate(instance_ids):
+                instance_tags = tags.pop()
+                set_tags_on_instances(
+                    region_name=region_name,
+                    instance_ids=[instance_id],
+                    tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
                 )
-                LOGGER.info("Fleet request error history: %s", resp)
-                errors = [i["EventInformation"]["EventSubType"] for i in resp["HistoryRecords"]]
-                for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
-                    if error in errors:
-                        return None
-            return []
-        return [inst["InstanceId"] for inst in resp["ActiveInstances"]]
-
-    def _wait_for_fleet_request_done(self, provision_parameters: ProvisionParameters, request_id: str):
-        """
-        Wait for spot fleet request fulfilled
-        :param request_id: spot fleet request id
-        :return: list of spot instance id-s
-        """
-        LOGGER.info("Waiting for spot fleet...")
-        waiting_time = 0
-        provisioned_instance_ids = []
-        while not provisioned_instance_ids and waiting_time < SPOT_REQUEST_TIMEOUT:
-            time.sleep(self._wait_interval)
-            provisioned_instance_ids = self._get_provisioned_fleet_instance_ids(provision_parameters, [request_id])
-            if provisioned_instance_ids is None:
-                break
-            waiting_time += self._wait_interval
-        if not provisioned_instance_ids:
-            with contextlib.suppress(Exception):
-                self._ec2_client(provision_parameters).cancel_spot_fleet_requests(
-                    SpotFleetRequestIds=[request_id], TerminateInstances=True
-                )
-        return provisioned_instance_ids
+            return [
+                find_instance_by_id(region_name=region_name, instance_id=instance_id) for instance_id in instance_ids
+            ]
+        except Exception:
+            # Never hand back half-initialized nodes, and never leak them: they belong to no cluster yet.
+            terminate_instances_by_id(region_name=region_name, instance_ids=instance_ids)
+            raise
 
     def _execute_spot_instance_request(
         self,
@@ -325,7 +290,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,
             request_ids=request_ids,
-            is_fleet=False,
         )
         if not instance_ids:
             with contextlib.suppress(Exception):

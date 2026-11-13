@@ -27,6 +27,7 @@ LOGGER = logging.getLogger(__name__)
 class ProvisionType(str, Enum):
     ON_DEMAND = "on_demand"
     SPOT = "spot"
+    SPOT_FLEET = "spot_fleet"
 
 
 class ProvisionPlanBuilder(BaseModel):
@@ -56,9 +57,25 @@ class ProvisionPlanBuilder(BaseModel):
         )
 
     @property
+    def _provision_request_spot_fleet(self) -> ProvisionParameters:
+        return ProvisionParameters(
+            name="Spot Fleet",
+            spot=True,
+            fleet=True,
+            region_name=self.region_name,
+            availability_zone=self.availability_zone,
+        )
+
+    @property
     def _provision_steps(self) -> List[ProvisionParameters]:
         if self.initial_provision_type == ProvisionType.ON_DEMAND:
             return [self._provision_request_on_demand]
+        if self.initial_provision_type == ProvisionType.SPOT_FLEET:
+            # Choosing spot_fleet means spot or nothing: never fall back to on-demand, whatever
+            # `instance_provision_fallback_on_demand` says. AZ/region fallback still applies.
+            if self.fallback_provision_on_demand:
+                LOGGER.info("instance_provision is spot_fleet: ignoring instance_provision_fallback_on_demand")
+            return [self._provision_request_spot_fleet]
         provision_plan = []
         if self.initial_provision_type == ProvisionType.SPOT:
             provision_plan.extend(
