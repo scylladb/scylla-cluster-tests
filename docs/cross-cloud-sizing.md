@@ -87,11 +87,30 @@ arch: x86            # force x86_64 (shorthand accepted)
 5. **Sort** — family rank → price (cheapest) → vCPU (smallest)
 6. **Pick first** — deterministic, same input always produces same output
 
+### Spot Runs Prefer Less-Interrupted Types
+
+When `instance_provision` is `spot` (or `spot_fleet`) on AWS, candidates are sorted by vCPU count first,
+then by their spot interruption bucket in the test's first region, then by the order above. Size always
+wins, so a bucket-0 24xlarge never beats a bucket-4 xlarge; the bucket only chooses between candidates of
+the closest size, for example `i8ge.xlarge` over `i8g.xlarge`. Because size comes first, a `>=` vCPU
+constraint can also land on a smaller type than on-demand picks. On-demand runs are unaffected.
+
+The bucket comes from the region configured at sizing time. If the provisioner later moves the run to
+another region (spot region relocation or region fallback), the type was ranked for the first region.
+
+Buckets follow the AWS Spot Instance Advisor ranges (0 = <5%, 1 = 5-10%, 2 = 10-15%, 3 = 15-20%,
+4 = >20% interrupted per month). SCT reads AWS's public
+[advisor data](https://spot-bid-advisor.s3.amazonaws.com/spot-advisor-data.json) once per process; nothing
+is copied into the repo. If the file can't be fetched, spot runs keep the normal order. Only AWS has data:
+Azure's `SpotResources` eviction-rate table returns nothing to the SCT service principal, and GCE and OCI
+publish no per-type signal. When no candidate has a bucket in the region, the normal order applies
+unchanged; when only some do, the types without one sort after them.
+
 ### Preferred Families
 
 | Role | AWS | GCE | Azure | OCI |
 |------|-----|-----|-------|-----|
-| db | i8g, i7i, i4i | z3-highmem | Standard_L*s_v4 | DenseIO.E5.Flex |
+| db | i8g, i7i, i4i | z3-highmem, n2, n2d | Standard_L*s_v4 | DenseIO.E5.Flex |
 | loader | c6i | e2-standard | Standard_F*s_v2 | VM.Standard3.Flex |
 | monitor | t3, m6i | n2-highmem | Standard_D*_v4 | VM.Standard.E4.Flex |
 

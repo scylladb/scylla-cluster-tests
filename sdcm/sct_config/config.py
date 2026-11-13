@@ -1646,6 +1646,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
         }
 
         db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
+        # Spot runs prefer types with lower interruption rates in the first region (SCT-707).
+        provision = (env.get("instance_provision") if env else None) or self.get("instance_provision")
+        is_spot = provision in ("spot", "spot_fleet")
+        # Only AWS has interruption data (the public Spot Instance Advisor JSON, fetched once per process).
+        spot_region = self.region_names[0] if is_spot and cloud == "aws" and self.region_names else None
         role_params = SIZING_ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
             if role == "db_oracle" and not oracle_cluster_in_use(db_type):
@@ -1668,14 +1673,14 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 is_fallback = True
                 self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
             if isinstance(value, dict):
-                cache_key = (role, cloud, tuple(sorted(value.items())))
+                cache_key = (role, cloud, tuple(sorted(value.items())), spot_region)
                 cached = _SIZING_RESOLUTION_CACHE.get(cache_key)
                 resolved, resolved_arch = cached if cached else (None, None)
                 if resolved is None:
                     try:
                         catalog_dir = pathlib.Path(sct_abs_path("data/instance_catalog"))
                         catalog = InstanceCatalog.from_directory(catalog_dir)
-                        result = select_instance(catalog, role, cloud, value)
+                        result = select_instance(catalog, role, cloud, value, spot_region=spot_region)
                         resolved = result.instance_type
                         resolved_arch = result.arch
                         _SIZING_RESOLUTION_CACHE[cache_key] = (resolved, resolved_arch)
