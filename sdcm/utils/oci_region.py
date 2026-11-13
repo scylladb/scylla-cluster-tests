@@ -64,6 +64,7 @@ from sdcm.provision.oci.constants import (
     TAG_NAMESPACE,
 )
 from sdcm.provision.security import ScyllaOpenPorts
+from sdcm.utils.builder_access import BUILDER_SSH_PORT, flatten_sources, get_builder_ssh_sources
 from sdcm.utils.get_username import get_username
 from sdcm.utils.lock_utils import KeyBasedLock
 from sdcm.utils.oci_utils import (
@@ -81,6 +82,7 @@ class OciRegion:
 
     SCT_VCN_NAME = "SCT-2-vcn"
     SCT_SECURITY_LIST_NAME = "SCT-2-sl"
+    SCT_BUILDER_SECURITY_LIST_NAME = "SCT-2-sl-builder"
     SCT_SUBNET_NAME_TMPL = "SCT-2-subnet-regional{suffix}"
     SCT_VCN_CIDR_TMPL = "10.{}.0.0/16"
 
@@ -89,6 +91,7 @@ class OciRegion:
         region_index = self._region_index()
         self.vcn_ipv4_cidr = ip_network(self.SCT_VCN_CIDR_TMPL.format(region_index))
         self._vcn_ipv6_cidr = None
+        self._builder_security_list = None
 
     @cached_property
     def _config(self):
@@ -406,13 +409,13 @@ class OciRegion:
                 return existing
             return self._create_security_list()
 
-    def _find_security_list(self):
+    def _find_security_list(self, display_name: str | None = None):
         sec_lists = oci.pagination.list_call_get_all_results_generator(
             self.network_client.list_security_lists,
             yield_mode="record",
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
-            display_name=self.SCT_SECURITY_LIST_NAME,
+            display_name=display_name or self.SCT_SECURITY_LIST_NAME,
         )
         while current_sec_list := next(sec_lists, None):
             if current_sec_list.lifecycle_state == "AVAILABLE":
@@ -457,6 +460,89 @@ class OciRegion:
             response.data.id,
             "AVAILABLE",
         )
+
+    def builder_security_list_rules(
+        self, sources: dict[str, list[str]]
+    ) -> tuple[list[IngressSecurityRule], list[EgressSecurityRule]]:
+        """The rules of the Jenkins builder subnet: SSH from the allowed sources, everything within the VCN."""
+        ingress = [
+            IngressSecurityRule(
+                protocol="6",
+                source=cidr,
+                source_type="CIDR_BLOCK",
+                tcp_options=TcpOptions(destination_port_range=PortRange(min=BUILDER_SSH_PORT, max=BUILDER_SSH_PORT)),
+                description=role,
+            )
+            for cidr, role in flatten_sources(sources)
+        ]
+        ingress.append(
+            IngressSecurityRule(
+                protocol="all",
+                source=str(self.vcn_ipv4_cidr),
+                source_type="CIDR_BLOCK",
+                description="Allow all traffic within VCN",
+            )
+        )
+        egress = [
+            EgressSecurityRule(
+                protocol="all",
+                destination="0.0.0.0/0",
+                destination_type="CIDR_BLOCK",
+                description="Allow all outbound traffic",
+            )
+        ]
+        if self.vcn_ipv6_cidr:
+            ingress.append(self._ipv6_intra_vcn_ingress_rule())
+            egress.append(self._ipv6_egress_rule())
+        return ingress, egress
+
+    @staticmethod
+    def _security_rule_keys(rules, address_attr: str) -> set[tuple]:
+        """What a set of security list rules lets through, without the descriptions."""
+        keys = set()
+        for rule in rules or []:
+            port_range = getattr(rule.tcp_options, "destination_port_range", None)
+            ports = (port_range.min, port_range.max) if port_range else None
+            keys.add((getattr(rule, address_attr), rule.protocol, ports))
+        return keys
+
+    def _builder_security_list_differs(self, security_list, ingress, egress) -> bool:
+        return self._security_rule_keys(security_list.ingress_security_rules, "source") != self._security_rule_keys(
+            ingress, "source"
+        ) or self._security_rule_keys(security_list.egress_security_rules, "destination") != self._security_rule_keys(
+            egress, "destination"
+        )
+
+    def ensure_builder_security_list(self, sources: dict[str, list[str]]):
+        """Create the Jenkins builder security list, or replace its rules when they differ from the desired ones."""
+        ingress, egress = self.builder_security_list_rules(sources)
+        with KEY_BASED_LOCKS.get_lock("oci--builder-security-list"):
+            security_list = self._find_security_list(self.SCT_BUILDER_SECURITY_LIST_NAME)
+            if security_list is None:
+                LOGGER.info("Creating security list '%s'", self.SCT_BUILDER_SECURITY_LIST_NAME)
+                details = CreateSecurityListDetails(
+                    compartment_id=self.compartment_id,
+                    display_name=self.SCT_BUILDER_SECURITY_LIST_NAME,
+                    vcn_id=self.vcn.id,
+                    ingress_security_rules=ingress,
+                    egress_security_rules=egress,
+                    freeform_tags=self._base_tags(self.SCT_BUILDER_SECURITY_LIST_NAME),
+                )
+                response = self.network_client.create_security_list(details)
+                security_list = self._wait_for_state(
+                    self.network_client,
+                    self.network_client.get_security_list,
+                    response.data.id,
+                    "AVAILABLE",
+                )
+            elif self._builder_security_list_differs(security_list, ingress, egress):
+                LOGGER.info("Replacing the rules of security list '%s'", self.SCT_BUILDER_SECURITY_LIST_NAME)
+                self.network_client.update_security_list(
+                    security_list.id,
+                    UpdateSecurityListDetails(ingress_security_rules=ingress, egress_security_rules=egress),
+                )
+        self._builder_security_list = security_list
+        return security_list
 
     def get_or_create_nsg(self, node_type: str):
         suffix = "common"
@@ -651,21 +737,26 @@ class OciRegion:
         )
         return ngw
 
-    def subnet_name(self, public: bool = False, nic_index: int = 0) -> str:
+    def subnet_name(self, public: bool = False, nic_index: int = 0, builder: bool = False) -> str:
         # We append "-public" or "-private" to distinguish subnets.
         # This allows having both public and private subnets in the same VCN.
         # Secondary NIC subnets get an additional "-nicN" suffix.
-        suffix = "-public" if public else "-private"
+        # The Jenkins builders get a public subnet of their own, with its own security list
+        if builder:
+            suffix = "-builder"
+        else:
+            suffix = "-public" if public else "-private"
         if nic_index > 0:
             suffix += f"-nic{nic_index}"
         return self.SCT_SUBNET_NAME_TMPL.format(suffix=suffix)
 
-    def subnet(self, public: bool = False, nic_index: int = 0, _cache: dict = {}):  # noqa: B006
-        cache_key = (self.region_name, public, nic_index)
+    def subnet(self, public: bool = False, nic_index: int = 0, builder: bool = False, _cache: dict = {}):  # noqa: B006
+        cache_key = (self.region_name, public, nic_index, builder)
         if existing := _cache.get(cache_key):
             return existing
-        with KEY_BASED_LOCKS.get_lock(f"oci-subnet-{self.region_name}-public-{public}-nic-{nic_index}"):
-            name = self.subnet_name(public=public, nic_index=nic_index)
+        lock_name = f"oci-subnet-{self.region_name}-public-{public}-nic-{nic_index}" + ("-builder" if builder else "")
+        with KEY_BASED_LOCKS.get_lock(lock_name):
+            name = self.subnet_name(public=public, nic_index=nic_index, builder=builder)
             subnets = oci.pagination.list_call_get_all_results_generator(
                 self.network_client.list_subnets,
                 yield_mode="record",
@@ -742,9 +833,12 @@ class OciRegion:
         ipv6_cidr=None,
         public: bool = False,
         nic_index: int = 0,
+        builder: bool = False,
     ):
-        name = self.subnet_name(public=public, nic_index=nic_index)
-        if subnet := self.subnet(public=public, nic_index=nic_index):
+        public = public or builder
+        kind = "builder" if builder else ("public" if public else "private")
+        name = self.subnet_name(public=public, nic_index=nic_index, builder=builder)
+        if subnet := self.subnet(public=public, nic_index=nic_index, builder=builder):
             LOGGER.info("Subnet '%s' already exists", name)
             return subnet
 
@@ -760,19 +854,30 @@ class OciRegion:
                         ipv6_cidr=subnet_cidr6,
                         public=public,
                         nic_index=nic_index,
+                        builder=builder,
                     )
                 except oci.exceptions.ServiceError as exc:
-                    LOGGER.warning("Failed to create a %s subnet: %s", ("public" if public else "private"), exc)
+                    LOGGER.warning("Failed to create a %s subnet: %s", kind, exc)
                     time.sleep(2)
                     continue
-            subnet = self.subnet(public=public, nic_index=nic_index)
+            subnet = self.subnet(public=public, nic_index=nic_index, builder=builder)
             if subnet is None:
-                raise RuntimeError(f"Failed to create '{'public' if public else 'private'}' subnet")
+                raise RuntimeError(f"Failed to create '{kind}' subnet")
             else:
                 return subnet
 
         if ipv6_cidr is None and self.vcn_ipv6_cidr:
             ipv6_cidr = self._pick_free_subnet_ipv6_cidr(name)
+
+        if builder:
+            security_list = self._builder_security_list or self._find_security_list(self.SCT_BUILDER_SECURITY_LIST_NAME)
+            if security_list is None:
+                raise RuntimeError(
+                    f"Security list '{self.SCT_BUILDER_SECURITY_LIST_NAME}' is missing in {self.region_name}, "
+                    "run 'hydra configure-jenkins-builders --cloud-provider oci' to create it"
+                )
+        else:
+            security_list = self.security_list
 
         LOGGER.info("Creating regional subnet '%s' (public=%s, nic_index=%d)", name, public, nic_index)
         details_kwargs = dict(
@@ -780,9 +885,9 @@ class OciRegion:
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
             display_name=name,
-            dns_label=self._subnet_dns_label(public=public, nic_index=nic_index),
+            dns_label=self._subnet_dns_label(public=public, nic_index=nic_index, builder=builder),
             prohibit_public_ip_on_vnic=not public,
-            security_list_ids=[self.security_list.id],
+            security_list_ids=[security_list.id],
             route_table_id=(self.public_route_table.id if public else self.private_route_table.id),
             dhcp_options_id=self.vcn.default_dhcp_options_id,
             freeform_tags=self._base_tags(name),
@@ -1076,6 +1181,8 @@ class OciRegion:
         # NOTE: public subnet using internet gateway
         _ = self.internet_gateway
         self.create_subnet(public=True)
+        self.ensure_builder_security_list(get_builder_ssh_sources())
+        self.create_subnet(public=True, builder=True)
 
     def configure(self):
         """Configure all required resources for SCT in this OCI region."""
@@ -1105,13 +1212,16 @@ class OciRegion:
                 "'hydra prepare-regions --cloud-provider oci'."
             )
 
-    def _subnet_dns_label(self, public: bool, nic_index: int = 0) -> str:
+    def _subnet_dns_label(self, public: bool, nic_index: int = 0, builder: bool = False) -> str:
         """Create a deterministic RFC-compliant subnet DNS label.
 
         Labels must be <=15 characters, alphanumeric, start with a letter and be
         unique in the VCN.
         """
-        visibility = "public" if public else "private"
+        if builder:
+            visibility = "builder"
+        else:
+            visibility = "public" if public else "private"
         label_source = f"{self.region_name}-{visibility}"
         if nic_index > 0:
             label_source += f"-nic{nic_index}"

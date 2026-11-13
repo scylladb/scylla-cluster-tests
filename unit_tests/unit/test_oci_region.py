@@ -35,13 +35,14 @@ def _make_wait_until_side_effect(expected_state="AVAILABLE"):
     return _fake_wait_until
 
 
-def _assert_private_and_public_subnet_create_calls(network_client):
-    assert network_client.create_subnet.call_count == 2
+def _assert_regional_subnet_create_calls(network_client):
+    assert network_client.create_subnet.call_count == 3
     create_details = [call.args[0] for call in network_client.create_subnet.call_args_list]
 
     expected_names = {
         "SCT-2-subnet-regional-private",
         "SCT-2-subnet-regional-public",
+        "SCT-2-subnet-regional-builder",
     }
     actual_names = {details.display_name for details in create_details}
     assert actual_names == expected_names
@@ -51,18 +52,22 @@ def _assert_private_and_public_subnet_create_calls(network_client):
     }
     assert prohibit_public_ip_by_subnet_name["SCT-2-subnet-regional-private"] is True
     assert prohibit_public_ip_by_subnet_name["SCT-2-subnet-regional-public"] is False
+    assert prohibit_public_ip_by_subnet_name["SCT-2-subnet-regional-builder"] is False
 
-    dns_labels_by_subnet_name = {details.display_name: details.dns_label for details in create_details}
-    private_dns_label = dns_labels_by_subnet_name["SCT-2-subnet-regional-private"]
-    public_dns_label = dns_labels_by_subnet_name["SCT-2-subnet-regional-public"]
-
-    assert private_dns_label != public_dns_label
-    for dns_label in (private_dns_label, public_dns_label):
+    dns_labels = [details.dns_label for details in create_details]
+    assert len(set(dns_labels)) == len(dns_labels)
+    for dns_label in dns_labels:
         assert dns_label
         assert dns_label[0].isalpha()
         assert len(dns_label) <= 15
 
 
+def _assert_security_list_create_calls(network_client):
+    created = {call.args[0].display_name for call in network_client.create_security_list.call_args_list}
+    assert created == {"SCT-2-sl", "SCT-2-sl-builder"}
+
+
+@patch("sdcm.utils.oci_region.get_builder_ssh_sources", return_value={"jenkins": ["192.0.2.10/32"]})
 @patch("sdcm.utils.oci_region.get_username", return_value="tester")
 @patch("sdcm.utils.oci_region.oci.wait_until")
 @patch("sdcm.utils.oci_region.OciRegion.network_client", new_callable=PropertyMock)
@@ -88,6 +93,7 @@ def test_configure_network_creates_resources(
     mock_network,
     mock_wait_until,
     mock_get_username,
+    mock_sources,
 ):
     compute_client = MagicMock()
     identity_client = MagicMock()
@@ -157,16 +163,17 @@ def test_configure_network_creates_resources(
 
     # VCN created
     network_client.create_vcn.assert_called_once()
-    # Security list created and attached
-    network_client.create_security_list.assert_called_once()
+    # security lists created: the shared one and the builder one
+    _assert_security_list_create_calls(network_client)
     # Internet gateway created
     network_client.create_internet_gateway.assert_called_once()
     # NAT gateway created
     network_client.create_nat_gateway.assert_called_once()
-    # Private and public subnets are created with expected names and visibility flags
-    _assert_private_and_public_subnet_create_calls(network_client)
+    # private, public and builder subnets are created with expected names and visibility flags
+    _assert_regional_subnet_create_calls(network_client)
 
 
+@patch("sdcm.utils.oci_region.get_builder_ssh_sources", return_value={"jenkins": ["192.0.2.10/32"]})
 @patch("sdcm.utils.oci_region.get_username", return_value="tester")
 @patch("sdcm.utils.oci_region.oci.wait_until")
 @patch("sdcm.utils.oci_region.OciRegion.network_client", new_callable=PropertyMock)
@@ -192,6 +199,7 @@ def test_configure_network_with_ipv6(
     mock_network,
     mock_wait_until,
     mock_get_username,
+    mock_sources,
 ):
     """Test network configuration when VCN has IPv6 CIDR blocks."""
     compute_client = MagicMock()
@@ -260,14 +268,14 @@ def test_configure_network_with_ipv6(
 
     # VCN created
     network_client.create_vcn.assert_called_once()
-    # Security list created with IPv6 rules
-    network_client.create_security_list.assert_called_once()
+    # security lists created with IPv6 rules: the shared one and the builder one
+    _assert_security_list_create_calls(network_client)
     # Internet gateway created
     network_client.create_internet_gateway.assert_called_once()
     # NAT gateway created
     network_client.create_nat_gateway.assert_called_once()
-    # Private and public subnets are created with expected names and visibility flags
-    _assert_private_and_public_subnet_create_calls(network_client)
+    # private, public and builder subnets are created with expected names and visibility flags
+    _assert_regional_subnet_create_calls(network_client)
 
     # Verify that IPv6 CIDR was cached
     assert region._vcn_ipv6_cidr is not None

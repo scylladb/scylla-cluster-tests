@@ -24,6 +24,7 @@ from sdcm.keystore import KeyStore
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.sct_runner import AwsFipsSctRunner, AwsSctRunner
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.common import wait_ami_available
 
 LOGGER = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ class AwsBuilder:
                 ],
                 "ImageId": runner.image.id,
                 "KeyName": self.region.SCT_KEY_PAIR_NAME,
-                "SecurityGroupIds": [self.region.sct_ssh_security_group.id, self.region.sct_security_group.id],
+                "SecurityGroupIds": [self.region.builder_security_group.id],
                 "TagSpecifications": [
                     {
                         "ResourceType": "instance",
@@ -297,9 +298,12 @@ class AwsBuilder:
         assert not res.text
 
     def configure_auto_scaling_group(self):
+        builder_group = self.region.ensure_builder_security_group(get_builder_ssh_sources())
         self.create_launch_template()
         self.create_auto_scaling_group()
         self.add_scaling_group_to_jenkins()
+        self.region.secure_builder_launch_templates(builder_group.id)
+        self.region.secure_running_builders(builder_group.id)
 
     @classmethod
     def configure_in_all_region(cls, regions=None):

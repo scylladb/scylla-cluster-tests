@@ -27,6 +27,7 @@ from sdcm.utils.resources_cleanup import (
     clean_resources_docker,
     clean_spot_fleet_requests_aws,
 )
+from utils.cloud_cleanup.aws.clean_aws import clean_unattached_security_groups
 
 SCT_RUNNER_AWS = {
     "Tags": [{"Key": "NodeType", "Value": "sct-runner"}],
@@ -543,3 +544,24 @@ def test_clean_instances_oci_prices_only_instances_it_terminates(oci_instance, s
     ):
         clean_instances_oci({"TestId": "1111"})
     assert report_costs.called is reported
+
+
+def test_unattached_cleanup_keeps_the_builder_security_group():
+    # builders stop after 10 idle minutes, so the group is often attached to nothing
+    groups = [
+        {"GroupId": "sg-builder", "GroupName": "SCT-builder-sg", "Tags": [{"Key": "Name", "Value": "SCT-builder-sg"}]},
+        {"GroupId": "sg-stale", "GroupName": "SCT-2-sg-leftover", "Tags": []},
+    ]
+    ec2 = MagicMock()
+    ec2.get_paginator.side_effect = lambda name: MagicMock(
+        paginate=MagicMock(
+            return_value=[{"SecurityGroups": groups}]
+            if name == "describe_security_groups"
+            else [{"NetworkInterfaces": []}]
+        )
+    )
+    with patch("utils.cloud_cleanup.aws.clean_aws.boto3.Session") as session:
+        session.return_value.client.return_value = ec2
+        clean_unattached_security_groups("eu-west-1")
+
+    ec2.delete_security_group.assert_called_once_with(GroupId="sg-stale")
