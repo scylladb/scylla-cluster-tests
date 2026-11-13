@@ -23,7 +23,8 @@ if [[ -n "${_HYDRA_COMPLETE}" ]]; then
     tool=${HYDRA_TOOL-$(command -v docker >/dev/null && echo docker || echo podman)}
     exec ${tool} run --rm --pull=never -u "${USER_ID}" \
         -v "${SCT_DIR}:${SCT_DIR}" -w "${SCT_DIR}" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
-        -e _HYDRA_COMPLETE -e COMP_WORDS -e COMP_CWORD \
+        -e _HYDRA_COMPLETE -e COMP_WORDS -e COMP_CWORD -e _SCT_LOGDIR \
+        -e HOME="${HOME_DIR}" -v "${HOME_DIR}:${HOME_DIR}" \
         "${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}" ./sct.py 2>/dev/null
 fi
 
