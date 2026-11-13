@@ -1,0 +1,184 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test reproducing the custom_s1 workload1 shape (ad-tech user-profile
+    store) on a 6-node single-DC AWS cluster of i8ge.2xlarge: each node is 1/6 of the customer's
+    us-east-1 i8ge.12xlarge node, so the cluster gets the load and disk fill of one such node.
+    latte preloads 90M ~55 KB single-row partitions over 5 tables, then runs the 51% read / 49%
+    full-row upsert mix for 6 hours under the nemeses of the operations the customer had issues with:
+    cluster grow-shrink, node crashes, repair and backup.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+# NOTE: the main load runs for 360m. Population of the 90M rows is expected to take ~1h47m,
+#       and draining its compaction debt ~20 more minutes, see 'prepare_wait_no_compactions_timeout'.
+#       The rest covers the setup, the latency spikes of the population, and the teardown.
+test_duration: 660
+n_db_nodes: 6
+# NOTE: the customer's clusters spread RF=3 over 3 virtual racks inside a single AZ,
+#       so the 6 nodes get the same layout: 2 nodes per rack.
+simulated_racks: 3
+n_loaders: 2
+# NOTE: i8ge.2xlarge (8 vCPU, 64 GiB, 5 TB NVMe) is 1/6 of the customer's i8ge.12xlarge in every
+#       dimension, so 6 such nodes hold the data and the load of 1 customer's us-east-1 node.
+#       The nemeses add such nodes during the test, so the region is chosen for its i8ge capacity,
+#       see the jenkinsfile.
+instance_type_db: 'i8ge.2xlarge'
+instance_type_loader: 'c6i.2xlarge'
+
+user_prefix: 'long-custom-s1-wrkld1'
+use_preinstalled_scylla: true
+
+nemesis_class_name: 'FixedOrderMonkey'
+# NOTE: the nemeses cover the operations the customer had issues with, see SCT-1057.
+#       'FixedOrderMonkey' runs them in this order and repeats it. Grow-shrink goes first,
+#       because most of the customer's issues are about it.
+#       - 'GrowShrinkClusterNemesis': scale-out and scale-in, which got stuck or caused timeouts
+#         (CUSTOMER-435, CUSTOMER-630, CUSTOMER-644, CUSTOMER-648).
+#         It adds 'nemesis_add_node_cnt' (3) nodes in parallel, 1 per rack, as the customer's autoscale does.
+#       - 'ScyllaKillMonkey': a node crash with a restart, like the SIGSEGV of CUSTOMER-714.
+#         The restart reads the ~32 GB commitlog of the node in ~35 seconds,
+#         replaying only the mutations which were not flushed yet.
+#       - 'MgmtRepair': Scylla Manager repair, which is a tablet repair here, and which failed
+#         in a race with tablet split (CUSTOMER-441).
+#       - 'SnapshotOperations': snapshots, the first step of every backup, which the customer's cluster
+#         was clearing when it hit CUSTOMER-724.
+#       - 'BootstrapStreamingErrorNemesis': a node join which fails in the middle and gets retried,
+#         like the stuck joins of CUSTOMER-435 and CUSTOMER-630.
+#       - 'SerialRestartOfElectedTopologyCoordinatorNemesis': restarts of the topology coordinator.
+#         The stuck joins of CUSTOMER-435 and CUSTOMER-630 failed on raft operations.
+#       - 'MgmtBackup': Scylla Manager backup to S3, which crashed a node
+#         while compaction deleted SSTables (CUSTOMER-714), see 'mgmt_backup_keyspaces'.
+#         'ManagerNativeBackup' would force the native uploads, but it is a nemesis runner of its own,
+#         which can't be listed here. 'MgmtBackup' uses the default method of Scylla Manager.
+#       - 'AbortDecommissionMonkey': a decommission aborted in the middle,
+#         like the scale-in started during the stuck resize of CUSTOMER-648.
+#       - 'AbortRepairMonkey': a repair failed in the middle and run again,
+#         like the failing and retried tablet repairs of CUSTOMER-441.
+# NOTE: a YAML list would mean 1 selector per nemesis thread, so the order is a folded string,
+#       1 nemesis per line, each ending with a comma.
+nemesis_selector: >-
+  GrowShrinkClusterNemesis,
+  ScyllaKillMonkey,
+  MgmtRepair,
+  SnapshotOperations,
+  BootstrapStreamingErrorNemesis,
+  SerialRestartOfElectedTopologyCoordinatorNemesis,
+  MgmtBackup,
+  AbortDecommissionMonkey,
+  AbortRepairMonkey,
+# NOTE: a backup of all the tables would upload ~1.2-2.1 TB per node, ~3-5.5 hours at the 100 MiB/s
+#       default rate limit of Scylla Manager, while its snapshot keeps up to as much data on the disks.
+#       So it backs up the 3 smallest tables, ~12% of the data, ~140-250 GB per node, ~22-40 minutes,
+#       which fits in the main load at its place in the order. Compaction runs on them as on all the tables.
+#       'cookie_profile' is also the table of the wedged compaction of CUSTOMER-724.
+mgmt_backup_keyspaces:
+  - 'custom_s1_w1.device_profile'
+  - 'custom_s1_w1.lrid_profile'
+  - 'custom_s1_w1.cookie_profile'
+# NOTE: the population is bound by the 1 GB/s disk write bandwidth of i8ge.2xlarge,
+#       so nemeses start only after it, to not compete with it for the disks.
+nemesis_during_prepare: false
+
+latte_schema_parameters:
+  # NOTE: 'post_prepare_cql_cmds' and 'mgmt_backup_keyspaces' refer to the keyspace by this name,
+  #       keep them in sync.
+  keyspace: 'custom_s1_w1'
+  # NOTE: us-east-1 uses LZ4, while the rune script defaults to ZstdWithDicts (eu-central-1)
+  compression: 'lz4'
+  # NOTE: how the 'tablets_initial' value is calculated.
+  #       The test keeps the number of tablet replicas per shard of the customer's us-east-1,
+  #       and with it the amount of data per tablet, since both clusters hold the same data per shard.
+  #       1) Customer: 8192 initial tablets per table, RF=3, 33 nodes of i8ge.12xlarge (48 vCPU),
+  #          ~47 shards per node: 8192 * 3 / (33 * 47) ~= 15.8 tablet replicas per table per shard.
+  #       2) Test: 6 nodes of i8ge.2xlarge (8 vCPU), ~7 shards per node, RF=3:
+  #          15.8 * (6 * 7) / 3 ~= 222 tablets per table.
+  #       3) Tablet counts are powers of 2, so 222 -> 256.
+  #       The shard counts assume 1 vCPU per node goes to IRQ handling. With all vCPUs as shards
+  #       the result is 248, which also gives 256.
+  #       The customer's schema shows only the initial count, and their tablets have probably split
+  #       since then.
+  tablets_initial: 256
+  # NOTE: the commitlog is not compressed, so it would take ~1/3 of the disk writes of the population,
+  #       bound by the 1 GB/s disk write bandwidth of i8ge.2xlarge.
+  #       So the population writes without it, and the keyspace gets durable after it.
+  #       The rows the population left in memtables have no commitlog entries, and the compaction wait
+  #       doesn't flush them. A graceful stop of Scylla flushes them, but the nemeses which kill Scylla
+  #       or hard reboot a node at the start of the main load lose them on that node.
+  #       The other 2 replicas keep them, and repairs bring them back.
+  durable_writes: 'false'
+
+post_prepare_cql_cmds: 'ALTER KEYSPACE custom_s1_w1 WITH durable_writes = true'
+# NOTE: the population outruns compaction and leaves ~1 TB of compaction debt per node, see the '--rate' note.
+#       Draining it takes ~20 minutes without load. Under the main load, the debt saturates the disks,
+#       and the commitlog, empty after the population, stalls the writes for ~15 minutes while it allocates
+#       its segments. So the main load starts only after the debt is drained.
+#       A major compaction would rewrite all the ~1.2 TB per node once more, so the test only waits.
+prepare_wait_no_compactions_timeout: 60  # (minutes)
+prepare_wait_no_compactions_trigger_major: false
+
+# NOTE: 'round_robin' runs every command on its own loader, so each of the 2 loaders runs
+#       1 prepare and 1 main command.
+round_robin: true
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+  # NOTE: the rune script writes compressible blobs ('latte::compressible_blob', latte 0.55+).
+  #       Its default 'blob_repeat_pct' and 'blob_alphabet_size' save ~53% with LZ4 in this test, within
+  #       the customer's 41-56%, see 'Compression savings' in the README.md of the workload.
+  #       The values below rely on these savings, so keep the defaults.
+  # NOTE: 90M rows of ~55 KB make ~5 TB of uncompressed data, ~2.5 TB per node with RF=3.
+  #       Compressed, it takes ~1.2 TB per node, about a quarter of the 5 TB disks.
+  #       The overwrites of the main load and ICS space amplification grow it to ~2 TB per node
+  #       by the end of the main load, still leaving room for the nemeses which decommission and replace nodes.
+  # NOTE: every loader writes its own 45M rows slice, set by '--start-cycle' and '--end-cycle'.
+  #       The rune script uses the cycle number as the row index.
+  #       Slices are multiples of 1000 rows, so every table gets exactly its share of the rows.
+  # NOTE: 'large_cell_per_100k=10': 1 of 10k rows gets a 1.1-2 MB large cell.
+  # NOTE: how the '--rate' value is chosen.
+  #       The population is bound by the 1 GB/s disk write bandwidth of i8ge.2xlarge, not by CPU.
+  #       With RF=3 on 6 nodes, every node stores as many rows per second as 1 loader writes.
+  #       With 'durable_writes' off and the ~53% savings of LZ4, every row a node stores costs it ~26 KB
+  #       of memtable flush, and compaction rewrites every flushed byte ~5 times over the population.
+  #       The population must take at most 2 hours, which needs at least 6250 rows/s per loader.
+  #       2 x 7000 rows/s takes ~1h47m, leaving ~13 minutes for latency spikes.
+  #       At this rate compaction uses all the disk bandwidth left after the flushes from ~10 minutes in,
+  #       and still falls behind by ~1 TB per node by the end of the population,
+  #       which the test waits to drain, see 'prepare_wait_no_compactions_timeout'.
+  #       Compaction keeps up only below ~4200 rows/s per loader, a ~3 hours population.
+  - >-
+    latte run --tag latte-prepare-01 --duration 45000000 --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 64 --rate 7000 --start-cycle 0 --end-cycle 45000000
+    --function insert -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-02 --duration 45000000 --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 64 --rate 7000 --start-cycle 45000000 --end-cycle 90000000
+    --function insert -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+
+stress_cmd:
+  # NOTE: the customer's us-east-1 serves 161k reads/s and 147k writes/s on 33 nodes,
+  #       ~9333 ops/s per node.
+  #       The cluster gets that load of 1 node: 2 x 4650 ops/s of the 'mixed' function,
+  #       which reads 51% of the time and upserts full rows otherwise.
+  #       Each loader works on the rows slice it has written, cycling over it
+  #       within the same '--start-cycle' and '--end-cycle' range for the whole duration.
+  - >-
+    latte run --tag latte-main-01 --duration 360m --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 48 --rate 4650 --start-cycle 0 --end-cycle 45000000
+    --function mixed -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --tag latte-main-02 --duration 360m --request-timeout 60 --retry-interval '1s,5s'
+    --sampling 5s --threads 8 --concurrency 48 --rate 4650 --start-cycle 45000000 --end-cycle 90000000
+    --function mixed -P large_cell_per_100k=10
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn

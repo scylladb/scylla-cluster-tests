@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// NOTE: the grow-shrink and bootstrap nemeses need on-demand i8ge.2xlarge nodes in the middle of the test.
+//       And the spot placement scores rank i8ge.2xlarge capacity of 'eu-central-1' the best in all its AZs.
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-central-1',
+    availability_zone: 'a',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/longevity/longevity-aws-custom-s1-workload1.yaml',
+)
