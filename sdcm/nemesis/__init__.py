@@ -204,6 +204,8 @@ class NemesisFlags:
     disruptive: bool = False  # flag that signal that nemesis disrupts node/cluster,
     # i.e reboot,kill, hardreboot, terminate
     supports_high_disk_utilization: bool = True  # supported in a 90% disk utilization scenario
+    # supported against logstor tables: no sstable file ops, compaction tuning, MV, CDC or index
+    supports_logstor: bool = True
     networking: bool = False  # flag that signal that nemesis interact with nemesis,
     # i.e switch off/on network interface, network issues
     kubernetes: bool = False  # flag that signal that nemesis run with k8s cluster

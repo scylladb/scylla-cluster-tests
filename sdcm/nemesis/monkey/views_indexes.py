@@ -63,6 +63,7 @@ class CreateIndexNemesis(NemesisBaseClass):
     schema_changes = True
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an Index consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         """Skip with parallel nemeses (scylladb/scylladb#21695) and on tablets with old Scylla versions."""
@@ -136,6 +137,7 @@ class AddRemoveMvNemesis(NemesisBaseClass):
     schema_changes = True
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         """Skip on tablets with Scylla 2025.3 and older."""
@@ -221,6 +223,7 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
     schema_changes = True
     topology_changes = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         """Require consistent topology changes and tablets with views enabled."""

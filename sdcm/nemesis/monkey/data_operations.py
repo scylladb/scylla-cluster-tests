@@ -412,6 +412,8 @@ class DeleteByPartitionsMonkey(DeleteMonkeyBase):
     The batch size is a fixed 10.
     """
 
+    supports_logstor = False  # needs a clustering-row validation table, logstor is key-value only
+
     def disrupt(self):
         """Delete whole partitions of the scylla-bench table."""
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
@@ -441,6 +443,8 @@ class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
 
     Batch size is `non_validated_partitions // partition_deletion_divisor`.
     """
+
+    supports_logstor = False  # deletes clustering-row ranges, logstor has no clustering columns
 
     def disrupt(self):
         """Delete overlapping clustering-key ranges from the chosen partitions."""
@@ -493,6 +497,8 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
     PartitionNotFound / TimestampNotFound if a selected partition was emptied by other
     load before it probes it.
     """
+
+    supports_logstor = False  # deletes clustering-row ranges, logstor has no clustering columns
 
     def plan_deletions(self, ks_cf):
         """

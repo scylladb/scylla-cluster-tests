@@ -120,6 +120,7 @@ class ModifyTableCachingMonkey(ModifyTableBaseMonkey):
     schema_changes = True
     free_tier_set = True
     modify_table = True
+    supports_logstor = False  # ALTER ... WITH caching fails on logstor, fix: scylladb PR 32812
 
     def disrupt(self):
         """Set the table caching options to random values."""
@@ -166,6 +167,7 @@ class ModifyTableCompactionMonkey(ModifyTableBaseMonkey):
     schema_changes = True
     free_tier_set = True
     modify_table = True
+    supports_logstor = False  # logstor has its own compaction, sstable compaction does not apply
 
     def disrupt(self):
         """Alter the compaction strategy to a random strategy with random options."""
@@ -301,6 +303,7 @@ class ModifyTableDefaultTimeToLiveMonkey(ModifyTableBaseMonkey):
     schema_changes = True
     free_tier_set = True
     modify_table = True
+    supports_logstor = False  # expired data is not reclaimed until logstor GC (SCYLLADB-3591)
 
     def disrupt(self):
         # Select table without columns with "counter" type — issue #1037
@@ -460,6 +463,7 @@ class ModifyTableTwcsWindowSizeMonkey(ModifyTableBaseMonkey):
     free_tier_set = True
     modify_table = True
     disruptive = True
+    supports_logstor = False  # logstor has its own compaction, sstable compaction does not apply
 
     def set_new_twcs_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Adjust window unit and size with random increments in acceptable borders,
