@@ -1,0 +1,11 @@
+test_duration: 720
+
+instance_type_db: 'i8ge.xlarge'
+sizing_loader:
+  vcpu: 4
+  memory: '>=16'
+
+n_db_nodes: 3
+n_loaders: 3
+
+user_prefix: scylla-api-backup-restore
