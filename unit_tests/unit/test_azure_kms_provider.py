@@ -192,6 +192,22 @@ def test_access_policies_include_tenant_id(mock_logger, kms_provider, azure_serv
         assert policy["tenantId"] == vault_tenant_id, "Access policy tenant_id must match vault tenantId"
 
 
+def test_get_vault_uri_asks_arm_on_minicloud_only(kms_provider, azure_service_mock):
+    azure_service_mock.minicloud_endpoint = "https://localhost:5443"
+    azure_service_mock.keyvault.vaults.get.return_value.properties.vault_uri = (
+        "https://localhost:5443/keyvault/test-vault-eastus/"
+    )
+    assert (
+        kms_provider.get_vault_uri("eastus", azure_service_mock) == "https://localhost:5443/keyvault/test-vault-eastus/"
+    )
+    azure_service_mock.keyvault.vaults.get.assert_called_once_with(
+        resource_group_name="test-rg", vault_name="test-vault-eastus"
+    )
+    azure_service_mock.minicloud_endpoint = None
+    assert kms_provider.get_vault_uri("eastus", azure_service_mock) == "https://test-vault-eastus.vault.azure.net/"
+    azure_service_mock.keyvault.vaults.get.assert_called_once()
+
+
 def test_vm_creation_fails_when_kms_returns_none(vm_provider, mock_ssh_key):
     """Test that VM creation fails with ProvisionError when KMS setup returns None."""
     with patch("sdcm.provision.azure.virtual_machine_provider.AzureKmsProvider") as mock_kms_class:

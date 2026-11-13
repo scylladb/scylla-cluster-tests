@@ -41,7 +41,7 @@ are separate hydra invocations that all need to reach the same live endpoint.
 
 `configurations/minicloud.yaml` is **mandatory** for every minicloud run - layer it after the
 test-case yaml. It is the single delivery mechanism for the params the emulator requires:
-KMS off by default (aws and gce may opt in, see below), `instance_provision: on_demand` (no spot
+KMS off by default (any backend may opt in, see below), `instance_provision: on_demand` (no spot
 market), `ip_ssh_connections: private` (guests live on the host's userspace switch),
 shipped IO properties instead of iotune, AZ/region fallbacks off, and kernel-panic checker off.
 Scylla runs in production mode: the shipped IO properties satisfy its IO check, and each shard
@@ -176,9 +176,9 @@ exit-137 failure mode above if you were wrong.
 
 ## What minicloud does not implement
 
-- **KMS on azure, in SCT** - the overlay keeps KMS off on every backend. An aws or gce run may opt
-  in with `SCT_ENTERPRISE_DISABLE_KMS=false`. minicloud also emulates Azure Key Vault, but SCT does
-  not wire it up yet, so the preflight check rejects KMS on azure. No pipeline knows about KMS.
+- **KMS by default** - the overlay keeps KMS off on every backend. minicloud emulates AWS KMS,
+  GCP Cloud KMS and Azure Key Vault, so a run may opt in with `SCT_ENTERPRISE_DISABLE_KMS=false`.
+  No pipeline knows about KMS.
 - **Spot** - `instance_provision` must stay `on_demand`.
 - **Local SSDs / NVMe passthrough** - guests get qcow2-backed disks.
 - Anything not in the emulated API surface fails closed with an explicit error rather than
@@ -369,7 +369,7 @@ Unsupported APIs:
 
 | API | effect | handling |
 |---|---|---|
-| `Microsoft.KeyVault`, `Microsoft.ManagedIdentity` | VM create fails in the KMS provider | `enterprise_disable_kms: true` in `configurations/minicloud.yaml` |
+| `Microsoft.ManagedIdentity` | the VM identity block is accepted and ignored; the metadata service hands a token to any VM | nothing to do |
 | `purchasePlan` set for every URN | loader and monitor image download may be rejected | unverified |
 | community gallery and gallery listing | `scylla_version` cannot be resolved | pin a URN |
 | `virtualMachines/{vm}/restart`, `runCommand` | reboot nemeses fail (405) | QATOOLS-468; the provision test uses `not disruptive` |
