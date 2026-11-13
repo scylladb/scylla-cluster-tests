@@ -51,6 +51,11 @@ Master 3-weeks (master-3weeks):
 - latency-650gb-during-rolling-upgrade-i8g-tablets — versions: ['master'], labels: ['master-3weeks'], mixed load
 - latency-650gb-with-nemesis-i8g-tablets — versions: ['master'], labels: ['master-3weeks'], mixed load
 
+Logstor weekly (logstor-weekly, Friday 20:00 UTC), x86 i4i.4xlarge:
+- logstor_uniform, logstor_hotspot, logstor_uniform_ec_twin, logstor_lsm_dual_60_40
+  - versions: ['master'], labels: ['logstor-weekly'], one sub test each
+- the same four jobs on 2027.1: versions: ['2027.1'], labels: [] (logstor is new in 2027.1)
+
 Master monthly (master-monthly):
 - predefined-throughput-steps-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 4 sub tests
 - latency-650gb-with-nemesis-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 3 sub tests (mixed, read, write)
@@ -91,3 +96,4 @@ Do not switch a job off by emptying its `include_versions`: an empty list is *no
 | scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets (weekly) | us-east-1 | us-west-2 |
 | scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets (3-weeks) | us-east-2 | eu-west-3 |
 | scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets (3-weeks) | eu-north-1 | eu-west-2 |
+| logstor_uniform, logstor_hotspot, logstor_uniform_ec_twin, logstor_lsm_dual_60_40 (weekly, i4i, throttle category SCT-perf-us-east-1, at most 3 at once) | us-east-1 | us-east-1 |
