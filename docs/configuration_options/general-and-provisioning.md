@@ -758,11 +758,11 @@ Duration (min) up to which [`instance_provision`](#instance_provision) defaults 
 
 ## **ssh_transport** / SCT_SSH_TRANSPORT
 
-Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'
+Set type of ssh library to use. Could be 'libssh2' (default), 'fabric' or 'asyncssh'
 
 **default:** libssh2
 
-**type:** Literal['libssh2', 'fabric']
+**type:** Literal['libssh2', 'fabric', 'asyncssh']
 
 
 <a id="test_duration"></a>
