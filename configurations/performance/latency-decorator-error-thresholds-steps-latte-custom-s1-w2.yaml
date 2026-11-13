@@ -1,0 +1,22 @@
+# P99 limits (ms) for latte-perf-regression-mixed-disk-bound-custom-s1-w2-i8g-8xlarge.
+# Disk-bound random reads sit above the 10 ms default even with correct io_properties, so the
+# limits are set from the calibration runs (SCT-1383) with headroom over the iotune side:
+# - iotune: write P99 ~2.2 ms, read P99 9-23 ms at 105k and 145k mixed ops/s.
+# - old io_properties preset: read P99 71 ms at 105k; writes fall behind at 145k (P99 43 s).
+# So a 50 ms read / 10 ms write limit passes correct io_properties and fails overstated ones.
+latency_decorator_error_thresholds:
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 10
+      P99 read:
+        fixed_limit: 50
+    unthrottled:
+      P99 write:
+        fixed_limit: 50
+      P99 read:
+        fixed_limit: 100
