@@ -5,6 +5,11 @@ add_node_cnt: 20
 
 user_prefix: 'cluster-scale-180-200-test'
 
+# The sct-runner holds a live remoter (SSH session + background log threads) per node.
+# For 180-200 nodes the default runner (m7i-flex.xlarge, 16G) runs out of memory and the
+# sct.py process is OOM-killed during (parallel) provisioning. Use a memory-optimized runner.
+instance_type_runner: 'r6i.2xlarge'  # 8 vcpus, 64G
+
 # Takes too long on big clusters
 cluster_health_check: false
 use_scylla_doctor_on_failure: false
