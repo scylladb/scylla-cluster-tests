@@ -338,6 +338,20 @@ class LoaderUtilsMixin:
             self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
             self._run_cql_commands(post_prepare_cql_cmds)
 
+    def wait_prepare_compactions(self):
+        if not (prepare_wait_no_compactions_timeout := self.params.get("prepare_wait_no_compactions_timeout")):
+            return
+        if self.params.get("prepare_wait_no_compactions_trigger_major"):
+            self.log.info("Trigger a major compaction on all the DB nodes")
+            for node in self.db_cluster.nodes:
+                node.run_nodetool("compact")
+        self.log.info(
+            "Wait up to %s minutes for the compactions to finish on all the DB nodes",
+            prepare_wait_no_compactions_timeout,
+        )
+        wait_time, _ = self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
+        self.log.info("Compactions finished on all the DB nodes after %.0f seconds of waiting", wait_time)
+
     def run_prepare_write_cmd(self):
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
@@ -423,11 +437,7 @@ class LoaderUtilsMixin:
 
             self.run_post_prepare_cql_cmds()
 
-        prepare_wait_no_compactions_timeout = self.params.get("prepare_wait_no_compactions_timeout")
-        if prepare_wait_no_compactions_timeout:
-            for node in self.db_cluster.nodes:
-                node.run_nodetool("compact")
-            self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
+        self.wait_prepare_compactions()
 
         self.prepare_phase_active.clear()
         self.log.info("Prepare finished")
