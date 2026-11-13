@@ -19,15 +19,19 @@ import random
 import re
 import time
 import traceback
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from datetime import datetime
 from functools import cache, wraps
 from itertools import chain, zip_longest
 from itertools import count as itertools_count
 from typing import List
+from uuid import UUID
 
 import cassandra
 import tenacity
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement
+from cassandra.query import SimpleStatement, ValueSequence
 
 from argus.client.sct.types import Package
 from sdcm import argus_results, wait
@@ -75,15 +79,67 @@ OVERSIZED_RPC_ALLOCATION_SYMBOL = "seastar::rpc::client::wait_for_reply"
 OVERSIZED_ACK2_ALLOCATION_SYMBOL = "gms::gossiper::do_send_ack2_msg"
 
 
+@dataclass
+class TruncationCheck:
+    """What the truncate check carries from before the node step to after it; per-table maps are keyed by table name."""
+
+    table_ids: dict[str, UUID]
+    nodes_by_host_id: dict[str, BaseNode]
+    replicas_before: dict[str, set[str]]
+    baseline: dict[str, dict[str, datetime | None]]
+    expected_nodes: dict[str, list[BaseNode]] = field(default_factory=dict)
+    recorded: dict[str, dict[str, datetime]] = field(default_factory=dict)
+
+    @property
+    def all_expected_nodes(self) -> list[BaseNode]:
+        return list({node.name: node for nodes in self.expected_nodes.values() for node in nodes}.values())
+
+
+def expected_record_hosts(replicas_before: set[str], replicas_after: set[str], all_hosts: set[str]) -> set[str]:
+    """Return the host ids that must hold a record: the tablet replicas that stayed in place, or every host for vnodes.
+
+    TRUNCATE on a tablet table runs only on the hosts that hold a replica, and a tablet can move while the test runs.
+    """
+    if not replicas_before and not replicas_after:
+        return set(all_hosts)
+    return replicas_before & replicas_after
+
+
+def missing_fresh_records(baseline: dict[str, datetime | None], found: dict[str, datetime | None]) -> dict[str, str]:
+    """Map each node whose record is absent or not newer than its pre-TRUNCATE baseline to the reason."""
+    problems = {}
+    for node, truncated_at in found.items():
+        before = baseline.get(node)
+        if truncated_at is None:
+            problems[node] = "no record"
+        elif before is not None and truncated_at <= before:
+            problems[node] = f"record {truncated_at} is not newer than {before}"
+    return problems
+
+
+def changed_records(recorded: dict[str, datetime], found: dict[str, datetime | None]) -> dict[str, str]:
+    """Map each node whose record seen after the TRUNCATE is gone or different now to the reason."""
+    problems = {}
+    for node, truncated_at in recorded.items():
+        now = found.get(node)
+        if now is None:
+            problems[node] = f"record {truncated_at} is gone"
+        elif now != truncated_at:
+            problems[node] = f"record {truncated_at} became {now}"
+    return problems
+
+
 def truncate_entries(func):
     @wraps(func)
     def inner(self, *args, **kwargs):
+        check = None
         if self.do_truncates:
             node = args[0]
             with self.db_cluster.cql_connection_patient(node, keyspace="truncate_ks", connect_timeout=600) as session:
-                self.actions_log.info("Start truncate simple tables")
                 session.default_timeout = 60.0 * 5
                 session.default_consistency_level = ConsistencyLevel.QUORUM
+                check = self._prepare_truncation_check(session)
+                self.actions_log.info("Start truncate simple tables")
                 try:
                     self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
                     self.actions_log.info("Finish truncate simple tables")
@@ -92,17 +148,21 @@ def truncate_entries(func):
                         message=f"Failed truncate simple tables. Error: {details!s}. Traceback: {traceback.format_exc()}",
                         severity=Severity.ERROR,
                     ).publish()
-                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+                    check = None
+                if check is not None:
+                    self._verify_truncation_recorded(session, check)
 
         func_result = func(self, *args, **kwargs)
 
         if self.do_truncates:
+            if check is not None:
+                self._verify_truncation_records_kept(check)
             # re-new connection
             with self.db_cluster.cql_connection_patient(node, keyspace="truncate_ks", connect_timeout=600) as session:
                 session.default_timeout = 60.0 * 5
                 session.default_consistency_level = ConsistencyLevel.QUORUM
-                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
-                self.read_data_from_truncated_tables(session=session)
+                if check is not None:
+                    self.read_data_from_truncated_tables(session=session, table_names=list(check.table_ids))
                 self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         return func_result
@@ -221,10 +281,98 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def _query_from_one_table(self, session, query, table_name) -> list:
         return self.rows_to_list(session.execute(SimpleStatement(query.format(table_name)), timeout=300))
 
-    def read_data_from_truncated_tables(self, session):
+    def _tablet_replica_hosts(self, session, table_id: UUID) -> set[str]:
+        rows = session.execute("SELECT replicas FROM system.tablets WHERE table_id = %s", (table_id,))
+        return {str(host_id) for row in rows for host_id, _ in row.replicas}
+
+    def _read_host_ids_and_records(
+        self, nodes: list[BaseNode], table_ids: dict[str, UUID]
+    ) -> tuple[dict[str, BaseNode], dict[str, dict[str, datetime | None]]]:
+        nodes_by_host_id, truncated_at = {}, {}
+        for node in nodes:
+            with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                nodes_by_host_id[str(session.execute("SELECT host_id FROM system.local").one().host_id)] = node
+                rows = session.execute(
+                    "SELECT table_uuid, truncated_at FROM system.truncated WHERE table_uuid IN %s",
+                    (ValueSequence(table_ids.values()),),
+                )
+                # one row per shard; keep the oldest, so a single stale shard fails the check
+                by_id = {}
+                for row in rows:
+                    by_id[row.table_uuid] = min(row.truncated_at, by_id.get(row.table_uuid, row.truncated_at))
+                truncated_at[node.name] = by_id
+        records = {
+            table: {node: by_id.get(table_id) for node, by_id in truncated_at.items()}
+            for table, table_id in table_ids.items()
+        }
+        return nodes_by_host_id, records
+
+    def _prepare_truncation_check(self, session) -> TruncationCheck:
+        rows = session.execute("SELECT table_name, id FROM system_schema.tables WHERE keyspace_name='truncate_ks'")
+        ids = {row.table_name: row.id for row in rows}
+        names = [f"truncate_table{i}" for i in range(NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)]
+        if missing := [name for name in names if name not in ids]:
+            raise AssertionError(f"Tables not found in truncate_ks: {', '.join(missing)}")
+        table_ids = {name: ids[name] for name in names}
+
+        nodes_by_host_id, baseline = self._read_host_ids_and_records(self.db_cluster.data_nodes, table_ids)
+        replicas_before = {
+            table: self._tablet_replica_hosts(session, table_id) for table, table_id in table_ids.items()
+        }
+        return TruncationCheck(
+            table_ids=table_ids, nodes_by_host_id=nodes_by_host_id, replicas_before=replicas_before, baseline=baseline
+        )
+
+    def _verify_truncation_recorded(self, session, check: TruncationCheck) -> None:
+        nodes_by_host_id = check.nodes_by_host_id
+        problems = []
+        for table, table_id in check.table_ids.items():
+            before = check.replicas_before[table]
+            after = self._tablet_replica_hosts(session, table_id)
+            expected = expected_record_hosts(before, after, set(nodes_by_host_id))
+            moved = before ^ after
+            if not expected:
+                problems.append(
+                    f"{table}: no replica stayed in place during the truncate: before {sorted(before)}, after {sorted(after)}"
+                )
+            problems.extend(
+                f"{table}: replica host {host_id} is not a data node"
+                for host_id in sorted(expected - nodes_by_host_id.keys())
+            )
+            if moved:
+                self.log.info("%s: replicas moved during the truncate, not checked: %s", table, sorted(moved))
+            check.expected_nodes[table] = [
+                nodes_by_host_id[host_id] for host_id in expected if host_id in nodes_by_host_id
+            ]
+
+        _, records = self._read_host_ids_and_records(check.all_expected_nodes, check.table_ids)
+        for table in check.table_ids:
+            found = {node.name: records[table][node.name] for node in check.expected_nodes[table]}
+            problems.extend(
+                f"{table} on {node}: {reason}"
+                for node, reason in sorted(missing_fresh_records(check.baseline[table], found).items())
+            )
+            check.recorded[table] = {
+                node: truncated_at for node, truncated_at in found.items() if truncated_at is not None
+            }
+        if problems:
+            self.fail("Truncation is not recorded on every replica:\n" + "\n".join(problems))
+
+    def _verify_truncation_records_kept(self, check: TruncationCheck) -> None:
+        _, records = self._read_host_ids_and_records(check.all_expected_nodes, check.table_ids)
+        problems = []
+        for table in check.table_ids:
+            found = {node.name: records[table][node.name] for node in check.expected_nodes[table]}
+            problems.extend(
+                f"{table} on {node}: {reason}"
+                for node, reason in sorted(changed_records(check.recorded[table], found).items())
+            )
+        if problems:
+            self.fail("Truncation records changed during the node step:\n" + "\n".join(problems))
+
+    def read_data_from_truncated_tables(self, session, table_names: Iterable[str]):
         truncate_query = "SELECT COUNT(*) FROM {}"
-        tables_name = self.get_tables_name_of_keyspace(session=session, keyspace_name="truncate_ks")
-        for table_name in tables_name:
+        for table_name in table_names:
             self.actions_log.info(f"Start read data from {table_name} tables")
             try:
                 count = self._query_from_one_table(session=session, query=truncate_query, table_name=table_name)
@@ -239,30 +387,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     message=f"Failed read data from {table_name} tables. Error: {details!s}. Traceback: {traceback.format_exc()}",
                     severity=Severity.ERROR,
                 ).publish()
-
-    def validate_truncated_entries_for_table(self, session, system_truncated=False):
-        tables_id = self.get_tables_id_of_keyspace(session=session, keyspace_name="truncate_ks")
-
-        for table_id in tables_id:
-            if system_truncated:
-                # validate truncation entries in the system.truncated table - expected entry
-                truncated_time = self.get_truncated_time_from_system_truncated(session=session, table_id=table_id)
-                self.assertTrue(
-                    truncated_time, msg="Expected truncated entry in the system.truncated table, but it's not found"
-                )
-
-            # validate truncation entries in the system.local table - not expected entry
-            truncated_time = self.get_truncated_time_from_system_local(session=session)
-            if system_truncated:
-                self.assertEqual(
-                    truncated_time,
-                    [[None]],
-                    msg="Not expected truncated entry in the system.local table, but it's found",
-                )
-            else:
-                self.assertTrue(
-                    truncated_time, msg="Expected truncated entry in the system.local table, but it's not found"
-                )
 
     @truncate_entries
     def upgrade_node(self, node, upgrade_sstables=True):
