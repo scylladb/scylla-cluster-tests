@@ -256,6 +256,15 @@ class TestHealthChecker:
         assert isinstance(err, str)
         assert err
 
+    def test_check_schema_agreement_default_budget_backs_off(self):
+        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=100)
+
+        with unittest.mock.patch("time.sleep") as mocked_sleep:
+            err = check_schema_agreement_in_gossip_and_peers(problem_node)
+
+        assert [call.args[0] for call in mocked_sleep.call_args_list] == [1, 2, 4, 8] + [15] * 7
+        assert err
+
     def test_check_group0_tokenring_consistency_with_none_values(self):
         """Test that check_group0_tokenring_consistency handles None values gracefully"""
         # Create a mock node with raft
