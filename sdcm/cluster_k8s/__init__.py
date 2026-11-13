@@ -3324,7 +3324,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                     return False
             return True
 
-    def restart_scylla(self, nodes=None, random_order=False):
+    def restart_scylla(self, nodes=None, random_order=False, *, random_generator: random.Random | None = None):
         nodes = nodes or self.nodes
         for i, k8s_cluster in enumerate(self.k8s_clusters):
             current_k8s_cluster_nodes = [node for node in nodes if node.dc_idx == i]
@@ -3344,7 +3344,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             readiness_timeout = self.get_nodes_reboot_timeout(len(current_k8s_cluster_nodes))
             statefulsets = KubernetesOps.list_statefulsets(k8s_cluster, namespace=self.namespace)
             if random_order:
-                random.shuffle(statefulsets)
+                (random_generator or random.Random()).shuffle(statefulsets)
             for statefulset in statefulsets:
                 k8s_cluster.kubectl(
                     f"rollout status statefulset/{statefulset.metadata.name} "
