@@ -5915,6 +5915,38 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
+# cap of the threads that check the nodes of a cluster at the same time, each thread opens its own SSH connection
+NODES_CHECK_MAX_WORKERS = 20
+
+
+def _check_nodes_in_parallel(check: Callable[[BaseNode], Any], nodes: list[BaseNode]) -> None:
+    """Run `check(node)` for every node, on up to NODES_CHECK_MAX_WORKERS nodes at the same time.
+
+    Raises the exception of the first failed node, in the order of `nodes`, the same one a serial loop
+    would raise. Once a check failed, no other check starts, and the running ones are waited for.
+    """
+    if not nodes:
+        return
+    failed = threading.Event()
+
+    def check_unless_failed(node: BaseNode) -> None:
+        # `map` cancels the queued checks only after the caller sees the failure, and by then
+        # the workers that got free already took the next nodes
+        if failed.is_set():
+            return
+        try:
+            check(node)
+        except BaseException:
+            failed.set()
+            raise
+
+    with ThreadPoolExecutor(
+        max_workers=min(len(nodes), NODES_CHECK_MAX_WORKERS), thread_name_prefix="NodesCheck"
+    ) as executor:
+        for _ in executor.map(check_unless_failed, nodes):
+            pass
+
+
 class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
@@ -6365,9 +6397,12 @@ class BaseScyllaCluster:
     def wait_for_schema_agreement(self):
         nodes_to_check = [node for node in self.nodes if not node.running_nemesis]
         assert nodes_to_check, "All nodes are under active nemesis, schema agreement could not be verified"
-        for node in nodes_to_check:
+
+        def check_node(node):
             err = check_schema_agreement_in_gossip_and_peers(node)
             assert not err, err
+
+        _check_nodes_in_parallel(check_node, nodes_to_check)
         self.log.debug("Schema agreement is reached")
         return True
 
@@ -7105,8 +7140,7 @@ class BaseScyllaCluster:
 
     @retrying(n=30, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
     def wait_all_nodes_un(self):
-        for node in self.nodes:
-            self.check_nodes_up_and_normal(verification_node=node)
+        _check_nodes_in_parallel(lambda node: self.check_nodes_up_and_normal(verification_node=node), self.nodes)
 
     def restart_binary_protocol(self, nodes=None, random_order=False, verify_up=True):
         nodes_to_restart = (nodes or self.nodes)[:]  # create local copy of nodes list
