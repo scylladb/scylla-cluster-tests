@@ -1,7 +1,9 @@
 #!groovy
 
 def completed_stages = [:]
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+// keep these in the script binding (no `def`) so call() and post{} can read them; log collection
+// and cleanup default to 30 minutes so they still run when 'Get test duration' fails
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,30,30]
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region)
@@ -327,11 +329,9 @@ def call(Map pipelineParams) {
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
                     def clean_sct_runner = completed_stages['clean_sct_runner']
-                    sh """
-                        echo "$collect_logs"
-                        echo "$clean_resources"
-                        echo "$send_email"
-                    """
+                    echo "'collect_logs' stage is completed: $collect_logs"
+                    echo "'clean_resources' stage is completed: $clean_resources"
+                    echo "'send_email' stage is completed: $send_email"
                     if (!completed_stages['clean_resources']) {
                         catchError {
                             script {
