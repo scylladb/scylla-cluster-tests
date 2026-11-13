@@ -4,13 +4,64 @@
 # Measured step: random uniform selection (distribution="random" -> hash_range(i, ROW_COUNT))
 # over an unbounded cycle range (no --end-cycle) so the key sequence never repeats within the run.
 # Schema: 10 columns x 200 bytes each (matching kv_uniform.rn reference)
-# Mixed (write:30,read:70) workload ramps to 600k ops/s before the 60m measured step
+# The reads use BYPASS CACHE, so that each read goes to the logstor segments on disk and not to
+# the logstor record cache.
+# Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
+# measured step, mixed (write:30,read:70) at 600k ops/s
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
+# Each latte command of each step starts at its own cycle, because latte derives the key of a
+# cycle from the cycle number alone, and the written values from the key. Two commands that
+# start at the same cycle therefore use the same keys in the same order:
+#  - A write step that repeats the keys of an earlier write step overwrites the records of
+#    that step in the order that they were written. Whole segments then die at the same time,
+#    and the write amplification that the test measures is lower than in a real workload.
+#  - A read command and a write command that start at the same cycle go through the same keys
+#    in the same order, so the read of a key and the write of that key are correlated in time.
+# The start cycles of the commands of a step are 5e9 apart, and the start cycles of the steps
+# are 1e10 apart. A 60m step at 1M ops/s uses 3.6e9 cycles, so the ranges do not overlap.
+# The populate uses the sequential distribution, which maps cycles to keys differently, so it
+# needs no range of its own.
+#
+# The first step conditions the logstor pool, and its results are not a measurement. The
+# populate writes each key once, so after it the pool holds live records and no dead records,
+# and logstor compaction has no work. A measurement on that pool shows a write amplification of
+# about 1 and no compaction cost, which is not the steady state of the workload.
+#
+# The conditioning step writes at 250k ops/s and reads at only 100 ops/s, because only
+# overwrites make dead records. The read command still runs, because stress_cmd_m is one template
+# for all the steps and a step cannot remove a command. At 100 ops/s, each HDR interval of the
+# read command still has samples. At this rate, the free segments of the pool drop to the default
+# logstor_compaction_trigger_threshold of 0.05 after about 35 minutes, and the rest of the step
+# lets compaction get to a steady state.
+#
+# The conditioning step sets wait_no_compactions to false, so that the measured step starts right
+# after the conditioning step. The wait between the steps watches only the
+# scylla_compaction_manager_compactions metric, which does not count logstor compaction, so the
+# wait adds an idle gap of 3 minutes or more and nothing else. In that gap, logstor compaction
+# frees segments with no foreground writes, so the measured step would start with more free
+# segments than in the steady state.
 perf_gradual_throttle_steps:
   mixed:
-    - {threads: 64, concurrency: 48, rate: '600000', write_rate: '180000', read_rate: '420000', duration: '60m'}
+    - {threads: 64, concurrency: 48, rate: '250000', write_rate: '250000', read_rate: '100',
+       write_start_cycle: 0, read_start_cycle: 5000000000, duration: '60m', wait_no_compactions: false}
+    - {threads: 64, concurrency: 48, rate: '600000', write_rate: '180000', read_rate: '420000',
+       write_start_cycle: 10000000000, read_start_cycle: 15000000000, duration: '60m'}
+
+# The conditioning step (250000) is not a measurement, so its latencies have no limits. Without
+# this entry, the step gets the P99 limit of 10 ms from mixed.default in test_default.yaml.
+latency_decorator_error_thresholds:
+  mixed:
+    '250000':
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
@@ -23,6 +74,8 @@ prepare_stress_cmd: >-
   data_dir/latte/latte_cs_alike.rn
 
 # Populate 500M rows with uniform distribution
+# The utilization of the logstor pool (about 44%) depends on the row count, the row shape and
+# logstor_disk_size_in_mb in enable_logstor.yaml. Read enable_logstor.yaml before you change them.
 prepare_write_cmd:
   - >-
     latte run --function write --consistency ALL --duration 500000000
@@ -37,16 +90,16 @@ stress_cmd_m:
   - >-
     latte run --function write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency --rate $write_rate
-    --start-cycle 1
+    --start-cycle $write_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function read --consistency ONE --duration $duration
     --threads $threads --concurrency $concurrency --rate $read_rate
-    --start-cycle 1
+    --start-cycle $read_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
-    -P column_count=10 -P column_size=200 -P key_size=48
+    -P column_count=10 -P column_size=200 -P key_size=48 -P bypass_cache=true
     data_dir/latte/latte_cs_alike.rn
 
 latte_schema_parameters:

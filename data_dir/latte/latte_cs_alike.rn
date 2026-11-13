@@ -56,6 +56,11 @@ const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
 //   'gauss_mean' and 'gauss_stddev' params.
 pub const DISTRIBUTION = latte::param!("distribution", "sequential");
 
+// When 'bypass_cache' is true, the read statements carry BYPASS CACHE, so that the storage engine
+// serves each read and the row cache does not. The setting applies to the prepared statements,
+// so set it only on the latte commands that read.
+const BYPASS_CACHE = latte::param!("bypass_cache", false);
+
 pub const P_STMT_WRITE = "latte_prep_stmt__write";
 pub const P_STMT_READ = "latte_prep_stmt__read";
 const P_STMT_COUNTER_WRITE = "latte_prep_stmt__counter_write";
@@ -158,7 +163,8 @@ pub async fn prepare(db) {
         P_STMT_WRITE,
         `INSERT INTO ${KEYSPACE}.${TABLE}(key${columns_keys}) VALUES (:key${columns_values})`
     ).await?;
-    db.prepare(P_STMT_READ, `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :key`).await?;
+    let bypass_cache = if BYPASS_CACHE { " BYPASS CACHE" } else { "" };
+    db.prepare(P_STMT_READ, `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :key${bypass_cache}`).await?;
 
     if !COUNTER_TABLE.is_empty() {
         db.prepare(
@@ -167,7 +173,7 @@ pub async fn prepare(db) {
             ` SET ${counter_columns}` +
             " WHERE key = :key"
         ).await?;
-        db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key`).await?;
+        db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key${bypass_cache}`).await?;
     }
 
     validate_distribution(db).await
