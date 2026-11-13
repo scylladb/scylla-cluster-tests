@@ -152,7 +152,10 @@ def delete_existing_backups(runner, mgr_cluster):
     ignore_take_snapshot_failing, issue_refs=["https://github.com/scylladb/scylla-manager/issues/3389"]
 )
 def mgmt_backup(runner, backup_specific_tables):
-    """Create and run a Manager backup task, optionally for specific keyspaces.
+    """Create and run a Manager backup task, optionally for specific keyspaces or tables.
+
+    The ``mgmt_backup_keyspaces`` patterns, when set, select what to back up regardless of
+    ``backup_specific_tables``.
 
     Args:
         runner: ``NemesisRunner`` instance.
@@ -176,22 +179,15 @@ def mgmt_backup(runner, backup_specific_tables):
         backup_bucket_location = runner.cluster.params.get("backup_bucket_location")[0].format(region=region)
         location = f"{backup_bucket_backend}:{backup_bucket_location}"
     delete_existing_backups(runner, mgr_cluster)
-    if backup_specific_tables:
-        non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in runner.cluster.get_test_keyspaces()]
-        runner.actions_log.info(f"Starting Scylla Manager backup task for keyspaces: {non_test_keyspaces}")
-        mgr_task = mgr_cluster.create_backup_task(
-            location_list=[
-                location,
-            ],
-            keyspace_list=non_test_keyspaces,
-        )
+    if keyspace_list := runner.cluster.params.get("mgmt_backup_keyspaces"):
+        runner.actions_log.info(f"Starting Scylla Manager backup task for keyspaces and tables: {keyspace_list}")
+    elif backup_specific_tables:
+        keyspace_list = [cql_unquote_if_needed(ks) for ks in runner.cluster.get_test_keyspaces()]
+        runner.actions_log.info(f"Starting Scylla Manager backup task for keyspaces: {keyspace_list}")
     else:
+        keyspace_list = None
         runner.actions_log.info("Starting Scylla Manager backup task for all keyspaces")
-        mgr_task = mgr_cluster.create_backup_task(
-            location_list=[
-                location,
-            ]
-        )
+    mgr_task = mgr_cluster.create_backup_task(location_list=[location], keyspace_list=keyspace_list)
 
     assert mgr_task is not None, "Backup task wasn't created"
 
