@@ -428,6 +428,20 @@ class RaftFeature(RaftFeatureOperations):
                     error=warning_message,
                 )
 
+            if not group0_members and valid_tokenring_members:
+                # get_group0_members() returns [] when the read fails; without this the checks below pass vacuously
+                warning_message = (
+                    f"Node {self._node.name} could not read group0 members while the token ring has "
+                    f"{len(valid_tokenring_members)} member(s); group0/token-ring consistency was not checked"
+                )
+                LOGGER.warning(warning_message)
+                yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                    severity=Severity.WARNING,
+                    node=self._node.name,
+                    error=warning_message,
+                )
+                return
+
             token_ring_node_ids = [member.host_id for member in valid_tokenring_members]
             # Healthy path: every group0 member is in the token ring and is a voter (or non-voters are
             # legitimate under limited voters), so search_inconsistent_host_ids() (3 CQL connections
