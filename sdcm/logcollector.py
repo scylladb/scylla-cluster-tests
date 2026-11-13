@@ -23,6 +23,7 @@ import time
 import traceback
 import urllib.parse
 from collections import OrderedDict
+from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -80,6 +81,16 @@ from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 
 LOGGER = logging.getLogger(__name__)
+
+# SSH state of the node whose logs this thread collects, checked once per node:
+# on a node without SSH each is_up() waits 30s, and every log entity used to ask again.
+_NODE_SSH_UP: ContextVar[bool | None] = ContextVar("node_ssh_up", default=None)
+
+
+def _node_ssh_up(node) -> bool:
+    if (ssh_up := _NODE_SSH_UP.get()) is None:
+        ssh_up = node.remoter.is_up()
+    return ssh_up
 
 
 def _create_retry_session(retries: int = 3) -> requests.Session:
@@ -803,9 +814,11 @@ class LogCollector:
     def current_run(self):
         return LogCollector._current_run
 
-    def __init__(self, nodes, test_id, storage_dir, params):
+    def __init__(self, nodes, test_id, storage_dir, params, cluster_log_type: str | None = None):
         self.test_id = test_id
         self.nodes = nodes
+        if cluster_log_type:
+            self.cluster_log_type = cluster_log_type
         self.local_dir = self.create_local_storage_dir(storage_dir)
         self.params = params
         for entity in self.log_entities:
@@ -827,7 +840,7 @@ class LogCollector:
             path = node.name
         remote_dir = os.path.join(self.node_remote_dir, path)
 
-        if ssh_connected := node.remoter.is_up():
+        if ssh_connected := _node_ssh_up(node):
             try:
                 result = node.remoter.run(f"mkdir -p {remote_dir}", ignore_status=True)
 
@@ -842,7 +855,7 @@ class LogCollector:
                 ssm_result = ssm_runner.run(f"mkdir -p {remote_dir}", ignore_status=True)
                 ok = ssm_result.ok
                 if not ok:
-                    LOGGER.error("SSM command failed for instance %s: mkdir", node._instance.get("InstanceId"))
+                    LOGGER.error("SSM command failed for instance %s: mkdir", ssm_runner.instance_id)
 
             except (ClientError, AttributeError) as e:
                 LOGGER.error("Failed to run SSM command: %s", e)
@@ -858,8 +871,9 @@ class LogCollector:
             return None, False
 
         is_file_remote = True
+        ok = False
 
-        if ssh_connected := node.remoter.is_up():
+        if ssh_connected := _node_ssh_up(node):
             try:
                 collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
                 node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
@@ -886,11 +900,9 @@ class LogCollector:
                 )
                 ok = ssm_result.ok
                 if not ssm_result.ok:
-                    LOGGER.error(
-                        "SSM command failed for instance %s: %s ", node._instance.get("InstanceId"), collect_log_command
-                    )
+                    LOGGER.error("SSM command failed for instance %s: %s ", ssm_runner.instance_id, collect_log_command)
                     return None, is_file_remote
-            except (ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
+            except (ClientError, ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
                 LOGGER.error("Failed to run SSM command: %s", e)
                 return None, is_file_remote
         return log_filename if ok else None, is_file_remote
@@ -942,23 +954,36 @@ class LogCollector:
         return local_dir
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        return self.collect_node_logs(local_search_path)
+
+    def collect_node_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        """Collect the logs of `self.nodes` only, without the subclasses' scan for inactive nodes."""
+
         def collect_logs_per_node(node):
             LOGGER.info("Collecting logs on host: %s", node.name)
-            remote_node_dir = self.create_remote_storage_dir(node)
-            local_node_dir = os.path.join(self.local_dir, node.name)
-            local_parent_dir = self.local_dir
-            for log_entity in self.log_entities:
-                try:
-                    log_entity.collect(
-                        node=node,
-                        local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
-                        remote_dst=remote_node_dir,
-                        local_search_path=local_search_path,
-                    )
-                except Exception as details:  # noqa: BLE001
-                    LOGGER.error(
-                        "Error occured during collecting of %s on host: %s\n%s", log_entity.name, node.name, details
-                    )
+            # Set in the worker thread, so each node keeps its own answer
+            ssh_up_token = _NODE_SSH_UP.set(bool(node.remoter and node.remoter.is_up()))
+            try:
+                remote_node_dir = self.create_remote_storage_dir(node)
+                local_node_dir = os.path.join(self.local_dir, node.name)
+                local_parent_dir = self.local_dir
+                for log_entity in self.log_entities:
+                    try:
+                        log_entity.collect(
+                            node=node,
+                            local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
+                            remote_dst=remote_node_dir,
+                            local_search_path=local_search_path,
+                        )
+                    except Exception as details:  # noqa: BLE001
+                        LOGGER.error(
+                            "Error occured during collecting of %s on host: %s\n%s",
+                            log_entity.name,
+                            node.name,
+                            details,
+                        )
+            finally:
+                _NODE_SSH_UP.reset(ssh_up_token)
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 
@@ -968,9 +993,12 @@ class LogCollector:
         if workers_number := len(self.nodes):
             workers_number = min(workers_number, 30)
             try:
-                ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
+                results = ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                     collect_logs_per_node, ignore_exceptions=True
                 )
+                for result in results:
+                    if result.exc:
+                        LOGGER.error("Failed to collect logs on host %s: %r", result.obj.name, result.exc)
             except Exception as details:  # noqa: BLE001
                 LOGGER.error("Error occured during collecting logs %s", details)
 
