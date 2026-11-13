@@ -1455,6 +1455,10 @@ class ClusterTester(unittest.TestCase):
             for future in as_completed(futures):
                 future.result()
 
+            if self.loaders and self.monitors:
+                # The monitors' setup may have written the loader targets before the loaders picked their port
+                self.monitors.reconfigure_scylla_monitoring()
+
             if self.params.get("use_ldap") and self.params.get("ldap_server_type") == LdapServerType.MS_AD:
                 if self.loaders:
                     self.loaders.added_password_suffix = True
