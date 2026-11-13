@@ -307,11 +307,12 @@ class AdaptiveTimeoutMultipliers(RootModel):
 
 
 class GrafanaPanelScreenshot(BaseModel):
-    """Capture a specific Grafana panel screenshot -- no Python code changes needed.
+    """Capture a Grafana panel, or a whole dashboard when `panel_title` is omitted -- no Python code changes needed.
 
     YAML example::
 
         grafana_screenshot_panels:
+          - dashboard_title: "Gemini"
           - dashboard_title: "Detailed"
             panel_title: "LSA total memory"
           - dashboard_title: "Overview"
@@ -320,7 +321,9 @@ class GrafanaPanelScreenshot(BaseModel):
     """
 
     dashboard_title: str = Field(description="Grafana dashboard title (substring match used for search)")
-    panel_title: str = Field(description="Panel title within the dashboard (substring match)")
+    panel_title: str | None = Field(
+        default=None, description="Panel title within the dashboard (substring match); omit for the whole dashboard"
+    )
     resolution: tuple[int, int] = Field(default=(1920, 4000), description="Screenshot resolution (width, height)")
 
     @property
@@ -329,7 +332,7 @@ class GrafanaPanelScreenshot(BaseModel):
 
     @property
     def name(self) -> str:
-        slug = f"{self.dashboard_title}-{self.panel_title}".lower()
+        slug = "-".join(filter(None, (self.dashboard_title, self.panel_title))).lower()
         return re.sub(r"[^\w\-]", "_", slug)
 
 

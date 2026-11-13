@@ -85,7 +85,6 @@ from sdcm.logcollector import (
 )
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
-from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.paths import (
     SCYLLA_MANAGER_AGENT_YAML_PATH,
@@ -8496,16 +8495,9 @@ class BaseMonitorSet:
 
     def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
         screenshot_links = []
-        grafana_extra_dashboards = []
-        if "alternator_port" in self.params:
-            grafana_extra_dashboards = [AlternatorDashboard()]
-        if self.params.get("gemini_cmd"):
-            grafana_extra_dashboards.append(GeminiDashboard())
         date_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-        screenshot_collector = GrafanaScreenShot(
-            name="grafana-screenshot", test_start_time=test_start_time, extra_entities=grafana_extra_dashboards
-        )
+        screenshot_collector = GrafanaScreenShot(name="grafana-screenshot", test_start_time=test_start_time)
         screenshot_collector.set_params(self.params)
         screenshot_files = screenshot_collector.collect(node, self.logdir)
         for screenshot in screenshot_files:

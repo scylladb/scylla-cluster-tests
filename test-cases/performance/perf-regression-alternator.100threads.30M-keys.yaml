@@ -75,3 +75,6 @@ email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com'
 argus_email_report_template: email_report_performance.yaml
 
 adaptive_timeout_store_metrics: false
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"

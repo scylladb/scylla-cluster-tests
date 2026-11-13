@@ -143,3 +143,6 @@ latency_decorator_error_thresholds:
         fixed_limit: 8
       P99 read:
         fixed_limit: 8
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"

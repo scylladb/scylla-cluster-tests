@@ -85,3 +85,6 @@ server_encrypt: true
 client_encrypt: true
 
 use_preinstalled_scylla: true
+
+grafana_screenshot_panels:
+  - dashboard_title: "Alternator"
