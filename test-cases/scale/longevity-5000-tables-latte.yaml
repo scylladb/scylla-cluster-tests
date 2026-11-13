@@ -32,9 +32,11 @@ use_mgmt: false
 # Timeouts tuned for 5000 tables, see https://scylladb.atlassian.net/browse/SCT-281
 # DECOMMISSION took up to 55 min and timed out at the 22-30 min hard timeout; x5 raises it to ~2 h
 # REPAIR (nodetool cluster repair) took 3.5-6 h and timed out at the 3 h soft timeout; x3 raises it to 9 h
+# TABLET_MIGRATION (balance after a grow) took 2.8 h at the 2.3 h soft timeout (SCT-1090); x2 raises it to 4.6 h
 adaptive_timeout_multipliers:
   decommission: 5
   repair: 3
+  tablet_migration: 2
 
 root_disk_size_monitor: 120
 root_disk_size_runner: 120
