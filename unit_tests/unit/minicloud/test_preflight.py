@@ -10,6 +10,7 @@ from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.minicloud.preflight import (
     check_scylla_memory_budget,
     container_mem_in_use_gib,
+    db_guest_count,
     scylla_reserve_memory,
 )
 from unit_tests.unit.minicloud.conftest import _meminfo_path_patch
@@ -381,3 +382,14 @@ def test_preflight_check_rejects_an_impossible_request(tmp_path):
             with patch("sdcm.utils.minicloud.manager.shutil.which", return_value="/usr/bin/docker"):
                 with pytest.raises(MinicloudError, match="does not fit"):
                     manager.preflight_check(skip_aws_creds=True, params=params)
+
+
+def test_db_guest_count_counts_the_peak_db_guests():
+    assert db_guest_count({"n_db_nodes": [3, 3]}) == 6
+    assert db_guest_count({"n_db_nodes": 3, "cluster_target_size": 5}) == 5
+
+
+def test_db_guest_count_counts_an_oracle_cluster_only_when_one_is_provisioned():
+    oracle = {"n_db_nodes": 3, "n_test_oracle_db_nodes": 1}
+    assert db_guest_count({**oracle, "db_type": "mixed_scylla"}) == 4
+    assert db_guest_count({**oracle, "db_type": "scylla"}) == 3
