@@ -111,5 +111,7 @@ class LogsConfigMixin(BaseModel):
         """,
     )
     teardown_validators: DictOrStr = SctField(
-        description="Validators to use during teardown phase",
+        description="Validators to use during teardown phase. They run within `test_duration`. "
+        "The `scrub` time grows with the disk usage of the fullest node; raise `scrub.timeout` "
+        "and `test_duration` together.",
     )
