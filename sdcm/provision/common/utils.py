@@ -13,7 +13,7 @@
 
 from textwrap import dedent
 
-from sdcm.utils.apt import APT_LOCK_TIMEOUT, apt_lock_wait
+from sdcm.utils.apt import APT_UPDATE_LOCK_WAIT, APT_UPDATE_TIME_BUDGET, apt_cmd, apt_lock_wait
 from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.rpm import rpm_lock_wait
 
@@ -201,23 +201,31 @@ def update_repo_cache():
             done
             rm -rf /var/cache/yum/
         elif apt-get --help 2>/dev/null 1>&2 ; then
-            echo "Cleaning apt cache..."
-            for n in 1 2 3 4 5 6 7 8 9; do
-                {apt_lock_wait()}
-                if apt-get -o DPkg::Lock::Timeout={APT_LOCK_TIMEOUT} clean; then
-                    break
-                fi
-                sleep $(backoff $n)
-            done
-            rm -rf /var/cache/apt/
+            # one time limit for the whole refresh: the cleanup, the update and their lock waits
+            _apt_deadline=$((SECONDS + {APT_UPDATE_TIME_BUDGET}))
+            _apt_retry_until_deadline() {{
+                local name=$1
+                shift
+                local n=0
+                while [ $SECONDS -lt $_apt_deadline ]; do
+                    n=$((n + 1))
+                    {apt_lock_wait(lock_timeout=APT_UPDATE_LOCK_WAIT)}
+                    local time_left=$((_apt_deadline - SECONDS))
+                    if [ $time_left -le 0 ]; then
+                        break
+                    fi
+                    if timeout --kill-after=10s $time_left "$@"; then
+                        return 0
+                    fi
+                    sleep $(backoff $n)
+                done
+                echo "WARNING: $name did not succeed in {APT_UPDATE_TIME_BUDGET} seconds, giving up"
+            }}
 
-            for n in 1 2 3 4 5 6 7 8 9; do
-                {apt_lock_wait()}
-                if apt-get -o DPkg::Lock::Timeout={APT_LOCK_TIMEOUT} -y update; then
-                    break
-                fi
-                sleep $(backoff $n)
-            done
+            echo "Cleaning apt cache..."
+            _apt_retry_until_deadline "apt-get clean" {apt_cmd("clean", dpkg_options=False)}
+            rm -rf /var/cache/apt/
+            _apt_retry_until_deadline "apt-get update" {apt_cmd("-y update", dpkg_options=False)}
         else
             echo "Unsupported distro"
         fi
