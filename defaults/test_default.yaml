@@ -219,13 +219,10 @@ run_db_node_benchmarks: false
 
 nemesis_multiply_factor: 2
 
+# Only the keys that sign the repos SCT installs from; both are published on downloads.scylladb.com/downloads/gpg/
 scylla_apt_keys:
-  - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
-  - '5E08FBD8B5D6EC9C'  # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
-  - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
-  - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
-  - 'A43E06657BAC99E3'  # ScyllaDB Package Signing Key 2024 (RSA) <security@scylladb.com>
-  - 'C503C686B007F39E'  # ScyllaDB Package Signing Key 2026 (RSA) <security@scylladb.com>
+  - 'A43E06657BAC99E3'  # ScyllaDB Package Signing Key 2024 (RSA): 2025.x, 6.2, Manager 3.3-3.8
+  - 'C503C686B007F39E'  # ScyllaDB Package Signing Key 2026 (RSA): 2026.x, master, Manager 3.9+
 
 raid_level: 0
 
