@@ -7,7 +7,8 @@
 #
 # Differences vs longevity-large-partition-200k_pks-4days.yaml:
 #   - Prepare 2500 partitions instead of 1250 (5x500)
-#   - Stress writes 1500 new partitions (2501-4000) instead of 750
+#   - Stress writes 250 new partitions (2501-2750) instead of 750, see the
+#     scylla-bench 1.3.2 note below
 #   - Stress concurrency reduced to ~25% (write: 10->2, read: 50/200/150->12/50/37)
 #     to keep CPU around ~50% with the larger dataset
 #   - LZ4Compressor applied to the base table in post_prepare_cql_cmds
@@ -19,15 +20,27 @@
 #   plus the materialized view, which duplicates every row      = ~2.82 TB
 #   at RF=3                                                     = ~8.45 TB cluster-wide
 #   over 6 nodes                                                = ~1.41 TB per node
-# The stress phase adds up to ~1.24 TB more (300M rows x ~4146 B mean, partitions
-# 2501-4000), offset by the delete nemeses; the rewrite of partitions 501-1500
-# overwrites existing keys and is not net-new data.
+# The stress phase adds up to ~0.21 TB more (50M rows x ~4146 B mean, partitions
+# 2501-2750), doubled by the view and landing as ~0.21 TB per node at RF=3 over 6
+# nodes, offset by the delete nemeses; the rewrite of partitions 501-1500 overwrites
+# existing keys and is not net-new data.
 #
 # Verified on GCE, z3-highmem-8-highlssd (8 vCPU, 64 GB, 3.22 TB usable NVMe), 6 nodes:
 #   - ~24% disk utilization at the end of prepare (base table, LZ4)
 #   - ~40% (1.29 TB / 3.22 TB per node) once the MV build completes
 # 1.29 TB on disk vs ~1.41 TB logical is only ~8% compression: the scylla-bench payload
 # is pseudo-random, so LZ4 has little to work with.
+#
+# Since scylla-bench 1.3.2 (scylladb/scylla-bench#313) every write path fills the value
+# with distinct random bytes; before it, writes without -validate-data stored an all-zero
+# value that LZ4 shrank to almost nothing. The prepare phase uses -validate-data and was
+# always incompressible, so the numbers above still hold, but the stress writer of new
+# partitions was sized on the old compressible payload: its 1500 partitions (~1.24 TB
+# per node once incompressible) filled the 3.22 TB disk to 98% after ~20 h (SCT-1325).
+# It now writes 250 partitions, so the live data settles at ~1.5 TB per node (~47%),
+# computed with zero compression for every write. The remaining ~1.7 TB covers compaction
+# transients of the large partitions, the per-node growth when a node is decommissioned
+# (6 -> 5 nodes, ~56%) and a second view built by the MV nemeses (~+0.65 TB).
 #
 # The dataset is a fixed size, not a percentage — the utilization above is for that
 # 3.22 TB node, and a larger disk resolved by the sizing constraint yields a lower one.
@@ -53,8 +66,9 @@ prepare_verify_cmd: ["scylla-bench -workload=sequential -mode=read -replication-
                     ]
 
 stress_cmd: [
-              # Write additional 1500 partitions with 200k rows each (on top of what was written in prepare_write_cmd) - test total partitions is 4000
-             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1500 -partition-offset=2501 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -concurrency=2 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s",
+              # Write additional 250 partitions with 200k rows each (on top of what was written in prepare_write_cmd) - test total partitions is 2750.
+              # Sized for incompressible scylla-bench payloads (see the header): one pass is ~0.21 TB per node, later passes overwrite.
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -partition-offset=2501 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -concurrency=2 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s",
              # due to increasing of amount deleted rows/partitions (delete nemeses) we need to insert back the part (from 501 to 1500 partitions) of the rows. Otherwise, the table may become empty after few deletions.
              # Partition range from 1501 to 2500 won't be re-written, remains as tombstones
              # Also, the first 500 partitions (as defined in partition_range_with_data_validation) won't be deleted. So it is not needed to be re-written
@@ -66,8 +80,8 @@ stress_read_cmd: [
                   "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=500 -partition-offset=1 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=12 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -validate-data -retry-number=30 -retry-interval=500ms,5s",
                   # Read partitions 501-2500 (2000 partitions)
                   "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=2000 -partition-offset=501 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=50 -connection-count=100 -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s",
-                  # Read partitions 2501-4000 (1500 partitions) that are being written during the test (different row size)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1500 -partition-offset=2501 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=37 -connection-count=100 -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s"
+                  # Read partitions 2501-2750 (250 partitions) that are being written during the test (different row size)
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=250 -partition-offset=2501 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=37 -connection-count=100 -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s"
                  ]
 
 # Create MV, set tombstone_gc to 'repair' + a propagation_delay_in_seconds of 5 minutes for the tombstone-gc-verification table,
