@@ -323,6 +323,7 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
     Explicit job_folder parameter overrides auto-detection.
     """
 
+
 def filter_jobs(
     jobs: list[JobConfig],
     scylla_version: str,
@@ -331,6 +332,7 @@ def filter_jobs(
     skip_jobs: list[str] | None = None,
 ) -> list[JobConfig]:
     """Filter jobs based on version exclusion, labels, backend, and skip list."""
+
 
 def build_job_parameters(
     job: JobConfig,
@@ -344,8 +346,10 @@ def build_job_parameters(
     Always includes scylla_version.
     """
 
+
 def trigger_jenkins_job(job_name: str, parameters: dict, dry_run: bool = False):
     """Trigger a Jenkins job via REST API or print in dry-run mode."""
+
 
 def trigger_matrix(
     matrix_file: str,

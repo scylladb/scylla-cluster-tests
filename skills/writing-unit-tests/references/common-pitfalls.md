@@ -18,6 +18,7 @@ def test_fetch_ami():
 ```python
 from unittest.mock import patch, MagicMock
 
+
 def test_fetch_ami():
     mock_client = MagicMock()
     mock_client.describe_images.return_value = {"Images": [{"ImageId": "ami-123"}]}
@@ -36,6 +37,7 @@ SCT requires pytest-style tests. `unittest.TestCase` breaks fixture injection an
 class TestConfig(unittest.TestCase):
     def setUp(self):
         self.config = create_config()
+
     def test_value(self):
         self.assertEqual(self.config.get("key"), "value")
 ```
@@ -45,6 +47,7 @@ class TestConfig(unittest.TestCase):
 @pytest.fixture
 def config():
     return create_config()
+
 
 def test_value(config):
     assert config.get("key") == "value"
@@ -60,6 +63,7 @@ This includes importing utility modules inside test functions to access module-l
 ```python
 def test_something():
     from sdcm.utils.common import get_data_dir_path  # inline import
+
     path = get_data_dir_path("test_data")
 ```
 
@@ -67,6 +71,7 @@ def test_something():
 ```python
 def test_presets():
     import utils.staging_trigger.constants as mod  # inline import
+
     mod._PRESETS = None
     ...
     mod._PRESETS = None
@@ -77,8 +82,10 @@ def test_presets():
 import utils.staging_trigger.constants as constants_mod
 from sdcm.utils.common import get_data_dir_path
 
+
 def test_something():
     path = get_data_dir_path("test_data")
+
 
 def test_presets():
     constants_mod._PRESETS = None
@@ -138,8 +145,12 @@ def config_file(tmp_path):
 ❌ **Bad:**
 ```python
 _shared_state = {}
+
+
 def test_01_setup():
     _shared_state["node"] = create_node()
+
+
 def test_02_verify():
     assert _shared_state["node"].is_up()  # fails if test_01 doesn't run first
 ```
@@ -151,6 +162,7 @@ def node():
     n = create_node()
     yield n
     n.cleanup()
+
 
 def test_node_is_up(node):
     assert node.is_up()
@@ -350,6 +362,7 @@ def _make_runner(disruptions):
     runner.disruptions_list = disruptions
     return runner
 
+
 def test_run_stops_after_skips(events_function_scope):
     runner = _make_runner(disruptions=[])  # events not wired to runner
     runner.disruptions_list = [SkippingTestNemesis(runner=runner)]
@@ -369,7 +382,9 @@ def make_nemesis_runner(events_function_scope):
         if disruptions is not None:
             runner.disruptions_list = disruptions
         return runner
+
     return _make
+
 
 # test file
 def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
@@ -378,6 +393,67 @@ def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
 ```
 
 
+<<<<<<< HEAD
+||||||| parent of d06753b0b (style: format python code blocks in markdown with ruff 0.17)
+❌ **Bad — PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142): a type-switching helper called from every test:**
+```python
+def _make_logger(logger_class, tmp_path):
+    if issubclass(logger_class, HDRHistogramFileLogger):
+        return logger_class(node=MagicMock(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr"))
+    return logger_class(node=MagicMock(), target_log_file=str(tmp_path / "target.log"))
+
+
+@pytest.mark.parametrize("logger_class", [_StubSSHLogger, _StubHDRLogger])
+def test_stop_releases_the_pool_worker(logger_class, tmp_path):
+    logger = _make_logger(logger_class, tmp_path)
+    ...
+```
+
+✅ **Good — one parametrized fixture builds the right object per type:**
+```python
+@pytest.fixture(params=["ssh", "hdr"])
+def logger(request, tmp_path):
+    """One real logger of each kind that owns a log-follower pool."""
+    if request.param == "hdr":
+        return HDRHistogramFileLogger(node=_node(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr"))
+    return SSHGeneralSystemdLogger(node=_node(), target_log_file=str(tmp_path / "target.log"))
+
+
+def test_stop_releases_the_pool_worker(logger):
+    ...
+```
+=======
+❌ **Bad — PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142): a type-switching helper called from every test:**
+```python
+def _make_logger(logger_class, tmp_path):
+    if issubclass(logger_class, HDRHistogramFileLogger):
+        return logger_class(
+            node=MagicMock(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+        )
+    return logger_class(node=MagicMock(), target_log_file=str(tmp_path / "target.log"))
+
+
+@pytest.mark.parametrize("logger_class", [_StubSSHLogger, _StubHDRLogger])
+def test_stop_releases_the_pool_worker(logger_class, tmp_path):
+    logger = _make_logger(logger_class, tmp_path)
+    ...
+```
+
+✅ **Good — one parametrized fixture builds the right object per type:**
+```python
+@pytest.fixture(params=["ssh", "hdr"])
+def logger(request, tmp_path):
+    """One real logger of each kind that owns a log-follower pool."""
+    if request.param == "hdr":
+        return HDRHistogramFileLogger(
+            node=_node(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+        )
+    return SSHGeneralSystemdLogger(node=_node(), target_log_file=str(tmp_path / "target.log"))
+
+
+def test_stop_releases_the_pool_worker(logger): ...
+```
+>>>>>>> d06753b0b (style: format python code blocks in markdown with ruff 0.17)
 
 See also: [anti-patterns.md](anti-patterns.md) for broader testing anti-patterns.
 
@@ -406,6 +482,7 @@ def test_b(fake_node, ...):
 ```python
 from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoServices
 
+
 @pytest.fixture(autouse=True)
 def clear_node_load_info_services_singleton():
     """Clear the NodeLoadInfoServices Singleton cache after each test to prevent cross-test pollution."""
@@ -432,3 +509,247 @@ def test_decommission(fake_node, adaptive_timeout_store):
         ...
     metrics = adaptive_timeout_store.get(operation="DECOMMISSION")  # same instance
 ```
+<<<<<<< HEAD
+||||||| parent of d06753b0b (style: format python code blocks in markdown with ruff 0.17)
+
+---
+
+### P-17: The Test Name Claims Something the Asserts Don't Check
+
+Reviewers read the name and assume it was verified. If the name says "without reaching EC2", "does not retry", or "never logs", there must be an assertion that fails when that happens. An assertion that the call simply succeeded does not cover it.
+
+❌ **Bad — PR [#16093](https://github.com/scylladb/scylla-cluster-tests/pull/16093): nothing checks that EC2 was not reached:**
+```python
+def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger):
+    env = build_env(parse_jenkinsfile(PIPELINE)) | {"SCT_TEST_ID": "11111111-2222-3333-4444-555555555555"}
+
+    is_error, message = validate_pipeline(PIPELINE, env)
+
+    assert not is_error, message
+```
+
+✅ **Good — record the side effect the name rules out, and assert on it:**
+```python
+def test_validate_pipeline_cloud_lookup_never_reaches_the_network(pipeline, remote_connections, restore_root_logger):
+    ...
+    is_error, message = validate_pipeline(pipeline_path, env)
+
+    assert remote_connections == [], f"linting {pipeline} reached the network: {remote_connections}"
+    assert not is_error, message
+```
+
+To assert "no network access", use a fixture that refuses outbound connections and records each attempt. PR #16093 adds one as `remote_connections` in `unit_tests/lint/conftest.py`: it monkeypatches `socket.socket.connect`/`connect_ex`, lets loopback through, and returns the list of refused addresses. Refusing, not just recording, keeps a missing stub from making a real call.
+
+---
+
+### P-18: Green for the Wrong Reason — Mutation-Check Every New Test
+
+A passing test proves only that the assertions held. It does not prove that the code under test ran. In PR #16093 the first replacement tests passed **with every stub removed**: `build_env` always injects a placeholder image for the main cluster, so the image lookup the tests were meant to cover never ran. The fix was a test-only config that adds an oracle cluster (`db_type: mixed_scylla` + `oracle_scylla_version`), whose resolver `build_env` does not short-circuit.
+
+✅ **Mutation check — required before calling a test done:**
+1. Break the code under test in the way the test claims to catch: delete the stub entry, invert the condition, return early.
+2. Run the test and confirm it **fails**, with a message that points at the break.
+3. Revert the break and confirm the test passes again.
+
+```bash
+# e.g. comment out one entry in _CLOUD_API_PATCHES, then:
+uv run python -m pytest unit_tests/lint/test_validator.py -n0 -q   # must FAIL
+git checkout sdcm/utils/lint/validator.py                           # restore
+```
+
+If the test still passes after the break, it is testing setup, a default, or a mock (see AP-3), not the code. Say in the PR description which mutation you checked.
+
+**Don't stub out the failure path.** A stub replaces a code path, and every bug in that path disappears with it. In PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142) the test replaced `_journal_thread` entirely. So it never ran the case the reviewer found: `remote_pid` is empty, `stop()` sends `kill -9 -`, and the worker stays blocked in `journalctl -f`. For each stub, list what the real code does that the stub skips, and cover any of those that the fix depends on with its own test. That PR added `test_stop_without_remote_pid_warns_instead_of_running_bare_kill`, and its reply to the review names the mutation it checked: "with the `_shutdown_pool()` calls removed, both parametrizations fail".
+
+---
+
+### P-19: Fixture and Helper Class Placement
+
+Fixtures and helper classes go at the top of the module, after imports and constants, or in `conftest.py` when more than one module uses them. The same review comment came up on PR #16093 (a fixture) and on PR #16142 (a stub class defined between tests). A fixture defined between tests is easy to miss and gets copied into the next file. Do not give fixture names a leading underscore: pytest injects them by name, so the underscore marks nothing as private and only makes the signature noisier.
+
+❌ **Bad — PR #16093: underscore fixture defined halfway down the file:**
+```python
+def test_fake_oci_image_is_indexable_as_the_resolvers_expect():
+    ...
+
+
+@pytest.fixture
+def _restore_root_logger():
+    root = logging.getLogger()
+    ...
+
+
+def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger):
+    ...
+```
+
+✅ **Good — public name, shared via `conftest.py`:**
+```python
+# unit_tests/lint/conftest.py
+@pytest.fixture
+def restore_root_logger():
+    """`validate_pipeline` silences the root logger for good; keep that out of the other tests."""
+    root = logging.getLogger()
+    handlers, disabled = root.handlers, root.disabled
+    yield
+    root.handlers = handlers
+    root.disabled = disabled
+```
+
+---
+
+### P-20: Test-Only Safeguards in Production Code
+
+Code that exists only to catch a missing stub, mock, or fixture during tests belongs in a test fixture, not in `sdcm/`. In production it is dead weight on every call, and it hides what the tests really depend on.
+
+❌ **Bad — PR #16093 added a network guard to the production linter path:**
+```python
+# sdcm/utils/lint/validator.py
+class LintNetworkAccessError(RuntimeError):
+    """Linting reached the network instead of a stub in `_CLOUD_API_PATCHES`."""
+
+
+@contextlib.contextmanager
+def _no_remote_network():
+    """Turn an unstubbed cloud call into a loud, self-explanatory failure."""
+    ...
+
+# inside validate_pipeline():
+        stack.enter_context(_no_remote_network())
+```
+
+✅ **Good — production keeps only what makes it work (the stubs); detection moves to a fixture:**
+```python
+# unit_tests/lint/conftest.py
+@pytest.fixture
+def remote_connections(monkeypatch):
+    """Refuse every outbound connection and record where it was headed."""
+    attempts = []
+    ...
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    return attempts
+```
+
+A future unstubbed lookup then fails in the unit tests, not in someone else's PR or CI run. **Not covered:** guards against real-world misuse, such as input validation or refusing to run without credentials. Those protect production and stay in `sdcm/`.
+=======
+
+---
+
+### P-17: The Test Name Claims Something the Asserts Don't Check
+
+Reviewers read the name and assume it was verified. If the name says "without reaching EC2", "does not retry", or "never logs", there must be an assertion that fails when that happens. An assertion that the call simply succeeded does not cover it.
+
+❌ **Bad — PR [#16093](https://github.com/scylladb/scylla-cluster-tests/pull/16093): nothing checks that EC2 was not reached:**
+```python
+def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger):
+    env = build_env(parse_jenkinsfile(PIPELINE)) | {"SCT_TEST_ID": "11111111-2222-3333-4444-555555555555"}
+
+    is_error, message = validate_pipeline(PIPELINE, env)
+
+    assert not is_error, message
+```
+
+✅ **Good — record the side effect the name rules out, and assert on it:**
+```python
+def test_validate_pipeline_cloud_lookup_never_reaches_the_network(pipeline, remote_connections, restore_root_logger):
+    ...
+    is_error, message = validate_pipeline(pipeline_path, env)
+
+    assert remote_connections == [], f"linting {pipeline} reached the network: {remote_connections}"
+    assert not is_error, message
+```
+
+To assert "no network access", use a fixture that refuses outbound connections and records each attempt. PR #16093 adds one as `remote_connections` in `unit_tests/lint/conftest.py`: it monkeypatches `socket.socket.connect`/`connect_ex`, lets loopback through, and returns the list of refused addresses. Refusing, not just recording, keeps a missing stub from making a real call.
+
+---
+
+### P-18: Green for the Wrong Reason — Mutation-Check Every New Test
+
+A passing test proves only that the assertions held. It does not prove that the code under test ran. In PR #16093 the first replacement tests passed **with every stub removed**: `build_env` always injects a placeholder image for the main cluster, so the image lookup the tests were meant to cover never ran. The fix was a test-only config that adds an oracle cluster (`db_type: mixed_scylla` + `oracle_scylla_version`), whose resolver `build_env` does not short-circuit.
+
+✅ **Mutation check — required before calling a test done:**
+1. Break the code under test in the way the test claims to catch: delete the stub entry, invert the condition, return early.
+2. Run the test and confirm it **fails**, with a message that points at the break.
+3. Revert the break and confirm the test passes again.
+
+```bash
+# e.g. comment out one entry in _CLOUD_API_PATCHES, then:
+uv run python -m pytest unit_tests/lint/test_validator.py -n0 -q   # must FAIL
+git checkout sdcm/utils/lint/validator.py                           # restore
+```
+
+If the test still passes after the break, it is testing setup, a default, or a mock (see AP-3), not the code. Say in the PR description which mutation you checked.
+
+**Don't stub out the failure path.** A stub replaces a code path, and every bug in that path disappears with it. In PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142) the test replaced `_journal_thread` entirely. So it never ran the case the reviewer found: `remote_pid` is empty, `stop()` sends `kill -9 -`, and the worker stays blocked in `journalctl -f`. For each stub, list what the real code does that the stub skips, and cover any of those that the fix depends on with its own test. That PR added `test_stop_without_remote_pid_warns_instead_of_running_bare_kill`, and its reply to the review names the mutation it checked: "with the `_shutdown_pool()` calls removed, both parametrizations fail".
+
+---
+
+### P-19: Fixture and Helper Class Placement
+
+Fixtures and helper classes go at the top of the module, after imports and constants, or in `conftest.py` when more than one module uses them. The same review comment came up on PR #16093 (a fixture) and on PR #16142 (a stub class defined between tests). A fixture defined between tests is easy to miss and gets copied into the next file. Do not give fixture names a leading underscore: pytest injects them by name, so the underscore marks nothing as private and only makes the signature noisier.
+
+❌ **Bad — PR #16093: underscore fixture defined halfway down the file:**
+```python
+def test_fake_oci_image_is_indexable_as_the_resolvers_expect(): ...
+
+
+@pytest.fixture
+def _restore_root_logger():
+    root = logging.getLogger()
+    ...
+
+
+def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger): ...
+```
+
+✅ **Good — public name, shared via `conftest.py`:**
+```python
+# unit_tests/lint/conftest.py
+@pytest.fixture
+def restore_root_logger():
+    """`validate_pipeline` silences the root logger for good; keep that out of the other tests."""
+    root = logging.getLogger()
+    handlers, disabled = root.handlers, root.disabled
+    yield
+    root.handlers = handlers
+    root.disabled = disabled
+```
+
+---
+
+### P-20: Test-Only Safeguards in Production Code
+
+Code that exists only to catch a missing stub, mock, or fixture during tests belongs in a test fixture, not in `sdcm/`. In production it is dead weight on every call, and it hides what the tests really depend on.
+
+❌ **Bad — PR #16093 added a network guard to the production linter path:**
+```python
+# sdcm/utils/lint/validator.py
+class LintNetworkAccessError(RuntimeError):
+    """Linting reached the network instead of a stub in `_CLOUD_API_PATCHES`."""
+
+
+@contextlib.contextmanager
+def _no_remote_network():
+    """Turn an unstubbed cloud call into a loud, self-explanatory failure."""
+    ...
+
+# inside validate_pipeline():
+        stack.enter_context(_no_remote_network())
+```
+
+✅ **Good — production keeps only what makes it work (the stubs); detection moves to a fixture:**
+```python
+# unit_tests/lint/conftest.py
+@pytest.fixture
+def remote_connections(monkeypatch):
+    """Refuse every outbound connection and record where it was headed."""
+    attempts = []
+    ...
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    return attempts
+```
+
+A future unstubbed lookup then fails in the unit tests, not in someone else's PR or CI run. **Not covered:** guards against real-world misuse, such as input validation or refusing to run without credentials. Those protect production and stay in `sdcm/`.
+>>>>>>> d06753b0b (style: format python code blocks in markdown with ruff 0.17)

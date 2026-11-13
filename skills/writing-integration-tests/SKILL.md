@@ -83,8 +83,7 @@ Use `yield` fixtures with teardown blocks, context managers, or `try/finally`. L
     scylla_docker_image="scylladb/scylla:2025.2.0",
     docker_network="my-network",
 )
-def test_with_ssl(docker_scylla, params):
-    ...
+def test_with_ssl(docker_scylla, params): ...
 ```
 
 ### SCT Configuration Fixture
@@ -127,6 +126,7 @@ For tests using `moto` (fully mocked AWS — no real credentials needed), write 
 import boto3
 from moto import mock_aws
 
+
 @mock_aws
 def test_s3_operations():
     """Test S3 storage operations with mocked AWS (no real credentials needed)."""
@@ -163,6 +163,7 @@ pytestmark = [
         reason="OCI credentials not configured — set OCI_CONFIG_FILE",
     ),
 ]
+
 
 def test_oci_instances():
     """Test OCI compute instance listing.
