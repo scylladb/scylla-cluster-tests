@@ -57,6 +57,12 @@ class ManagerConfigMixin(BaseModel):
     mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
     )
+    mgmt_backup_keyspaces: StringOrList = SctField(
+        description="""Keyspaces and tables to back up by the Scylla Manager backup nemeses, as patterns of
+                       the '--keyspace' option of 'sctool backup', e.g. 'keyspace1.standard1'.
+                       When not set, 'MgmtBackup' backs up all the keyspaces,
+                       and 'MgmtBackupSpecificKeyspaces' all the test keyspaces.""",
+    )
     mgmt_docker_image: String = SctField(
         description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
     )

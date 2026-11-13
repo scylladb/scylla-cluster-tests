@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**25 options.**
+**26 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -93,6 +93,17 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 **default:** N/A
 
 **type:** sdcm.mgmt.common.AgentBackupParameters
+
+
+<a id="mgmt_backup_keyspaces"></a>
+
+## **mgmt_backup_keyspaces** / SCT_MGMT_BACKUP_KEYSPACES
+
+Keyspaces and tables to back up by the Scylla Manager backup nemeses, as patterns of<br>the '--keyspace' option of 'sctool backup', e.g. 'keyspace1.standard1'.<br>When not set, 'MgmtBackup' backs up all the keyspaces,<br>and 'MgmtBackupSpecificKeyspaces' all the test keyspaces.
+
+**default:** N/A
+
+**type:** str | list[str] → list[str] (appendable)
 
 
 <a id="mgmt_docker_image"></a>

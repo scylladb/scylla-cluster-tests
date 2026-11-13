@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-530 options across 29 groups.
+531 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -39,7 +39,7 @@ concerns first, then one page per backend, then one per test type.
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 17 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
-| [Scylla Manager](configuration_options/scylla-manager.md) | 25 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
+| [Scylla Manager](configuration_options/scylla-manager.md) | 26 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
 | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) | 10 | A second database cluster used for comparison or migration testing -- the 'oracle' cluster in Gemini runs, or a Cassandra... |
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
 | [Vector Store](configuration_options/vector-store.md) | 9 | The Vector Store service under test alongside Scylla. |
@@ -321,6 +321,7 @@ concerns first, then one page per backend, then one per test type.
 | [`max_deviation`](configuration_options/performance-regression-tests.md#max_deviation) | `SCT_MAX_DEVIATION` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`max_events_severities`](configuration_options/monitoring-events-and-reporting.md#max_events_severities) | `SCT_MAX_EVENTS_SEVERITIES` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`mgmt_agent_backup_config`](configuration_options/scylla-manager.md#mgmt_agent_backup_config) | `SCT_MGMT_AGENT_BACKUP_CONFIG` | [Scylla Manager](configuration_options/scylla-manager.md) |
+| [`mgmt_backup_keyspaces`](configuration_options/scylla-manager.md#mgmt_backup_keyspaces) | `SCT_MGMT_BACKUP_KEYSPACES` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`mgmt_docker_image`](configuration_options/scylla-manager.md#mgmt_docker_image) | `SCT_MGMT_DOCKER_IMAGE` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`mgmt_nodetool_refresh_flags`](configuration_options/scylla-manager.md#mgmt_nodetool_refresh_flags) | `SCT_MGMT_NODETOOL_REFRESH_FLAGS` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`mgmt_prepare_snapshot_size`](configuration_options/scylla-manager.md#mgmt_prepare_snapshot_size) | `SCT_MGMT_PREPARE_SNAPSHOT_SIZE` | [Scylla Manager](configuration_options/scylla-manager.md) |
