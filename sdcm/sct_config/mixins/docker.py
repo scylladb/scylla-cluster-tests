@@ -33,6 +33,7 @@ class DockerConfigMixin(BaseModel):
 
     docker_image: String = SctField(
         description="Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version",
+        jenkins_param="scylla_docker_image",
     )
     docker_network: String = SctField(
         description="Local docker network to use, if there's need to have db cluster connect to other services running in docker",

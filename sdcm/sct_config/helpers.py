@@ -20,6 +20,7 @@ import copy
 import json
 import os
 import pathlib
+import re
 from functools import lru_cache
 
 import anyconfig
@@ -117,6 +118,11 @@ def count_regions(region_string: str) -> int:
     if " " in region_string:
         return len(region_string.split())
     return 1
+
+
+def branch_desc(git_branch: str) -> str:
+    """The branch name without its `origin/branch-` prefix, with `.` and `_` replaced by `-`, cut to 8 characters."""
+    return re.sub(r"origin/branch-|origin/", "", git_branch, count=1).translate(str.maketrans("._", "--"))[:8]
 
 
 @lru_cache(maxsize=1)

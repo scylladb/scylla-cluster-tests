@@ -14,8 +14,6 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             // Cloud Provider Configuration
@@ -358,9 +356,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
-                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
-                                             "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                         stage("Split for ${sub_test}") {
                                             try {
                                                 stage("Checkout for ${sub_test}") {

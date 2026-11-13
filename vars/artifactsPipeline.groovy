@@ -40,8 +40,6 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
@@ -219,7 +217,6 @@ def call(Map pipelineParams) {
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
 
-                                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                         stage("Checkout (${instance_type})") {
                                             script {
                                                 loadEnvFromString(params.extra_environment_variables)
@@ -319,7 +316,14 @@ def call(Map pipelineParams) {
                                         stage("Run SCT Test (${instance_type})") {
                                             // Timeout for the test itself
                                             timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
-                                                def cloud_provider = getCloudProviderFromBackend(params.backend)
+                                                // the branch's db instance type, for whichever backend runs (each backend reads only its own option)
+                                                def inputs = instance_type ? [instance_type_db: instance_type, gce_instance_type_db: instance_type,
+                                                                              azure_instance_type_db: instance_type, oci_instance_type_db: instance_type] : [:]
+                                                def sctEnv
+                                                dir('scylla-cluster-tests') {
+                                                    sctEnv = pipelineEnv(params: params, region: builder.region, inputs: inputs)
+                                                }
+                                                withEnv(sctEnv) {
                                                 sctScript """
                                                     rm -fv ./latest
 
@@ -328,108 +332,6 @@ def call(Map pipelineParams) {
                                                     # below - only a builder-local run may sweep a stale one.
                                                     if [[ "${useRunner}" != "true" ]] ; then
                                                         rm -fv ./sct_runner_ip
-                                                    fi
-
-                                                    if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
-                                                        export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
-                                                    fi
-                                                    export SCT_COLLECT_LOGS=false
-                                                    export SCT_CONFIG_FILES=${test_config}
-                                                    if [[ -n "${params.region ? params.region : ''}" ]] ; then
-                                                        export SCT_REGION_NAME='${params.region}'
-                                                    fi
-                                                    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
-                                                    fi
-                                                    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-                                                        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
-                                                    fi
-                                                    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-                                                        export SCT_OCI_REGION_NAME=${params.oci_region_name}
-                                                    fi
-                                                    if [[ ! -z "${params.scylla_ami_id}" ]]; then
-                                                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                                    elif [[ ! -z "${params.gce_image_db}" ]]; then
-                                                        export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-                                                    elif [[ ! -z "${params.azure_image_db}" ]]; then
-                                                        export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
-                                                    elif [[ ! -z "${params.oci_image_db}" ]]; then
-                                                        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
-                                                    elif [[ ! -z "${params.scylla_version}" ]]; then
-                                                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
-                                                    elif [[ ! -z "${params.scylla_repo}" ]]; then
-                                                        export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                                    elif [[ ! -z "${params.unified_package}" ]]; then
-                                                        export SCT_UNIFIED_PACKAGE="${params.unified_package}"
-                                                        export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
-                                                        export SCT_USE_MGMT=false
-                                                    else
-                                                        echo "need to choose one of SCT_AZURE_IMAGE_DB | SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
-                                                        exit 1
-                                                    fi
-
-                                                    if [[ ! -z "${params.scylla_mgmt_address}" && -z "${params.unified_package}" ]]; then
-                                                        export SCT_USE_MGMT=true
-                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
-                                                    fi
-
-                                                    if [[ ! -z "${params.manager_version}" && -z "${params.unified_package}" ]]; then
-                                                        export SCT_USE_MGMT=true
-                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_MANAGER_VERSION="${params.manager_version}"
-                                                    fi
-
-                                                    if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
-                                                        export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
-                                                    fi
-
-                                                    if [[ ! -z "${params.scylla_docker_image}" ]]; then
-                                                        export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
-                                                        if [[ -z "${params.scylla_version}" ]]; then
-                                                            echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
-                                                            exit 1
-                                                        fi
-                                                    fi
-
-                                                    if [[ ! -z "${instance_type}" ]]; then
-                                                        case "${params.backend}" in
-                                                            "aws")
-                                                                export SCT_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "gce")
-                                                                export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "azure")
-                                                                export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "oci")
-                                                                export SCT_OCI_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                        esac
-                                                    fi
-
-                                                    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-                                                        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                    fi
-                                                    if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
-                                                        export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                    fi
-                                                    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
-                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                    fi
-                                                    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
-                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
-                                                    fi
-
-                                                    if [[ ! -z "${params.scylla_doctor_full_tarball_url}" ]]; then
-                                                        export SCT_SCYLLA_DOCTOR_FULL_TARBALL_URL="${params.scylla_doctor_full_tarball_url}"
-                                                    fi
-                                                    if [[ "${params.run_scylla_doctor_only}" == "true" ]]; then
-                                                        export SCT_RUN_SCYLLA_DOCTOR_ONLY=true
-                                                    fi
-                                                    if [[ ! -z "${params.scylla_doctor_edition}" ]]; then
-                                                        export SCT_SCYLLA_DOCTOR_EDITION="${params.scylla_doctor_edition}"
                                                     fi
 
                                                     echo "start test ......."
@@ -441,6 +343,7 @@ def call(Map pipelineParams) {
                                                     fi
                                                     echo "end test ....."
                                                 """
+                                                }
                                             }
                                         }
                                         stage("Collect log data (${instance_type})") {

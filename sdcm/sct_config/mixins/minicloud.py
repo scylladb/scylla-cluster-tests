@@ -107,6 +107,7 @@ class MinicloudConfigMixin(BaseModel):
     minicloud_regions: StringOrList = SctField(
         description="Narrow the AWS regions minicloud prepares (default: every SCT-supported region; "
         "each costs ~2s at start-up)",
+        jenkins_param="region",
     )
     minicloud_s3_passthrough_buckets: StringOrList = SctField(
         description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads, test sstables). "

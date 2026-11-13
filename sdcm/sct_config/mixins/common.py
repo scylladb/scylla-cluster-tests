@@ -92,6 +92,7 @@ class CommonConfigMixin(BaseModel):
     cluster_backend: String = SctField(
         description="backend that will be used, aws/gce/azure/oci/docker/xcloud",
         appendable=False,
+        jenkins_param="backend",
     )
     cluster_health_check: Boolean = SctField(
         description="Enable or disable starting cluster health checker for all nodes",
@@ -104,6 +105,7 @@ class CommonConfigMixin(BaseModel):
     config_files: StringOrList = SctField(
         description="a list of config files that would be used",
         appendable=False,
+        jenkins_param="test_config",
     )
     data_volume_disk_iops: int = SctField(
         description="Number of iops for ebs type io2|io3|gp3",
@@ -164,6 +166,7 @@ class CommonConfigMixin(BaseModel):
         "pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs "
         "for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing "
         "downstream ever sees 'auto'.",
+        jenkins_param="provision_type",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
         description="Create the instance on_demand when the requested `instance_provision` type could not be "
@@ -245,11 +248,21 @@ class CommonConfigMixin(BaseModel):
         "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
         "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
     )
+    pytest_addopts: String = SctField(
+        description="Extra pytest options for `run-pytest` (passed to pytest as PYTEST_ADDOPTS)",
+        appendable=False,
+    )
     raid_level: int = SctField(
         description="Number of of raid level: 0 - RAID0, 5 - RAID5",
     )
     region_name: StringOrList = SctField(
         description="Cloud region(s) to run in. A space-separated list or YAML list provisions a multi-region cluster, one entry per datacenter. Despite the AWS-sounding default, this is the generic region option; GCE uses 'gce_datacenter' and Azure uses 'azure_region_name'.",
+        appendable=False,
+        jenkins_param="region",
+    )
+    requested_by_user: String = SctField(
+        description="The user a service account triggered the job for; reported as the user of the run instead of "
+        "the service account (also read from BUILD_USER_REQUESTED_BY)",
         appendable=False,
     )
     reuse_cluster: String = SctField(

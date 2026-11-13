@@ -28,11 +28,11 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-530 options across 29 groups.
+532 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
-| [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
+| [General and provisioning](configuration_options/general-and-provisioning.md) | 76 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
@@ -429,10 +429,12 @@ concerns first, then one page per backend, then one per test type.
 | [`prepare_write_cmd`](configuration_options/stress-commands-and-load-generation.md#prepare_write_cmd) | `SCT_PREPARE_WRITE_CMD` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`prepare_write_stress`](configuration_options/stress-commands-and-load-generation.md#prepare_write_stress) | `SCT_PREPARE_WRITE_STRESS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`print_kernel_callstack`](configuration_options/monitoring-events-and-reporting.md#print_kernel_callstack) | `SCT_PRINT_KERNEL_CALLSTACK` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
+| [`pytest_addopts`](configuration_options/general-and-provisioning.md#pytest_addopts) | `SCT_PYTEST_ADDOPTS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`rack_aware_loader`](configuration_options/stress-commands-and-load-generation.md#rack_aware_loader) | `SCT_RACK_AWARE_LOADER` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`raid_level`](configuration_options/general-and-provisioning.md#raid_level) | `SCT_RAID_LEVEL` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`region_aware_loader`](configuration_options/stress-commands-and-load-generation.md#region_aware_loader) | `SCT_REGION_AWARE_LOADER` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`region_name`](configuration_options/general-and-provisioning.md#region_name) | `SCT_REGION_NAME` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`requested_by_user`](configuration_options/general-and-provisioning.md#requested_by_user) | `SCT_REQUESTED_BY_USER` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`reuse_cluster`](configuration_options/general-and-provisioning.md#reuse_cluster) | `SCT_REUSE_CLUSTER` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`root_disk_size_db`](configuration_options/general-and-provisioning.md#root_disk_size_db) | `SCT_ROOT_DISK_SIZE_DB` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`root_disk_size_loader`](configuration_options/general-and-provisioning.md#root_disk_size_loader) | `SCT_ROOT_DISK_SIZE_LOADER` | [General and provisioning](configuration_options/general-and-provisioning.md) |

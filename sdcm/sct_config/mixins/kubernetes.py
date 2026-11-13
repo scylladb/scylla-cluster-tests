@@ -36,6 +36,7 @@ class KubernetesConfigMixin(BaseModel):
     )
     eks_cluster_version: String = SctField(
         description="Kubernetes version for the EKS control plane, e.g. '1.30'.",
+        jenkins_param="k8s_version",
     )
     eks_nodegroup_role_arn: String = SctField(
         description="ARN of the IAM role for EKS node groups",
@@ -52,6 +53,7 @@ class KubernetesConfigMixin(BaseModel):
     # k8s-gke options
     gke_cluster_version: String = SctField(
         description="Specifies the version of the GKE cluster to be used.",
+        jenkins_param="k8s_version",
     )
     gke_k8s_release_channel: String = SctField(
         description="K8S release channel name to be used. Expected values are: 'rapid', 'regular', 'stable' and '' (static / No channel).",

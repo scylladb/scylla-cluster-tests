@@ -1,7 +1,7 @@
 """Build SCT environment variables from parsed Jenkins pipeline parameters.
 
 Converts PipelineConfig into the environment variable dict that
-SCTConfiguration expects, mirroring the logic in vars/runSctTest.groovy.
+SCTConfiguration expects, with the same generated mapping the Jenkins steps use (sdcm/utils/pipeline_env.py).
 """
 
 import json
@@ -10,6 +10,7 @@ import logging
 from sdcm.sct_config import BACKEND_IMAGE_FIELD, SCTConfiguration
 from sdcm.sct_config import count_regions as count_regions_from_string
 from sdcm.utils.lint.jenkins_parser import PipelineConfig
+from sdcm.utils.pipeline_env import PipelineInput, option_params, pipeline_env
 
 logger = logging.getLogger(__name__)
 
@@ -35,101 +36,6 @@ for _param, (_env_var, _value) in _RUNTIME_REQUIRED_PARAM_PLACEHOLDERS.items():
     for _backend, _required in SCTConfiguration.model_fields["backend_required_params"].default.items():
         if _param in _required:
             _BACKEND_RUNTIME_PLACEHOLDERS.setdefault(_backend, {})[_env_var] = _value
-
-# Mapping from pipeline parameter names to SCT_* environment variable names.
-# "Direct" means the env var name follows the SCT_ + UPPER(param) convention.
-# "Adapted" means the env var name differs from the parameter name.
-PARAM_TO_ENV: dict[str, str] = {
-    # Always set
-    "backend": "SCT_CLUSTER_BACKEND",
-    "test_config": "SCT_CONFIG_FILES",
-    # Region/location
-    "region": "SCT_REGION_NAME",
-    "gce_datacenter": "SCT_GCE_DATACENTER",
-    "azure_region_name": "SCT_AZURE_REGION_NAME",
-    "oci_region_name": "SCT_OCI_REGION_NAME",
-    "availability_zone": "SCT_AVAILABILITY_ZONE",
-    # Scylla version/image
-    "scylla_version": "SCT_SCYLLA_VERSION",
-    "scylla_ami_id": "SCT_AMI_ID_DB_SCYLLA",
-    "gce_image_db": "SCT_GCE_IMAGE_DB",
-    "azure_image_db": "SCT_AZURE_IMAGE_DB",
-    "scylla_repo": "SCT_SCYLLA_REPO",
-    "new_scylla_repo": "SCT_NEW_SCYLLA_REPO",
-    "new_version": "SCT_NEW_VERSION",
-    "oracle_scylla_version": "SCT_ORACLE_SCYLLA_VERSION",
-    "docker_image": "SCT_DOCKER_IMAGE",
-    # Provisioning
-    "provision_type": "SCT_INSTANCE_PROVISION",
-    "instance_provision_fallback_on_demand": "SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND",
-    "linux_distro": "SCT_SCYLLA_LINUX_DISTRO",
-    "use_preinstalled_scylla": "SCT_USE_PREINSTALLED_SCYLLA",
-    "ip_ssh_connections": "SCT_IP_SSH_CONNECTIONS",
-    # Manager
-    "manager_version": "SCT_MANAGER_VERSION",
-    "target_manager_version": "SCT_TARGET_MANAGER_VERSION",
-    "scylla_mgmt_agent_version": "SCT_SCYLLA_MGMT_AGENT_VERSION",
-    "scylla_mgmt_agent_address": "SCT_SCYLLA_MGMT_AGENT_ADDRESS",
-    "scylla_mgmt_address": "SCT_SCYLLA_MGMT_ADDRESS",
-    "backup_bucket_backend": "SCT_BACKUP_BUCKET_BACKEND",
-    # K8s operator
-    "k8s_scylla_operator_docker_image": "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE",
-    "k8s_scylla_operator_upgrade_docker_image": "SCT_K8S_SCYLLA_OPERATOR_UPGRADE_DOCKER_IMAGE",
-    "k8s_scylla_operator_helm_repo": "SCT_K8S_SCYLLA_OPERATOR_HELM_REPO",
-    "k8s_scylla_operator_upgrade_helm_repo": "SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO",
-    "k8s_scylla_operator_chart_version": "SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION",
-    "k8s_scylla_operator_upgrade_chart_version": "SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION",
-    "k8s_enable_tls": "SCT_K8S_ENABLE_TLS",
-    "k8s_enable_sni": "SCT_K8S_ENABLE_SNI",
-    "k8s_enable_performance_tuning": "SCT_K8S_ENABLE_PERFORMANCE_TUNING",
-    "k8s_log_api_calls": "SCT_K8S_LOG_API_CALLS",
-    "k8s_deploy_monitoring": "SCT_K8S_DEPLOY_MONITORING",
-    "k8s_scylla_utils_docker_image": "SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE",
-    # xcloud
-    "xcloud_provider": "SCT_XCLOUD_PROVIDER",
-    "xcloud_env": "SCT_XCLOUD_ENV",
-    # Stress
-    "stress_duration": "SCT_STRESS_DURATION",
-    "prepare_stress_duration": "SCT_PREPARE_STRESS_DURATION",
-    "gemini_seed": "SCT_GEMINI_SEED",
-    # Post behavior
-    "post_behavior_db_nodes": "SCT_POST_BEHAVIOR_DB_NODES",
-    "post_behavior_loader_nodes": "SCT_POST_BEHAVIOR_LOADER_NODES",
-    "post_behavior_monitor_nodes": "SCT_POST_BEHAVIOR_MONITOR_NODES",
-    "post_behavior_k8s_cluster": "SCT_POST_BEHAVIOR_K8S_CLUSTER",
-    "post_behavior_vector_store_nodes": "SCT_POST_BEHAVIOR_VECTOR_STORE_NODES",
-    # Misc
-    "disable_raft": "SCT_DISABLE_RAFT",
-    "internode_compression": "SCT_INTERNODE_COMPRESSION",
-    "update_db_packages": "SCT_UPDATE_DB_PACKAGES",
-    "pytest_addopts": "PYTEST_ADDOPTS",
-    "test_email_title": "SCT_EMAIL_SUBJECT_POSTFIX",
-    "stop_on_hw_perf_failure": "SCT_STOP_ON_HW_PERF_FAILURE",
-    # Provisioning (direct param name)
-    "instance_provision": "SCT_INSTANCE_PROVISION",
-    # GCE project
-    "gce_project": "SCT_GCE_PROJECT",
-    # Nonroot install
-    "nonroot_offline_install": "SCT_NONROOT_OFFLINE_INSTALL",
-    # Manager extras
-    "mgmt_restore_extra_params": "SCT_MGMT_RESTORE_EXTRA_PARAMS",
-    "mgmt_agent_backup_config": "SCT_MGMT_AGENT_BACKUP_CONFIG",
-    # aws_region is an alias for region used in some performance pipelines
-    "aws_region": "SCT_REGION_NAME",
-    # requested_by_user → BUILD_USER_REQUESTED_BY
-    "requested_by_user": "BUILD_USER_REQUESTED_BY",
-}
-
-# Parameters that map to multiple environment variables
-PARAM_TO_MULTI_ENV: dict[str, list[str]] = {
-    "k8s_version": ["SCT_EKS_CLUSTER_VERSION", "SCT_GKE_CLUSTER_VERSION"],
-}
-
-# Parameters whose values must be JSON-encoded before setting as env vars
-JSON_ENCODED_PARAMS: dict[str, str] = {
-    "perf_extra_jobs_to_compare": "SCT_PERF_EXTRA_JOBS_TO_COMPARE",
-    "email_recipients": "SCT_EMAIL_RECIPIENTS",
-}
 
 # Parameters that are not mapped to environment variables — used for
 # pipeline orchestration only
@@ -188,7 +94,7 @@ def count_regions(config: PipelineConfig) -> int:
 def build_env(config: PipelineConfig) -> dict[str, str]:
     """Convert a PipelineConfig into SCT environment variables.
 
-    Mirrors the parameter-to-env-var mapping in vars/runSctTest.groovy.
+    The jenkinsfile arguments go through the generated mapping of sdcm/utils/pipeline_env.py.
 
     Args:
         config: Parsed pipeline configuration.
@@ -202,41 +108,19 @@ def build_env(config: PipelineConfig) -> dict[str, str]:
     if not config.backend:
         env["SCT_CLUSTER_BACKEND"] = "aws"
 
+    env |= pipeline_env(PipelineInput(pipeline_params=config.params))
+
+    known_params = {param for params in option_params().values() for param in params}
     for param_name, param_value in config.params.items():
         if not param_value:
             continue
-
-        # Check direct mapping (single env var)
-        env_var = PARAM_TO_ENV.get(param_name)
-        if env_var:
-            env[env_var] = param_value
-            continue
-
-        # Check multi-value mapping (one param → multiple env vars)
-        multi_env = PARAM_TO_MULTI_ENV.get(param_name)
-        if multi_env:
-            for target_var in multi_env:
-                env[target_var] = param_value
-            continue
-
-        # Check JSON-encoded params
-        json_env = JSON_ENCODED_PARAMS.get(param_name)
-        if json_env:
-            env[json_env] = json.dumps(param_value)
-            continue
-
         # extra_environment_variables → parse and export directly
         if param_name == "extra_environment_variables":
             parse_extra_env_vars(param_value, env)
-            continue
+        elif param_name not in known_params and param_name not in NON_ENV_PARAMS:
+            logger.warning("Unmapped pipeline parameter '%s' in %s", param_name, config.file_path)
 
-        # Skip known non-env params
-        if param_name in NON_ENV_PARAMS:
-            continue
-
-        logger.warning("Unmapped pipeline parameter '%s' in %s", param_name, config.file_path)
-
-    # Ensure test_config is JSON-encoded (as runSctTest.groovy does via JsonOutput.toJson)
+    # the parser's list, since the raw value can be a Groovy list literal rather than JSON
     if config.test_config:
         env["SCT_CONFIG_FILES"] = json.dumps(config.test_config)
 

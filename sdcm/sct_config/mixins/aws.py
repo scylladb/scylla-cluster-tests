@@ -43,12 +43,14 @@ class AwsConfigMixin(BaseModel):
     )
     ami_id_db_scylla: String = SctField(
         description="AMS AMI id to use for scylla db node",
+        jenkins_param="scylla_ami_id",
     )
     ami_id_db_scylla_desc: String = SctField(
         description="version name to report stats to Elasticsearch and tagged on cloud instances",
     )
     ami_id_loader: String = SctField(
         description="AMS AMI id to use for loader node",
+        jenkins_param="loader_ami_id",
     )
     ami_id_monitor: String = SctField(
         description="AMS AMI id to use for monitor node",
