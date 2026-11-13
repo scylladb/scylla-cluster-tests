@@ -31,17 +31,27 @@ When `_create_or_find_instances()` (inherited from `AWSCluster`) called `self._c
 # Before (broken):
 def _create_instances(self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):
     instances = super()._create_instances(
-        count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx,
-        az_idx=az_idx, instance_type=instance_type, is_zero_node=is_zero_node,
+        count=count,
+        ec2_user_data=ec2_user_data,
+        dc_idx=dc_idx,
+        az_idx=az_idx,
+        instance_type=instance_type,
+        is_zero_node=is_zero_node,
     )
+
 
 # After (fixed):
 def _create_instances(
     self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
 ):
     instances = super()._create_instances(
-        count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx,
-        az_idx=az_idx, instance_type=instance_type, is_zero_node=is_zero_node, ami_id=ami_id,
+        count=count,
+        ec2_user_data=ec2_user_data,
+        dc_idx=dc_idx,
+        az_idx=az_idx,
+        instance_type=instance_type,
+        is_zero_node=is_zero_node,
+        ami_id=ami_id,
     )
 ```
 
