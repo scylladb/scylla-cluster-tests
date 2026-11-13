@@ -78,6 +78,8 @@ class SSHLoggerBase(LoggerBase):
     RETRIEVE_LOG_MESSAGE_TEMPLATE = "SSHLogger reading {log_file} from {since}"
     VERBOSE_RETRIEVE = True
     READINESS_CHECK_DELAY = 10  # seconds
+    # How long stop() waits for the pool worker to return after killing the remote follower
+    STOP_GRACE_PERIOD = 5  # seconds
     # Follows the journal, so honours the `since' it is given; a follower of a log file reads all of it
     READS_JOURNAL = False
 
@@ -104,19 +106,46 @@ class SSHLoggerBase(LoggerBase):
         if self._child_thread is None:
             return
         self._termination_event.set()
-        if remote_pid := self.remote_pid:
-            self._kill_follower(remote_pid)
-        else:
-            # Without the pid the remote follower keeps running, so _retrieve() stays blocked and
-            # the pool worker outlives stop() -- and would still hang interpreter shutdown.
-            self._log.warning(
-                "No remote pid file for the log follower of %s; can't kill it, its pool worker may outlive stop()",
-                self._target_log_file,
-            )
+        self._stop_remote_follower()
         self._remove_remote_files()
         if self._thread.running():
             self._thread.cancel()
         self._shutdown_pool()
+
+    def _stop_remote_follower(self) -> None:
+        """Kill the remote follower and make sure the pool worker reading it returns.
+
+        A follower that is still running keeps _retrieve() blocked, so the pool worker outlives stop() -- and
+        CPython's interpreter-shutdown hook joins it forever (SCT-803).
+
+        stop() can race start(): the worker may launch the follower just after the first kill, which then
+        found nothing to kill. By the end of the grace period that follower has written its pid file, so a
+        second kill gets it.
+        """
+        for _ in range(2):
+            self._kill_remote_follower()
+            if self._worker_returned():
+                return
+        self._log.warning(
+            "The log follower of %s is still running after stop() (remote pid: %r); its pool worker may outlive it",
+            self._target_log_file,
+            self.remote_pid,
+        )
+
+    def _kill_remote_follower(self) -> None:
+        if remote_pid := self.remote_pid:
+            self._kill_follower(remote_pid)
+
+    def _worker_returned(self) -> bool:
+        """Wait up to STOP_GRACE_PERIOD for the journal task, and say whether it has returned."""
+        try:
+            self._thread.result(timeout=self.STOP_GRACE_PERIOD)
+        except TimeoutError:
+            return False
+        except BaseException:  # noqa: BLE001
+            # Cancelled, or the task failed: either way it is no longer running
+            return True
+        return True
 
     def _kill_follower(self, remote_pid: str) -> None:
         """Kill the follower's process group, as root, while its leader is still our script.
@@ -166,6 +195,9 @@ class SSHLoggerBase(LoggerBase):
             self._mark_run_start(since=read_from_timestamp)
         while not self._termination_event.is_set():
             if self._is_ready_to_retrieve():
+                # stop() may have come while is_up() ran: a follower launched now would outlive it
+                if self._termination_event.is_set():
+                    break
                 self._retrieve(since=read_from_timestamp)
                 # As seconds since the epoch: journalctl reads a date without a zone in the host's local time, which a
                 # physical host may not keep in UTC, and systemd < 220 (CentOS 7, Amazon Linux 2) rejects a zone
@@ -258,13 +290,17 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                 return
             LOGGER.debug(f"Stopping HDRHistogramFileLogger for {self._remote_log_file} -> {self._target_log_file}")
             self._termination_event.set()
-            # ensure the tail command to be stopped
-            self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
+            self._stop_remote_follower()
             self._remove_remote_files()
             if self._thread.running():
                 self._thread.cancel()
             self._shutdown_pool()
             self._started = False
+
+    def _kill_remote_follower(self) -> None:
+        # The tail runs as the SSH user; pkill by the file name also gets one whose pid file is gone
+        self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
+        super()._kill_remote_follower()
 
     def remove_remote_log_file(self):
         """
@@ -326,6 +362,9 @@ class HDRHistogramFileLogger(SSHLoggerBase):
             LOGGER.debug("Start check if remoter ready. %s -> %s", self._remote_log_file, self._target_log_file)
             if self._is_ready_to_retrieve():
                 LOGGER.debug("Remoter ready. %s -> %s", self._remote_log_file, self._target_log_file)
+                # stop() may have come while is_up() ran: a tail launched now would outlive it
+                if self._termination_event.is_set():
+                    break
                 self._retrieve(since=read_from_timestamp)
                 try:
                     file_size = os.path.getsize(self._target_log_file)
