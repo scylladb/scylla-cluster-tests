@@ -2668,6 +2668,15 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 **type:** dict_or_str_or_pydantic
 
 
+## **mgmt_backup_keyspaces** / SCT_MGMT_BACKUP_KEYSPACES
+
+Keyspaces and tables to back up by the Scylla Manager backup nemeses, as patterns of the '--keyspace' option of 'sctool backup', e.g. 'keyspace1.standard1'. When not set, 'MgmtBackup' backs up all the keyspaces, and 'MgmtBackupSpecificKeyspaces' all the test keyspaces.
+
+**default:** N/A
+
+**type:** str_or_list (appendable)
+
+
 ## **mgmt_reuse_backup_snapshot_name** / SCT_MGMT_REUSE_BACKUP_SNAPSHOT_NAME
 
 Name of backup snapshot to use in Manager restore benchmark test, for example, 500gb_2t_ics. The name provides the info about dataset size (500gb), tables number (2) and compaction (ICS)

@@ -1877,6 +1877,15 @@ class SCTConfiguration(dict):
             "For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
         ),
         dict(
+            name="mgmt_backup_keyspaces",
+            env="SCT_MGMT_BACKUP_KEYSPACES",
+            type=str_or_list,
+            help="Keyspaces and tables to back up by the Scylla Manager backup nemeses, as patterns of "
+            "the '--keyspace' option of 'sctool backup', e.g. 'keyspace1.standard1'. "
+            "When not set, 'MgmtBackup' backs up all the keyspaces, "
+            "and 'MgmtBackupSpecificKeyspaces' all the test keyspaces.",
+        ),
+        dict(
             name="mgmt_reuse_backup_snapshot_name",
             env="SCT_MGMT_REUSE_BACKUP_SNAPSHOT_NAME",
             type=str,
