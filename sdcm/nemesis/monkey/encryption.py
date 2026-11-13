@@ -14,6 +14,7 @@ import time
 
 from sdcm.exceptions import SstablesNotFound, UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass, target_all_nodes
+from sdcm.nemesis.utils.node_allocator import AllNodesRunNemesisError
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -25,13 +26,40 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
-@retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, SstablesNotFound))
-def _check_encryption_fact(sstable_util_instance, expected_bool_value):
-    sstable_util_instance.check_that_sstables_are_encrypted(expected_bool_value=expected_bool_value)
+def _check_node_sstables_encryption(node, ks_cf, expected_bool_value) -> bool:
+    """Check encryption of the table's sstables on the node. Return False if the node has none."""
+    sstable_util = SstableUtils(db_node=node, ks_cf=ks_cf)
+    if sstables := sstable_util.get_sstables():
+        sstable_util.check_that_sstables_are_encrypted(sstables=sstables, expected_bool_value=expected_bool_value)
+        return True
+    return False
 
 
 class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
     """Shared logic for the AWS KMS table-encryption nemesis (with/without key rotation)."""
+
+    @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, SstablesNotFound))
+    def _check_encryption_fact(self, ks_cf, expected_bool_value):
+        # The target may hold no replica of the table (zero-token node, tablets with RF < nodes),
+        # so fall back to other data nodes, reserving each one to not interfere with other nemeses
+        target_node = self.runner.target_node
+        if _check_node_sstables_encryption(target_node, ks_cf, expected_bool_value):
+            return
+        busy_nodes = []
+        for node in self.runner.cluster.data_nodes:
+            if node is target_node:
+                continue
+            try:
+                with self.runner.node_allocator.run_nemesis(nemesis_label="TableEncryptionCheck", node_list=[node]):
+                    if _check_node_sstables_encryption(node, ks_cf, expected_bool_value):
+                        return
+            except AllNodesRunNemesisError:
+                busy_nodes.append(f"{node.name} ({node.running_nemesis})")
+        if busy_nodes:
+            raise UnsupportedNemesis(
+                f"sstables for '{ks_cf}' weren't found on the free nodes, other nodes are busy: {busy_nodes}"
+            )
+        raise SstablesNotFound(f"sstables for '{ks_cf}' weren't found on any of the nodes")
 
     def _upgrade_sstables(self, nodes, keyspace_name, table_name):
         self.runner.actions_log.info("Upgrade sstables for the new encrypted table on all nodes")
@@ -157,8 +185,8 @@ class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
                     aws_kms.rotate_kms_key(kms_key_alias_name)
 
             # Check that sstables of that table are really encrypted
-            sstable_util = SstableUtils(db_node=self.runner.target_node, ks_cf=f"{keyspace_name}.{table_name}")
-            _check_encryption_fact(sstable_util, True)
+            ks_cf = f"{keyspace_name}.{table_name}"
+            self._check_encryption_fact(ks_cf, True)
 
             with self.runner.target_node.remote_scylla_yaml() as scylla_yaml:
                 user_info_encryption_enabled = (
@@ -193,7 +221,7 @@ class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
                 )
 
                 # Check that sstables of that table are not encrypted anymore
-                _check_encryption_fact(sstable_util, False)
+                self._check_encryption_fact(ks_cf, False)
         finally:
             # Delete table
             self.runner.actions_log.info(f"Delete encrypted table {keyspace_name}.{table_name}")
