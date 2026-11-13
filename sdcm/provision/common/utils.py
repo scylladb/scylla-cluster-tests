@@ -14,7 +14,7 @@
 import re
 from textwrap import dedent
 
-from sdcm.utils.apt import APT_LOCK_TIMEOUT, apt_lock_wait
+from sdcm.utils.apt import APT_LOCK_TIMEOUT, APT_UPDATE_TIME_BUDGET, apt_cmd, apt_lock_wait
 from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.rpm import rpm_lock_wait
 
@@ -323,9 +323,15 @@ def update_repo_cache():
             done
             rm -rf /var/cache/apt/
 
+            _apt_update_deadline=$((SECONDS + {APT_UPDATE_TIME_BUDGET}))
             for n in 1 2 3 4 5 6 7 8 9; do
                 {apt_lock_wait()}
-                if apt-get -o DPkg::Lock::Timeout={APT_LOCK_TIMEOUT} -y update; then
+                _apt_update_time_left=$((_apt_update_deadline - SECONDS))
+                if [ $_apt_update_time_left -le 0 ]; then
+                    echo "WARNING: apt-get update did not succeed in {APT_UPDATE_TIME_BUDGET} seconds, keeping the current package lists"
+                    break
+                fi
+                if timeout --kill-after=10s $_apt_update_time_left {apt_cmd("-y update", dpkg_options=False)}; then
                     break
                 fi
                 sleep $(backoff $n)

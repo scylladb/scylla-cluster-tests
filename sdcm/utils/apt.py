@@ -18,6 +18,11 @@ from typing import Optional
 # as long as the cloud-init apt configuration does (see sdcm/provision/user_data.py).
 APT_LOCK_TIMEOUT = 300
 
+# Time limit for the package lists refresh in the boot-time scripts. A slow mirror must not keep
+# cloud-init busy past the SCT wait for it (sdcm/provision/helpers/cloud_init.py, 600 s): on giving up,
+# the node keeps its current lists, and node setup refreshes them again over SSH.
+APT_UPDATE_TIME_BUDGET = 300
+
 # All the lock files apt/dpkg may hold. `DPkg::Lock::Timeout` covers only the dpkg ones,
 # the others have to be waited for explicitly, see apt_lock_wait().
 APT_LOCK_FILES = (

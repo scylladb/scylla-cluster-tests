@@ -21,6 +21,7 @@ import yaml
 from sdcm.provision.common.utils import minify_shell_script
 from sdcm.provision.user_data import UserDataBuilder, UserDataObject, gzipped_mime_part
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
+from sdcm.utils.apt import APT_DEFAULTS
 
 
 class ExampleUserDataObject(UserDataObject):
@@ -113,6 +114,17 @@ def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
     assert loaded_yaml["runcmd"] == ["mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done"]
+
+
+def test_apt_configuration_bounds_retries_like_apt_cmd():
+    """With a high retry count, a slow mirror kept `apt-get update` running past the cloud-init wait."""
+    loaded_yaml = yaml.safe_load(UserDataBuilder(user_data_objects=[]).build_user_data_yaml())
+
+    assert loaded_yaml["apt"]["conf"].splitlines() == [
+        f'Acquire::Retries "{APT_DEFAULTS["Acquire::Retries"]}";',
+        f'Acquire::http::Timeout "{APT_DEFAULTS["Acquire::http::Timeout"]}";',
+        f'DPkg::Lock::Timeout "{APT_DEFAULTS["DPkg::Lock::Timeout"]}";',
+    ]
 
 
 def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():

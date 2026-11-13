@@ -17,12 +17,12 @@ from dataclasses import dataclass, field
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-from textwrap import dedent
 from typing import Dict, List
 
 import yaml
 
 from sdcm.provision.common.utils import minify_shell_script
+from sdcm.utils.apt import APT_DEFAULTS
 
 CLOUD_INIT_SCRIPTS_PATH = "/var/lib/sct/cloud-init"
 # what cloud-init recognizes a gzipped part by, once unpacked
@@ -116,14 +116,13 @@ class UserDataBuilder:
 
     @property
     def apt_configuration(self) -> Dict:
-        return yaml.safe_load(
-            dedent("""
-                                        apt:
-                                          conf: |
-                                            Acquire::Retries "60";
-                                            DPkg::Lock::Timeout "300";
-                                     """)
+        # The same limits as apt_cmd() uses. apt waits up to 30 s before each retry of a file, so with
+        # many retries a slow mirror keeps `apt-get update` running for tens of minutes instead of failing.
+        conf = "".join(
+            f'{option} "{APT_DEFAULTS[option]}";\n'
+            for option in ("Acquire::Retries", "Acquire::http::Timeout", "DPkg::Lock::Timeout")
         )
+        return {"apt": {"conf": conf}}
 
     def build_user_data_yaml(self) -> str:
         """
