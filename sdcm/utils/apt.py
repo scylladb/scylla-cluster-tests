@@ -13,6 +13,11 @@
 
 from typing import Optional
 
+# Time limit for the package lists refresh in the boot-time scripts, the cache cleanup included.
+# A slow mirror must not keep cloud-init, and the SCT wait for it (sdcm/provision/helpers/cloud_init.py),
+# busy for tens of minutes: on giving up, the node keeps its current lists,
+# and node setup refreshes them again over SSH.
+APT_UPDATE_TIME_BUDGET = 300
 
 APT_DEFAULTS = {
     "Acquire::http::Timeout": "60",

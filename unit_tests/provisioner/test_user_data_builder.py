@@ -102,6 +102,17 @@ def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
     assert loaded_yaml["runcmd"] == ["mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done"]
 
 
+def test_apt_configuration_bounds_retries():
+    """With 60 retries, a slow mirror kept `apt-get update` running past the cloud-init wait."""
+    loaded_yaml = yaml.safe_load(UserDataBuilder(user_data_objects=[]).build_user_data_yaml())
+
+    assert loaded_yaml["apt"]["conf"].splitlines() == [
+        'Acquire::Retries "3";',
+        'Acquire::http::Timeout "60";',
+        'DPkg::Lock::Timeout "300";',
+    ]
+
+
 def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
     builder = UserDataBuilder(user_data_objects=[NotApplicableUserDataObject()])
     user_data_yaml = builder.build_user_data_yaml()

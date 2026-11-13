@@ -13,6 +13,7 @@
 
 from textwrap import dedent
 
+from sdcm.utils.apt import APT_UPDATE_TIME_BUDGET, apt_cmd
 from sdcm.utils.curl import curl_with_retry
 
 
@@ -181,22 +182,32 @@ def configure_backoff_timeout():
 
 
 def update_repo_cache():
-    return dedent("""\
+    return dedent(f"""\
         if yum --help 2>/dev/null 1>&2 ; then
             echo "Cleaning yum cache..."
             yum clean all
             rm -rf /var/cache/yum/
         elif apt-get --help 2>/dev/null 1>&2 ; then
-            echo "Cleaning apt cache..."
-            apt-get clean all
-            rm -rf /var/cache/apt/
+            # one time limit for the whole refresh: the cleanup, the update and the pauses between attempts
+            _apt_deadline=$((SECONDS + {APT_UPDATE_TIME_BUDGET}))
+            _apt_retry_until_deadline() {{
+                local name=$1
+                shift
+                local n=0
+                while [ $SECONDS -lt $_apt_deadline ]; do
+                    n=$((n + 1))
+                    if timeout --kill-after=10s $((_apt_deadline - SECONDS)) "$@"; then
+                        return 0
+                    fi
+                    sleep $(backoff $n)
+                done
+                echo "WARNING: $name did not succeed in {APT_UPDATE_TIME_BUDGET} seconds, giving up"
+            }}
 
-            for n in 1 2 3 4 5 6 7 8 9; do
-                if apt-get -y update; then
-                    break
-                fi
-                sleep $(backoff $n)
-            done
+            echo "Cleaning apt cache..."
+            _apt_retry_until_deadline "apt-get clean" {apt_cmd("clean")}
+            rm -rf /var/cache/apt/
+            _apt_retry_until_deadline "apt-get update" {apt_cmd("-y update")}
         else
             echo "Unsupported distro"
         fi
