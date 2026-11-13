@@ -179,3 +179,18 @@ def test_rate_unthrottled_string():
         }
     )
     config.verify_configuration()
+
+
+def test_perf_p99_search_from_yaml(monkeypatch):
+    """The SC ladder sets the P99 search bracket next to its steps."""
+    monkeypatch.setenv("SCT_CONFIG_FILES", "configurations/performance/write_steps_p99_ladder_sc.yaml")
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert config.get("perf_p99_search") == {
+        "target_p99_ms": 10,
+        "low": 50000,
+        "high": 150000,
+        "tolerance": 5000,
+        "probe_duration": "10m",
+        "confirm_duration": "15m",
+    }
