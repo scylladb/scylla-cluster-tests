@@ -240,9 +240,10 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     SCT neither creates nor destroys physical hosts, so cleaning them up means undoing what the run left on them that
     breaks the next one: the SSH tunnel ports it bound on the roles with `ip_ssh_connections: public` (the role's own
     setting in the hosts config, else the run's), and the Scylla install of a DB host (its disk setup and the files it
-    left), unless Scylla came preinstalled. Every host also gets back the packages it had before the run. Runs in the
-    cleanup phase, after the logs were collected, for the node types the post behavior asks to clean (`NodeType`, all
-    of them when not given).
+    left), unless Scylla came preinstalled. A DB host also gets back the packages it had before the run; loader and
+    monitor hosts are shared with other jobs and keep theirs. A monitor host loses the run's monitoring stack and its
+    directory. Runs in the cleanup phase, after the logs were collected, for the node types the post behavior asks to
+    clean (`NodeType`, all of them when not given).
     """
     node_types = tags_dict.get("NodeType")
     node_types = list(BAREMETAL_HOSTS_SECTIONS) if node_types is None else node_types
@@ -264,15 +265,20 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     for node_type, section in sections.items():
         tunnel_ports = node_type in public_roles
         scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
+        # Loader and monitor hosts are shared with other jobs: their packages stay as they are
+        restore_baseline = node_type == "scylla-db"
+        monitoring_stack_of = tags_dict.get("TestId") if node_type == "monitor" else None
         for host_ips in section["node_list"]:
             address = host_ips["public_ip"] if tunnel_ports else host_ips["private_ip"]
             if dry_run:
                 LOGGER.info(
-                    "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: yes)",
+                    "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: %s, monitoring stack: %s)",
                     node_type,
                     address,
                     tunnel_ports,
                     scylla_disk_setup,
+                    restore_baseline,
+                    monitoring_stack_of or False,
                 )
                 continue
             LOGGER.info("Cleaning up %s host %s", node_type, address)
@@ -281,7 +287,10 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
             )
             try:
                 PhysicalHost(name=f"{node_type} {address}", remoter=remoter).clean_up_host(
-                    tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup
+                    tunnel_ports=tunnel_ports,
+                    scylla_disk_setup=scylla_disk_setup,
+                    restore_baseline=restore_baseline,
+                    monitoring_stack_of=monitoring_stack_of,
                 )
             finally:
                 remoter.stop()

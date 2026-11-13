@@ -7,12 +7,14 @@ This backend is experimental and not regularly tested in CI.
 import logging
 import re
 import shlex
+from pathlib import Path
 from typing import Literal, NotRequired, Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.test_config import TestConfig
 from sdcm.utils.apt import apt_cmd
+from sdcm.utils.decorators import retrying
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
 from sdcm.utils.remote_logger import journal_time
 from sdcm.utils.rpm import rpm_cmd
@@ -66,6 +68,16 @@ LIST_RUNNING_SERVICES = (
     "systemctl list-units --type=service --state=running --no-legend --plain | awk '{print $1}' | grep -v @"
 )
 
+# Each run installs its monitoring stack, and keeps its data, in its own directory under the monitor host's home
+MONITOR_RUN_DIR = "sct-monitoring-{test_id}"
+# Removes the containers of one run's monitoring stack, and no other run's: every container of the stack, the Grafana
+# renderer included, carries the run's TestId label and NodeType=monitor; the run's stress containers on a loader and
+# monitor host carry only the TestId. The stack runs with scylla-monitoring's default container names, so kill-all.sh
+# would remove another run's stack too.
+STOP_RUN_MONITORING_STACK = (
+    "docker ps -aq --filter label=TestId={test_id} --filter label=NodeType=monitor | xargs -r docker rm -f"
+)
+
 BASE_NAME = "db-node"
 LOADER_NAME = "loader-node"
 MONITOR_NAME = "monitor-node"
@@ -103,9 +115,21 @@ class PhysicalHostCleanup:
     `test_config`.
     """
 
-    def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool) -> None:
+    def clean_up_host(
+        self,
+        tunnel_ports: bool,
+        scylla_disk_setup: bool,
+        restore_baseline: bool = True,
+        monitoring_stack_of: str | None = None,
+    ) -> None:
         """Run the cleanup steps asked for, and restore the host's packages. A failing step is logged and does not
         skip the others.
+
+        `monitoring_stack_of` is the test id of the run whose monitoring stack this host ran: its containers are
+        removed, and its directory with them.
+
+        `restore_baseline` is False for a loader or monitor host: other jobs share it, and restoring the baseline
+        would remove the packages they installed since, and those the next run needs.
 
         `scylla_disk_setup` is for a DB host the run installed Scylla on: its disk setup is reset, and once its
         packages are restored, the files the Scylla install left are removed.
@@ -127,19 +151,39 @@ class PhysicalHostCleanup:
                     self._reset_scylla_disk_setup(disks)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
-        try:
-            self.restore_packages()
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
-        try:
-            self.restore_services()
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
+        if monitoring_stack_of:
+            try:
+                self.remove_monitoring_stack(monitoring_stack_of)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not remove the monitoring stack of the run: %s", exc)
+        if restore_baseline:
+            try:
+                self.restore_packages()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
+            try:
+                self.restore_services()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
         if scylla_disk_setup:
             try:
                 self.remove_scylla_leftovers()
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not remove the leftovers of the Scylla install, the next install will: %s", exc)
+
+    def stop_monitoring_stack(self, test_id: str) -> None:
+        """Remove the containers of the monitoring stack of the run `test_id`, and only those: the ones with its TestId
+        label and NodeType=monitor.
+        """
+        self.remoter.run(STOP_RUN_MONITORING_STACK.format(test_id=shlex.quote(test_id)))
+
+    def remove_monitoring_stack(self, test_id: str) -> None:
+        """Remove the monitoring stack of the run `test_id` and its directory, the Prometheus data included: log
+        collection, which runs before the cleanup, already took what it needs.
+        """
+        self.stop_monitoring_stack(test_id)
+        # With sudo: the stack's containers write their data as other users
+        self.remoter.sudo(f'rm -rf "$HOME/{MONITOR_RUN_DIR.format(test_id=test_id)}"')
 
     def record_host_baseline(self) -> None:
         """Record the packages the host has and the services it runs, for the cleanup after the run to restore.
@@ -573,12 +617,20 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     def wait_for_cloud_init(self):
         # The first step of BaseNode.init() once SSH is up: the baseline is recorded before SCT installs anything on
         # the host, e.g. vector by configure_remote_logging() and rsync by do_default_installations()
+        if self.node_type != "db":
+            # Loader and monitor hosts are shared with other jobs, and their cleanup doesn't restore a baseline
+            return
         try:
             self.record_host_baseline()
         except Exception as exc:  # noqa: BLE001
             self.log.warning(
                 "Could not record the packages and services of the host, the cleanup leaves them as they are: %s", exc
             )
+
+    @property
+    def keeps_daily_apt_triggers(self) -> bool:
+        # Loader and monitor hosts are shared with other jobs, and nothing would turn their apt-daily timers back on
+        return self.node_type != "db"
 
     def _get_public_ip_address(self) -> Optional[str]:
         return self._public_ip
@@ -676,6 +728,10 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError("Physical hosts IPs are not configured!")
+        # Before any setup: a host that is both loader and monitor gets its Docker checked once, for both roles
+        if (role := kwargs.get("node_type")) in ("loader", "monitor"):
+            for address in self._node_private_ips:
+                cluster.register_docker_host_role(address, role)
         super().__init__(**kwargs)
 
     @property
@@ -780,6 +836,9 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
 
 class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
+    # A shared lab host: installing Docker or changing its group would hit the other jobs on it
+    owns_host = False
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
@@ -800,6 +859,20 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
+    # A shared lab host: changing its Docker, firewall or packages would hit the other jobs on it
+    owns_host = False
+
+    @staticmethod
+    @retrying(n=5)
+    def get_monitor_install_path_base(node) -> Path:
+        # Each run gets its own install and data directory, so a second run's monitor on the host can't delete them
+        home = node.remoter.run("echo $HOME").stdout.strip()
+        return Path(home) / MONITOR_RUN_DIR.format(test_id=node.tags["TestId"])
+
+    def stop_scylla_monitoring(self, node):
+        # Not kill-all.sh: it removes every container with the stack's default names, other runs' stacks included
+        node.stop_monitoring_stack(node.tags["TestId"])
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):

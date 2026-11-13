@@ -34,6 +34,7 @@ from sdcm.cluster_baremetal import (
     PACKAGE_BASELINE,
     SCYLLA_COREDUMP_MOUNT_UNIT,
     SERVICE_BASELINE,
+    MonitorSetPhysical,
     NodeIpsNotConfiguredError,
     PhysicalHost,
     PhysicalMachineCluster,
@@ -1304,7 +1305,8 @@ def test_the_db_host_cleanup_stops_scylla_restores_packages_then_removes_leftove
     assert calls == ["log followers", "systemctl stop scylla-server.service", "packages", "services", "leftovers"]
 
 
-def test_a_loader_host_cleanup_skips_the_scylla_steps(monkeypatch):
+def test_a_loader_host_cleanup_skips_the_scylla_steps_and_the_baseline_restore(monkeypatch):
+    """Other jobs share a loader or monitor host: a restore would remove the packages they installed."""
     host = _host_with_disk_state()
     calls = []
     monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: calls.append("log followers"))
@@ -1312,10 +1314,36 @@ def test_a_loader_host_cleanup_skips_the_scylla_steps(monkeypatch):
     monkeypatch.setattr(host, "restore_services", lambda: calls.append("services"))
     monkeypatch.setattr(host, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
 
-    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False)
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, restore_baseline=False)
 
-    assert calls == ["log followers", "packages", "services"]
+    assert calls == ["log followers"]
     host.remoter.sudo.assert_not_called()
+
+
+def test_a_monitor_host_cleanup_removes_only_the_runs_monitoring_stack(monkeypatch):
+    """The run's own stack (containers with its TestId label and NodeType=monitor, the mountless renderer too) and
+    directory go; other runs' stacks and the run's stress containers stay.
+    """
+    host = _host_with_disk_state()
+    monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: None)
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, restore_baseline=False, monitoring_stack_of="1234")
+
+    host.remoter.run.assert_called_once_with(
+        "docker ps -aq --filter label=TestId=1234 --filter label=NodeType=monitor | xargs -r docker rm -f"
+    )
+    host.remoter.sudo.assert_called_once_with('rm -rf "$HOME/sct-monitoring-1234"')
+
+
+def test_the_baremetal_monitor_restart_stops_only_its_own_stack():
+    """A restart (REUSE_CLUSTER) stops the run's stack, not every container with the stack's default names."""
+    node = MagicMock()
+    node.tags = {"TestId": "1234"}
+
+    MonitorSetPhysical.stop_scylla_monitoring(MagicMock(), node)
+
+    node.stop_monitoring_stack.assert_called_once_with("1234")
+    node.remoter.run.assert_not_called()
 
 
 def test_a_failed_package_restore_does_not_skip_the_leftovers(monkeypatch):
@@ -1335,6 +1363,7 @@ def test_the_node_records_the_baseline_before_installing_anything(monkeypatch):
     """BaseNode.init() installs vector and rsync once SSH is up: the baseline must not have them."""
     calls = []
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = "db"
     node.ssh_login_info = {"hostname": None}
     node.logdir = None
     node.log = MagicMock()
@@ -1357,6 +1386,7 @@ def test_the_node_records_the_baseline_before_installing_anything(monkeypatch):
 
 def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = "db"
     node.log = MagicMock()
     node.record_host_baseline = MagicMock(side_effect=RuntimeError("rpm: exited with 1"))
 
@@ -1364,6 +1394,63 @@ def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
 
     node.record_host_baseline.assert_called_once()
     assert "leaves them as they are" in node.log.warning.call_args.args[0]
+
+
+@pytest.mark.parametrize("node_type", ["loader", "monitor"])
+def test_a_shared_host_records_no_baseline(node_type):
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = node_type
+    node.record_host_baseline = MagicMock()
+
+    node.wait_for_cloud_init()
+
+    node.record_host_baseline.assert_not_called()
+
+
+@pytest.mark.parametrize("node_type,disabled", [("db", True), ("loader", False), ("monitor", False)])
+def test_only_a_db_host_gets_its_daily_apt_timers_disabled(node_type, disabled):
+    """Loader and monitor hosts are shared: their apt-daily timers stay on."""
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = node_type
+    node.distro = MagicMock(uses_systemd=True, is_ubuntu=True)
+    node.remoter = MagicMock()
+
+    node.disable_daily_triggered_services()
+
+    assert node.remoter.sudo.called == disabled
+
+
+@pytest.mark.parametrize(
+    "node_class,node_type,disabled",
+    [
+        pytest.param(PhysicalMachineNode, "db", True, id="baremetal-db"),
+        pytest.param(PhysicalMachineNode, "loader", False, id="baremetal-loader"),
+        pytest.param(PhysicalMachineNode, "monitor", False, id="baremetal-monitor"),
+        pytest.param(sdcm_cluster.BaseNode, "loader", True, id="cloud-loader"),
+    ],
+)
+def test_the_logging_script_leaves_the_apt_timers_of_a_shared_host_on(node_class, node_type, disabled):
+    """The first run on a host also disables the apt-daily timers in its logging setup script: not on a shared host."""
+    node = node_class.__new__(node_class)
+    node.name = "node-1"
+    node.node_type = node_type
+    node.journal_since = None
+    node.parent_cluster = MagicMock(params={"logs_transport": "vector"})
+    node.test_config = MagicMock(get_logging_service_host_port=MagicMock(return_value=("127.0.0.1", 5003)))
+    node.remoter = MagicMock()
+
+    node.configure_remote_logging()
+
+    script = node.remoter.sudo.call_args.args[0]
+    assert ("systemctl disable apt-daily.timer" in script) == disabled
+    assert ("unattended-upgrades" in script) == disabled
+
+
+def test_each_run_gets_its_own_monitoring_directory():
+    node = MagicMock(tags={"TestId": "1234-abcd"})
+    node.remoter.run.return_value = MagicMock(stdout="/home/fedora\n")
+
+    assert str(MonitorSetPhysical.get_monitor_install_path_base(node)) == "/home/fedora/sct-monitoring-1234-abcd"
 
 
 def _host_with_log_followers(leaders: str) -> PhysicalHost:
@@ -1407,3 +1494,19 @@ def test_logs_go_to_the_tunnel_or_straight_to_the_runner_per_node(node_setting, 
     monkeypatch.setattr(TestConfig, "VECTOR_SSH_TUNNEL_LOCAL_PORT", 5001)
 
     assert TestConfig.get_logging_service_host_port(node_setting) == expected
+
+
+@pytest.mark.parametrize(
+    "node_type,registered", [("loader", {"loader"}), ("monitor", {"monitor"}), ("scylla-db", None)]
+)
+def test_loader_and_monitor_hosts_are_registered_for_their_docker_preflight(monkeypatch, node_type, registered):
+    """Registered at construction, before any setup, so a loader+monitor host is checked once for both roles."""
+    monkeypatch.setattr(sdcm_cluster, "_DOCKER_HOST_CHECKS", {})
+    monkeypatch.setattr(sdcm_cluster.BaseCluster, "__init__", lambda self, **kwargs: None)
+
+    PhysicalMachineCluster(
+        credentials=[MagicMock()], n_nodes=1, public_ips=["1.0.0.1"], private_ips=["10.0.0.1"], node_type=node_type
+    )
+
+    host = sdcm_cluster._DOCKER_HOST_CHECKS.get("10.0.0.1")
+    assert (host.roles if host else None) == registered
