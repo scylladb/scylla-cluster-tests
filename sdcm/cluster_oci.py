@@ -13,10 +13,10 @@
 
 import json
 import logging
-import time
-from datetime import datetime
 from functools import cached_property
 from typing import Dict, List
+
+from oci.core.models import Instance
 
 from sdcm import cluster
 from sdcm.kernel_panic_checker import OCIKernelPanicChecker
@@ -45,7 +45,8 @@ from sdcm.utils.oci_utils import (
 
 LOGGER = logging.getLogger(__name__)
 SPOT_TERMINATION_CHECK_DELAY = 15
-SPOT_TERMINATION_CHECK_OVERHEAD = 5
+SSH_CHECK_TIMEOUT = 1
+TERMINATION_LIFECYCLE_STATES = (Instance.LIFECYCLE_STATE_TERMINATING, Instance.LIFECYCLE_STATE_TERMINATED)
 
 
 class CreateOciNodeError(Exception):
@@ -78,6 +79,7 @@ class OciNode(cluster.BaseNode):
         self._instance_type = oci_instance.instance_type
         self._ipv6_map: dict | None = None
         self._cached_network_interfaces: list | None = None
+        self._spot_termination_reported = False
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         ssh_login_info = {
             "hostname": None,
@@ -381,32 +383,30 @@ class OciNode(cluster.BaseNode):
         )
 
     def check_spot_termination(self):
-        """Check if a spot instance termination was initiated by the cloud.
+        """Check if OCI started to terminate (preempt) this spot instance.
+
+        OCI documents the preemption notice only as an `instancepreemptionaction` event of the Events
+        service. With the event, the instance goes to TERMINATING minutes before the VM stops. So two
+        sources are checked:
+        - the `instancePreemptionAction` key of the instance metadata, described in an Oracle blog only
+        - the lifecycle state from the OCI API, which needs no SSH
 
         Returns number of seconds to wait before next check.
         """
-        try:
-            self.wait_ssh_up(verbose=False)
+        # `destroy` sets termination_event before SCT terminates the instance itself
+        if self._spot_termination_reported or self.termination_event.is_set():
+            return SPOT_TERMINATION_CHECK_DELAY
 
-            status = self.query_oci_metadata("termination-notification")
-            try:
-                terminate_action = json.loads(status)
-            except ValueError:
-                return SPOT_TERMINATION_CHECK_DELAY
+        if preemption_action := self._get_metadata_preemption_action():
+            message = f"OCI preemption notice in the instance metadata: {preemption_action}"
+        elif (state := self._get_oci_lifecycle_state()) in TERMINATION_LIFECYCLE_STATES:
+            message = f"Instance is {state}, but the test did not terminate it. Most likely an OCI preemption"
+        else:
+            return SPOT_TERMINATION_CHECK_DELAY
 
-            self.log.warning("Got spot termination notification from OCI %s", status)
-            terminate_action_timestamp = time.mktime(
-                datetime.strptime(terminate_action["timeCreated"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
-            )
-            # OCI termination happens 120 seconds after notification
-            termination_time = terminate_action_timestamp + 120
-            next_check_delay = terminate_action["time-left"] = termination_time - time.time()
-
-            SpotTerminationEvent(node=self, message=terminate_action).publish()
-            return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
-        except Exception as details:  # noqa: BLE001
-            self.log.warning("Error during getting OCI spot termination notification: %s", details)
-
+        self.log.warning("Got spot termination notification from OCI: %s", message)
+        SpotTerminationEvent(node=self, message=message).publish()
+        self._spot_termination_reported = True
         return SPOT_TERMINATION_CHECK_DELAY
 
     def fix_scylla_server_systemd_config(self):
@@ -434,6 +434,39 @@ class OciNode(cluster.BaseNode):
         )
         install_secret_file(self.remoter, dropin, "/etc/systemd/system/scylla-server.service.d/oci-s3-creds.conf")
         self.remoter.sudo("systemctl daemon-reload")
+
+    def _get_metadata_preemption_action(self):
+        """`instancePreemptionAction` of the instance metadata, or None.
+
+        Skipped when SSH is down, because `wait_ssh_up` would block the spot check for up to 25 minutes.
+        """
+        # Not 0: the libssh2 remoter returns False for it without checking the connection
+        if not self.remoter or not self.remoter.is_up(timeout=SSH_CHECK_TIMEOUT):
+            return None
+        try:
+            instance_metadata = json.loads(self.query_oci_metadata(""))
+        except Exception as details:  # noqa: BLE001
+            self.log.debug("Failed to read the OCI instance metadata: %s", details)
+            return None
+        preemption_action = instance_metadata.get("instancePreemptionAction")
+        if preemption_action or instance_metadata.get("state", "").lower() != "running":
+            # The notice format is not documented, so log a sample of it. Custom `metadata` holds user_data and ssh keys
+            self.log.warning(
+                "OCI instance metadata: %s",
+                {key: value for key, value in instance_metadata.items() if key != "metadata"},
+            )
+        return preemption_action
+
+    def _get_oci_lifecycle_state(self) -> str:
+        """Lifecycle state of the instance from the OCI API, or an empty string."""
+        try:
+            vm_provider = self.parent_cluster.provisioners[self.dc_idx]._vm_provider  # noqa: SLF001
+            # Resolving by OCID calls the OCI API. Resolving by name would return the cached, stale state
+            instance = vm_provider._resolve_instance(self._get_oci_instance_id())  # noqa: SLF001
+        except Exception as details:  # noqa: BLE001
+            self.log.warning("Failed to get the OCI lifecycle state: %s", details)
+            return ""
+        return instance.lifecycle_state if instance else ""
 
     def _restart_inner(self):
         self._instance.reboot(wait=True, hard=False)
