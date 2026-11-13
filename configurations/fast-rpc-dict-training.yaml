@@ -1,0 +1,5 @@
+# Shortens RPC dictionary training so advanced RPC compression (on by default) uses dictionaries early in a test.
+append_scylla_yaml:
+  rpc_dict_training_min_time_seconds: 900
+  rpc_dict_update_period_seconds: 150
+  rpc_dict_training_min_bytes: 100000000
