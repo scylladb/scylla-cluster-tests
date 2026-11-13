@@ -213,74 +213,17 @@ A pruned nemesis emits exactly one `SKIPPED` Argus row at precheck time. If ever
 
 ### Code Style Guidelines
 
-**IMPORTANT: Avoid inline imports at all cost**
+The coding standards live in [docs/standards/](docs/standards/), indexed in
+[docs/INDEX.md](docs/INDEX.md). Reviews follow [REVIEW.md](REVIEW.md). Do not
+restate a standard here; change it with the `updating-standards` skill. Read the
+standard before you change code in its area:
 
-- All imports at the top of the file, NOT inside functions/methods
-- **Exception:** Only for hard-to-overcome cyclic dependencies (add comment above the import explaining why)
-
-**Import grouping standard:**
-1. Built-in modules (e.g., `import os`, `from typing import List`)
-2. Third-party modules (e.g., `import pytest`, `from boto3 import client`)
-3. Internal modules (e.g., `from sdcm.cluster import BaseNode`)
-
-Separate each group with a blank line.
-Within each group, sort imports alphabetically.
-
-**Logging convention:**
-- Use uppercase `LOGGER` for module-level loggers: `LOGGER = logging.getLogger(__name__)`
-- This ensures consistency across the codebase
-
-**HTTP/Curl Conventions:**
-- All `remoter.run("curl ...")` calls must use `curl_with_retry()` from `sdcm/utils/curl.py`
-- `curl_with_retry()` retries connection resets (curl exit 35/56, which plain `--retry` does NOT retry) by default: it adds `--retry-all-errors` through `RETRY_ALL_ERRORS_PROBE`, a runtime capability check that expands to nothing on distros with curl < 7.71 - safe on any node
-- Never write a bare `--retry-all-errors` literal in shell/userdata scripts - use the `RETRY_ALL_ERRORS_PROBE` constant (or its snippet verbatim in plain-string scripts); the bare flag hard-fails on curl < 7.71 (rhel7/8-family, ubuntu2004)
-- Keep the probe quote-free so it works inside both single-quoted and double-quoted command wrappers
-- For non-idempotent requests (POST/PUT/DELETE), always set `retry_all_errors=False`
-- All `requests` calls must go through a session with retry adapter (pattern: `sdcm/rest/rest_client.py`)
-- Localhost calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
-- Document any exceptions with `# no-retry: <reason>` comments
-
-Full reference (defaults, probe rationale, curl-in-bash patterns, compliance greps): [docs/http-retry-conventions.md](docs/http-retry-conventions.md)
-
-### Method Signature Changes (Override Safety)
-
-**CRITICAL**: SCT uses deep class hierarchies (e.g., `BaseCluster` -> `AWSCluster` -> `MonitorSetEKS`).
-When modifying a method signature in a parent class:
-
-1. Search for ALL overrides: `grep -rn "def <method_name>" sdcm/ unit_tests/`
-2. Update every override to accept and forward the new parameter
-3. Update test stubs in `unit_tests/` that override the same method (e.g., `dummy_remote.py`, `test_cluster.py`)
-4. If using `**kwargs` in overrides, verify the parameter actually reaches `super()`
-
-Failure to do this causes runtime `TypeError` that isn't caught by linting or unit tests.
-See PR #14113 for a real-world example of this failure pattern (caused by PR #13445 missing an override in `cluster_k8s/eks.py`).
-
-High-risk methods with 5+ overrides: `add_nodes`, `_create_instances`, `wait_for_init`, `destroy`.
-
-### Unit Testing Guidelines
-
-**IMPORTANT: Use pytest style, NOT class-based tests**
-
-All unit tests in `unit_tests/` should follow pytest conventions:
-
-**❌ DON'T:** Use `class Test*` groupings — whether `unittest.TestCase` subclasses or plain pytest classes. Avoid `setUp()`, `self.assertEqual()`, and class methods for shared logic.
-
-**✅ DO:** Use top-level `def test_*` functions, fixtures, and simple `assert` statements. Use module-level helper functions for shared setup logic.
-
-**Key Principles:**
-
-1. **Use fixtures for setup/teardown** - `@pytest.fixture` to avoid code repetition, access via function parameters
-2. **Use parametrize for multiple test cases** - `@pytest.mark.parametrize("input,expected", [...])` for efficient variation testing
-3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
-4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
-5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
-
-## Documentation Standards
-
-- **Docstrings**: Google Python format (Args, Returns, Raises sections)
-- **Config parameters**: Include type, default, valid range, and example. See [docs/sct-configuration.md](docs/sct-configuration.md)
-- **Code comments**: Explain "why" not "what" — focus on intent and non-obvious constraints
-- **Breaking changes**: Bold formatting, before/after examples, migration paths
+- [Coding style](docs/standards/python/coding-style.md): imports, logging, docstrings, comments, error handling.
+- [Class hierarchies](docs/standards/python/class-hierarchies.md): base class signature changes.
+- [Remote commands and HTTP](docs/standards/python/remote-commands.md): curl, `requests`, package installs.
+- [Unit tests](docs/standards/testing/unit-tests.md): pytest structure.
+- [Configuration options](docs/standards/config/configuration-options.md): new SCT options.
+- [Commits and pull requests](docs/standards/global/commits-and-pull-requests.md): commit messages and labels.
 
 ## Environment Variables
 
@@ -340,6 +283,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
+| running-ai-reviewers | Runs Claude or CodeRabbit locally with the `REVIEW.md` rules; prints the review, posts nothing. Use to review a branch or PR before or without a PR comment. | `skills/running-ai-reviewers/SKILL.md` |
 | discovering-standards | Discovers the coding standards of SCT, writes `docs/standards/` and `docs/INDEX.md`, and updates `REVIEW.md`. Use when the standards must be discovered or refreshed. | `skills/discovering-standards/SKILL.md` |
 | updating-standards | Adds or changes one coding standard in `docs/standards/` and its `docs/INDEX.md` entry. Use when a convention is stated or settled in a review. | `skills/updating-standards/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |

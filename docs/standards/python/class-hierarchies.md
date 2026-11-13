@@ -22,5 +22,5 @@ A change to the code of one backend can need the same change on the other
 backends. The backends are AWS, GCE, Azure, OCI, Docker, K8S, and bare metal. Check each one
 and tell the result in the pull request.
 
-Sources: `AGENTS.md` section Method Signature Changes,
+Sources: the former `AGENTS.md` section Method Signature Changes,
 `skills/code-review/SKILL.md` checks 1 and 7.

@@ -197,10 +197,10 @@ Skills that generate code examples or instructions must follow SCT conventions:
 
 | Convention | Source | Rule |
 |-----------|--------|------|
-| Import style | `AGENTS.md` | No inline imports; 3 groups (stdlib, third-party, internal) |
-| Test style | `AGENTS.md` | pytest, not unittest.TestCase |
-| Docstrings | `AGENTS.md` | Google Python docstring format |
-| Error handling | `AGENTS.md` | `silence` context manager over bare try/except |
-| Pre-commit | `.github/copilot-instructions.md` | Always run `uv run sct.py pre-commit` |
-| Commit format | `.github/copilot-instructions.md` | Conventional Commits with SCT types/scopes |
-| Test location | `.github/copilot-instructions.md` | All tests in `unit_tests/`, named `test_*.py` |
+| Import style | `docs/standards/python/coding-style.md` | No inline imports; 3 groups (stdlib, third-party, internal) |
+| Test style | `docs/standards/testing/unit-tests.md` | pytest, not unittest.TestCase |
+| Docstrings | `docs/standards/python/coding-style.md` | Google Python docstring format |
+| Error handling | `docs/standards/python/coding-style.md` | No bare `except`; catch the narrowest exception |
+| Pre-commit | `docs/standards/global/commits-and-pull-requests.md` | Always run `uv run sct.py pre-commit` |
+| Commit format | `docs/standards/global/commits-and-pull-requests.md` | Conventional Commits with SCT types/scopes |
+| Test location | `docs/standards/testing/unit-tests.md` | Tests in `unit_tests/unit/` or `unit_tests/integration/`, named `test_*.py` |

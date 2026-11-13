@@ -30,6 +30,7 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `commit-summary` — Generate weekly commit summary reports
 - `writing-nemesis` — Create new chaos engineering disruptions
 - `code-review` — Review PRs for correctness and convention compliance
+- `running-ai-reviewers` — Run Claude or CodeRabbit locally with the `REVIEW.md` rules
 - `discovering-standards` — Discover the coding standards, write `docs/standards/` and `docs/INDEX.md`, and update `REVIEW.md`
 - `updating-standards` — Add or change one coding standard
 - `labeling-pipelines` — Add test_metadata to test-case YAML files

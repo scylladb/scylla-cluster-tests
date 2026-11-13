@@ -1,6 +1,11 @@
 language: "en-US"
 
+# The review rules live in REVIEW.md and docs/standards/ (read through
+# knowledge_base.code_guidelines). Do not restate them here.
+# Design: docs/plans/ai-tooling/review-tools/spec.md
+
 reviews:
+  profile: quiet
   high_level_summary: false
   high_level_summary_in_walkthrough: true
   auto_review:
@@ -8,17 +13,53 @@ reviews:
     auto_incremental_review: false
     ignore_title_keywords:
       - "[Backport"
-    labels_to_ignore:
-      - "skip-review"
-      - "backport"
-    path_filters:
-      - "!argus/**"
+    labels:
+      - "!skip-review"
+  path_filters:
+    - "!argus/**"
   request_changes_workflow: false
   collapse_walkthrough: true
   poem: false
   review_status: false
   sequence_diagrams: false
   changed_files_summary: false
+  estimate_code_review_effort: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  # Off: pre-commit runs ruff (which covers pylint and flake8) and check-yaml.
+  # markdownlint and languagetool flag style, which REVIEW.md does not check.
+  # shellcheck, actionlint, hadolint, and gitleaks stay on: nothing else runs them.
+  tools:
+    ruff:
+      enabled: false
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
+    markdownlint:
+      enabled: false
+    yamllint:
+      enabled: false
+    languagetool:
+      enabled: false
+  # Generated code and title/description checks are outside the REVIEW.md passes.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+  pre_merge_checks:
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: "off"
   labeling_instructions:
     - label: "Bug"
       instructions: "Apply when the PR fixes a bug (not adding features or refactoring)"
@@ -38,89 +79,13 @@ reviews:
       instructions: "Apply when the PR modifies sdcm/monitorstack/, prometheus.py, or Grafana-related code"
     - label: "dependencies"
       instructions: "Apply when the PR modifies pyproject.toml dependencies"
-  path_instructions:
-    - path: "**/*"
-      instructions: |
-        - Only comment on issues that would block merging — ignore minor or stylistic concerns.
-        - Restrict feedback to errors, security risks, or functionality-breaking problems.
-        - Do not post comments on code style, formatting, or non-critical improvements.
-        - Keep reviews short: flag only issues that make the PR unsafe to merge.
-        - Limit review comments to 3–5 items maximum, unless additional blockers exist.
-
-    - path: "sdcm/cluster*.py"
-      instructions: |
-        CRITICAL: Check for method signature changes on base classes. SCT uses deep class hierarchies.
-        If a method signature changed, ALL overrides must be updated (see AGENTS.md "Method Signature Changes" section).
-        High-risk methods with 5+ overrides: add_nodes, _create_instances, wait_for_init, destroy.
-        Reference: PR #13445/#14113 for real-world failure pattern.
-
-    - path: "sdcm/nemesis/**"
-      instructions: |
-        Nemesis code review checklist (see docs/nemesis.md and skills/writing-nemesis/SKILL.md):
-        - NemesisBaseClass subclass must set boolean flags
-        - disrupt() method must be implemented
-        - Node allocation must use NemesisNodeAllocator
-        - Check nemesis flag filtering expressions are valid
-
-    - path: "sdcm/provision/**"
-      instructions: |
-        Provisioning changes may require backend-specific provision test labels.
-        Verify PR has appropriate test-provision-* labels (see AGENTS.md "Backend-Specific Provision Tests").
-
-    - path: "sdcm/utils/curl.py"
-      instructions: |
-        HTTP/Curl conventions (docs/http-retry-conventions.md):
-        - All remoter.run("curl ...") must use curl_with_retry()
-        - All requests calls must use a session with retry adapter
-        - Never a bare --retry-all-errors literal; it must go through RETRY_ALL_ERRORS_PROBE
-        - Exceptions must have "# no-retry: <reason>" comments
-
-    - path: "sdcm/rest/**"
-      instructions: |
-        HTTP/Curl conventions (docs/http-retry-conventions.md):
-        - All remoter.run("curl ...") must use curl_with_retry()
-        - All requests calls must use a session with retry adapter
-        - Never a bare --retry-all-errors literal; it must go through RETRY_ALL_ERRORS_PROBE
-        - Exceptions must have "# no-retry: <reason>" comments
-
-    - path: "unit_tests/**"
-      instructions: |
-        Unit test conventions (AGENTS.md "Unit Testing Guidelines" and skills/writing-unit-tests/SKILL.md):
-        - Must use pytest style (top-level def test_*, NOT class-based)
-        - Use fixtures, parametrize, simple assert statements
-        - No unittest.TestCase subclasses
-
-    - path: "**/*.py"
-      instructions: |
-        Import conventions (AGENTS.md "Code Style Guidelines"):
-        - All imports at top of file, NOT inside functions
-        - Exception only for cyclic dependencies (must have explanatory comment)
-        - Group: stdlib, third-party, internal (separated by blank lines)
-
-    - path: "sdcm/sct_config/**"
-      instructions: |
-        Configuration changes (AGENTS.md "Configuration Changes"):
-        - Every new config option MUST have a default in defaults/*.yaml
-        - Include type, default, valid range in parameter definition
-
-    - path: "defaults/**"
-      instructions: |
-        Configuration changes (AGENTS.md "Configuration Changes"):
-        - Every new config option MUST have a default in defaults/*.yaml
-        - Include type, default, valid range in parameter definition
-
-    - path: "sdcm/remote/**"
-      instructions: |
-        Remote execution commands that install packages must follow skills/package-installation/SKILL.md:
-        - Always include timeouts, retries, and non-interactive flags
-        - apt-get must use DEBIAN_FRONTEND=noninteractive
-        - yum/dnf must use -y flag
-
 chat:
   auto_reply: false
 
 knowledge_base:
   opt_out: false
+  web_search:
+    enabled: false
   learnings:
     scope: auto
   issues:
@@ -140,11 +105,6 @@ knowledge_base:
     filePatterns:
       - "REVIEW.md"
       - "docs/standards/**/*.md"
-      - "docs/nemesis.md"
-      - "docs/sct-configuration.md"
       - "skills/code-review/SKILL.md"
-      - "skills/writing-unit-tests/SKILL.md"
-      - "skills/package-installation/SKILL.md"
-      - "skills/writing-nemesis/SKILL.md"
 
 tone_instructions: "Be extremely concise. No pleasantries, no summaries, no follow-up suggestions. Only report actionable issues found in the code."
