@@ -437,6 +437,9 @@ minicloud_scylla_reserve_memory: ''
 # scylla-server gets --idle-poll-time-us 0 --poll-aio 0 on every db guest: the reactors stop polling
 # while idle and give back the host threads the guests share with everything else.
 minicloud_scylla_overcommitted_cpu: true
+# Fraction of the host io_properties.yaml figures kept for the loader, the monitor and the host;
+# the rest is split between the db guests.
+minicloud_io_properties_margin: 0.05
 # Empty = no docker limit, the container may use the whole host. When set, this also becomes
 # the budget the preflight guest-memory gate measures against instead of host MemAvailable.
 minicloud_container_memory: ''

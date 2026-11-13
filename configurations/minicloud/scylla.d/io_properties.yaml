@@ -1,8 +1,15 @@
-# used on minicloud instead of iotune; values are GCP limits for one 375 GB local SSD
-# (scylla-machine-image common/gcp_io_params.yaml).
+# Host-drive figures: SCT scales them per db guest at node setup
+# (sdcm/utils/minicloud/io_properties.py, minicloud_io_properties_margin).
+#
+# Measured on minipc (Crucial E100 1 TB): write_bandwidth from a 30 GiB sequential direct-IO write on
+# minipc3, write_iops rounded up from iotune on minipc4, reads from iotune on minipc4 (scylla 2026.1).
+# Used for every lab host on purpose, although some minipc nodes real measurements can slightly differ.
+#
+# Re-measure with disk-bench when a host or drive changes. Never take write_bandwidth from iotune:
+# on these drives it oscillated from 33 to 1818 MiB/s.
 disks:
   - mountpoint: /var/lib/scylla
-    read_iops: 170000
-    read_bandwidth: 692060160
-    write_iops: 90000
-    write_bandwidth: 367001600
+    read_iops: 386501
+    read_bandwidth: 4862312960
+    write_iops: 30000
+    write_bandwidth: 95600000
