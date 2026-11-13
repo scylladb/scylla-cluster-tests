@@ -621,7 +621,7 @@ class BaseNode(AutoSshContainerMixin):
         self.resolve_ip_addresses()
         self.log = SDCMAdapter(self.log, extra={"prefix": str(self)})
         if self.ssh_login_info:
-            self.ssh_login_info["hostname"] = self.external_address
+            self.ssh_login_info.update(self._ssh_address())
 
             self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
 
@@ -981,10 +981,11 @@ class BaseNode(AutoSshContainerMixin):
         self.__dict__.pop("cql_address", None)
         self.__dict__.pop("public_dns_name", None)
         self.__dict__.pop("private_dns_name", None)
-        if self.ssh_login_info["hostname"] == self.external_address:
+        ssh_address = self._ssh_address()
+        if all(self.ssh_login_info.get(key) == value for key, value in ssh_address.items()):
             return
 
-        self.ssh_login_info["hostname"] = self.external_address
+        self.ssh_login_info.update(ssh_address)
         self.remoter.stop()
         self._init_remoter(self.ssh_login_info)
         self._init_port_mapping()
@@ -1587,6 +1588,10 @@ class BaseNode(AutoSshContainerMixin):
             return self.public_ip_address
         else:
             return self.private_ip_address
+
+    def _ssh_address(self) -> dict:
+        """Where the runner opens SSH to: `ssh_login_info` keys to set, `hostname` at least."""
+        return {"hostname": self.external_address}
 
     @property
     def ip_ssh_connections(self) -> str:

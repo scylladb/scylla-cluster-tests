@@ -319,6 +319,66 @@ def test_get_baremetal_instances_use_each_roles_ip_ssh_connections(test_id, tmp_
     assert [node.ssh_login_info["hostname"] for node in collector.loader_set] == ["192.168.2.1", "192.168.2.2"]
 
 
+def test_get_baremetal_instances_reach_lab_hosts_through_the_access_service(test_id, tmp_path_factory):
+    """Logs of a lab host come through the lab access service; a host with no public address is reached privately."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-access")
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = {
+        "db_nodes": {"username": "scylla", "node_list": [{"private_ip": "10.0.0.1"}]},
+        "loader_nodes": {"username": "jenkins", "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]},
+        "monitor_nodes": {"username": "jenkins", "node_list": []},
+    }
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+        "ip_ssh_connections": "public",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.localhost = MagicMock()
+        collector.localhost.lab_access_ssh_address.return_value = {"hostname": "172.17.0.5", "port": 10027}
+        collector.get_baremetal_instances_by_testid()
+
+    assert collector.db_cluster[0].ssh_login_info["hostname"] == "10.0.0.1"
+    # no SCT key: the access service accepts only `none` auth
+    assert collector.loader_set[0].ssh_login_info == {
+        "hostname": "172.17.0.5",
+        "port": 10027,
+        "user": "jenkins",
+        "key_file": None,
+    }
+
+
+def test_get_baremetal_instances_skip_a_lab_host_the_access_service_cant_reach(test_id, tmp_path_factory):
+    """A failed lab access lookup loses that host's logs only, not the other hosts'."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-access-down")
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = {
+        "db_nodes": {"username": "scylla", "node_list": [{"private_ip": "10.0.0.1"}]},
+        "loader_nodes": {"username": "jenkins", "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]},
+        "monitor_nodes": {"username": "jenkins", "node_list": []},
+    }
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+        "ip_ssh_connections": "private",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.localhost = MagicMock()
+        collector.localhost.lab_access_ssh_address.side_effect = RuntimeError("sdm status failed")
+        collector.get_baremetal_instances_by_testid()
+
+    assert [node.ssh_login_info["hostname"] for node in collector.db_cluster] == ["10.0.0.1"]
+    assert collector.loader_set == []
+
+
 def test_get_baremetal_instances_no_config(test_id, tmp_path_factory):
     """Test graceful handling when s3_baremetal_config is not set."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal-noconfig")

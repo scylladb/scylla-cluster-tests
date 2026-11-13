@@ -72,8 +72,11 @@ MONITOR_NAME = "monitor-node"
 
 
 class NodeInfo(TypedDict):
-    public_ip: str
+    # defaults to private_ip: a lab host often has no other address
+    public_ip: NotRequired[str]
     private_ip: str
+    # the host's name in the lab's access service: SCT then opens SSH where that service says, not to the address
+    access: NotRequired[str]
 
 
 class NodeCredentialInformation(TypedDict):
@@ -495,6 +498,8 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     journal_outlives_run = True
     # Hosts this run already freed the SSH tunnel ports on, see _init_port_mapping
     _tunnel_ports_released_on: set[str] = set()
+    # The host's name in the lab access service, see _ssh_address
+    _access_name: str | None = None
 
     def __init__(
         self,
@@ -504,6 +509,7 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         private_ip,
         credentials,
         base_logdir=None,
+        access_name=None,
         node_prefix=None,
         after_config=None,
         dc_idx=0,
@@ -518,6 +524,7 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         }
         self._public_ip = public_ip
         self._private_ip = private_ip
+        self._access_name = access_name
         super().__init__(
             name=name,
             parent_cluster=parent_cluster,
@@ -561,6 +568,21 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
             test_id,
             journal_time(self.journal_since),
         )
+
+    def _ssh_address(self) -> dict:
+        if not self._access_name:
+            return super()._ssh_address()
+        localhost = TestConfig().tester_obj().localhost
+        # Access for the whole run: Jenkins adds about 3h to test_duration for setup, teardown, logs and cleanup
+        duration = f"{self.parent_cluster.params.get('test_duration') + 240}m"
+        # The access service accepts only `none` auth, which the SSH client tries only without a key
+        return {"key_file": None, **localhost.lab_access_ssh_address(self._access_name, duration=duration)}
+
+    @property
+    def ip_ssh_connections(self) -> str:
+        # The lab access service blocks SSH port forwarding, so a host reached through it can't get reverse tunnels:
+        # it is `private` even on a `public` role, and sends its logs straight to the runner
+        return "private" if self._access_name else super().ip_ssh_connections
 
     def _init_port_mapping(self):
         # Nodes sharing a host (a loader and a monitor on one machine) share its tunnel ports, and the tunnel of the
@@ -673,6 +695,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         n_nodes = kwargs.get("n_nodes")
         self._node_public_ips = kwargs.pop("public_ips", None) or []
         self._node_private_ips = kwargs.pop("private_ips", None) or []
+        self._node_access_names = kwargs.pop("access_names", None) or []
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError("Physical hosts IPs are not configured!")
@@ -690,6 +713,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
             private_ip=private_ip,
             credentials=self.credentials[0],
             base_logdir=self.logdir,
+            access_name=self._node_access_names[node_index] if node_index < len(self._node_access_names) else None,
             node_prefix=self.node_prefix,
             dc_idx=dc_idx,
             rack=rack,
@@ -801,6 +825,12 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
     def __init__(self, **kwargs):
+        # install_mgmt copies the monitor's SSH key to the host, and a lab access login has no key, see _ssh_address
+        if kwargs["params"].get("use_mgmt") and any(kwargs.get("access_names") or []):
+            raise ValueError(
+                "use_mgmt needs the SSH key on the monitor host, and a monitor reached through the lab access "
+                "service logs in without one: set use_mgmt to false, or give the monitor an address instead of `access`"
+            )
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
             self._ssh_username = username

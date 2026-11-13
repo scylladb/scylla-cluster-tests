@@ -45,4 +45,15 @@ except ImportError:
             raise NotImplementedError(not_supported_message)
 
 
+if not hasattr(XCloudConnectivityContainerMixin, "lab_access_ssh_address"):
+    # Missing scylla-qa-internal, or one older than its lab host access (scylla-qa-internal#75)
+
+    def _lab_access_not_supported(self, access_name, duration=None):
+        raise NotImplementedError(
+            f"Can't reach lab host {access_name!r}: the lab access service needs a scylla-qa-internal with lab host access"
+        )
+
+    XCloudConnectivityContainerMixin.lab_access_ssh_address = _lab_access_not_supported
+
+
 __all__ = ["XCloudConnectivityContainerMixin"]
