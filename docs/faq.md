@@ -132,7 +132,7 @@ hydra tunnel --test-id <test_id> --port 3000 <monitor node name>
 hydra tunnel --test-id <test_id> --port 9090 <monitor node name>
 ```
 
-`hydra tunnel` supports AWS, GCE and Azure. For a test that already finished, use
+`hydra tunnel` supports AWS, GCE, Azure and OCI. For a test that already finished, use
 `hydra investigate show-monitor <test_id>`.
 
 ## How can I clear monitoring stack create by `hydra investigate show-monitor`
