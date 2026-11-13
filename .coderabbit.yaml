@@ -85,10 +85,21 @@ reviews:
 
     - path: "unit_tests/**"
       instructions: |
-        Unit test conventions (AGENTS.md "Unit Testing Guidelines" and skills/writing-unit-tests/SKILL.md):
-        - Must use pytest style (top-level def test_*, NOT class-based)
-        - Use fixtures, parametrize, simple assert statements
-        - No unittest.TestCase subclasses
+        Unit test conventions (AGENTS.md "Unit Testing Guidelines", skills/writing-unit-tests/SKILL.md and its references/):
+        - pytest style: top-level def test_*, no classes, no unittest.TestCase subclasses
+        - Tests that differ only in literals are one test with pytest.param(id=...) cases (AP-2)
+        - Setup lives in fixtures or fixture factories, not helper functions; the test body is act and assert (P-15, P-21)
+        - No new underscore-prefixed names; tests use public names only (AP-12, P-19)
+        - Fixtures come before tests; every test and fixture has a docstring (P-19)
+        - Mock calls are checked with assert_called_once_with and every argument, not call_count or assert_called_once() (AP-13)
+        - Every assert checks a value produced for this case, not a precondition the test arranged (AP-14)
+        - Real objects and plain data over MagicMock, SimpleNamespace or simulators (AP-15)
+        - No tests of constants, nemesis flags, registry discovery or __all__ (AP-8)
+        - Inputs come from real runs; expected values come from intent, not magic numbers (AP-16)
+        - Every branch and changed argument the PR adds has a case; bug-fix cases fail on the pre-fix code (AP-17, P-18)
+        - The subject is built through its constructor, never __new__; no production logic is copied into the test (AP-6)
+        - pytest.raises names the concrete exception and a match=, never Exception (AP-13)
+        - No wall-clock asserts or unpatched sleeps; Singletons cleared before and after yield (P-22, P-16)
 
     - path: "**/*.py"
       instructions: |
@@ -144,6 +155,7 @@ knowledge_base:
       - "docs/sct-configuration.md"
       - "skills/code-review/SKILL.md"
       - "skills/writing-unit-tests/SKILL.md"
+      - "skills/writing-unit-tests/references/*.md"
       - "skills/package-installation/SKILL.md"
       - "skills/writing-nemesis/SKILL.md"
 

@@ -265,7 +265,7 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 
 **❌ DON'T:** Use `class Test*` groupings — whether `unittest.TestCase` subclasses or plain pytest classes. Avoid `setUp()`, `self.assertEqual()`, and class methods for shared logic.
 
-**✅ DO:** Use top-level `def test_*` functions, fixtures, and simple `assert` statements. Use module-level helper functions for shared setup logic.
+**✅ DO:** Use top-level `def test_*` functions, fixtures, and simple `assert` statements. Use fixtures (or fixture factories) for shared setup logic.
 
 **Key Principles:**
 
