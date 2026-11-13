@@ -2,9 +2,10 @@
 
 import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 
-def call(Map params, RunWrapper currentBuild) {
+// `status` overrides the build result, for a caller that finishes a run before the build result is final.
+def call(Map params, RunWrapper currentBuild, String status = null) {
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def test_status = currentBuild.currentResult
+    def test_status = status ?: currentBuild.currentResult
 
     sh """#!/bin/bash
     set -xe

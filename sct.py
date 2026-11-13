@@ -79,6 +79,7 @@ lazy from sdcm.sct_runner import (
     update_sct_runner_tags,
 )
 lazy from sdcm.test_config import TestConfig
+lazy from sdcm.utils import spot_retry
 lazy from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     create_proxy_argus_s3_url,
@@ -3480,6 +3481,33 @@ def create_argus_test_run():
             LOGGER.info("Initialized Argus TestRun with test id %s", argus_client.run_id)
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
+
+
+@cli.command("spot-retry-decision", help="Decide whether a failed attempt lost to a spot reclaim is retried.")
+@click.option("--attempt", type=int, required=True, help="1-based number of the attempt that just failed")
+def spot_retry_decision(attempt):
+    """Print `SPOT_RETRY_DECISION=<stop|spot|on_demand>` for the run in SCT_TEST_ID.
+
+    Any error answers `stop`: a retry must never happen without evidence of a reclaim.
+    """
+    add_file_logger()
+    decision = spot_retry.STOP
+    try:
+        params = SCTConfiguration()
+        policy = params.get("spot_termination_retry") or []
+        if policy and params.get("test_id"):
+            test_config = get_test_config()
+            test_config.set_test_id_only(params.get("test_id"))
+            test_config.init_argus_client(params)
+            argus_client = test_config.argus_client()
+            if isinstance(argus_client, ReplayOnlyArgusSCTClient):
+                LOGGER.warning("Argus is not reachable from here (replay-only client), cannot see the run's events")
+            else:
+                decision = spot_retry.decide(policy, attempt, spot_retry.fetch_run_events(argus_client))
+    except Exception:  # noqa: BLE001
+        LOGGER.error("Could not decide on a spot retry, not retrying", exc_info=True)
+    LOGGER.info("Spot retry decision after attempt %s: %s", attempt, decision)
+    click.echo(f"{spot_retry.DECISION_MARKER}{decision}")
 
 
 @cli.command("finish-argus-test-run", help="Finish argus test run if it is not finished by SCT.")
