@@ -33,7 +33,7 @@ lazy from sdcm.sct_config.config import (
     is_arm_instance_type,
     substitute_arch_markers,
 )
-lazy from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
+lazy from sdcm.sct_config.defaults import BACKEND_IMAGE_FIELD, available_backends
 lazy from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
 lazy from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,
@@ -43,7 +43,9 @@ lazy from sdcm.sct_config.types import (
     dict_or_str,
     int_or_list_or_eval,
     str_or_list_or_eval,
+    yaml_from_str,
 )
+lazy from sdcm.utils.cloud_backends import AWS_SUPPORTED_REGIONS
 
 __all__ = [
     "AWS_SUPPORTED_REGIONS",
@@ -62,5 +64,6 @@ __all__ = [
     "is_arm_instance_type",
     "simulated_racks_enabled",
     "str_or_list_or_eval",
+    "yaml_from_str",
     "substitute_arch_markers",
 ]

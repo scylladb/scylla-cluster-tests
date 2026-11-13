@@ -59,6 +59,7 @@ from google.cloud.exceptions import GoogleCloudError
 from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from paramiko import SSHException
+from pydantic import BaseModel
 from tenacity import RetryError
 
 from argus.client.sct.types import LogLink
@@ -136,8 +137,6 @@ from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import dict_to_yaml_file, remote_file, yaml_file_to_dict
 from sdcm.remote.remote_long_running import run_long_running_cmd
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_config.config import backend_to_cloud
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
@@ -165,6 +164,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.cloud_backends import backend_to_cloud
 from sdcm.utils.cloud_catalog.cost import InstanceRate, get_hourly_rate
 from sdcm.utils.common import (
     PageFetcher,
@@ -776,7 +776,7 @@ class BaseNode(AutoSshContainerMixin):
     def _reconfigure_agent(self, ssh_remoter):
         """Reconfigure SCT agent with current API key and optionally enable TLS"""
         agent_config = self.parent_cluster.params.get("agent")
-        agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
+        agent_enabled = agent_config.enabled and self.parent_cluster.node_type in (
             "scylla-db",
             "loader",
             "monitor",
@@ -789,15 +789,15 @@ class BaseNode(AutoSshContainerMixin):
         if ssh_remoter.run("systemctl is-active sct-agent.service", ignore_status=True, verbose=False).exited != 0:
             return
 
-        agent_tls = agent_config.get("tls")
+        agent_tls = agent_config.tls
         tls_cert_file, tls_key_file = self._setup_agent_tls_certs(ssh_remoter) if agent_tls else ("", "")
 
         self.log.info("Reconfiguring SCT agent on node %s (tls=%s)", self.name, agent_tls)
         script = reconfigure_agent_script(
             api_keys=[agent_api_key],
-            port=agent_config.get("port"),
-            max_concurrent_jobs=agent_config.get("max_concurrent_jobs"),
-            log_level=agent_config.get("log_level"),
+            port=agent_config.port,
+            max_concurrent_jobs=agent_config.max_concurrent_jobs,
+            log_level=agent_config.log_level,
             tls=agent_tls,
             tls_cert_file=tls_cert_file,
             tls_key_file=tls_key_file,
@@ -810,7 +810,7 @@ class BaseNode(AutoSshContainerMixin):
         # the previous one has to go.
         self.invalidate_network_configuration_cache()
         agent_config = self.parent_cluster.params.get("agent")
-        agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
+        agent_enabled = agent_config.enabled and self.parent_cluster.node_type in (
             "scylla-db",
             "loader",
             "monitor",
@@ -823,12 +823,12 @@ class BaseNode(AutoSshContainerMixin):
                 if self.ip_ssh_connections == "public"
                 else self.private_ip_address
             )
-            agent_tls = agent_config.get("tls")
+            agent_tls = agent_config.tls
 
             self.remoter = AgentCmdRunner(
                 hostname=agent_hostname,
                 api_key=agent_api_key,
-                port=agent_config.get("port"),
+                port=agent_config.port,
                 user=ssh_login_info.get("user", "root") if ssh_login_info else "root",
                 tls=agent_tls,
                 ca_cert=str(CA_CERT_FILE) if agent_tls else None,
@@ -836,7 +836,7 @@ class BaseNode(AutoSshContainerMixin):
             self.log.info(
                 "Using SCT agent for command execution at %s:%s (tls=%s)",
                 agent_hostname,
-                agent_config.get("port"),
+                agent_config.port,
                 agent_tls,
             )
         else:
@@ -1727,10 +1727,10 @@ class BaseNode(AutoSshContainerMixin):
                 severity=Severity.ERROR,
             ).publish()
         # We want to figure out all places where "params" attribute has type that not consistent
-        elif not isinstance(self.parent_cluster.params, SCTConfiguration):
+        elif not isinstance(self.parent_cluster.params, BaseModel):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
-                message=f"The 'params' attribute expected to by 'SCTConfiguration`, "
+                message=f"The 'params' attribute expected to be a config model (`SCTConfiguration`), "
                 f"but actually it is a `{type(self.parent_cluster.params)}`",
                 trace=sys._getframe().f_back,
                 severity=Severity.ERROR,
@@ -5070,7 +5070,7 @@ class BaseCluster:
             syslog_host_port=self.test_config.get_logging_service_host_port(),
             test_config=self.test_config,
             install_docker=self.node_type == "loader",
-            install_agent=(agent_config.get("enabled") and self.node_type in supported_node_types),
+            install_agent=(agent_config.enabled and self.node_type in supported_node_types),
         )
         return user_data_builder.to_string()
 

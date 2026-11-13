@@ -41,18 +41,6 @@ available_backends: list[str] = [
     "oci",
 ]
 
-AWS_SUPPORTED_REGIONS: list[str] = [
-    "eu-west-1",
-    "eu-west-2",
-    "eu-west-3",
-    "us-west-2",
-    "us-east-1",
-    "us-east-2",
-    "eu-north-1",
-    "eu-central-1",
-    "ca-central-1",
-]
-
 # Maps each cloud backend to the SCT config field that holds its machine image.
 # Used by the pipeline linter to generate placeholder values for validation.
 BACKEND_IMAGE_FIELD: dict[str, str] = {
@@ -86,7 +74,6 @@ BACKEND_REQUIRED_PARAMS: dict = {
         "ami_id_db_scylla",
         "ami_id_loader",
         "ami_id_monitor",
-        "aws_root_disk_name_monitor",
         "ami_db_scylla_user",
         "ami_monitor_user",
         "scylla_network_config",
@@ -198,7 +185,6 @@ BACKEND_REQUIRED_PARAMS: dict = {
         "instance_type_db",
         "region_name",
         "ami_id_monitor",
-        "aws_root_disk_name_monitor",
         "ami_monitor_user",
         "user_credentials_path",
         "scylla_version",

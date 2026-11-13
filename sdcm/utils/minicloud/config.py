@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import yaml
 
 from sdcm import sct_abs_path
-from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+from sdcm.utils.cloud_backends import AWS_SUPPORTED_REGIONS
 from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, MINICLOUD_TLS_PORT, get_minicloud_endpoint
 
 

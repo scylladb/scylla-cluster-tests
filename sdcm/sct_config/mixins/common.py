@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from pydantic.functional_validators import BeforeValidator
 from typing_extensions import Annotated
 
+from sdcm.sct_config.sections.agent import AgentConfig
 from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,
     Boolean,
@@ -28,6 +29,7 @@ from sdcm.sct_config.types import (
     String,
     StringOrList,
     dict_or_str_or_pydantic,
+    yaml_from_str,
 )
 from sdcm.test_metadata import TestMetadata
 
@@ -65,16 +67,12 @@ class CommonConfigMixin(BaseModel):
     add_node_cnt: int = SctField(
         description="The number of nodes to add during the test.",
     )
-    agent: DictOrStr = SctField(
+    agent: Annotated[AgentConfig, BeforeValidator(yaml_from_str)] = SctField(
+        default_factory=AgentConfig,
         description="""
-            Configuration for SCT agent - a lightweight service for remote command execution.                 When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.
-            Configuration options:
-            - enabled: bool - enable agent (required)
-            - port: int - agent HTTP API port (default: 16000)
-            - binary_url: str - URL to download agent binary
-            - max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)
-            - log_level: str - logging level (default: info)
-            - tls: bool - enable TLS for agent communication (default: false)""",
+                SCT agent section: a lightweight service installed on DB, loader and monitor nodes that
+                replaces SSH-based command execution with REST API calls.
+        """,
     )
     availability_zone: String = SctField(
         description="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).

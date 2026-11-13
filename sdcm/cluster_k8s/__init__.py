@@ -61,7 +61,6 @@ from sdcm.remote.kubernetes_cmd_runner import (
     KubernetesCmdRunner,
     KubernetesPodRunner,
 )
-from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events.database import ScyllaYamlUpdateEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
@@ -1695,7 +1694,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             container="scylla-manager",
             cluster_prefix="mgr-",
             node_prefix="mgr-node-",
-            params=init_and_verify_sct_config(),
+            params=self.params,
             n_nodes=1,
         )
 

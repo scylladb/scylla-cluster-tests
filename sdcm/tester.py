@@ -1371,7 +1371,7 @@ class ClusterTester(unittest.TestCase):
             [
                 self.params.get("client_encrypt"),
                 self.params.get("server_encrypt"),
-                self.params.get("agent").get("tls"),
+                self.params.get("agent").tls,
             ]
         )
         if not self.params.get("cluster_backend").startswith("k8s") and needs_ca:
