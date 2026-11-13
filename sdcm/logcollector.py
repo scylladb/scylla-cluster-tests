@@ -1033,6 +1033,11 @@ class LogCollector:
             return None
 
 
+def cat_scylla_conf(path: str) -> str:
+    """`cat` a Scylla config file, falling back to the nonroot offline-install copy under ~/scylladb."""
+    return f"{{ cat {path} 2>/dev/null || cat ~/scylladb{path}; }}"
+
+
 class ScyllaLogCollector(LogCollector):
     """ScyllaDB cluster log collecting
 
@@ -1068,13 +1073,9 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="mem_info", command="cat /proc/meminfo"),
         CommandLog(name="interrupts", command="cat /proc/interrupts"),
         CommandLog(name="vmstat", command="cat /proc/vmstat"),
-        CommandLog(
-            name="scylla.yaml",
-            # Fixme: command=f'cat {self.add_install_prefix(SCYLLA_YAML_PATH)}'),
-            command=f"cat {SCYLLA_YAML_PATH}",
-        ),
+        CommandLog(name="scylla.yaml", command=cat_scylla_conf(SCYLLA_YAML_PATH)),
         CommandLog(name="coredumps.info", command="sudo coredumpctl info"),
-        CommandLog(name="io-properties.yaml", command="cat /etc/scylla.d/io_properties.yaml"),
+        CommandLog(name="io-properties.yaml", command=cat_scylla_conf("/etc/scylla.d/io_properties.yaml")),
         CommandLog(name="dmesg.log", command="sudo dmesg -P"),
         # a node which is up locally but unreachable for its peers and loaders (SCT-479) can
         # only be diagnosed with the netfilter rules and the routing state of the node at hand
@@ -1107,7 +1108,7 @@ class ScyllaLogCollector(LogCollector):
                 "sudo vector validate /etc/vector/vector.yaml )"
             ),
         ),
-        CommandLog(name="cassandra-rackdc.properties", command=f"cat {SCYLLA_PROPERTIES_PATH}"),
+        CommandLog(name="cassandra-rackdc.properties", command=cat_scylla_conf(SCYLLA_PROPERTIES_PATH)),
         CommandLog(name="scylla-manager-agent.yaml", command=f"cat {SCYLLA_MANAGER_AGENT_YAML_PATH}"),
         CommandLog(
             name="scylla-manager-agent.log",
