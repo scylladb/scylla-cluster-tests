@@ -16,6 +16,7 @@ SCT requires pytest-native style throughout `unit_tests/`. The framework runs te
 # unit_tests/test_config_parsing.py
 import unittest
 
+
 class TestConfigParsing(unittest.TestCase):
     def setUp(self):
         self.config = SCTConfiguration()
@@ -72,6 +73,7 @@ def test_node_is_healthy():
     result = check_node_health(node)
     assert result is True
 
+
 def test_node_detects_down():
     node = MockNode(ip="10.0.0.1", dc="dc1")
     node.remoter = FakeRemoter()
@@ -112,8 +114,10 @@ When tests differ only in input/output values, merge them with parametrize.
 def test_parse_version_enterprise():
     assert parse_scylla_version("5.4.0-enterprise") == ("5.4.0", "enterprise")
 
+
 def test_parse_version_oss():
     assert parse_scylla_version("5.4.0") == ("5.4.0", "oss")
+
 
 def test_parse_version_rc():
     assert parse_scylla_version("5.4.0~rc1") == ("5.4.0", "rc")
@@ -122,11 +126,14 @@ def test_parse_version_rc():
 **Good**:
 
 ```python
-@pytest.mark.parametrize("version_str,expected", [
-    pytest.param("5.4.0-enterprise", ("5.4.0", "enterprise"), id="enterprise"),
-    pytest.param("5.4.0", ("5.4.0", "oss"), id="oss"),
-    pytest.param("5.4.0~rc1", ("5.4.0", "rc"), id="rc-candidate"),
-])
+@pytest.mark.parametrize(
+    "version_str,expected",
+    [
+        pytest.param("5.4.0-enterprise", ("5.4.0", "enterprise"), id="enterprise"),
+        pytest.param("5.4.0", ("5.4.0", "oss"), id="oss"),
+        pytest.param("5.4.0~rc1", ("5.4.0", "rc"), id="rc-candidate"),
+    ],
+)
 def test_parse_scylla_version(version_str, expected):
     assert parse_scylla_version(version_str) == expected
 ```
@@ -184,11 +191,14 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 
 
-@pytest.mark.parametrize("raw,expected_list", [
-    pytest.param("10.0.0.1,10.0.0.2", ["10.0.0.1", "10.0.0.2"], id="two-seeds"),
-    pytest.param("10.0.0.1", ["10.0.0.1"], id="single-seed"),
-    pytest.param("", [], id="empty-string"),
-])
+@pytest.mark.parametrize(
+    "raw,expected_list",
+    [
+        pytest.param("10.0.0.1,10.0.0.2", ["10.0.0.1", "10.0.0.2"], id="two-seeds"),
+        pytest.param("10.0.0.1", ["10.0.0.1"], id="single-seed"),
+        pytest.param("", [], id="empty-string"),
+    ],
+)
 def test_seeds_selector_parsed_as_list(monkeypatch, raw, expected_list):
     monkeypatch.setenv("SCT_SEEDS_SELECTOR", raw)
     config = SCTConfiguration()
@@ -213,12 +223,15 @@ import pytest
 from sdcm.utils.version_utils import normalize_scylla_version
 
 
-@pytest.mark.parametrize("raw,expected", [
-    pytest.param("5.4.0", "5.4.0", id="plain"),
-    pytest.param("5.4.0~rc1", "5.4.0", id="rc-suffix"),
-    pytest.param("5.4.0-enterprise", "5.4.0", id="enterprise-suffix"),
-    pytest.param("5.4.0~rc1-enterprise", "5.4.0", id="both-suffixes"),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param("5.4.0", "5.4.0", id="plain"),
+        pytest.param("5.4.0~rc1", "5.4.0", id="rc-suffix"),
+        pytest.param("5.4.0-enterprise", "5.4.0", id="enterprise-suffix"),
+        pytest.param("5.4.0~rc1-enterprise", "5.4.0", id="both-suffixes"),
+    ],
+)
 def test_normalize_scylla_version(raw, expected):
     assert normalize_scylla_version(raw) == expected
 ```
