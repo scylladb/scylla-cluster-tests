@@ -582,7 +582,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         def wait_for_package_manager(node):
             # sudo: a non-root fuser can't see the root package manager holding the lock
             if node.distro.is_rhel_like:
-                wait_cmd = "while fuser /var/run/yum.pid >/dev/null 2>&1; do sleep 10; done"
+                # dnf (yum on RHEL 8+) never creates /var/run/yum.pid and keeps no lock file open
+                # for fuser, so wait for the process itself
+                wait_cmd = (
+                    'pgrep -a -x "yum|dnf|dnf5" || true; while pgrep -x "yum|dnf|dnf5" >/dev/null; do sleep 10; done'
+                )
             elif node.distro.is_sles:
                 wait_cmd = "while fuser /run/zypp.pid >/dev/null 2>&1; do sleep 10; done"
             else:
