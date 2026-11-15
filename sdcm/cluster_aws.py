@@ -1378,7 +1378,8 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list if node_list else self.nodes
-        for node in node_list:
+
+        def _wait_for_node_db_up(node):
             wait.wait_for(
                 func=self.check_node_db_up,
                 step=10,
@@ -1387,6 +1388,10 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 throw_exc=True,
                 node=node,
             )
+
+        # run_func_parallel uses the default ThreadPoolExecutor size, so a cluster larger than that
+        # pool is waited on in batches.
+        self.run_func_parallel(func=_wait_for_node_db_up, node_list=node_list)
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
@@ -1587,7 +1592,8 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             return
 
         self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
-        for node in self.nodes:
+
+        def _reconfigure_node(node):
             try:
                 node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
                 node.configure_vector_store_service()
@@ -1595,6 +1601,9 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             except Exception as e:
                 self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
                 raise
+
+        # run_func_parallel re-raises the first failure once every node has finished.
+        self.run_func_parallel(func=_reconfigure_node)
 
     def _create_node(
         self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
