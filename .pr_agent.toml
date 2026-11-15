@@ -1,8 +1,8 @@
 # Qodo Merge (qodo.ai) configuration.
 #
-# Reviews are manual-only: Qodo does not run automatically when a PR is
-# opened/updated, nor on new commits pushed to a PR. To get a review, comment
-# on the PR with a command, e.g.:
+# Qodo reviews once when a PR is opened, reopened, or marked ready for review.
+# It does not run on drafts, on new commits, on backports, or on PRs labeled
+# skip-review. To get another review, comment on the PR with a command, e.g.:
 #
 #   /agentic_review
 #   /agentic_describe
@@ -13,9 +13,17 @@
 #
 # Repository-root config takes precedence over the organization-level
 # `pr-agent-settings` repo and over the Qodo portal settings.
+[config]
+# Skip the automatic review for these PRs. The defaults of ignore_pr_title
+# (^[Auto], ^Auto) stay in the list.
+# https://docs.qodo.ai/configuration/configuration-and-command-reference.md
+ignore_pr_labels = ["skip-review"]
+ignore_pr_title = ["^\\[Backport", "^\\[Auto\\]", "^Auto"]
+
 [github_app]
-# Commands run automatically when a PR is opened or updated. Empty = none.
-pr_commands = []
+# Commands run automatically when a PR is opened, reopened, or marked ready
+# for review. Drafts are skipped (feedback_on_draft_pr defaults to false).
+pr_commands = ["/agentic_review"]
 
 # Commands run automatically on new commits pushed to an open PR. Empty = none.
 push_commands = []

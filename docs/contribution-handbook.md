@@ -464,18 +464,22 @@ reviewers.
 **AI code review** — four AI reviewers can review a PR: CodeRabbit, Qodo,
 GitHub Copilot, and Claude. Each one follows [`REVIEW.md`](../REVIEW.md) and the standards in
 [`docs/standards/`](standards/); their configuration holds no rules of its own.
-They run on request. On each non-draft, non-backport PR to `master`, a bot posts
-these commands once:
+CodeRabbit and Qodo review each non-draft, non-backport PR to `master` once,
+when it opens or leaves draft. They do not review new commits. Claude and
+Copilot run on request. On the same PRs, a bot posts these commands once:
 
-| Reviewer | How to request | Configuration |
+| Reviewer | How to request (again) | Configuration |
 |----------|----------------|---------------|
 | CodeRabbit | Comment `@coderabbitai review` (incremental) or `@coderabbitai full review` | [`.coderabbit.yaml`](../.coderabbit.yaml) |
 | Qodo | Comment `/agentic_review` | [`.pr_agent.toml`](../.pr_agent.toml) |
 | Copilot | Reviewers menu → Copilot, or `gh pr edit <number> --add-reviewer @copilot` | Reads `REVIEW.md` and `AGENTS.md` directly |
 | Claude | Comment `@claude review` (org members) | [`claude-review.yml`](../.github/workflows/claude-review.yml), with the `code-review` skill |
 
-Backport PRs and PRs labeled `skip-review` get no how-to comment. After a trial,
-one reviewer will run automatically, also skipping them; the design and the selection data are in
+To silence the automatic reviews, add the `skip-review` label before the PR
+opens, or while it is a draft. That PR then gets no automatic review and no
+how-to comment. On an open PR, comment `@coderabbitai pause` to stop CodeRabbit.
+The automatic reviews are a trial: after it, only the reviewer that authors act
+on most stays automatic. The design and the selection data are in
 [`docs/plans/ai-tooling/review-tools/spec.md`](plans/ai-tooling/review-tools/spec.md).
 These reviews supplement, but do not replace, human review: treat bot findings as
 suggestions to verify against the code, not as rulings.

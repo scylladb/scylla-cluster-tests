@@ -8,8 +8,11 @@ reviews:
   profile: quiet
   high_level_summary: false
   high_level_summary_in_walkthrough: true
+  # One review when a PR opens or leaves draft; no re-review on push.
+  # The skip-review label and backport titles turn it off.
   auto_review:
-    enabled: false
+    enabled: true
+    drafts: false
     auto_incremental_review: false
     ignore_title_keywords:
       - "[Backport"
