@@ -17,7 +17,9 @@
 # Required env (per flavor):
 #   SCT_SCYLLA_VERSION      - e.g. 2026.2  (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB / SCT_AZURE_IMAGE_DB for ami)
 #   GCS_KEY_FILE / GOOGLE_APPLICATION_CREDENTIALS - GCE backend only (image export)
-#   SCT_AZURE_IMAGE_DB      - Azure backend, every flavor: a marketplace URN publisher:offer:sku:version,
+#   SCT_AZURE_IMAGE_DB      - Azure backend, every flavor, unless SCT_SCYLLA_VERSION is a released version
+#                             (e.g. 2026.1, resolved to its community gallery image on real Azure):
+#                             a marketplace URN publisher:offer:sku:version,
 #                             e.g. scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3
 #                             (a 'latest' version is rejected: the Scylla version is read from the URN)
 #
@@ -114,9 +116,9 @@ if [[ "$FLAVOR" != "provision" && -z "${SCT_SCYLLA_VERSION:-}" &&
     exit 5
 fi
 
-# minicloud cannot resolve an Azure image from a Scylla version, so every flavor needs a URN
-if [[ "$BACKEND" == "azure" && -z "${SCT_AZURE_IMAGE_DB:-}" ]]; then
-    echo "ERROR: the azure backend needs SCT_AZURE_IMAGE_DB=<publisher:offer:sku:version> for every flavor" >&2
+# a released Scylla version resolves to its community gallery image on real Azure; anything else needs a URN
+if [[ "$BACKEND" == "azure" && -z "${SCT_AZURE_IMAGE_DB:-}" && -z "${SCT_SCYLLA_VERSION:-}" ]]; then
+    echo "ERROR: the azure backend needs a released SCT_SCYLLA_VERSION (e.g. 2026.1) or SCT_AZURE_IMAGE_DB=<publisher:offer:sku:version>" >&2
     exit 5
 fi
 

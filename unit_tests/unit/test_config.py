@@ -1733,11 +1733,12 @@ def test_azure_oracle_image_resolver_joins_image_ids_per_region():
             "get_arch_from_azure_instance_type",
             return_value=sct_config.azure_utils.VmArch.X86,
         ),
-        patch.object(sct_config.azure_utils, "get_released_scylla_images", return_value=[azure_image]),
+        patch.object(sct_config.azure_utils, "get_released_scylla_images", return_value=[azure_image]) as released,
     ):
         result = sct_config._resolve_oracle_images_azure(conf, "2026.1")
 
     assert result == f"{azure_image.id} {azure_image.id}"
+    assert all(call.kwargs["azure_service"] is AzureService.real_cloud() for call in released.call_args_list)
 
 
 @pytest.mark.parametrize(
@@ -2171,6 +2172,31 @@ def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_c
     assert not conf.get("intra_node_comm_public")
     assert scylla_version == "2026.2.5"
     assert not azure_service_built
+
+
+GALLERY_ID = "/CommunityGalleries/scylladb-7e8d8a04-23db-487d-87ec-0e175c0615bb/Images/scylla-2026.1/Versions/2026.1.15"
+
+
+def test_azure_minicloud_resolves_a_released_version_on_real_azure(monkeypatch):
+    """Released images exist only on real Azure, so the lookup must not use the minicloud-guarded client"""
+    config_files = [
+        "test-cases/artifacts/azure-image.yaml",
+        "configurations/minicloud.yaml",
+        "configurations/minicloud/azure.yaml",
+    ]
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1")
+    monkeypatch.setenv("SCT_AZURE_REGION_NAME", "eastus")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_files).replace("'", '"'))
+    monkeypatch.delenv("SCT_AZURE_IMAGE_DB", raising=False)
+    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
+    image = MagicMock(id=None, unique_id=GALLERY_ID)
+    with patch.object(sct_config.azure_utils, "get_released_scylla_images", return_value=[image]) as released:
+        conf = sct_config.SCTConfiguration()
+
+    assert conf.get("azure_image_db") == GALLERY_ID
+    assert released.call_args.kwargs["azure_service"] is AzureService.real_cloud()
 
 
 def test_azure_minicloud_yaml_only_activation_is_refused(monkeypatch, tmp_path):

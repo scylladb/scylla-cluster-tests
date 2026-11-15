@@ -308,3 +308,25 @@ class TestOsIpv6Fallback:
 
     def test_no_address_at_all_is_empty(self, node):
         assert self.node_with(node, {}, "eth0")._os_ipv6_address() == ""
+
+
+@pytest.fixture(name="node_without_ptr")
+def fixture_node_without_ptr(node, monkeypatch):
+    node.name = "db-node-1"
+    node._private_ip_address_resolved = True
+    node._private_ip_address_cached = "10.180.0.10"
+    monkeypatch.setattr(
+        "sdcm.cluster_azure.resolve_ip_to_dns",
+        Mock(side_effect=ValueError("Unable to resolve IP: [Errno 1] Unknown host")),
+    )
+    return node
+
+
+def test_private_dns_name_falls_back_to_the_node_name_without_a_ptr_record(node_without_ptr):
+    assert node_without_ptr.private_dns_name == "db-node-1"
+
+
+def test_private_dns_name_without_a_ptr_record_raises_when_dns_names_are_on(node_without_ptr):
+    node_without_ptr.use_dns_names = True
+    with pytest.raises(ValueError, match="Unable to resolve IP"):
+        _ = node_without_ptr.private_dns_name

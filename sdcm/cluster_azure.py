@@ -406,7 +406,13 @@ class AzureNode(cluster.BaseNode):
 
     @cached_property
     def private_dns_name(self) -> str:
-        return resolve_ip_to_dns(self.private_ip_address)
+        try:
+            return resolve_ip_to_dns(self.private_ip_address)
+        except ValueError:
+            if self.use_dns_names:
+                raise
+            self.log.warning("No PTR record for %s, using the node name as its DNS name", self.private_ip_address)
+            return self.name
 
 
 class AzureCluster(cluster.BaseCluster):
