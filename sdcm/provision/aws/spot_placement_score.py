@@ -24,7 +24,7 @@ Scores are a *relative* ranking, never a go/no-go verdict. Two caveats from the 
   reorder the candidate list it walks.
 
 A high per-AZ score also "assumes that your fleet request will be configured to use a single Availability Zone
-and the capacity-optimized allocation strategy" - see `SPOT_FLEET_ALLOCATION_STRATEGY` in `constants.py`.
+and the capacity-optimized allocation strategy" - see `EC2_FLEET_ALLOCATION_STRATEGY` in `constants.py`.
 
 Every failure path returns an empty result so callers fall back to their previous ordering: the scores are an
 optimization and must never be able to fail a test run. The error handling is deliberately total, because the

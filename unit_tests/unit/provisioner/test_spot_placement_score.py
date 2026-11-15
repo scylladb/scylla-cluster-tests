@@ -23,7 +23,7 @@ from botocore.exceptions import (
 from botocore.parsers import ResponseParserError
 
 from sdcm.provision.aws import spot_placement_score
-from sdcm.provision.aws.constants import SPOT_FLEET_ALLOCATION_STRATEGY
+from sdcm.provision.aws.constants import EC2_FLEET_ALLOCATION_STRATEGY
 from sdcm.provision.aws.spot_placement_score import (
     PlacementScore,
     _chunk_regions,
@@ -272,13 +272,13 @@ def test_credentials_error_falls_back_to_given_order(mock_ec2):
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b"]) is None
 
 
-def test_fleet_allocation_strategy_is_valid_for_request_spot_fleet():
-    """RequestSpotFleet takes camelCase ('capacityOptimized'); the hyphenated spelling belongs to the
-    different CreateFleet API. botocore does not validate enums client-side, so the wrong value would only
+def test_fleet_allocation_strategy_is_valid_for_create_fleet():
+    """CreateFleet takes the hyphenated spelling ('capacity-optimized'); camelCase belongs to the legacy
+    RequestSpotFleet API. botocore does not validate enums client-side, so the wrong value would only
     fail against real AWS with InvalidParameterValue.
     """
-    shape = botocore.session.get_session().get_service_model("ec2").shape_for("SpotFleetRequestConfigData")
-    assert SPOT_FLEET_ALLOCATION_STRATEGY in shape.members["AllocationStrategy"].enum
+    shape = botocore.session.get_session().get_service_model("ec2").shape_for("SpotOptionsRequest")
+    assert EC2_FLEET_ALLOCATION_STRATEGY in shape.members["AllocationStrategy"].enum
 
 
 def test_response_parser_error_falls_back_to_given_order(mock_ec2):

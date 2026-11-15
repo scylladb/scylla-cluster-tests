@@ -33,7 +33,7 @@ from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
-from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
+from sdcm.provision.aws.utils import configure_set_preserve_hostname_script, split_instance_types
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
@@ -65,7 +65,6 @@ INSTANCE_PROVISION_ON_DEMAND = "on_demand"
 INSTANCE_PROVISION_SPOT = "spot"
 INSTANCE_PROVISION_SPOT_FLEET = "spot_fleet"
 SPOT_CNT_LIMIT = 10
-SPOT_FLEET_LIMIT = 500
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
@@ -216,7 +215,17 @@ class AWSCluster(cluster.BaseCluster):
             placement_group_name=self.placement_group_name,
             tag_specifications=[{"Tags": tags_as_ec2_tags(self.tags)}],
         )
-        limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
+        if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET:
+            # One all-or-nothing EC2 Fleet request for the whole count, so DB nodes added mid-test (cluster growth,
+            # nemesis) get the same instance type alternatives as the initial cluster.
+            instances = ec2.create_spot_fleet(
+                **spot_params, alternative_instance_types=self._fleet_alternative_instance_types(spot_params)
+            )
+            if is_zero_node:
+                ec2.add_tags(instances, {"ZeroTokenNode": "True"})
+            return instances
+
+        limit = SPOT_CNT_LIMIT
         request_cnt = 1
         tail_cnt = 0
         if count > limit:
@@ -230,16 +239,22 @@ class AWSCluster(cluster.BaseCluster):
             if tail_cnt and i == request_cnt - 1:
                 spot_params["count"] = tail_cnt
 
-            if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
-                instances_i = ec2.create_spot_fleet(**spot_params)
-            else:
-                instances_i = ec2.create_spot_instances(**spot_params)
-            instances.extend(instances_i)
+            instances.extend(ec2.create_spot_instances(**spot_params))
 
         if is_zero_node:
             ec2.add_tags(instances, {"ZeroTokenNode": "True"})
 
         return instances
+
+    def _fleet_alternative_instance_types(self, spot_params) -> list[str]:
+        """Instance types EC2 Fleet may use instead of the requested one: DB nodes of `instance_type_db` only.
+
+        Zero-token nodes and platform-migration targets ask for their own type explicitly, and loaders and
+        monitors have no alternatives option.
+        """
+        if self.node_type != "scylla-db" or spot_params["instance_type"] != self.params.get("instance_type_db"):
+            return []
+        return split_instance_types(self.params.get("aws_instance_type_db_alternatives"))
 
     def _create_instances(
         self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
@@ -301,7 +316,7 @@ class AWSCluster(cluster.BaseCluster):
                 instance_type=instance_type,
                 count=count,
             )
-        elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
+        elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET:
             instances = self._create_spot_instances(
                 count,
                 interfaces,
@@ -311,7 +326,8 @@ class AWSCluster(cluster.BaseCluster):
                 is_zero_node=is_zero_node,
                 ami_id=ami_id,
             )
-            # straight to spot with no ladder; a failure raises out of here rather than downgrading
+            # spot or nothing, whatever the count: no ladder, so a failure raises out of here rather than
+            # downgrading to on-demand
             self._publish_provision_outcome(
                 requested=INSTANCE_PROVISION_SPOT_FLEET,
                 realized=INSTANCE_PROVISION_SPOT_FLEET,
@@ -371,9 +387,7 @@ class AWSCluster(cluster.BaseCluster):
     ):
         instances = None
 
-        if self.instance_provision.lower() == "spot" or (
-            self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1
-        ):
+        if self.instance_provision.lower() == "spot":
             instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT]
         else:
             instances_provision_fallbacks = [self.instance_provision]

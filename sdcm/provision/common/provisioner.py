@@ -11,6 +11,7 @@ class ProvisionParameters(BaseModel):
     region_name: str
     availability_zone: str
     spot: bool  # Signals on whether instance could be revoked by cloud provider
+    fleet: bool = False  # AWS: launch through EC2 Fleet whatever the count (`instance_provision: spot_fleet`)
 
 
 class InstanceParamsBase(BaseModel):

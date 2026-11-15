@@ -18,7 +18,7 @@ availability zone (AZ fallback) or relocate the whole cluster to another region 
 They live here - not under a single backend - so neither backend imports the other's package.
 """
 
-from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND
+from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND, INSTANCE_PROVISION_SPOT_FLEET
 
 FALLBACK_SUPPORTED_BACKENDS: tuple[str, ...] = ("aws", "gce")
 
@@ -54,5 +54,10 @@ def is_spot_capacity_scoring_enabled(params, backend: str) -> bool:
     if not params.get("use_spot_placement_scores"):
         return False
     if params.get("cluster_backend") != backend or backend not in SPOT_SCORING_SUPPORTED_BACKENDS:
+        return False
+    if backend == "aws" and params.get("instance_provision") == INSTANCE_PROVISION_SPOT_FLEET:
+        # The AWS score describes a request for `instance_type_db` alone, while an EC2 Fleet run offers the
+        # `aws_instance_type_db_alternatives` too - and AWS documents that scoring fewer than three types always
+        # comes back low. A score for a request SCT doesn't make must not pick or veto AZs and regions.
         return False
     return params.get("instance_provision") != INSTANCE_PROVISION_ON_DEMAND
