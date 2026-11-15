@@ -8,7 +8,8 @@ from sdcm.cluster import BaseScyllaCluster
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
-PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
+# nemesis_seed is resolved by ClusterTester.setUp before any runner exists; the fakes carry one.
+PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False, nemesis_seed=[1])
 
 
 @dataclass

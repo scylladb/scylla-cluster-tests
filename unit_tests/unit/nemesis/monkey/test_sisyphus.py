@@ -194,7 +194,7 @@ def test_direct_instantiation_selector_precedence(
 @pytest.mark.parametrize(
     "class_names,seeds,expected",
     [
-        pytest.param(["SisyphusMonkey", "SisyphusMonkey"], None, [None, None], id="no_seeds"),
+        pytest.param(["SisyphusMonkey", "SisyphusMonkey"], [], [None, None], id="no_seeds"),
         pytest.param(
             ["SisyphusMonkey", "SisyphusMonkey", "SisyphusMonkey"],
             [17],
@@ -212,8 +212,7 @@ def test_direct_instantiation_selector_precedence(
 def test_seed_assignment_behaviour(tester, class_names, seeds, expected):
     """Parametrized: no seeds -> None, single -> broadcast, N->1:1 mapping."""
     tester.params["nemesis_class_name"] = class_names
-    if seeds is not None:
-        tester.params["nemesis_seed"] = seeds
+    tester.params["nemesis_seed"] = seeds
 
     nemeses = tester.get_nemesis_class()
     assert len(nemeses) == len(class_names), f"Expected {len(class_names)} nemesis threads, got {len(nemeses)}"

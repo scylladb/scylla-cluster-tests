@@ -120,8 +120,8 @@ class OperationThread:
         self.thread_stats = OperationThreadStats()
         self.log = logging.getLogger(self.__class__.__name__)
         self.log.debug("Thread params: %s", thread_params)
-        nemesis_seed = self.thread_params.db_cluster.params.get("nemesis_seed")
-        self.generator = random.Random(nemesis_seed[0]) if nemesis_seed else random.Random()
+        # ClusterTester.setUp resolves nemesis_seed before any thread starts, so the first entry is always there.
+        self.generator = random.Random(self.thread_params.db_cluster.params.get("nemesis_seed")[0])
         self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
         self.termination_event = thread_params.termination_event
 

@@ -3481,7 +3481,8 @@ def get_nemesis_list(backend, config):
     tester = FakeTester()
 
     tester.params = SCTConfiguration()
-    sisyphus_nemesis = SisyphusMonkey(tester, None)
+    # A real run resolves an unset nemesis_seed in ClusterTester.setUp; the listing uses the configured seed or 0.
+    sisyphus_nemesis = SisyphusMonkey(tester, None, nemesis_seed=(tester.params.get("nemesis_seed") or [0])[0])
 
     collected_disrupt_methods_names = [disrupt.__class__.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
