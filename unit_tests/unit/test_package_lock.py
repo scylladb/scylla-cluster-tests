@@ -32,7 +32,9 @@ def _run(snippet):
     return subprocess.run(["bash", "-ce", snippet], capture_output=True, text=True, timeout=60, check=False)
 
 
-@pytest.mark.parametrize("snippet", [apt_lock_wait(), apt_lock_wait(kill_stale=True), rpm_lock_wait()])
+@pytest.mark.parametrize(
+    "snippet", [apt_lock_wait(), apt_lock_wait(kill_stale=True), rpm_lock_wait()], ids=["apt", "apt-kill-stale", "rpm"]
+)
 def test_snippets_are_quote_free(snippet):
     """They get embedded into ``bash -c '...'`` commands and cloud-init scripts."""
     assert "'" not in snippet
