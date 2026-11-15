@@ -75,6 +75,7 @@ from sdcm.test_config import TestConfig
 from sdcm.utils import oci_utils
 from sdcm.utils.aws_utils import aws_check_instance_type_supported, get_arch_from_instance_type
 from sdcm.utils.azure_utils import (
+    AzureService,
     azure_check_instance_type_available,
 )
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
@@ -298,7 +299,10 @@ def _resolve_oracle_images_azure(conf, oracle_scylla_version: str) -> str:
                         f"(e.g. 'master:latest') for ARM instances."
                     )
                 azure_image = azure_utils.get_released_scylla_images(
-                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                    scylla_version=oracle_scylla_version,
+                    region_name=region,
+                    arch=azure_arch,
+                    azure_service=AzureService.real_cloud(),
                 )[0]
         except Exception as ex:  # noqa: BLE001
             raise ValueError(
@@ -799,7 +803,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
                                     f"(e.g. 'master:latest') for ARM instances."
                                 )
                             azure_image = azure_utils.get_released_scylla_images(
-                                scylla_version=scylla_version, region_name=region, arch=azure_arch
+                                scylla_version=scylla_version,
+                                region_name=region,
+                                arch=azure_arch,
+                                azure_service=AzureService.real_cloud(),
                             )[0]
                     except MinicloudActivationError:
                         raise

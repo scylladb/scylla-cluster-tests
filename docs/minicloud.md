@@ -348,13 +348,15 @@ Prerequisites:
 
 - KeyStore `azure.json` holds a service principal that can create resource groups and accept
   marketplace terms.
-- The marketplace terms for the pinned Scylla offer are accepted. If SCT cannot accept them, an
-  admin does it once.
+- With a pinned marketplace URN, the marketplace terms for that Scylla offer are accepted. If SCT
+  cannot accept them, an admin does it once. A released `scylla_version` needs no terms.
 - The host prerequisites in [Running locally](#running-locally).
 
 Run:
 
 ```bash
+SCT_SCYLLA_VERSION=2026.1 scripts/run-minicloud-test.sh -f ami -b azure
+# or pin a marketplace URN
 SCT_AZURE_IMAGE_DB=scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3 \
   scripts/run-minicloud-test.sh -f ami -b azure
 ```
@@ -374,8 +376,9 @@ Credentials:
   all-zero UUID as tenant and subscription.
 - `AZURE_ENDPOINT_URL=https://localhost:5443` redirects every ARM client. If
   `SCT_MINICLOUD_ENDPOINT_URL` is set but `AZURE_ENDPOINT_URL` is not, SCT refuses to build an ARM
-  client, so nothing is provisioned on real Azure by mistake. The one exception is
-  `AzureService.real_cloud()`, which sct-runner management uses on purpose.
+  client, so nothing is provisioned on real Azure by mistake. Two callers use
+  `AzureService.real_cloud()` on purpose: sct-runner management, and the read-only lookup of
+  released Scylla images.
 
 TLS:
 
@@ -391,8 +394,13 @@ northeurope.
 
 Image:
 
-- Pin `azure_image_db` to a marketplace URN, `publisher:offer:sku:version`, and do not set
-  `scylla_version`. SCT takes it from the URN version. A `latest` version fails config validation.
+- A released `scylla_version` (for example `2026.1`) resolves to its community gallery image on
+  real Azure, as on a real-Azure run. minicloud downloads that image on first use.
+- A marketplace URN, `publisher:offer:sku:version`, pinned in `azure_image_db` still works. Do not
+  set `scylla_version` then: SCT takes it from the URN version. A `latest` version fails config
+  validation.
+- Branch versions (`master:latest`) and private gallery or managed-image ids still need a pinned
+  URN.
 - Loader and monitor use the Canonical images from `defaults/azure_config.yaml`.
 - The guest boots in about 90 seconds. The first run is slower because it downloads the image
   through a scratch managed disk; later runs use the cache.
@@ -406,7 +414,7 @@ Unsupported APIs:
 |---|---|---|
 | `Microsoft.ManagedIdentity` | the VM identity block is accepted and ignored; the metadata service hands a token to any VM | nothing to do |
 | `purchasePlan` set for every URN | loader and monitor image download may be rejected | unverified |
-| community gallery and gallery listing | `scylla_version` cannot be resolved | pin a URN |
+| private gallery and managed-image lookup | branch versions cannot be resolved | pin a URN |
 | `virtualMachines/{vm}/restart`, `runCommand` | reboot nemeses fail (405) | QATOOLS-468; the provision test uses `not disruptive` |
 | Resource Graph | sct-runner listing | served by real Azure: the runner code uses `AzureService.real_cloud()`, not the redirected singleton |
 | `locations`, `vmSizes`, `resource_skus` | synthetic answer or multi-NIC validation only | not on the tested paths |
