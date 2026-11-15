@@ -12,6 +12,7 @@ codebase (e.g. ``BaseNode.install_package()`` / ``upgrade_manager_agent()``) -- 
 that ``-o DPkg::Lock::Timeout=...`` is always present.
 """
 
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -120,3 +121,26 @@ def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
     assert "fuser -k -TERM" in cmd, f"install retry must kill a stale lock holder: {cmd!r}"
     assert kwargs.get("retry") == 3, f"install command missing retry=3: {kwargs!r}"
     assert kwargs.get("timeout") == 600, f"install command missing timeout=600: {kwargs!r}"
+
+
+def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
+    """After an OS upgrade timeout on RHEL, wait for the yum/dnf process: dnf never creates /var/run/yum.pid."""
+    fake_self = MagicMock()
+    fake_self.params.get.return_value = True
+    fake_self.system_upgrade_timeout = 0.1
+
+    release = threading.Event()
+    fake_node = MagicMock()
+    fake_node.name = "node1"
+    fake_node.distro.is_rhel_like = True
+    fake_node.upgrade_system.side_effect = lambda: release.wait(10)
+
+    try:
+        UpgradeTest.upgrade_os(fake_self, nodes=[fake_node])
+    finally:
+        release.set()
+
+    fake_node.remoter.sudo.assert_called_once()
+    cmd = fake_node.remoter.sudo.call_args.args[0]
+    assert 'while pgrep -x "yum|dnf|dnf5"' in cmd, cmd
+    assert "yum.pid" not in cmd, cmd
