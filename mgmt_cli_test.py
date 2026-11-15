@@ -59,6 +59,7 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM
+from sdcm.utils.cluster_tools import flush_nodes
 from sdcm.utils.common import clean_enospc_on_node, reach_enospc_on_node
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.tablets.common import TabletsConfiguration
@@ -1113,6 +1114,9 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
         ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
+        if self.params.get("mgmt_flush_and_wait_for_compactions"):
+            flush_nodes(cluster=self.db_cluster, keyspace=ks_name)
+            self.wait_no_compactions_running(n=240)
 
         self.log.info("Run backup and wait for it to finish")
         backup_task = self.backup_with_manager_task(

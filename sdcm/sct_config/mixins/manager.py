@@ -57,8 +57,18 @@ class ManagerConfigMixin(BaseModel):
     mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
     )
+    mgmt_backup_repaired_percent: int = SctField(
+        ge=0,
+        le=100,
+        description="Percent of the backup dataset (`mgmt_prepare_snapshot_size`) repaired by incremental repair "
+        "before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85",
+    )
     mgmt_docker_image: String = SctField(
         description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
+    )
+    mgmt_flush_and_wait_for_compactions: Boolean = SctField(
+        description="Flush and wait for compactions to finish after writing the backup dataset, "
+        "so they don't slow down the backup",
     )
     mgmt_nodetool_refresh_flags: String = SctField(
         description="Nodetool refresh extra options like --load-and-stream or --primary-replica-only",

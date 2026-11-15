@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**25 options.**
+**27 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -95,6 +95,17 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 **type:** sdcm.mgmt.common.AgentBackupParameters
 
 
+<a id="mgmt_backup_repaired_percent"></a>
+
+## **mgmt_backup_repaired_percent** / SCT_MGMT_BACKUP_REPAIRED_PERCENT
+
+Percent of the backup dataset ([`mgmt_prepare_snapshot_size`](#mgmt_prepare_snapshot_size)) repaired by incremental repair before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85
+
+**default:** 0
+
+**type:** int
+
+
 <a id="mgmt_docker_image"></a>
 
 ## **mgmt_docker_image** / SCT_MGMT_DOCKER_IMAGE
@@ -104,6 +115,17 @@ Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 **default:** scylladb/scylla-manager:3.12.0
 
 **type:** str (appendable)
+
+
+<a id="mgmt_flush_and_wait_for_compactions"></a>
+
+## **mgmt_flush_and_wait_for_compactions** / SCT_MGMT_FLUSH_AND_WAIT_FOR_COMPACTIONS
+
+Flush and wait for compactions to finish after writing the backup dataset, so they don't slow down the backup
+
+**default:** False
+
+**type:** bool
 
 
 <a id="mgmt_nodetool_refresh_flags"></a>

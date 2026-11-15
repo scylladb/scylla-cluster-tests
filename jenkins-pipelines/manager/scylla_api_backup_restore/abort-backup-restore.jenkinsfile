@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    backend: 'aws',
+    region: 'us-east-1',
+    scylla_version: 'master:latest',
+    billing_project: 'Single-copy backup',
+    test_name: 'scylla_api_backup_restore_tests.ScyllaApiBackupRestoreTests.test_abort_backup_restore',
+    test_config: '''["test-cases/manager/scylla_api_backup.yaml", "configurations/object_storage_s3.yaml"]''',
+)
