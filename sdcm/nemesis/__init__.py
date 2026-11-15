@@ -302,7 +302,9 @@ class NemesisRunner:
         self.log = SDCMAdapter(logger, extra={"prefix": str(self)})
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get("nemesis_filter_seeds")
-        self.nemesis_seed = nemesis_seed if nemesis_seed is not None else random.randint(0, 1000)
+        # Seeds are resolved once by ClusterTester.resolve_nemesis_seeds, so they are in params and
+        # in the Argus run configuration; a runner built outside add_nemesis takes the first one.
+        self.nemesis_seed = nemesis_seed if nemesis_seed is not None else self.cluster.params.get("nemesis_seed")[0]
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 

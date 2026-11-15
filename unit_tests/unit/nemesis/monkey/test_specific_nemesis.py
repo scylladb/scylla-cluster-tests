@@ -35,6 +35,6 @@ def test_is_it_on_kubernetes(parent, result):
             self.params = params
             self.nodes = []
 
-    params = {"nemesis_interval": 10, "nemesis_filter_seeds": 1}
+    params = {"nemesis_interval": 10, "nemesis_filter_seeds": 1, "nemesis_seed": [1]}
     nemesis = TestNemesisClass(FakeTester(db_cluster=FakeClass(), params=params), None)
     assert nemesis._is_it_on_kubernetes() == result

@@ -41,6 +41,7 @@ class FakeSCTConfiguration(SCTConfiguration):
             "config_files": ["test-cases/PR-provision-test-docker.yaml"],
             "cluster_backend": "docker",
             "run_commit_log_check_thread": False,
+            "nemesis_seed": [1],  # resolved by ClusterTester.setUp in production, which the fakes skip
         }
 
 

@@ -886,6 +886,7 @@ def tester_with_argus(monkeypatch):
     monkeypatch.setattr("sdcm.tester.get_my_ip", lambda: "10.0.0.1")
 
     tester.init_argus_run = types.MethodType(ClusterTester.init_argus_run, tester)
+    tester.resolve_nemesis_seeds = types.MethodType(ClusterTester.resolve_nemesis_seeds, tester)
 
     return tester, mock_argus_client
 
@@ -927,6 +928,41 @@ def test_init_argus_run_config_excludes_internal_fields(tester_with_argus):
     assert "multi_region_params" not in parsed
     assert "regions_data" not in parsed
     assert "target_db_image_ids" not in parsed
+
+
+@pytest.mark.parametrize(
+    "class_names",
+    [
+        pytest.param([], id="no-nemesis-thread"),
+        pytest.param(["SisyphusMonkey"], id="one-thread"),
+        pytest.param(["SisyphusMonkey"] * 3, id="three-threads"),
+    ],
+)
+def test_resolve_nemesis_seeds_puts_one_seed_per_thread_in_the_argus_config(tester_with_argus, class_names):
+    """An unset nemesis_seed becomes one seed per nemesis_class_name entry, at least one, before the
+    configuration is submitted, so the "SCT Configuration" in Argus shows the seeds the run uses.
+    """
+    tester, mock_argus_client = tester_with_argus
+    tester.params["nemesis_class_name"] = class_names
+
+    tester.resolve_nemesis_seeds()
+    tester.init_argus_run()
+
+    seeds = tester.params.get("nemesis_seed")
+    assert len(seeds) == max(1, len(class_names))
+    content = mock_argus_client.sct_submit_config.call_args.kwargs["content"]
+    assert json.loads(content)["nemesis_seed"] == seeds
+
+
+def test_resolve_nemesis_seeds_keeps_a_configured_seed(tester_with_argus):
+    """A job that pins nemesis_seed keeps its value, so a replay runs with the seed it asked for."""
+    tester, _ = tester_with_argus
+    tester.params["nemesis_class_name"] = ["SisyphusMonkey", "SisyphusMonkey"]
+    tester.params["nemesis_seed"] = [5]
+
+    tester.resolve_nemesis_seeds()
+
+    assert tester.params.get("nemesis_seed") == [5]
 
 
 # get_cluster_docker: the monitoring set follows 'n_monitor_nodes', as on every other backend
