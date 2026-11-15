@@ -280,3 +280,64 @@ entry fires the job from the wrong run, or twice (SCT-1168 — see [common-issue
 
 Entries on two arches whose version ranges overlap fail matrix validation; the weekly
 `QA-tools/trigger-matrix-arch-audit` job mails any drift that slips through.
+
+---
+
+## Serial Per-Node Loops (SKILL.md Check 12)
+
+### Trigger
+
+A new or changed loop over all the nodes of a cluster (`for node in self.nodes`, `for node in cluster.nodes`,
+a comprehension, or a call made once per node from a caller's loop) whose body blocks on per-node I/O:
+`node.remoter.run/sudo/stop`, `node.destroy()`, `node.get_backtraces()`, log collection, an S3 upload,
+a container stop.
+
+### Why This Matters
+
+The loop costs the sum of the per-node times. Cloud termination waits (AWS `wait_until_terminated`,
+Azure `terminate(wait=True)`, GCE `_instance_wait_safe`) and SSH round trips take tens of seconds per node,
+so a 100-node teardown spends an hour or more in one loop. Nothing fails, so no test catches it: an audit
+found nine of these in the teardown path ([SCT-719](https://scylladb.atlassian.net/browse/SCT-719)).
+
+### How to Check
+
+1. Is the loop on a teardown or cleanup path? `tearDown`, `stop_resources*`, `clean_resources`,
+   `*.destroy()`, `get_backtraces`, log and screenshot collection. Elsewhere, flag it only when it is
+   on a path that runs on every test.
+2. Does the body block on the node? Pure Python on cached state (`node.ip_address`, building a dict) is not a finding.
+3. Does the order matter? Rolling restarts, one-at-a-time decommission, and anything that must keep quorum
+   stay serial. Two serial loops in a row where the second waits for the first (stop all, then wait for all)
+   are fine as two parallel phases.
+4. Suggest `ParallelObject`:
+
+```python
+# WRONG — 100 nodes × termination wait
+for node in self.nodes:
+    node.destroy()
+
+# RIGHT — one termination wait
+ParallelObject(objects=self.nodes, timeout=600, num_workers=min(32, len(self.nodes)) or None).run(
+    lambda node: node.destroy(), ignore_exceptions=True
+)
+```
+
+- Always pass `timeout`: the default is 6 seconds, which kills real per-node work.
+- `ignore_exceptions=True` keeps the old `try/except` per node semantics: one bad node does not stop the
+  cleanup of the rest. Log or raise from the returned `ParallelObjectResult.exc` values.
+- Cap `num_workers` on paths that can reach many nodes, as `sdcm/nemesis/__init__.py` does, and keep it
+  above 0: teardown runs on empty clusters after a failed setup, and `ThreadPoolExecutor(max_workers=0)`
+  raises `ValueError`. `or None` falls back to the default pool size.
+
+### Known Instances (SCT-719 children)
+
+| Jira | Code |
+|------|------|
+| SCT-728 | `BaseCluster.destroy()` — `node.destroy()` per node, the biggest one |
+| SCT-725 | `BaseCluster.get_backtraces()` — coredump processing and upload per node |
+| SCT-724 | `terminate_node()` — log collection + destroy, called serially by cleanup flows |
+| SCT-726 | `ClusterTester._stop_all_node_task_threads()` — nested loop over db, loader, monitor nodes |
+| SCT-727 | `ClusterTester.stop_resources_stop_tasks_threads()` — carries `# TODO: this should be run in parallel` |
+| SCT-732 | `BaseLoaderSet.kill_stress_thread()` — `node.remoter.stop()` per loader |
+| SCT-723 | `BaseMonitorSet.update_default_time_range()` — remote `find ... -exec sed` per monitor |
+| SCT-722 | `BaseMonitorSet.get_grafana_screenshots_from_all_monitors()` — screenshot + upload per monitor |
+| SCT-734 | `MonitorSetDocker.destroy()` — stop monitoring + destroy per node |

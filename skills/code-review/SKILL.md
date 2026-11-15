@@ -205,6 +205,15 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - When `plan.md` exists, every box is checked, or the PR description tells why a box stays open
 - The flow is optional: a PR without a flow directory is not a finding
 
+### Check 12: Serial Per-Node Loops in Teardown and Cleanup
+
+**Trigger**: PR adds or changes a `for node in <cluster>.nodes` loop (or a comprehension over nodes) whose body runs blocking per-node I/O: `remoter.run/sudo`, `node.destroy()`, log or coredump collection, an S3 upload, a container stop. Highest priority in `tearDown`, `stop_resources`, `clean_resources`, `destroy()`, and log collection paths.
+
+- The time is the sum over the nodes: one minute per node is 100 minutes on a 100-node cluster
+- Ask for `ParallelObject` (`sdcm/utils/parallel_object.py`) with an explicit `timeout` (the default is 6 s) and `ignore_exceptions=True` where one bad node must not stop the cleanup of the rest
+- Not a finding when the order matters: rolling restarts, one-at-a-time decommission, steps that must keep quorum
+- Full rule and the known instances: [review-checklist.md](references/review-checklist.md#serial-per-node-loops-skillmd-check-12)
+
 ## Reference Index
 
 | File | Content |
@@ -233,5 +242,6 @@ A complete code review:
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
 - [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`
 - [ ] Spec compliance checked — when the PR carries a flow directory, the change matches its `spec.md`
+- [ ] Per-node loops checked — no new serial per-node I/O in teardown/cleanup paths
 - [ ] Each finding proven, or tagged ❓ question
 - [ ] One review posted, with inline comments and the outcome of each `REVIEW.md` pass

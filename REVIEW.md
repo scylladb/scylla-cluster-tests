@@ -23,6 +23,10 @@ in order, so that a reader sees which pass found what.
 - Does the change need the same change on another backend: AWS, GCE, Azure,
   OCI, Docker, K8S, or bare metal?
 - Does a new configuration option have a default in `defaults/`?
+- Does a loop over all the nodes of a cluster run blocking per-node work
+  (SSH, a log or coredump upload, a cloud instance termination) one node at
+  a time? In teardown and cleanup code, run it with `ParallelObject`, unless
+  the order matters.
 - Does an error path hide the error? A bare `except` and an ignored return
   value both hide a failure.
 - Does a test assert the behavior, or only the implementation?
