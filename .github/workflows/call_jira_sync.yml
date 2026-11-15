@@ -11,7 +11,13 @@ permissions:
 
 jobs:
   jira-sync:
+<<<<<<< HEAD
     uses: scylladb/github-automation/.github/workflows/main_pr_events_jira_sync.yml@dbcc15cf919d1eb01589dc57af405f9fc8d2d3b6 # main
+||||||| parent of 6332a0a74 (chore(deps): update scylladb/github-automation digest to 6481404)
+    uses: scylladb/github-automation/.github/workflows/main_pr_events_jira_sync.yml@575136ad5a73f08deb5b726dba1ebb492873c026 # main
+=======
+    uses: scylladb/github-automation/.github/workflows/main_pr_events_jira_sync.yml@6481404d0c9ad296a5d6e1b7ad563cddb453498c # main
+>>>>>>> 6332a0a74 (chore(deps): update scylladb/github-automation digest to 6481404)
     with:
       caller_action: ${{ github.event.action }}
     secrets:
