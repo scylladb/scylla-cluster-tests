@@ -36,6 +36,7 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `reviewing-pipeline-docs` — Review test_metadata sections for accuracy
 - `stack-sync` — Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support)
 - `downscaling-for-minicloud` — Shrink a test-case to run against the local minicloud emulator
+- `running-staging-jobs` — Prove a PR on staging Jenkins with per-PR copies of the affected pipelines
 
 ## Development flow
 
