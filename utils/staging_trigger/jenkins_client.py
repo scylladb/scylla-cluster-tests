@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import jenkins
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.get_username import get_username
 from utils.staging_trigger.constants import ParamDefinition
 
 logger = logging.getLogger(__name__)
@@ -68,9 +69,14 @@ class JenkinsJobTrigger:
     def trigger(self, job_name: str, parameters: dict) -> int:
         """Trigger a job and return the expected build number.
 
+        Fills an empty or missing `requested_by_user` with the caller's username: the jenkins.json
+        token may belong to someone else, and the build tags its cloud resources with this user.
+
         Parameters the job does not define are dropped: Jenkins rejects the
         whole build with 400 Bad Request when it gets one.
         """
+        if not parameters.get("requested_by_user"):
+            parameters = {**parameters, "requested_by_user": get_username()}
         if defined := self.get_job_parameter_definitions(job_name):
             if unknown := sorted(set(parameters) - set(defined)):
                 logger.warning("Dropping parameters that %s does not define: %s", job_name, ", ".join(unknown))
