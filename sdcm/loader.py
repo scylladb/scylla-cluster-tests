@@ -422,7 +422,8 @@ class CqlStressCassandraStressExporter(StressExporter):
             # Stress test finished.
             self.do_skip = True
 
-        return self.do_skip
+        # A stats row starts with the total ops count; anything else (e.g. an error message with commas) is not one.
+        return self.do_skip or not line.split(",", 1)[0].strip().isdigit()
 
     @staticmethod
     def split_line(line: str) -> list:
