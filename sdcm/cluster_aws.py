@@ -58,6 +58,7 @@ from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTA
 from sdcm.utils.decorators import retrying
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.net import to_inet_ntop_format
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.vector_store_utils import (
     VectorStoreClusterMixin,
     VectorStoreNodeMixin,
@@ -84,6 +85,9 @@ SPOT_TERMINATION_CHECK_DELAY = 0
 TRANSIENT_EIP_RELEASE_ERRORS = ("InvalidNetworkInterfaceID.NotFound", "InvalidIPAddress.InUse")
 EIP_RELEASE_RETRIES = 8
 EIP_RELEASE_BACKOFF_THRESHOLD = 10
+
+MAX_NODE_INIT_WORKERS = 20
+NODE_INIT_TIMEOUT = 40 * 60
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -656,16 +660,21 @@ class AWSCluster(cluster.BaseCluster):
                     ami_id=image_id,
                 )
             )
-        new_nodes = []
+        # node_index and rack follow the instance order, whichever node finishes its init first.
+        node_specs = []
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
             node_rack = node_index % self.racks_count if rack is None else rack
+            node_specs.append((instance, self._node_index, node_rack))
+
+        def _create_and_init_node(node_spec):
+            instance, node_index, node_rack = node_spec
             node = self._create_node(
                 instance,
                 self._ec2_ami_username,
                 self.node_prefix,
-                self._node_index,
+                node_index,
                 self.logdir,
                 dc_idx=dc_idx,
                 rack=node_rack,
@@ -674,9 +683,30 @@ class AWSCluster(cluster.BaseCluster):
             node.enable_auto_bootstrap = enable_auto_bootstrap
             if ssh_connection_ip_type(self.params) == "ipv6" and not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
+            return node
 
-            self.nodes.append(node)
-            new_nodes.append(node)
+        # _create_node runs node.init(), which waits on EC2, SSH and cloud-init. The nodes that
+        # initialized go into self.nodes, in instance order, so teardown terminates them.
+        results = ParallelObject(
+            objects=node_specs,
+            timeout=NODE_INIT_TIMEOUT,
+            num_workers=min(len(node_specs), MAX_NODE_INIT_WORKERS),
+        ).run(_create_and_init_node, ignore_exceptions=True)
+        new_nodes = [result.result for result in results if result.exc is None]
+        self.nodes.extend(new_nodes)
+
+        if failed := [result for result in results if result.exc is not None]:
+            self.log.error("Failed to initialize %s out of %s node(s)", len(failed), len(node_specs))
+            # These instances are not in self.nodes, so teardown would not terminate them. After a
+            # timeout some may still be initializing, and the queued ones never started.
+            for result in failed:
+                instance = result.obj[0]
+                try:
+                    instance.terminate()
+                except botocore.exceptions.ClientError as error:
+                    self.log.error("Failed to terminate instance %s: %s", instance.id, error)
+            raise failed[0].exc
+
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
         # Not `self.nodes[-count:]`: another thread (a nemesis, the cluster growth) can add nodes at the same time,
