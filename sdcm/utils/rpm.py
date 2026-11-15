@@ -11,9 +11,11 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+from sdcm.utils import package_lock
+
 
 def rpm_lock_wait(lock_timeout: int = 120) -> str:
-    """Build a shell loop which waits for the rpm lock to be released.
+    """Build a shell loop which waits for the rpm lock to be released, logging its holders.
 
     Quote free (uses double quotes only), so it can be embedded both into
     ``bash -c '...'`` commands and into the generated cloud-init scripts.
@@ -21,12 +23,7 @@ def rpm_lock_wait(lock_timeout: int = 120) -> str:
     Args:
         lock_timeout: Max seconds to wait for the rpm lock (default 120, polls every 2s).
     """
-    iterations = lock_timeout // 2
-    return (
-        f"for i in $(seq 1 {iterations}); do "
-        "fuser /var/lib/rpm/.rpm.lock &>/dev/null || break; "
-        f'echo "rpm lock held, waiting... ($i/{iterations})"; sleep 2; done'
-    )
+    return package_lock.lock_wait(name="rpm", lock_files="/var/lib/rpm/.rpm.lock", lock_timeout=lock_timeout, poll=2)
 
 
 def rpm_cmd(pkg_manager: str, subcommand: str, lock_timeout: int = 120) -> str:
