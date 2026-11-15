@@ -10,7 +10,7 @@ from click.testing import CliRunner
 
 import utils.staging_trigger.constants as constants_mod
 from utils.staging_trigger.cache import _load_cache, _save_cache, lookup_pr
-from utils.staging_trigger.cli import cli
+from utils.staging_trigger.cli import _show_trigger_examples, cli
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
     DTEST_TOPOLOGY_FLAGS,
@@ -423,6 +423,10 @@ class TestCli:
         result = runner.invoke(cli, ["run-config", "--help"])
         assert result.exit_code == 0
         assert "CONFIG_FILE" in result.output
+
+    def test_trigger_example_keeps_group_path(self, capsys):
+        _show_trigger_examples(["scylla-staging/u/oss/artifacts/artifacts-ami-test"], folder="scylla-staging/u", pr=1)
+        assert "-f scylla-staging/u trigger --pr 1 oss/artifacts/artifacts-ami-test\n" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

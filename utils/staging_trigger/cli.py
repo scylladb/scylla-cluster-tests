@@ -394,14 +394,11 @@ def _show_trigger_examples(job_names: list[str], branch: str = "", folder: str =
     source_flag = f"--pr {pr}" if pr else f"-b {branch}" if branch else "-b <branch>"
     folder_flag = f"-f {folder} " if folder else ""
 
-    if len(job_names) == 1:
-        name = job_names[0].rsplit("/", 1)[-1]
-        click.echo(f"  python staging_trigger.py {folder_flag}trigger {source_flag} {name}")
-    else:
-        names = " ".join(j.rsplit("/", 1)[-1] for j in job_names[:3])
-        if len(job_names) > 3:
-            names += " ..."
-        click.echo(f"  python staging_trigger.py {folder_flag}trigger {source_flag} {names}")
+    # Keep the group path (e.g. oss/artifacts/): trigger resolves the job as <folder>/<name>.
+    names = " ".join(j.removeprefix(f"{folder}/") for j in job_names[:3])
+    if len(job_names) > 3:
+        names += " ..."
+    click.echo(f"  python staging_trigger.py {folder_flag}trigger {source_flag} {names}")
 
     click.echo()
     click.echo("  Add -n for dry run, -e to edit parameters first.")
