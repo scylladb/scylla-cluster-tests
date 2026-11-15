@@ -25,7 +25,11 @@ class ParallelObject:
                 if item in object is any other type, will be passed to disrupt_func as is.
                 if function accept list as parameter, the item shuld be list of list item = [[]]
 
-        :param timeout: global timeout for running all
+        :param timeout: seconds to wait for each object's result. The waits run one after another,
+                from the moment the previous result was collected, so the whole run can take
+                longer than `timeout`, and longer still when objects queue for one of
+                `num_workers`. After the first timeout the remaining objects are not waited for:
+                the queued ones are cancelled, and the running ones go on in the background.
         :param num_workers: num of parallel threads, defaults to None
         :param disable_logging: disable logging for running disrupt_func, defaults to False
         """
