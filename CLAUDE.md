@@ -37,6 +37,7 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `stack-sync` — Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support)
 - `downscaling-for-minicloud` — Shrink a test-case to run against the local minicloud emulator
 - `running-staging-jobs` — Prove a PR on staging Jenkins with per-PR copies of the affected pipelines
+- `updating-runner-images` — Roll out a new SCT runner image and move the Jenkins builders onto it
 
 ## Development flow
 
