@@ -36,11 +36,14 @@ jobs:
           fi
           gh pr comment "$PR_NUMBER" --body-file - <<EOF
           $marker
-          AI reviewers run on request. Each one follows [REVIEW.md](https://github.com/$GH_REPO/blob/master/REVIEW.md).
+          Each AI reviewer follows [REVIEW.md](https://github.com/$GH_REPO/blob/master/REVIEW.md).
+          CodeRabbit and Qodo review this PR once, now. They do not review new commits; request that with the commands below.
+          To skip them, add the \`skip-review\` label before the PR opens, or while it is a draft.
+          To stop CodeRabbit on this PR, comment \`@coderabbitai pause\`.
 
-          | Reviewer | How to request |
+          | Reviewer | How to request (again) |
           |----------|----------------|
-          | CodeRabbit | Comment \`@coderabbitai review\`, or \`@coderabbitai full review\` |
+          | CodeRabbit | Comment \`@coderabbitai review\` (new commits), or \`@coderabbitai full review\` |
           | Qodo | Comment \`/agentic_review\` |
           | Copilot | Reviewers menu → Copilot, or \`gh pr edit $PR_NUMBER --add-reviewer @copilot\` |
           | Claude | Comment \`@claude review\` (org members) |
