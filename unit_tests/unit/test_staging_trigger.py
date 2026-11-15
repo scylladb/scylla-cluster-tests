@@ -1237,12 +1237,14 @@ JOB_CONFIG_XML = """<flow-definition><properties><hudson.model.ParametersDefinit
 <parameterDefinitions>
   <hudson.model.StringParameterDefinition><name>backend</name><defaultValue>aws</defaultValue></hudson.model.StringParameterDefinition>
   <hudson.model.StringParameterDefinition><name>scylla_version</name><defaultValue></defaultValue></hudson.model.StringParameterDefinition>
+  <hudson.model.StringParameterDefinition><name>requested_by_user</name><defaultValue></defaultValue></hudson.model.StringParameterDefinition>
 </parameterDefinitions>
 </hudson.model.ParametersDefinitionProperty></properties></flow-definition>"""
 
 
+@patch("utils.staging_trigger.jenkins_client.get_username", MagicMock(return_value="someone"))
 class TestJenkinsJobTriggerTrigger:
-    """trigger() must not send parameters the job lacks: Jenkins answers 400 to the whole build."""
+    """trigger() sends only the parameters the job defines, and always a requested_by_user."""
 
     @staticmethod
     def _client(config_xml):
@@ -1259,7 +1261,7 @@ class TestJenkinsJobTriggerTrigger:
         assert client.trigger("folder/job", params) == 7
 
         client.jenkins.build_job.assert_called_once_with(
-            name="folder/job", parameters={"scylla_version": "master:latest"}
+            name="folder/job", parameters={"scylla_version": "master:latest", "requested_by_user": "someone"}
         )
 
     def test_keeps_parameters_when_definitions_unknown(self):
@@ -1269,4 +1271,30 @@ class TestJenkinsJobTriggerTrigger:
 
         client.trigger("folder/job", params)
 
-        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters=params)
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={**params, "requested_by_user": "someone"}
+        )
+
+    @pytest.mark.parametrize("params", [{}, {"requested_by_user": ""}], ids=["missing", "empty"])
+    def test_fills_requested_by_user(self, params):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"backend": "aws", **params})
+
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={"backend": "aws", "requested_by_user": "someone"}
+        )
+
+    def test_keeps_explicit_requested_by_user(self):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"requested_by_user": "other"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"requested_by_user": "other"})
+
+    def test_drops_requested_by_user_when_job_lacks_it(self):
+        client = self._client(JOB_CONFIG_XML.replace("requested_by_user", "other_param"))
+
+        client.trigger("folder/job", {"backend": "aws"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"backend": "aws"})
