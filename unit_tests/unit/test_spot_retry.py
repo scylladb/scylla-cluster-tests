@@ -21,6 +21,7 @@ from sdcm.sct_provision.instances_provider import provision_instances_with_fallb
 from sdcm.tester import ClusterTester, CriticalTestFailure, teardown_on_exception
 from sdcm.utils import spot_retry
 from sdcm.utils.argus import ReplayOnlyArgusSCTClient
+from sdcm.utils.parallel_object import ParallelObjectException
 
 SPOT_EVENT = {
     "event_type": "SpotTerminationEvent",
@@ -293,7 +294,8 @@ def test_reclaim_during_the_cloud_init_wait_publishes_spot_termination_event(pri
         patch("sdcm.sct_provision.instances_provider.RemoteCmdRunnerBase"),
         patch("sdcm.sct_provision.instances_provider.wait_cloud_init_completes", side_effect=TimeoutError("ssh")),
         patch("sdcm.sct_provision.instances_provider.SpotTerminationEvent") as event,
-        pytest.raises(TimeoutError),
+        # the waits run in parallel, so the cloud-init error of each node arrives in one exception
+        pytest.raises(ParallelObjectException, match="TimeoutError: ssh"),
     ):
         provision_instances_with_fallback(
             provisioner,
