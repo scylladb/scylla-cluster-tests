@@ -605,6 +605,19 @@ class BaseNode(AutoSshContainerMixin):
             LOGGER.debug("Node rack name: %s", self._node_rack)
         return self._node_rack
 
+    def cache_dc_and_rack_names(self, dc_name: str | None, rack_name: str | None) -> None:
+        """Keep the names that `nodetool status` of another node reported for this node.
+
+        `datacenter` and `node_rack` return a kept name without running `nodetool status` on this node.
+        A name that the node already has is not replaced.
+
+        Args:
+            dc_name: the datacenter name of this node, or None when it is not known.
+            rack_name: the rack name of this node, or None when it is not known.
+        """
+        self._datacenter_name = self._datacenter_name or dc_name
+        self._node_rack = self._node_rack or rack_name
+
     @property
     def network_interfaces(self):
         raise NotImplementedError()
@@ -5816,6 +5829,13 @@ def wait_for_init_wrap(method):
             task_queue.put((_node, exception_details))
             task_queue.task_done()
 
+        def update_rack_info_in_argus(_node: BaseNode):
+            try:
+                _node.update_rack_info_in_argus(_node.datacenter, _node.node_rack)
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Failure setting dc/rack information for %s in Argus.", _node)
+                LOGGER.debug("Exception details:\n", exc_info=True)
+
         def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
             time_elapsed = time.perf_counter() - start_time
             try:
@@ -5898,12 +5918,13 @@ def wait_for_init_wrap(method):
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
                 cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
-            for node in node_list:
-                try:
-                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
-                except Exception:  # noqa: BLE001
-                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
-                    LOGGER.debug("Exception details:\n", exc_info=True)
+                cl_inst.read_dc_and_rack_names(nodes=node_list, verification_node=node_list[0])
+                cl_inst.run_func_parallel(func=update_rack_info_in_argus, node_list=node_list)
+            else:
+                # A node of another cluster type takes its rack name from the tester, which asks the DB cluster
+                # on every call, so these nodes are not asked all at once.
+                for node in node_list:
+                    update_rack_info_in_argus(node)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug("TestConfig duration -> %s s", int(time_elapsed))
@@ -6407,6 +6428,23 @@ class BaseScyllaCluster:
             return node_status
         status = self.get_nodetool_status(verification_node=verification_node, dc_aware=False)
         return status.get(ip_address, None)
+
+    def read_dc_and_rack_names(self, nodes: list[BaseNode], verification_node: BaseNode) -> None:
+        """Read the datacenter and the rack names of `nodes` from one `nodetool status` and keep them on the nodes.
+
+        A node that the status does not list keeps no name, and neither does any node when `verification_node`
+        cannot run Scylla commands. Such a node runs `nodetool status` on itself when it is asked for a name.
+
+        Args:
+            nodes: the nodes to keep the names on.
+            verification_node: the node that runs `nodetool status`.
+        """
+        if not verification_node._is_node_ready_run_scylla_commands():
+            return
+        status = verification_node.get_nodes_status(nodes=nodes)
+        for node in nodes:
+            node_status = status.get(node, {})
+            node.cache_dc_and_rack_names(dc_name=node_status.get("dc"), rack_name=node_status.get("rack"))
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
         @retrying(
