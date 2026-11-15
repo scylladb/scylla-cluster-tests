@@ -32,7 +32,7 @@ from cassandra.query import SimpleStatement
 from sdcm import argus_results
 from sdcm import wait
 from sdcm.cluster import BaseNode
-from sdcm.utils.apt import apt_cmd
+from sdcm.utils.apt import APT_LOCK_FILES, apt_cmd, apt_lock_wait
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
@@ -65,6 +65,15 @@ from sdcm.exceptions import Group0LimitedVotersFeatureNotEnableOnNodes
 
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
+
+# apt lock handling for the 600s retried upgrade/rollback commands. The waits have to end well
+# before the SSH timeout, otherwise the waiting retry itself becomes an orphan which later runs
+# apt-get next to the following retry. After the wait the stale holder is killed.
+UPGRADE_APT_LOCK_KWARGS = {
+    "lock_timeout": 240,
+    "kill_stale": True,
+    "options": {"DPkg::Lock::Timeout": "60"},
+}
 
 # jira:SCYLLADB-2533 - the `rpc::client::wait_for_reply` oversized allocation - is fixed by a seastar bump
 # (jira:SCYLLADB-1541) which landed on master only. The backports were declined both for 2026.1
@@ -362,18 +371,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 if node.distro.is_rhel_like:
                     node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
                 else:
-                    # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
-                    # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
-                    # the dpkg frontend lock (DPkg::Lock::Timeout) instead of immediately
-                    # failing while the previous apt-get process is still running and holding
-                    # it. See SCT-839.
-                    dist_upgrade_cmd = apt_cmd(
-                        f"dist-upgrade {scylla_pkg_ver} -y",
-                        options={"DPkg::Lock::Timeout": "300"},
-                    )
-                    node.remoter.sudo(apt_cmd("update"), retry=3, timeout=600)
+                    # A retry after the SSH timeout finds the previous apt-get still running on the
+                    # node and holding the locks (SCT-839, SCT-1426): wait for it, log who holds
+                    # the locks, and kill a stale holder instead of failing every retry on the lock.
+                    node.remoter.sudo(apt_cmd("update", **UPGRADE_APT_LOCK_KWARGS), retry=3, timeout=600)
                     node.remoter.sudo(
-                        f"DEBIAN_FRONTEND=noninteractive {dist_upgrade_cmd}",
+                        f"DEBIAN_FRONTEND=noninteractive "
+                        f"{apt_cmd(f'dist-upgrade {scylla_pkg_ver} -y', **UPGRADE_APT_LOCK_KWARGS)}",
                         retry=3,
                         timeout=600,
                     )
@@ -450,14 +454,17 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             node.upgrade_system()
 
         def wait_for_package_manager(node):
+            # sudo: a non-root fuser can't see the root package manager holding the lock
             if node.distro.is_rhel_like:
-                lock_file = "/var/run/yum.pid"
+                wait_cmd = "while fuser /var/run/yum.pid >/dev/null 2>&1; do sleep 10; done"
             elif node.distro.is_sles:
-                lock_file = "/run/zypp.pid"
+                wait_cmd = "while fuser /run/zypp.pid >/dev/null 2>&1; do sleep 10; done"
             else:
-                lock_file = "/var/lib/dpkg/lock-frontend"
+                # all the apt locks, logs who holds them; fails when they are still held after the wait,
+                # like the loops above fail on the remoter timeout
+                wait_cmd = f"{apt_lock_wait(lock_timeout=9 * 60)}; ! fuser {' '.join(APT_LOCK_FILES)} >/dev/null 2>&1"
             self.log.warning("OS upgrade timed out on %s, waiting for package manager to finish...", node.name)
-            node.remoter.run(f"while fuser {lock_file} >/dev/null 2>&1; do sleep 10; done", timeout=10 * 60)
+            node.remoter.sudo(f"bash -c '{wait_cmd}'", timeout=10 * 60)
             self.log.info("OS upgrade on %s completed after initial timeout", node.name)
 
         if not self.params.get("upgrade_node_system"):
@@ -522,18 +529,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run(r"sudo yum remove scylla\* -y", retry=3)
                 node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y", retry=3, timeout=600)
             else:
-                # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
-                # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
-                # the dpkg frontend lock (DPkg::Lock::Timeout) instead of immediately
-                # failing while a previous apt-get process is still running and holding it.
-                # See SCT-839.
+                # Same as the upgrade: a retry may find the previous apt-get still holding the locks.
                 node.remoter.sudo(apt_cmd(r"remove scylla\* -y"), retry=3)
-                install_cmd = apt_cmd(
-                    f"install {scylla_pkg_ver} -y",
-                    options={"DPkg::Lock::Timeout": "300"},
-                )
                 node.remoter.sudo(
-                    f"DEBIAN_FRONTEND=noninteractive {install_cmd}",
+                    f"DEBIAN_FRONTEND=noninteractive "
+                    f"{apt_cmd(f'install {scylla_pkg_ver} -y', **UPGRADE_APT_LOCK_KWARGS)}",
                     retry=3,
                     timeout=600,
                 )

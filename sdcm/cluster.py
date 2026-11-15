@@ -108,7 +108,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_config.config import backend_to_cloud
 from sdcm.utils.cloud_catalog.cost import InstanceRate, get_hourly_rate
 from sdcm.utils.cost_reporting import ON_DEMAND, SPOT, instance_cost_item, price_tags, report_cost_items
-from sdcm.utils.apt import apt_cmd
+from sdcm.utils.apt import apt_cmd, apt_lock_wait
 from sdcm.utils.rpm import rpm_cmd
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.system import AwsKmsEvent
@@ -7764,24 +7764,7 @@ class BaseMonitorSet:
 
         node.update_repo_cache()
 
-        prereqs_script = dedent("""
-            # Function to wait for apt locks to be released
-            wait_for_apt_lock() {
-                echo "Waiting for apt locks to be released..."
-                local max_attempts=60
-                local attempt=0
-                while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock >/dev/null 2>&1; do
-                    if [ $attempt -ge $max_attempts ]; then
-                        echo "Timeout waiting for apt lock after $max_attempts attempts"
-                        exit 1
-                    fi
-                    echo "Apt is locked by another process, waiting... (attempt $((attempt+1))/$max_attempts)"
-                    sleep 10
-                    attempt=$((attempt+1))
-                done
-                echo "Apt locks are free, proceeding..."
-            }
-
+        prereqs_script = f"wait_for_apt_lock() {{ {apt_lock_wait(lock_timeout=600)}; }}\n" + dedent("""
             # Function to install Docker and Python basics on Debian/Ubuntu
             install_debian_pkgs() {
                 echo "Detected Debian/Ubuntu system..."
