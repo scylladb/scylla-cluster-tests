@@ -4,7 +4,7 @@
 
 Options specific to long-running longevity test scenarios.
 
-**12 options.**
+**13 options.**
 
 
 <a id="cluster_target_size"></a>
@@ -16,6 +16,17 @@ Used for scale test: max size of the cluster
 **default:** N/A
 
 **type:** int | list[int] → list[int]
+
+
+<a id="grow_cluster_during_stress"></a>
+
+## **grow_cluster_during_stress** / SCT_GROW_CLUSTER_DURING_STRESS
+
+Used with [`cluster_target_size`](#cluster_target_size) in longevity_test.test_custom_time. When true, the [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd)<br>load and the nemesis are started first and the cluster is grown to [`cluster_target_size`](#cluster_target_size) while<br>they run. If [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) ends before the cluster reaches its target size, it is run again,<br>unless it failed. It is run once more after the cluster reached its target size, so the<br>full-size cluster gets a full round of the load and the nemesis.<br>When false, the cluster is grown before [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) and the nemesis start.
+
+**default:** False
+
+**type:** bool
 
 
 <a id="compaction_strategy"></a>
