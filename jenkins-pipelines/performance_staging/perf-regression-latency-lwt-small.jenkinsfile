@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'performance_regression_lwt_test.PerformanceRegressionLWTTest',
-    test_config: 'test-cases/performance/perf-regression-latency-lwt-small.yaml',
+    test_config: '''["test-cases/performance/perf-regression-latency-lwt-small.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml"]''',
     sub_tests: ["test_latency"],
     timeout: [time: 300, unit: 'MINUTES']
 )

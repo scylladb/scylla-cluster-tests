@@ -9,5 +9,5 @@ rollingUpgradePipeline(
     region: '''["ca-central-1", "eu-central-1", "eu-north-1", "eu-west-3", "us-west-2"]''',
     base_versions: '',
     test_name: 'upgrade_test.UpgradeTest.test_cluster_upgrade_latency_regression',
-    test_config: '''["test-cases/upgrades/rolling-upgrade-latency-regression-aws-custom-d2-workload1-5dcs-expensive.yaml", "configurations/tablets_disabled.yaml", "configurations/auth_cassandra.yaml"]''',
+    test_config: '''["configurations/performance/disable_advanced_rpc_compression.yaml", "test-cases/upgrades/rolling-upgrade-latency-regression-aws-custom-d2-workload1-5dcs-expensive.yaml", "configurations/tablets_disabled.yaml", "configurations/auth_cassandra.yaml"]''',
 )

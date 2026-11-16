@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'performance_regression_row_level_repair_test.PerformanceRegressionRowLevelRepairTest.test_row_level_repair_large_partitions',
-    test_config: 'test-cases/performance/perf-row-level-repair-1TB.yaml',
+    test_config: '''["test-cases/performance/perf-row-level-repair-1TB.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml"]''',
 
     timeout: [time: 10960, unit: 'MINUTES'],
     post_behaviour: 'destroy'

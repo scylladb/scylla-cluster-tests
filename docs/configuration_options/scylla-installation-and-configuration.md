@@ -50,7 +50,7 @@ More arguments to append to scylla_setup command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** {'rf_rack_valid_keyspaces': True}
+**default:** {'rf_rack_valid_keyspaces': True, 'internode_compression_enable_advanced': True, 'rpc_dict_training_when': 'when_leader'}
 
 **type:** dict | str | pydantic.main.BaseModel
 
@@ -215,7 +215,7 @@ Scylla install mode, repo/offline/web
 
 Scylla [`internode_compression`](#internode_compression) in scylla.yaml: which inter-node traffic to compress -- 'all', 'dc' (between datacenters only) or 'none'.
 
-**default:** N/A
+**default:** rack
 
 **type:** str (appendable)
 

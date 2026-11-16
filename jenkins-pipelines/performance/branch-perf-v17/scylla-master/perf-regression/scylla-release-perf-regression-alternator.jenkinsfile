@@ -8,6 +8,6 @@ perfRegressionParallelPipeline(
     region: "us-east-1",
     provision_type: 'on_demand',
     test_name: "performance_regression_alternator_test.PerformanceRegressionAlternatorTest",
-    test_config: "test-cases/performance/perf-regression-alternator-full.yaml",
+    test_config: '''["test-cases/performance/perf-regression-alternator-full.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml"]''',
     sub_tests: ["test_full"],
 )
