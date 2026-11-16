@@ -34,6 +34,16 @@ class LongevityConfigMixin(BaseModel):
     cluster_target_size: IntOrList = SctField(
         description="""Used for scale test: max size of the cluster""",
     )
+    grow_cluster_during_stress: Boolean = SctField(
+        description="""
+            Used with cluster_target_size in longevity_test.test_custom_time. When true, the stress_cmd
+            load and the nemesis are started first and the cluster is grown to cluster_target_size while
+            they run. If stress_cmd ends before the cluster reaches its target size, it is run again,
+            unless it failed. It is run once more after the cluster reached its target size, so the
+            full-size cluster gets a full round of the load and the nemesis.
+            When false, the cluster is grown before stress_cmd and the nemesis start.
+        """,
+    )
     compaction_strategy: String = SctField(
         description="Compaction strategy to use for pre-created schema",
     )
