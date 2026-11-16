@@ -130,6 +130,16 @@ def test_each_nic_lands_in_its_own_subnet(make_provisioner):
     assert subnets == ["default", "nic1", "nic2"]
 
 
+def test_subnets_keep_default_outbound_access(make_provisioner, azure_service):
+    """A private subnet would cut nodes without a public IP off the internet."""
+    provisioner = make_provisioner(2)
+    provisioner.get_or_create_instance(definition("outbound-vm"), PricingModel.ON_DEMAND)
+
+    for subnet_name in ("default", "nic1"):
+        subnet = azure_service.network.subnets.get(provisioner.resource_group_name, "default", subnet_name)
+        assert subnet.default_outbound_access is True
+
+
 def test_public_ip_is_attached_to_the_primary_nic_only(make_provisioner):
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(definition("public-ip-vm"), PricingModel.ON_DEMAND)

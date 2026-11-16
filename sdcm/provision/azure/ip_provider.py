@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import PublicIPAddress
+from azure.mgmt.network.models import PublicIPAddress, PublicIPAddressSku
 
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.utils.azure_utils import AzureService
@@ -63,15 +63,13 @@ class IpAddressProvider:
             poller = self._azure_service.network.public_ip_addresses.begin_create_or_update(
                 resource_group_name=self._resource_group_name,
                 public_ip_address_name=ip_name,
-                parameters={
-                    "location": self._region,
-                    "zones": [self._az] if self._az else [],
-                    "sku": {
-                        "name": "Standard",
-                    },
-                    "public_ip_allocation_method": "Static",
-                    "public_ip_address_version": version.upper(),
-                },
+                parameters=PublicIPAddress(
+                    location=self._region,
+                    zones=[self._az] if self._az else [],
+                    sku=PublicIPAddressSku(name="Standard"),
+                    public_ip_allocation_method="Static",
+                    public_ip_address_version=version.upper(),
+                ),
             )
             pollers.append((ip_name, poller))
         for ip_name, poller in pollers:
