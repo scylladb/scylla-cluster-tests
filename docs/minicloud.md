@@ -124,7 +124,7 @@ The whole test must fit in the host's free RAM:
   db guests x minicloud_lightweight_memory
 + n_loaders x minicloud_lightweight_memory_loader
 + n_monitor_nodes x minicloud_lightweight_memory_monitor
-+ ~2 GiB host headroom
++ 2 GiB + 1 GiB per guest host headroom
 ```
 
 where db guests are `n_db_nodes` plus the zero-token, vector-store and (for the mixed db types)
@@ -577,7 +577,9 @@ per-build choices; set them in the jenkinsfile, or per run via `extra_environmen
 
 Setting `minicloud_container_memory` also moves the preflight guest-memory gate onto that cap
 instead of the host's free memory - the cgroup OOM killer enforces the cap, so measuring the host
-would pass a test the cap then kills.
+would pass a test the cap then kills. The guests' QEMU processes run inside the cap, so the gate
+adds their 1 GiB per guest to it; the 2 GiB base headroom stays out, since dockerd and SCT run
+outside the container.
 
 ### Guest memory locking
 

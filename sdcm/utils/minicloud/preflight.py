@@ -15,6 +15,9 @@ from sdcm.utils.minicloud.config import (
 
 LOGGER = logging.getLogger(__name__)
 
+HOST_HEADROOM_BASE_GIB = 2.0
+HOST_HEADROOM_PER_GUEST_GIB = 1.0
+
 # Every SCT param whose nodes become a minicloud QEMU guest, and therefore has to be part of
 # the host-memory arithmetic. Keep in sync with the node pools tester.py provisions.
 GUEST_NODE_COUNT_PARAMS = (
@@ -297,11 +300,13 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         return
     needed_gib, breakdown = _guest_memory_gib(config, params, guests)
     if config.container_memory:
-        # The cap is the whole budget the guests get, so no host headroom is subtracted from
-        # it - dockerd and SCT live outside the cgroup.
+        # dockerd and SCT live outside the cgroup, so the base headroom does not count against the
+        # cap. The guests' QEMU processes run inside it, so their per-guest cost does.
+        qemu_overhead_gib = HOST_HEADROOM_PER_GUEST_GIB * guests
+        needed_gib += qemu_overhead_gib
         budget_gib = parse_memory_gib(config.container_memory, "minicloud_container_memory")
         budget_source = f"the minicloud_container_memory cap ({config.container_memory})"
-        headroom_note = ""
+        headroom_note = f" + {qemu_overhead_gib:.0f}GiB QEMU overhead ({HOST_HEADROOM_PER_GUEST_GIB:.0f}GiB per guest)"
     else:
         available_gib = host_available_memory_gib()
         if available_gib is None:  # the host does not report its free memory: nothing to size against
@@ -309,7 +314,12 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
 
         mem_in_use_gib = container_mem_in_use_gib(config.container_name)
         budget_gib = available_gib + mem_in_use_gib
-        host_headroom_gib = 2.0  # dockerd, hydra, SCT itself and the page cache need to live too
+        # dockerd, hydra, SCT itself and the page cache need to live too, and every guest costs
+        # more than its RAM: its QEMU process, the emulator's per-guest state. Measured on a
+        # 44GiB minipc5: 8 guests of 34GiB total left the host at 43.1GiB used plus 1.3GiB in
+        # swap, about 9GiB over the guests; a flat 2GiB passed that run, and the host OOM
+        # killer then killed a guest.
+        host_headroom_gib = HOST_HEADROOM_BASE_GIB + HOST_HEADROOM_PER_GUEST_GIB * guests
         needed_gib += host_headroom_gib
         budget_source = "available host memory"
         if mem_in_use_gib:
@@ -327,7 +337,10 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
                 guests,
                 needed_gib,
             )
-        headroom_note = f" + {host_headroom_gib:.0f}GiB host headroom"
+        headroom_note = (
+            f" + {host_headroom_gib:.0f}GiB host headroom ({HOST_HEADROOM_BASE_GIB:.0f}GiB + "
+            f"{HOST_HEADROOM_PER_GUEST_GIB:.0f}GiB per guest)"
+        )
     if budget_gib < needed_gib:
         raise MinicloudError(
             f"not enough memory for this test: {guests} guest(s): {breakdown}{headroom_note} = "
