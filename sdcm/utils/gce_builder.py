@@ -23,7 +23,7 @@ from google.cloud import compute_v1
 from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
-from sdcm.sct_runner import GceSctRunner
+from sdcm.sct_runner import BUILDER_KEEP_HOURS, GceSctRunner
 from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_region import BUILDER_NETWORK_TAG, GceRegion
@@ -90,7 +90,7 @@ class GceBuilder:
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
 
-    VERSION = "v12"
+    VERSION = "v13"
 
     def __init__(self, region: GceRegion):
         self.region = region
@@ -217,14 +217,16 @@ class GceBuilder:
         metadata = compute_v1.Metadata()
         metadata.items += [{"key": "RunByUser", "value": "QA"}]
         metadata.items += [{"key": "NodeType", "value": "builder"}]
-        metadata.items += [{"key": "keep", "value": "alive"}]
+        metadata.items += [{"key": "keep", "value": BUILDER_KEEP_HOURS}]
+        metadata.items += [{"key": "keep_action", "value": "terminate"}]
         metadata.items += [{"key": "billing_project", "value": "sct-runners"}]
         template.properties.metadata = metadata
 
         template.properties.labels = {
             "runbyuser": "qa",
             "nodetype": "builder",
-            "keep": "alive",
+            "keep": BUILDER_KEEP_HOURS,
+            "keep_action": "terminate",
             "billing_project": "sct-runners",
         }
         template.properties.tags = compute_v1.Tags(items=[BUILDER_NETWORK_TAG])
