@@ -22,8 +22,8 @@
 // A job that reaches this helper runs either on a nested-virtualization cloud sct-runner
 // (c8i/m8i/r8i on AWS, n1/n2/c2/c3 on GCE, Dv3/Ev3 and later sizes on Azure, sized by
 // `instance_type_runner` in the test-case yaml or by configurations/minicloud/{aws,gce,azure}.yaml)
-// or on the lab KVM agent (`local_agent: true`). The helper works either way, selected as
-// everywhere else by the presence of ./sct_runner_ip.
+// or on the lab KVM agent (`local_agent: true`). The helper works either way: ./sct_runner_ip
+// selects the runner, and without it the caller's localAgent flag must allow the local path.
 
 // Whether this build runs against minicloud. Single definition of the default so the three
 // pipelines and their `when {}` guards cannot disagree.
@@ -166,7 +166,15 @@ def exportSizing(Map params, Map pipelineParams) {
 // 'Run SCT Test', 'Collect logs' and 'Clean resources' are separate hydra invocations, and they
 // all have to reach the same live endpoint. A container that died with the first of them would
 // take cleanup down with it.
-def call(Map params) {
+//
+// localAgent is the caller's resolved `local_agent` choice. Without a runner, minicloud starts on
+// the current agent, which only the lab KVM agent can do: on any other builder it fails on the
+// missing /dev/kvm and hides why the runner is missing.
+def call(Map params, boolean localAgent = false) {
+    def runnerIp = fileExists('sct_runner_ip') ? readFile('sct_runner_ip').trim() : ''
+    if (!runnerIp && !localAgent) {
+        error("SCT runner was not created; minicloud runs only on an SCT runner or the lab KVM agent")
+    }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
 
     sh """#!/bin/bash
@@ -184,7 +192,7 @@ def call(Map params) {
         export SCT_MINICLOUD_REGIONS="${params.region}"
     fi
 
-    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    RUNNER_IP="${runnerIp}"
     if [[ -n "\${RUNNER_IP}" ]] ; then
         ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} start-minicloud -b "${params.backend}"
     else
