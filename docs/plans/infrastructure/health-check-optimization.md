@@ -2,7 +2,7 @@
 status: in_progress
 domain: framework
 created: 2026-01-11
-last_updated: 2026-09-08
+last_updated: 2026-11-16
 owner: fruch
 ---
 
@@ -73,9 +73,11 @@ that is not in the `UN` state, from the point of view of the node doing the
 reporting — which is what makes one down node cost the whole cluster.
 
 `sdcm/cluster.py:BaseScyllaCluster.wait_for_schema_agreement` is a second,
-separate per-node loop that still runs sequentially and shares the same retry
-constants (`sdcm/utils/health_checker.py:check_schema_agreement_in_gossip_and_peers`).
-It is the path SCT-808 measured.
+separate per-node path. It shares the same retry constants
+(`sdcm/utils/health_checker.py:check_schema_agreement_in_gossip_and_peers`), and
+it is the path SCT-808 measured, when it still checked one node at a time. It
+now checks the nodes concurrently, and so does
+`sdcm/cluster.py:BaseScyllaCluster.wait_all_nodes_un` (see Already delivered).
 
 ### Already delivered
 
@@ -89,6 +91,12 @@ It is the path SCT-808 measured.
   failures collected and reported rather than aborting the sweep. Worker count
   is `cluster_health_check_parallel_workers` (default 5). Landed in
   [#13584](https://github.com/scylladb/scylla-cluster-tests/pull/13584).
+- **Parallel schema-agreement and UN waits** — `wait_for_schema_agreement` and
+  `wait_all_nodes_un` check the nodes concurrently, up to 50 at a time, and
+  raise the error of the first failed node in node order, as the serial loops
+  did. Landed in
+  [#17028](https://github.com/scylladb/scylla-cluster-tests/pull/17028). Its
+  gain is not measured on a real cluster yet.
 
 Parallelism reduced wall-clock by roughly the worker count but did not remove
 the underlying waiting — the sleeps are now paid five at a time instead of one
@@ -101,6 +109,10 @@ Only `cluster_health_check` (on/off) and
 `cluster_health_check_parallel_workers`. Earlier revisions of this plan
 proposed five further parameters under two inconsistent naming schemes; none of
 them were implemented, and the names are superseded by this revision.
+
+The cap of the schema-agreement and UN waits is not an option: it is the
+constant `sdcm/cluster.py:NODES_CHECK_MAX_WORKERS`, and
+`cluster_health_check_parallel_workers` does not apply to them.
 
 ### Constraint: the gate must stay synchronous
 
@@ -292,6 +304,12 @@ immediately — the overwhelmingly common case — then costs about a second
 instead of the full delay. This applies to both retrying call paths, which
 share the same constants, and closes
 [SCT-808](https://scylladb.atlassian.net/browse/SCT-808).
+
+The schema-agreement path is parallel since
+[#17028](https://github.com/scylladb/scylla-cluster-tests/pull/17028): the nodes
+that retry wait at the same time, up to 50 of them. There the backoff shortens
+one wait per group of nodes, not one wait per node, so its gain on that path
+has to be measured again.
 
 **Short-circuit.** Stop every node independently paying the retry budget for
 the same cluster-wide condition. When the disagreement is about a node's
