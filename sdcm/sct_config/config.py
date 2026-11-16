@@ -59,6 +59,7 @@ from sdcm.sct_config.helpers import (
     DOCKER_RACK_ARG_MIN_VERSION,
     _load_docker_images_defaults_cached,
     _nested_env_subkey,
+    branch_desc,
     is_config_option_appendable,
     merge_dicts_append_strings,
     simulated_racks_enabled,
@@ -902,8 +903,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
         #        Only the Scylla AMI default user is caught here: a user that doesn't match the AMI's distro
         #        (e.g. 'ubuntu' on Amazon Linux) still fails later, on the SSH wait.
         if self.get("unified_package"):
-            self.log.info("unified_package is set, forcing use_preinstalled_scylla=False")
+            self.log.info("unified_package is set, forcing use_preinstalled_scylla=False and use_mgmt=False")
             self["use_preinstalled_scylla"] = False
+            self["use_mgmt"] = False  # Scylla Manager is not in the unified package
             if self.get("cluster_backend") == "aws" and (
                 not self.get("ami_id_db_scylla") or self.get("ami_db_scylla_user") == "scyllaadm"
             ):
@@ -968,6 +970,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 setattr(self, repo_key, resolve_latest_repo_symlink(repo_link))
 
         # 9) append username or ami_id_db_scylla_desc to the user_prefix
+        if not self.get("ami_id_db_scylla_desc") and (git_branch := os.environ.get("GIT_BRANCH")):
+            # on Jenkins: the SCT branch, e.g. origin/branch-2026.1 -> 2026-1
+            self["ami_id_db_scylla_desc"] = branch_desc(git_branch)
         version_tag = self.get("ami_id_db_scylla_desc") or getpass.getuser()
         user_prefix = self.get("user_prefix") or getpass.getuser()
         prefix_max_len = 35

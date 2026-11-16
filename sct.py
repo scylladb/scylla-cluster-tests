@@ -43,6 +43,7 @@ lazy import pytest
 lazy import yaml
 lazy from rich.table import Table
 
+lazy import sct_pipeline
 lazy import sct_scan_issues
 lazy import sct_sizing
 lazy import sct_ssh
@@ -286,6 +287,7 @@ def cli(ctx):
         "lint-pipelines",
         "trigger-matrix",
         "trigger-matrix-audit",
+        "pipeline",
     ):
         try_auth_with_okta()
 
@@ -2669,6 +2671,8 @@ def run_pytest(target, backend, config, logdir):
 
     if logdir:
         os.environ["_SCT_LOGDIR"] = logdir
+    if addopts := os.environ.get("SCT_PYTEST_ADDOPTS"):  # the pytest_addopts option
+        os.environ["PYTEST_ADDOPTS"] = addopts
     _logdir = Path(get_test_config().logdir())
     logfile = _logdir / "output.log"
     junit_file = _logdir / "junit.xml"
@@ -4074,6 +4078,7 @@ cli.add_command(sct_ssh.gcp_allow_public)
 cli.add_command(sct_ssh.update_scylla_packages)
 cli.add_command(sct_scan_issues.scan_issue_skips)
 cli.add_command(sct_sizing.sizing_group)
+cli.add_command(sct_pipeline.pipeline)
 
 
 if __name__ == "__main__":
