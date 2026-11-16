@@ -20,6 +20,7 @@ from sdcm.provision.gce.capacity_errors import (
     is_type_unavailable_error,
     is_preemption_error,
     classify_provisioning_error,
+    is_zero_quota_error,
 )
 
 
@@ -77,6 +78,23 @@ def test_is_config_error(message, expected):
 )
 def test_is_quota_error(message, expected):
     assert is_quota_error(_FakeError(message)) is expected
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("403 QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 0.0 in region us-central1.", True),
+        ("QUOTA_EXCEEDED: Quota 'LOCAL_SSD_TOTAL_GB_PER_VM_FAMILY' exceeded.  Limit: 0 in region us-east1.", True),
+        ("QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 24.0 in region us-central1.", False),
+        ("QUOTA_EXCEEDED: Quota 'CPUS' exceeded.  Limit: 0.5 in region us-central1.", False),
+        ("QUOTA_EXCEEDED: Quota 'CPUS' exceeded.  Limit: 100.0 in region us-central1.", False),
+        ("QUOTA_EXCEEDED for cpus in us-east1", False),
+        # A zero limit without a quota marker is not a quota error at all
+        ("Limit: 0.0", False),
+    ],
+)
+def test_is_zero_quota_error(message, expected):
+    assert is_zero_quota_error(_FakeError(message)) is expected
 
 
 @pytest.mark.parametrize(
