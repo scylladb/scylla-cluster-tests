@@ -48,7 +48,14 @@ def tmplClass = Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloud
 def cloudClass = Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloud")
 
 def nsgList = Collections.emptyList()
-def tagList = Collections.emptyList()
+// Defined tags in SCT's namespace, so clean_oci terminates a builder Jenkins lost track of
+def tagClass = Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloudTagsTemplate")
+def tagList = [
+    NodeType: "builder",
+    keep: "$keep_hours",
+    keep_action: "terminate",
+    CreatedBy: "SCT",
+].collect { k, v -> tagClass.newInstance("sct", k, v) }
 
 // Correct DataBoundConstructor signature from plugin
 def ctor = tmplClass.getDeclaredConstructor(
@@ -134,7 +141,7 @@ def tmpl = ctor.newInstance(
     false,                          // doNotDisable
     "30",                          // retryTimeoutMins
     false,                          // disableLegacyImdsEndpoint
-    0                               // maxTotalUses (0 = unlimited)
+    1                               // maxTotalUses: one build per builder
 )
 
 println("Successfully created BaremetalCloudAgentTemplate")

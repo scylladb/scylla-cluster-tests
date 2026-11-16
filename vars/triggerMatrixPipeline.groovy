@@ -29,7 +29,7 @@ def call(Map pipelineParams = [:]) {
     pipeline {
         agent {
             label {
-                label "aws-sct-builders-eu-west-1-v7-CI"
+                label "aws-sct-builders-eu-west-1-v8-CI"
                 retries 3
             }
         }
