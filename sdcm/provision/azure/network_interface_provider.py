@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import NetworkInterface
+from azure.mgmt.network.models import NetworkInterface, NetworkInterfaceIPConfiguration, PublicIPAddress, Subnet
 
 from sdcm.utils.azure_utils import AzureService
 
@@ -56,23 +56,19 @@ class NetworkInterfaceProvider:
             if nic_name in self._cache:
                 nics.append(self._cache[nic_name])
                 continue
-            parameters = {
-                "location": self._region,
-                "ip_configurations": [
-                    {
-                        "name": nic_name,
-                        "subnet": {
-                            "id": subnet_id,
-                        },
-                    }
+            parameters = NetworkInterface(
+                location=self._region,
+                ip_configurations=[
+                    NetworkInterfaceIPConfiguration(
+                        name=nic_name,
+                        subnet=Subnet(id=subnet_id),
+                        public_ip_address=None
+                        if address is None
+                        else PublicIPAddress(id=address, delete_option="Delete"),
+                    )
                 ],
-                "enable_accelerated_networking": True,
-            }
-            if address is not None:
-                parameters["ip_configurations"][0]["public_ip_address"] = {
-                    "id": address,
-                    "properties": {"deleteOption": "Delete"},
-                }
+                enable_accelerated_networking=True,
+            )
             LOGGER.info("Creating nic in resource group %s...", self._resource_group_name)
             poller = self._azure_service.network.network_interfaces.begin_create_or_update(
                 resource_group_name=self._resource_group_name,
