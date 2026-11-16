@@ -45,7 +45,7 @@ class OciBuilder:
     NUM_OCPUS = 2
     MEMORY_GB = 16
     NUM_EXECUTORS = 1
-    VERSION = "v3"
+    VERSION = "v4"
 
     def __init__(
         self,

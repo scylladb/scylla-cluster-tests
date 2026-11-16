@@ -47,12 +47,12 @@ def test_connection_error_is_raised_as_is(builder):
 
 def test_script_console_success(builder):
     response = MagicMock(
-        status_code=200, text="OCI cloud configured programmatically: oci-us-phoenix-1-qa-builder-v3-1"
+        status_code=200, text="OCI cloud configured programmatically: oci-us-phoenix-1-qa-builder-v4-1"
     )
     with patch("sdcm.utils.oci_builder.requests.post", return_value=response) as post:
         builder._add_cloud_configuration_to_jenkins()
     script = post.call_args.kwargs["data"]["script"]
-    assert "oci-sct-builders-us-phoenix-1-v3" in script
+    assert "oci-sct-builders-us-phoenix-1-v4" in script
     assert "maxTotalUses" in script
 
 
