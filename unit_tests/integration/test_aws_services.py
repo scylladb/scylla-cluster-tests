@@ -63,6 +63,7 @@ def keystore_configure(moto_server):
         "aws_images_role.json": (
             b'{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}'
         ),
+        "builder_ssh_sources.json": b'{"jenkins": ["192.0.2.10/32"]}',
     }
     for file in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
         entries[file] = (Path("~/.ssh").expanduser() / file).read_bytes()
