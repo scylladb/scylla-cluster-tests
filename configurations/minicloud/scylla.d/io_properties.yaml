@@ -3,7 +3,10 @@
 #
 # Measured on minipc (Crucial E100 1 TB): write_bandwidth from a 30 GiB sequential direct-IO write on
 # minipc3, write_iops rounded up from iotune on minipc4, reads from iotune on minipc4 (scylla 2026.1).
-# Used for every lab host on purpose, although some minipc nodes real measurements can slightly differ.
+# Used for every lab host on purpose, to avoid per-host files, although the hosts differ a lot:
+# sustained 30 GiB writes measured 19-168 MB/s across minipc1-4 (minipc1 the slowest, out of the
+# rolling-upgrade pool until its SSD is replaced). minipc5 has a different drive (Kingston 2 TB) and is not measured yet: run disk-bench there before
+# trusting these figures for it.
 #
 # Re-measure with disk-bench when a host or drive changes. Never take write_bandwidth from iotune:
 # on these drives it oscillated from 33 to 1818 MiB/s.
