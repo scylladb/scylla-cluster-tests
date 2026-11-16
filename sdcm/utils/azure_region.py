@@ -23,20 +23,24 @@ from contextlib import suppress
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import TargetRegion
+from azure.mgmt.network.models import (
+    AddressSpace,
+    NetworkInterface,
+    NetworkInterfaceIPConfiguration,
+    NetworkSecurityGroup,
+    PublicIPAddress,
+    PublicIPAddressSku,
+    Subnet,
+    VirtualNetwork,
+)
 
+from sdcm.provision.azure.network_security_group_provider import inbound_tcp_rule
 from sdcm.utils.azure_utils import AzureService
 
 if TYPE_CHECKING:
     from typing import Any, Optional
 
     from azure.mgmt.compute.models import Gallery, GalleryImageVersion, VirtualMachine
-    from azure.mgmt.network.models import (
-        NetworkInterface,
-        NetworkSecurityGroup,
-        PublicIPAddress,
-        Subnet,
-        VirtualNetwork,
-    )
 
 
 LOGGER = logging.getLogger(__name__)
@@ -164,9 +168,7 @@ class AzureRegion:
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
             gallery=self.common_parameters(location=self.sct_gallery_location, tags=tags)
-            | {
-                "description": "Shared Image Gallery for SCT",
-            },
+            | {"properties": {"description": "Shared Image Gallery for SCT"}},
         ).wait()
 
     @cached_property
@@ -188,22 +190,9 @@ class AzureRegion:
         self.azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             network_security_group_name=self.sct_network_security_group_name,
-            parameters=self.common_parameters(tags=tags)
-            | {
-                "security_rules": [
-                    {
-                        "name": "SSH",
-                        "protocol": "TCP",
-                        "source_port_range": "*",
-                        "destination_port_range": "22",
-                        "source_address_prefix": "*",
-                        "destination_address_prefix": "*",
-                        "access": "Allow",
-                        "priority": 300,
-                        "direction": "Inbound",
-                    }
-                ],
-            },
+            parameters=NetworkSecurityGroup(
+                **self.common_parameters(tags=tags), security_rules=[inbound_tcp_rule("SSH", 22)]
+            ),
         ).wait()
 
     @cached_property
@@ -225,12 +214,9 @@ class AzureRegion:
         self.azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             virtual_network_name=self.sct_virtual_network_name,
-            parameters=self.common_parameters(tags=tags)
-            | {
-                "address_space": {
-                    "address_prefixes": ["10.0.0.0/16"],
-                }
-            },
+            parameters=VirtualNetwork(
+                **self.common_parameters(tags=tags), address_space=AddressSpace(address_prefixes=["10.0.0.0/16"])
+            ),
         ).wait()
 
     @cached_property
@@ -252,26 +238,23 @@ class AzureRegion:
             resource_group_name=self.sct_resource_group_name,
             virtual_network_name=self.sct_virtual_network_name,
             subnet_name=self.sct_subnet_name,
-            subnet_parameters={
-                "address_prefix": "10.0.0.0/24",
-                "network_security_group": {
-                    "id": self.sct_network_security_group.id,
-                },
-            },
+            subnet_parameters=Subnet(
+                address_prefix="10.0.0.0/24",
+                network_security_group=NetworkSecurityGroup(id=self.sct_network_security_group.id),
+                default_outbound_access=True,  # newer network API versions make a new subnet private by default
+            ),
         ).wait()
 
     def create_public_ip_address(self, public_ip_address_name: str, tags: Optional[dict] = None) -> PublicIPAddress:
         return self.azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             public_ip_address_name=public_ip_address_name,
-            parameters=self.common_parameters(tags=tags)
-            | {
-                "sku": {
-                    "name": "Standard",
-                },
-                "public_ip_allocation_method": "Static",
-                "public_ip_address_version": "IPV4",
-            },
+            parameters=PublicIPAddress(
+                **self.common_parameters(tags=tags),
+                sku=PublicIPAddressSku(name="Standard"),
+                public_ip_allocation_method="Static",
+                public_ip_address_version="IPV4",
+            ),
         ).result()
 
     def create_network_interface(
@@ -281,24 +264,22 @@ class AzureRegion:
         create_public_ip_address: bool = True,
         enable_accelerated_networking: bool = True,
     ) -> NetworkInterface:
-        parameters = self.common_parameters(tags=tags) | {
-            "ip_configurations": [
-                {
-                    "name": f"{network_interface_name}-{self.IP_CONFIGURATION_NAME_SUFFIX}",
-                    "subnet": {
-                        "id": self.sct_subnet.id,
-                    },
-                }
-            ],
-            "enable_accelerated_networking": enable_accelerated_networking,
-        }
+        ip_configuration = NetworkInterfaceIPConfiguration(
+            name=f"{network_interface_name}-{self.IP_CONFIGURATION_NAME_SUFFIX}",
+            subnet=Subnet(id=self.sct_subnet.id),
+        )
         if create_public_ip_address:
-            parameters["ip_configurations"][0]["public_ip_address"] = {
-                "id": self.create_public_ip_address(
+            ip_configuration.public_ip_address = PublicIPAddress(
+                id=self.create_public_ip_address(
                     public_ip_address_name=f"{network_interface_name}-{self.PUBLIC_IP_ADDRESS_NAME_SUFFIX}",
                     tags=tags,
                 ).id,
-            }
+            )
+        parameters = NetworkInterface(
+            **self.common_parameters(tags=tags),
+            ip_configurations=[ip_configuration],
+            enable_accelerated_networking=enable_accelerated_networking,
+        )
         return self.azure_service.network.network_interfaces.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             network_interface_name=network_interface_name,
@@ -406,14 +387,16 @@ class AzureRegion:
             gallery_image_name=gallery_image_name,
             gallery_image=self.common_parameters(location=self.sct_gallery_location, tags=tags)
             | {
-                "hyper_v_generation": "V2",
-                "identifier": {
-                    "publisher": "ScyllaDB",
-                    "offer": f"qa-{gallery_image_name}",
-                    "sku": gallery_image_name,
+                "properties": {
+                    "hyperVGeneration": "V2",
+                    "identifier": {
+                        "publisher": "ScyllaDB",
+                        "offer": f"qa-{gallery_image_name}",
+                        "sku": gallery_image_name,
+                    },
+                    "osState": os_state.value,
+                    "osType": "Linux",
                 },
-                "os_state": os_state.value,
-                "os_type": "Linux",
             },
         ).wait()
 
