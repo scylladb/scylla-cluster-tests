@@ -37,7 +37,7 @@ import pytz
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
 from azure.mgmt.compute.models import VirtualMachine
-from azure.mgmt.resource.resources.models import TagsPatchResource, TagsPatchOperation
+from azure.mgmt.resource.resources.models import Tags, TagsPatchResource, TagsPatchOperation
 import google.api_core.exceptions
 from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
@@ -1383,14 +1383,7 @@ class AzureSctRunner(SctRunner):
         instance: VirtualMachine = sct_runner_info.instance
 
         tags_to_create = {str(k): str(v) for k, v in tags.items()}
-        params = TagsPatchResource.from_dict(
-            {
-                "operation": TagsPatchOperation.MERGE.value,
-                "properties": {
-                    "tags": tags_to_create,
-                },
-            }
-        )
+        params = TagsPatchResource(operation=TagsPatchOperation.MERGE, properties=Tags(tags=tags_to_create))
         LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
         resource_mgmt_client.tags.begin_update_at_scope(scope=instance.id, parameters=params)
         LOGGER.info("SCT runner tags set to: %s", tags_to_create)
