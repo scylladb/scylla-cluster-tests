@@ -22,7 +22,7 @@ import google.api_core.exceptions
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
 
-from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error
+from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error, is_zero_quota_error
 from sdcm.provision.gce.constants import (
     DISK_TYPE_HYPERDISK_BALANCED,
     DISK_TYPE_LOCAL_SSD,
@@ -43,6 +43,7 @@ from sdcm.provision.provisioner import (
     PricingModel,
     ProvisionError,
     ProvisionUnrecoverableError,
+    ZeroQuotaError,
     ZoneResourcesExhaustedError,
 )
 from sdcm.utils.decorators import retrying
@@ -90,6 +91,18 @@ def _is_zone_exhausted(error: BaseException) -> bool:
     if is_config_error(error):
         return False
     return ZONE_EXHAUSTED_MARKER in str(error)
+
+
+def _zero_quota_message(what: str, error: BaseException) -> str:
+    """Message of the ZeroQuotaError raised, instead of a retry, on a quota whose limit is 0.
+
+    Retrying such a request 15 minutes apart can never succeed; it only holds the run until its
+    stage timeout aborts it, with the cause buried in retry warnings (SCT-1550).
+    """
+    return (
+        f"Failed to create {what}: the GCE quota limit is 0 in this region for the project; "
+        f"request quota or run in a region that has it: {error}"
+    )
 
 
 def max_network_interfaces(vcpu_count: int) -> int:
@@ -251,10 +264,16 @@ class VirtualMachineProvider:
                 )
                 pending_instance_creations.append((definition, operation, normalized_name, user_data, startup_script))
             except google.api_core.exceptions.GoogleAPIError as err:
+                # Both errors abort the batch: wait out the inserts already sent, so a VM they bring
+                # up is cached or deleted instead of left running until the teardown sweep.
                 if is_config_error(err):
+                    self._drain_pending_creations(pending_instance_creations, pricing_model)
                     raise InstanceConfigurationError(
                         f"Failed to create instance {normalized_name} due to configuration error: {err}"
                     ) from err
+                if is_zero_quota_error(err):
+                    self._drain_pending_creations(pending_instance_creations, pricing_model)
+                    raise ZeroQuotaError(_zero_quota_message(f"instance {normalized_name}", err)) from err
                 if pricing_model.is_spot() and is_preemption_error(err):
                     LOGGER.warning("Spot VM %s was preempted during the insert request: %s", normalized_name, err)
                     self._drain_pending_creations(pending_instance_creations, pricing_model)
@@ -426,6 +445,12 @@ class VirtualMachineProvider:
                 raise InstanceConfigurationError(
                     f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
                 ) from gce_error
+            if is_zero_quota_error(gce_error):
+                LOGGER.error(
+                    "Instance %s creation failed on a zero quota (not retryable): %s", normalized_name, gce_error
+                )
+                self._cleanup_failed_instance(normalized_name, gce_error)
+                raise ZeroQuotaError(_zero_quota_message(f"instance {normalized_name}", gce_error)) from gce_error
             if pricing_model.is_spot() and is_preemption_error(gce_error):
                 # Retrying spot here would re-issue the same request three times, 15 minutes apart,
                 # while the caller already holds a cheaper answer: re-provision at on-demand pricing.
@@ -522,6 +547,8 @@ class VirtualMachineProvider:
                 raise InstanceConfigurationError(
                     f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
                 ) from gce_error
+            if is_zero_quota_error(gce_error):
+                raise ZeroQuotaError(_zero_quota_message(f"instance {normalized_name}", gce_error)) from gce_error
             if pricing_model.is_spot() and is_preemption_error(gce_error):
                 raise OperationPreemptedError(
                     f"Spot instance {normalized_name} preempted during provisioning: {gce_error}"
