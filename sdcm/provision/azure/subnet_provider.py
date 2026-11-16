@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import Subnet
+from azure.mgmt.network.models import NetworkSecurityGroup, Subnet
 
 from sdcm.utils.azure_utils import AzureService
 
@@ -50,12 +50,13 @@ class SubnetProvider:
             resource_group_name=self._resource_group_name,
             virtual_network_name=vnet_name,
             subnet_name=subnet_name,
-            subnet_parameters={
-                "address_prefix": "10.0.0.0/24",
-                "network_security_group": {
-                    "id": network_sec_group_id,
-                },
-            },
+            # newer network API versions make a new subnet private by default; nodes without a public IP
+            # then cannot reach the internet (package repos, vector.dev)
+            subnet_parameters=Subnet(
+                address_prefix="10.0.0.0/24",
+                network_security_group=NetworkSecurityGroup(id=network_sec_group_id),
+                default_outbound_access=True,
+            ),
         ).wait()
         subnet = self._azure_service.network.subnets.get(self._resource_group_name, vnet_name, subnet_name)
         LOGGER.info("Provisioned subnet %s for the %s vnet", subnet.name, vnet_name)
