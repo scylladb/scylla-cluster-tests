@@ -5917,6 +5917,25 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
+# cap of the threads that check the nodes of a cluster at the same time, each thread opens its own SSH connection
+NODES_CHECK_MAX_WORKERS = 50
+
+
+def _check_nodes_in_parallel(check: Callable[[BaseNode], Any], nodes: list[BaseNode]) -> None:
+    """Run `check(node)` for every node, on up to NODES_CHECK_MAX_WORKERS nodes at the same time.
+
+    Raises the exception of the first failed node, in the order of `nodes`, the same one a serial loop
+    would raise. Nodes after it may already be checked by then. The checks that did not start yet are
+    cancelled, and the running ones are waited for.
+    """
+    if not nodes:
+        return
+    with ThreadPoolExecutor(
+        max_workers=min(len(nodes), NODES_CHECK_MAX_WORKERS), thread_name_prefix="NodesCheck"
+    ) as executor:
+        list(executor.map(check, nodes))
+
+
 class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
@@ -6367,9 +6386,12 @@ class BaseScyllaCluster:
     def wait_for_schema_agreement(self):
         nodes_to_check = [node for node in self.nodes if not node.running_nemesis]
         assert nodes_to_check, "All nodes are under active nemesis, schema agreement could not be verified"
-        for node in nodes_to_check:
+
+        def check_node(node):
             err = check_schema_agreement_in_gossip_and_peers(node)
             assert not err, err
+
+        _check_nodes_in_parallel(check_node, nodes_to_check)
         self.log.debug("Schema agreement is reached")
         return True
 
@@ -7108,8 +7130,7 @@ class BaseScyllaCluster:
 
     @retrying(n=30, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
     def wait_all_nodes_un(self):
-        for node in self.nodes:
-            self.check_nodes_up_and_normal(verification_node=node)
+        _check_nodes_in_parallel(lambda node: self.check_nodes_up_and_normal(verification_node=node), self.nodes)
 
     def restart_binary_protocol(self, nodes=None, random_order=False, verify_up=True):
         nodes_to_restart = (nodes or self.nodes)[:]  # create local copy of nodes list
