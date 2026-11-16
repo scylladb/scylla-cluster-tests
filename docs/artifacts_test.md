@@ -35,6 +35,16 @@ Alternatively, and even recommended, one can use the `manager_version` parameter
 
 Optionally, you can override default cloud instance type by providing `instance_type` parameter. This parameter can be a space-separated list of instance types.
 
+On GCE, an instance family can run in another region and project than the job's `gce_datacenter` and `gce_project`, when its quota exists only there. The jenkinsfile maps the family (the part of the instance type before the first `-`) to its placement:
+
+```groovy
+gce_placement_by_instance_family: [
+    z4d: [gce_datacenter: 'us-east4', gce_project: 'gcp-sct-project-1'],
+],
+```
+
+Each instance type of that family runs on a builder, an SCT runner and a cluster in that region and project. The other instance types of the same build keep the job's region and project. For that family the mapping wins over the `gce_datacenter` and `gce_project` build parameters, because its quota exists only in the mapped region and project. The release pipelines send one flat `instance_type` list, so they need no change for it.
+
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.
 
 `private-repo.jenkinsfile` can be used to create a Jenkins project which verifies private repo correctness. You need to provide `scylla_repo` parameter which points to a private repo.

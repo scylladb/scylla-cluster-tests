@@ -34,6 +34,18 @@ def call(Map pipelineParams) {
                                    params.azure_region_name, params.oci_region_name,
                                    (minicloudEnabled && localAgent) ? [minicloud: true] : null)
 
+    // GCE instance families whose quota exists only in another region and project than the job's,
+    // e.g. z4d: [gce_datacenter: 'us-east4', gce_project: 'gcp-sct-project-1']. An instance type of
+    // such a family runs on a builder, runner and cluster of that placement; every other instance
+    // type keeps the job's gce_datacenter and gce_project. The release pipelines send one flat list
+    // of instance types, so the placement is decided here. Builders are resolved now, at definition
+    // time, rather than inside the parallel tasks.
+    def gcePlacements = (!minicloudEnabled && (params.backend ?: pipelineParams.get('backend')) == 'gce') ?
+        pipelineParams.get('gce_placement_by_instance_family', [:]) : [:]
+    def placementBuilders = gcePlacements.collectEntries { family, placement ->
+        [family, getJenkinsLabels('gce', null, placement.gce_datacenter, null, null, null, placement.gce_project)]
+    }
+
     pipeline {
         agent none
 
@@ -213,10 +225,20 @@ def call(Map pipelineParams) {
                         def tasks = [:]
                         params.instance_type.split(' ').each {
                             def instance_type = it
+                            def instance_family = instance_type.tokenize('-')[0]
+                            def placement = gcePlacements[instance_family]
+                            def taskBuilder = placement ? placementBuilders[instance_family] : builder
+                            // The helpers below read the region and project off the params they get
+                            def taskParams = params.collectEntries { key, value -> [key, value] }
+                            if (placement) {
+                                taskParams.gce_datacenter = placement.gce_datacenter
+                                taskParams.gce_project = placement.gce_project ?: taskParams.gce_project
+                            }
                             tasks["${instance_type}"] = {
-                                node(builder.label) {
+                                node(taskBuilder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                                             "SCT_GCE_PROJECT=${taskParams.gce_project ?: ''}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
 
                                         def test_config = groovy.json.JsonOutput.toJson(params.test_config)
@@ -278,7 +300,7 @@ def call(Map pipelineParams) {
                                                     timeout(time: 5, unit: 'MINUTES') {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
-                                                                estimateTestCost(params, builder.region, instance_type)
+                                                                estimateTestCost(taskParams, taskBuilder.region, instance_type)
                                                             }
                                                         }
                                                     }
@@ -288,7 +310,7 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
-                                                            createSctRunner(params, pipelineParams.timeout.time + 30, builder.region)
+                                                            createSctRunner(taskParams, pipelineParams.timeout.time + 30, taskBuilder.region)
                                                         }
                                                     }
                                                 }
@@ -338,8 +360,8 @@ def call(Map pipelineParams) {
                                                     if [[ -n "${params.region ? params.region : ''}" ]] ; then
                                                         export SCT_REGION_NAME='${params.region}'
                                                     fi
-                                                    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
+                                                    if [[ -n "${taskParams.gce_datacenter ? taskParams.gce_datacenter : ''}" ]] ; then
+                                                        export SCT_GCE_DATACENTER='${taskParams.gce_datacenter}'
                                                     fi
                                                     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                                         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
@@ -448,7 +470,7 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 30, unit: 'MINUTES') {
-                                                            runCollectLogs(params, builder.region)
+                                                            runCollectLogs(taskParams, taskBuilder.region)
                                                         }
                                                     }
                                                 }
@@ -459,7 +481,7 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
-                                                            runCleanupResource(params, builder.region)
+                                                            runCleanupResource(taskParams, taskBuilder.region)
                                                         }
                                                     }
                                                 }

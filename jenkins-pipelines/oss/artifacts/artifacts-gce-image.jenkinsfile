@@ -10,6 +10,10 @@ artifactsPipeline(
     backend: 'gce',
     provision_type: 'spot',
     gce_datacenter: 'us-central1',
+    // z4d quota is 0 in us-central1; ours is in us-east4 of gcp-sct-project-1 (SCT-1446, SCT-1550)
+    gce_placement_by_instance_family: [
+        z4d: [gce_datacenter: 'us-east4', gce_project: 'gcp-sct-project-1'],
+    ],
 
     timeout: [time: 45, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',

@@ -1,7 +1,10 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def call(String backend, String region=null, String datacenter=null, String location=null, String oci_region=null ,Map overrides=null) {
+// `gce_project`, when given, picks the GCE builder project instead of params.gce_project, without
+// the global `params` leak an `overrides` entry has (see below) - safe to use for one placement of
+// a build whose other placements keep the build's project.
+def call(String backend, String region=null, String datacenter=null, String location=null, String oci_region=null ,Map overrides=null, String gce_project=null) {
     if (!(params instanceof Map)) {
         params = params.collectEntries()
     }
@@ -39,7 +42,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
 
     }
 
-    def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
+    def gcp_project = gce_project?.trim() ?: params.gce_project?.trim() ?: 'gcp-sct-project-1'
 
     // NOTE: 'aws', 'gce' and 'oci' labels (without region) are useful for cases
     //       when backend-specific region param has no value.
