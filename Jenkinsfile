@@ -431,6 +431,7 @@ pipeline {
                                                 echo "${err}"
                                             }
                                         }
+                                        def runner_failed = false
                                         if (sct_runner_backends.contains(backend)){
                                             try {
                                                 wrap([$class: 'BuildUser']) {
@@ -443,133 +444,138 @@ pipeline {
                                                 }
                                             } catch(Exception err) {
                                                 echo "${err}"
-                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                                runner_failed = true
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Creating SCT runner failed')
                                                 markStepFailed("Creating SCT runner failed: ${err}")
                                             }
                                         }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    if (curr_params.with_minicloud) {
-                                                        // Must be up before anything calls the EC2/GCE API.
-                                                        timeout(time: 15, unit: 'MINUTES') {
-                                                            startMinicloud(curr_params)
-                                                        }
-                                                    }
-                                                    timeout(time: 30, unit: 'MINUTES') {
-                                                        if (curr_params.backend == 'xcloud') {
-                                                            echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
-                                                        }
-                                                        if (curr_params.with_minicloud) {
-                                                            echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
-                                                        } else if (backend in artifacts_backends) {
-                                                            echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
-                                                        } else if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
-                                                            provisionResources(curr_params, builder.region)
-                                                        } else if (curr_params.backend.contains('docker')) {
-                                                            sh """
-                                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
-                                                            """
-                                                        } else {
-                                                            sh """
-                                                                echo 'Skipping resource provisioning because this backend is not supported'
-                                                            """
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Resource provisioning failed')
-                                            markStepFailed("Resource provisioning failed: ${err}")
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 5, unit: 'MINUTES') {
-                                                        createArgusTestRun(curr_params)
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            markStepFailed("Creating Argus test run failed: ${err}", false)
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                env.BUILD_USER_ID=env.CHANGE_AUTHOR
-                                                timeout(time: 300, unit: 'MINUTES') {
-                                                    dir(working_dir) {
-                                                        echo "Run provision test"
-                                                        runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
-                                                        pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
-                                            markStepFailed("Provision test failed: ${err}")
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                timeout(time: 90, unit: 'MINUTES') {
-                                                    dir(working_dir) {
-                                                        runCollectLogs(curr_params, builder.region)
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            markStepFailed("Collecting logs failed: ${err}", false)
-                                        }
-                                        // The minicloud artifacts tests run no monitor node, so there is no stack to restore.
-                                        // Neither do the artifacts tests.
-                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks']) && !curr_params.with_minicloud && !(backend in artifacts_backends)) {
+                                        // Without the runner nothing below can run: minicloud would start on the builder, which
+                                        // has no KVM, and run-test would hide the runner error. Only the cleanup runs.
+                                        if (!runner_failed) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
-                                                    timeout(time: 25, unit: 'MINUTES') {
-                                                        dir(working_dir) {
-                                                            runRestoreMonitoringStack()
+                                                    dir(working_dir) {
+                                                        if (curr_params.with_minicloud) {
+                                                            // Must be up before anything calls the EC2/GCE API.
+                                                            timeout(time: 15, unit: 'MINUTES') {
+                                                                startMinicloud(curr_params)
+                                                            }
                                                         }
-                                                    }
-                                                }
-                                            } catch(Exception err) {
-                                                echo "${err}"
-                                                markStepFailed("Restoring monitoring stack failed: ${err}")
-                                            }
-                                        }
-                                        if (pullRequestContainsLabels("test-provision-${backend}-reuse")) {
-                                            try {
-                                                withEnv(["SCT_REUSE_CLUSTER=${env.SCT_TEST_ID}"]) {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        env.BUILD_USER_ID=env.CHANGE_AUTHOR
-                                                        timeout(time: 300, unit: 'MINUTES') {
-                                                            dir(working_dir) {
-                                                                echo "Reuse the cluster and re-run provision test"
-                                                                runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
-                                                                pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                        timeout(time: 30, unit: 'MINUTES') {
+                                                            if (curr_params.backend == 'xcloud') {
+                                                                echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
+                                                            }
+                                                            if (curr_params.with_minicloud) {
+                                                                echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
+                                                            } else if (backend in artifacts_backends) {
+                                                                echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
+                                                            } else if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
+                                                                provisionResources(curr_params, builder.region)
+                                                            } else if (curr_params.backend.contains('docker')) {
+                                                                sh """
+                                                                    echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+                                                                """
+                                                            } else {
+                                                                sh """
+                                                                    echo 'Skipping resource provisioning because this backend is not supported'
+                                                                """
                                                             }
                                                         }
                                                     }
                                                 }
                                             } catch(Exception err) {
                                                 echo "${err}"
-                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
-                                                markStepFailed("Cluster reuse test failed: ${err}")
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Resource provisioning failed')
+                                                markStepFailed("Resource provisioning failed: ${err}")
                                             }
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 5, unit: 'MINUTES') {
-                                                        finishArgusTestRun(curr_params, currentBuild)
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir(working_dir) {
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            createArgusTestRun(curr_params)
+                                                        }
                                                     }
                                                 }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                markStepFailed("Creating Argus test run failed: ${err}", false)
                                             }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            markStepFailed("Finishing Argus test run failed: ${err}", false)
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    env.BUILD_USER_ID=env.CHANGE_AUTHOR
+                                                    timeout(time: 300, unit: 'MINUTES') {
+                                                        dir(working_dir) {
+                                                            echo "Run provision test"
+                                                            runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
+                                                            pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                        }
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                                markStepFailed("Provision test failed: ${err}")
+                                            }
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    timeout(time: 90, unit: 'MINUTES') {
+                                                        dir(working_dir) {
+                                                            runCollectLogs(curr_params, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                markStepFailed("Collecting logs failed: ${err}", false)
+                                            }
+                                            // The minicloud artifacts tests run no monitor node, so there is no stack to restore.
+                                            // Neither do the artifacts tests.
+                                            if (!(backend in ['k8s-local-kind-aws', 'k8s-eks']) && !curr_params.with_minicloud && !(backend in artifacts_backends)) {
+                                                try {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        timeout(time: 25, unit: 'MINUTES') {
+                                                            dir(working_dir) {
+                                                                runRestoreMonitoringStack()
+                                                            }
+                                                        }
+                                                    }
+                                                } catch(Exception err) {
+                                                    echo "${err}"
+                                                    markStepFailed("Restoring monitoring stack failed: ${err}")
+                                                }
+                                            }
+                                            if (pullRequestContainsLabels("test-provision-${backend}-reuse")) {
+                                                try {
+                                                    withEnv(["SCT_REUSE_CLUSTER=${env.SCT_TEST_ID}"]) {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            env.BUILD_USER_ID=env.CHANGE_AUTHOR
+                                                            timeout(time: 300, unit: 'MINUTES') {
+                                                                dir(working_dir) {
+                                                                    echo "Reuse the cluster and re-run provision test"
+                                                                    runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
+                                                                    pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } catch(Exception err) {
+                                                    echo "${err}"
+                                                    pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
+                                                    markStepFailed("Cluster reuse test failed: ${err}")
+                                                }
+                                            }
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir(working_dir) {
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            finishArgusTestRun(curr_params, currentBuild)
+                                                        }
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                markStepFailed("Finishing Argus test run failed: ${err}", false)
+                                            }
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
