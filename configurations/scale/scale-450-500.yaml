@@ -1,4 +1,6 @@
-test_duration: 30240 # (60min * 500 nodes) + 240min to run nemesis after the cluster was grown
+# (60min * 500 nodes) + 240min of margin. After the cluster reaches its target size, the test runs one
+# more stress_cmd round (10min) on it and ends.
+test_duration: 30240
 n_db_nodes: 450
 cluster_target_size: 500
 add_node_cnt: 50
