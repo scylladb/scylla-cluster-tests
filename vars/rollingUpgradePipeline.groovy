@@ -432,7 +432,7 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 timeout(time: 10, unit: 'MINUTES') {
-                                                                    startMinicloud(params_mapping[base_version])
+                                                                    startMinicloud(params_mapping[base_version], localAgent)
                                                                 }
                                                             }
                                                         }
