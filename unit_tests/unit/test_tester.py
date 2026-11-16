@@ -607,6 +607,7 @@ def _perf_collector_tester(tmp_path, name, node_attrs=None):
     mock_node.name = "perf-collector-node-1"
     mock_node.is_kubernetes.return_value = False
     mock_node.is_docker.return_value = False
+    mock_node.spot_reclaimed = False
     mock_node.is_service_exists.return_value = True
     mock_node.configure_mock(**(node_attrs or {}))
 
@@ -673,6 +674,7 @@ def test_stop_perf_collector_tolerates_an_unreachable_node(tmp_path):
     healthy_node.name = "perf-collector-node-2"
     healthy_node.is_kubernetes.return_value = False
     healthy_node.is_docker.return_value = False
+    healthy_node.spot_reclaimed = False
     healthy_node.is_service_exists.return_value = True
     tester.db_cluster.nodes = [unreachable_node, healthy_node]
 
