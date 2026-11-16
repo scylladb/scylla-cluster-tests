@@ -15,8 +15,10 @@ Write each commit subject as `type(scope): subject`. commitlint checks it.
 ### One Logical Change per Commit
 
 Each commit is one coherent step that a reviewer can read alone. During a
-review, push each fix as a new commit, so that the reviewer sees the fix.
-Fold each fixup commit into the commit that it amends before the merge.
+review, fold each fix into the commit that it amends, and force-push. The
+`pr-range-diff` workflow posts the changes of each force-push as a comment
+on the pull request. The reviewer reads this comment to check the
+review round.
 
 ### Root Cause of a Bug
 
@@ -58,5 +60,6 @@ backend whose provisioning code the change touches.
 `skills/code-review/references/review-checklist.md` maps the files to the
 backends.
 
-Sources: `commitlint.config.js`, `docs/contribution-handbook.md` sections 2.4,
-2.6, 3.2, 4.4, `.github/copilot-instructions.md`, `AGENTS.md`.
+Sources: `commitlint.config.js`, `.github/workflows/pr-range-diff.yaml`,
+`docs/contribution-handbook.md` sections 2.4, 2.6, 3.2, 4.4,
+`.github/copilot-instructions.md`, `AGENTS.md`.
