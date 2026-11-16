@@ -3958,12 +3958,19 @@ class ClusterTester(unittest.TestCase):
 
     @silence()
     def stop_resources_stop_tasks_threads(self, cluster):
-        # TODO: this should be run in parallel
-        for node in cluster.nodes:
+        nodes = list(cluster.nodes)
+        for node in nodes:
             node.stop_task_threads()
-        for node in cluster.nodes:
+
+        def wait_till_tasks_threads_are_stopped(node):
             with silence(parent=self, name=f"stop_resources_stop_tasks_threads(cluster={cluster!s})"):
                 node.wait_till_tasks_threads_are_stopped()
+
+        # the waits are mostly local, for threads that already got the stop signal, so the cap only keeps
+        # a cluster of hundreds of nodes from getting a thread for each node
+        ParallelObject(objects=nodes, timeout=None, num_workers=50, disable_logging=True).run(
+            wait_till_tasks_threads_are_stopped, ignore_exceptions=True
+        )
 
     @silence()
     def get_backtraces(self, cluster):
