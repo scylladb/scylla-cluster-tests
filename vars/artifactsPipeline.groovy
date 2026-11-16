@@ -298,7 +298,7 @@ def call(Map pipelineParams) {
                                             stage("Start Minicloud (${instance_type})") {
                                                 dir('scylla-cluster-tests') {
                                                     timeout(time: 15, unit: 'MINUTES') {
-                                                        startMinicloud(params)
+                                                        startMinicloud(params, localAgent)
                                                     }
                                                 }
                                             }
