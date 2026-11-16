@@ -259,6 +259,18 @@ def test_spot_monitoring_starts_before_the_cloud_init_wait(monkeypatch):
     assert called.index("start_spot_monitoring_if_needed") < called.index("wait_for_cloud_init")
 
 
+def test_reclaimed_node_gets_no_more_scylla_commands():
+    """Teardown diagnostics on a reclaimed node wait out SSH timeouts: 40 minutes per attempt on Azure."""
+    node = MagicMock(spot_reclaimed=False)
+    assert sdcm_cluster.BaseNode._is_node_ready_run_scylla_commands(node)
+
+    with patch("sdcm.cluster.SpotTerminationEvent") as event:
+        sdcm_cluster.BaseNode.report_spot_termination(node, "Instance was preempted.")
+
+    event.return_value.publish.assert_called_once()
+    assert not sdcm_cluster.BaseNode._is_node_ready_run_scylla_commands(node)
+
+
 @pytest.mark.parametrize(
     "pricing_model, reclaimed, published",
     [

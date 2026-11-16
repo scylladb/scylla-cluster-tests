@@ -29,7 +29,6 @@ from sdcm.provision.network_configuration import (
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.remote.remote_file import install_secret_file
-from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
@@ -405,7 +404,7 @@ class OciNode(cluster.BaseNode):
             return SPOT_TERMINATION_CHECK_DELAY
 
         self.log.warning("Got spot termination notification from OCI: %s", message)
-        SpotTerminationEvent(node=self, message=message).publish()
+        self.report_spot_termination(message)
         self._spot_termination_reported = True
         return SPOT_TERMINATION_CHECK_DELAY
 

@@ -34,7 +34,6 @@ from sdcm.provision.network_configuration import NetworkInterface, network_inter
 from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
-from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.common import (
@@ -341,7 +340,7 @@ class GCENode(cluster.BaseNode):
                 match entry["protoPayload"]["methodName"]:
                     case "compute.instances.preempted":
                         self.log.warning("Got spot termination notification from GCE")
-                        SpotTerminationEvent(node=self, message="Instance was preempted.").publish()
+                        self.report_spot_termination("Instance was preempted.")
                     case "compute.instances.migrateOnHostMaintenance" | "compute.instances.terminateOnHostMaintenance":
                         GceInstanceEvent(entry, severity=Severity.CRITICAL).publish()
                     case "compute.instances.automaticRestart" | "compute.instances.hostError":
