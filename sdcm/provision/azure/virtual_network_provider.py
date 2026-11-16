@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import VirtualNetwork
+from azure.mgmt.network.models import AddressSpace, VirtualNetwork
 
 from sdcm.utils.azure_utils import AzureService
 
@@ -49,13 +49,10 @@ class VirtualNetworkProvider:
         self._azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             virtual_network_name=name,
-            parameters={
-                "location": self._region,
-                "zones": [self._az] if self._az else [],
-                "address_space": {
-                    "address_prefixes": ["10.0.0.0/16"],
-                },
-            },
+            parameters=VirtualNetwork(
+                location=self._region,
+                address_space=AddressSpace(address_prefixes=["10.0.0.0/16"]),
+            ),
         ).wait()
         vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, name)
         LOGGER.info("Provisioned vnet %s in the %s resource group", vnet.name, self._resource_group_name)
