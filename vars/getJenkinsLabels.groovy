@@ -40,7 +40,6 @@ def call(String backend, String region=null, String datacenter=null, String loca
     }
 
     def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
-    gcp_project = gcp_project == 'gcp' ? 'gcp-skilled-adapter-452' : gcp_project
 
     // NOTE: 'aws', 'gce' and 'oci' labels (without region) are useful for cases
     //       when backend-specific region param has no value.
