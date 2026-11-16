@@ -26,7 +26,7 @@ from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.gce_region import BUILDER_NETWORK_TAG, GceRegion
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS
 from sdcm.utils.context_managers import environment
-from sdcm.sct_runner import GceSctRunner
+from sdcm.sct_runner import GceSctRunner, BUILDER_KEEP_HOURS
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class GceBuilder:
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
 
-    VERSION = "v12"
+    VERSION = "v13"
 
     def __init__(self, region: GceRegion):
         self.region = region
@@ -217,14 +217,16 @@ class GceBuilder:
         metadata = compute_v1.Metadata()
         metadata.items += [{"key": "RunByUser", "value": "QA"}]
         metadata.items += [{"key": "NodeType", "value": "builder"}]
-        metadata.items += [{"key": "keep", "value": "alive"}]
+        metadata.items += [{"key": "keep", "value": BUILDER_KEEP_HOURS}]
+        metadata.items += [{"key": "keep_action", "value": "terminate"}]
         metadata.items += [{"key": "billing_project", "value": "sct-runners"}]
         template.properties.metadata = metadata
 
         template.properties.labels = {
             "runbyuser": "qa",
             "nodetype": "builder",
-            "keep": "alive",
+            "keep": BUILDER_KEEP_HOURS,
+            "keep_action": "terminate",
             "billing_project": "sct-runners",
         }
         template.properties.tags = compute_v1.Tags(items=[BUILDER_NETWORK_TAG])
