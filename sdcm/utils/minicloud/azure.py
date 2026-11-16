@@ -5,7 +5,7 @@ import os
 
 import requests
 from azure.identity import ClientSecretCredential
-from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.resource.resources import ResourceManagementClient
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.minicloud.config import (
