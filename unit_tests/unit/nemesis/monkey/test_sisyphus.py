@@ -44,6 +44,18 @@ def tester(tmp_path):
     return cluster_tester
 
 
+@pytest.mark.parametrize("seed", [pytest.param(0, id="seed-zero"), pytest.param(7, id="any-seed")])
+def test_same_seed_yields_same_disruption_order(seed):
+    """Two runners built with the same nemesis_seed shuffle the disruptions identically, including
+    seed 0, which used to be treated as "no seed" and fell back to an unseeded generator.
+    """
+    first = FakeSisyphusMonkey(FakeTester(params=PARAMS), nemesis_seed=seed)
+    second = FakeSisyphusMonkey(FakeTester(params=PARAMS), nemesis_seed=seed)
+
+    assert first.nemesis_seed == seed
+    assert first._disruption_list_names == second._disruption_list_names
+
+
 def test_disruptions_list(get_sisyphus):
     nemesis = get_sisyphus()
     assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == {
@@ -182,7 +194,7 @@ def test_direct_instantiation_selector_precedence(
 @pytest.mark.parametrize(
     "class_names,seeds,expected",
     [
-        pytest.param(["SisyphusMonkey", "SisyphusMonkey"], None, [None, None], id="no_seeds"),
+        pytest.param(["SisyphusMonkey", "SisyphusMonkey"], [], [None, None], id="no_seeds"),
         pytest.param(
             ["SisyphusMonkey", "SisyphusMonkey", "SisyphusMonkey"],
             [17],
@@ -200,8 +212,7 @@ def test_direct_instantiation_selector_precedence(
 def test_seed_assignment_behaviour(tester, class_names, seeds, expected):
     """Parametrized: no seeds -> None, single -> broadcast, N->1:1 mapping."""
     tester.params["nemesis_class_name"] = class_names
-    if seeds is not None:
-        tester.params["nemesis_seed"] = seeds
+    tester.params["nemesis_seed"] = seeds
 
     nemeses = tester.get_nemesis_class()
     assert len(nemeses) == len(class_names), f"Expected {len(class_names)} nemesis threads, got {len(nemeses)}"
