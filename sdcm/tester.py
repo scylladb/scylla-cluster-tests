@@ -4352,7 +4352,7 @@ class ClusterTester(unittest.TestCase):
         action, doing = ("start", "starting") if running else ("stop", "stopping")
 
         def on_node(node):
-            if node.is_kubernetes() or node.is_docker() or not node.ssh_login_info:
+            if node.is_kubernetes() or node.is_docker() or not node.ssh_login_info or node.spot_reclaimed:
                 self.log.debug("%s: no systemd access, skipping %s", node.name, PERF_COLLECTOR_SERVICE)
                 return
             try:

@@ -51,7 +51,6 @@ from sdcm.utils.gce_utils import (
 )
 from sdcm.wait import exponential_retry
 from sdcm.kernel_panic_checker import GCPKernelPanicChecker
-from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import (
     MINICLOUD_PENDING_INSTANCES_TIMEOUT,
     PENDING_INSTANCES_TIMEOUT,
@@ -342,7 +341,7 @@ class GCENode(cluster.BaseNode):
                 match entry["protoPayload"]["methodName"]:
                     case "compute.instances.preempted":
                         self.log.warning("Got spot termination notification from GCE")
-                        SpotTerminationEvent(node=self, message="Instance was preempted.").publish()
+                        self.report_spot_termination("Instance was preempted.")
                     case "compute.instances.migrateOnHostMaintenance" | "compute.instances.terminateOnHostMaintenance":
                         GceInstanceEvent(entry, severity=Severity.CRITICAL).publish()
                     case "compute.instances.automaticRestart" | "compute.instances.hostError":
