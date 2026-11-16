@@ -21,7 +21,7 @@ import click
 import requests
 
 from sdcm.keystore import KeyStore
-from sdcm.sct_runner import OciSctRunner
+from sdcm.sct_runner import BUILDER_KEEP_HOURS, OciSctRunner
 from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.sct_cmd_helpers import get_all_regions
@@ -43,7 +43,7 @@ class OciBuilder:
 
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v5"
+    VERSION = "v6"
 
     def __init__(
         self,
@@ -159,6 +159,7 @@ class OciBuilder:
             max_instances=instance_pool["max_instances"],
             num_executors=self.NUM_EXECUTORS,
             jenkins_labels=self.jenkins_labels,
+            keep_hours=BUILDER_KEEP_HOURS,
         )
 
         try:

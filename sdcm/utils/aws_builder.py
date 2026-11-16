@@ -21,7 +21,7 @@ import botocore
 import requests
 
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
+from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner, BUILDER_KEEP_HOURS
 from sdcm.keystore import KeyStore
 from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.common import wait_ami_available
@@ -71,7 +71,7 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.numExecutors, // numExecutors
   false, // addNodeOnlyIfRunning
   true, // restrictUsage allow execute only jobs with proper label
-  "10", // maxTotalUses
+  "1", // maxTotalUses: one build per builder
   true, // disableTaskResubmit,
   600, // initOnlineTimeoutSec,
   60, // initOnlineCheckIntervalSec,
@@ -98,7 +98,7 @@ jenkins.save()
 class AwsBuilder:
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v7"
+    VERSION = "v8"
 
     def __init__(self, region: AwsRegion, params=None, number=1):
         self.region = region
@@ -240,7 +240,7 @@ class AwsBuilder:
                     {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
                     {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
                     {"Key": "billing_project", "Value": "sct-builders", "PropagateAtLaunch": True},
-                    {"Key": "keep", "Value": "alive", "PropagateAtLaunch": True},
+                    {"Key": "keep", "Value": BUILDER_KEEP_HOURS, "PropagateAtLaunch": True},
                     {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
                 ],
             )
@@ -307,7 +307,7 @@ class AwsCiBuilder(AwsBuilder):
 class AwsFipsCiBuilder(AwsBuilder):
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = "v7-fibs"
+    VERSION = "v8-fibs"
 
     @cached_property
     def name(self):

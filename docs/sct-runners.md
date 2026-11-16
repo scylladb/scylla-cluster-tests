@@ -39,12 +39,8 @@ because that would slow it down
 
    ./sct.py create-runner-image -c oci -r us-ashburn-1 -z a
     ```
-3. update version on `aws_builder.py` and `gce_builder.py`
-4. build jenkins configuration with new sct runner image
-    ```bash
-    ./sct.py configure-jenkins-builders -c gce
-    ./sct.py configure-jenkins-builders -c aws
-    ```
-    This also applies the builder network access rules, see [Jenkins builders: network access](jenkins-builders.md).
-
-5. update `vars/getJenkinsLabels.groovy` with the new labels created in step 1
+3. boot a runner from each image with `create-runner-instance`, reboot it, check SSH again
+4. roll the builders onto the new images as a new builder version, following
+   [Changing builder configuration](jenkins-builders.md#changing-builder-configuration).
+   Configure also applies the builder network access rules, see
+   [Jenkins builders: network access](jenkins-builders.md#network-access).
