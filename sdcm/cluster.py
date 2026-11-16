@@ -5837,8 +5837,8 @@ def wait_for_init_wrap(method):
                 )
             except queue.Empty:
                 pass
-            if timeout and time_elapsed / 60 > timeout:
-                msg = "TIMEOUT [%d min]: Waiting for node(-s) setup/startup(%d/%d) expired!" % (
+            if timeout and time_elapsed > timeout:
+                msg = "TIMEOUT [%d s]: Waiting for node(-s) setup/startup(%d/%d) expired!" % (
                     timeout,
                     len(results),
                     len(node_list),
