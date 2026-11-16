@@ -648,6 +648,7 @@ class AWSCluster(cluster.BaseCluster):
                     ami_id=image_id,
                 )
             )
+        new_nodes = []
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
@@ -667,9 +668,12 @@ class AWSCluster(cluster.BaseCluster):
                 node.config_ipv6_as_persistent()
 
             self.nodes.append(node)
+            new_nodes.append(node)
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
-        return self.nodes[-count:]
+        # Not `self.nodes[-count:]`: another thread (a nemesis, the cluster growth) can add nodes at the same time,
+        # and the tail of the list would then hold its nodes.
+        return new_nodes
 
     def _create_node(
         self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
