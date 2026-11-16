@@ -447,32 +447,30 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-network"
-version = "28.1.0"
+version = "33.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "azure-common" },
     { name = "azure-mgmt-core" },
     { name = "isodate" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/19/a3/8d2fa6e33107354c8cd2abcca4e0f02138bda4c6024984ae5fce5cf23b27/azure_mgmt_network-28.1.0.tar.gz", hash = "sha256:8c84bffb5ec75c6e0244e58ecf07c00d5fc421d616b0cb369c6fe585af33cf87", size = 651528, upload-time = "2024-12-20T05:56:54.599Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a4/64/745a47ed48aa3c193d6941c6d9d314f61043cd777bfe4f380c04a8819329/azure_mgmt_network-33.1.0.tar.gz", hash = "sha256:ca44e95967e530bdac32ff7d7e6476c84e852225e5aae148eef2694f34f9710b", size = 1124214, upload-time = "2026-10-12T07:38:56.088Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/68/d1604383635f1f1b16cd7f1e27004db40a1f0493c57b2da9fb36dc775a79/azure_mgmt_network-28.1.0-py3-none-any.whl", hash = "sha256:8ddb0e9ec8f10c9c152d60fc945908d113e4591f397ea3e40b92290ec2b01658", size = 575260, upload-time = "2024-12-20T05:56:57.672Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/d2/c0ba9d3515d10f943ac662d293d01a28145c0de605b37cb70b56997e644a/azure_mgmt_network-33.1.0-py3-none-any.whl", hash = "sha256:c768d065799db9751999bf041fa5130bff6ab7b2ac281207a2a3845c3c1cfe6f", size = 927178, upload-time = "2026-10-12T07:38:58.171Z" },
 ]
 
 [[package]]
 name = "azure-mgmt-resource"
-version = "23.2.0"
+version = "26.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "azure-common" },
     { name = "azure-mgmt-core" },
     { name = "isodate" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/e9/cafb7076283db9f21e05e54fa0536b16d790e43f30691e80d6eac4603789/azure_mgmt_resource-23.2.0.tar.gz", hash = "sha256:747b750df7af23ab30e53d3f36247ab0c16de1e267d666b1a5077c39a4292529", size = 1957902, upload-time = "2024-10-24T04:09:38.688Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/e1/c6196381cc6bb3eff9e24f5bf31b7fd962651ddbd6120bc2a4c482a7af16/azure_mgmt_resource-26.0.0.tar.gz", hash = "sha256:54227c5db06d3be4dd4b77ad885b273e9eb2606d1de653c5b534066cfbb60c0c", size = 117372, upload-time = "2026-06-24T09:48:29.546Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/ed/85b5e33b2d5ee8ae12228a77f74a484cd6bf58d3288d8524498a02cf0c8c/azure_mgmt_resource-23.2.0-py3-none-any.whl", hash = "sha256:7af2bca928ecd58e57ea7f7731d245f45e9d927036d82f1d30b96baa0c26b569", size = 2670967, upload-time = "2024-10-24T04:09:41.091Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/6e/3e776a0817ebe3558fbd8d3f98b1bd8fa75a46596e5cf9bb4377960c4611/azure_mgmt_resource-26.0.0-py3-none-any.whl", hash = "sha256:ef36559a4c0843b4272aa584efb455c686e4c3f6357421b38c82f405c01a9a9f", size = 102492, upload-time = "2026-06-24T09:48:30.854Z" },
 ]
 
 [[package]]
@@ -3065,21 +3063,31 @@ wheels = [
 
 [[package]]
 name = "pycryptodome"
-version = "3.19.1"
+version = "4.5.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b1/38/42a8855ff1bf568c61ca6557e2203f318fb7afeadaf2eb8ecfdbde107151/pycryptodome-3.19.1.tar.gz", hash = "sha256:8ae0dd1bcfada451c35f9e29a3e5db385caabc190f98e4a80ad02a61098fb776", size = 4782144, upload-time = "2023-12-28T06:52:40.741Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/4d/dfbdfacc0579fa4394e3a442f034c2fb41a44d95d21bf9cd85cee89c3df6/pycryptodome-4.5.0.tar.gz", hash = "sha256:51e97a8d1cf101974bc40c20b3191cb1903891e5c172346943d5d4f3bc4f9d83", size = 1863771, upload-time = "2026-11-15T13:03:45.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/ef/4931bc30674f0de0ca0e827b58c8b0c17313a8eae2754976c610b866118b/pycryptodome-3.19.1-cp35-abi3-macosx_10_9_universal2.whl", hash = "sha256:67939a3adbe637281c611596e44500ff309d547e932c449337649921b17b6297", size = 2417027, upload-time = "2023-12-28T06:51:50.138Z" },
-    { url = "https://files.pythonhosted.org/packages/67/e6/238c53267fd8d223029c0a0d3730cb1b6594d60f62e40c4184703dc490b1/pycryptodome-3.19.1-cp35-abi3-macosx_10_9_x86_64.whl", hash = "sha256:11ddf6c9b52116b62223b6a9f4741bc4f62bb265392a4463282f7f34bb287180", size = 1579728, upload-time = "2023-12-28T06:51:52.385Z" },
-    { url = "https://files.pythonhosted.org/packages/7c/87/7181c42c8d5ba89822a4b824830506d0aeec02959bb893614767e3279846/pycryptodome-3.19.1-cp35-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e3e6f89480616781d2a7f981472d0cdb09b9da9e8196f43c1234eff45c915766", size = 2051440, upload-time = "2023-12-28T06:51:55.751Z" },
-    { url = "https://files.pythonhosted.org/packages/34/dd/332c4c0055527d17dac317ed9f9c864fc047b627d82f4b9a56c110afc6fc/pycryptodome-3.19.1-cp35-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:27e1efcb68993b7ce5d1d047a46a601d41281bba9f1971e6be4aa27c69ab8065", size = 2125379, upload-time = "2023-12-28T06:51:58.567Z" },
-    { url = "https://files.pythonhosted.org/packages/24/9e/320b885ea336c218ff54ec2b276cd70ba6904e4f5a14a771ed39a2c47d59/pycryptodome-3.19.1-cp35-abi3-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1c6273ca5a03b672e504995529b8bae56da0ebb691d8ef141c4aa68f60765700", size = 2153951, upload-time = "2023-12-28T06:52:01.699Z" },
-    { url = "https://files.pythonhosted.org/packages/f4/54/8ae0c43d1257b41bc9d3277c3f875174fd8ad86b9567f0b8609b99c938ee/pycryptodome-3.19.1-cp35-abi3-musllinux_1_1_aarch64.whl", hash = "sha256:b0bfe61506795877ff974f994397f0c862d037f6f1c0bfc3572195fc00833b96", size = 2044041, upload-time = "2023-12-28T06:52:03.737Z" },
-    { url = "https://files.pythonhosted.org/packages/45/93/f8450a92cc38541c3ba1f4cb4e267e15ae6d6678ca617476d52c3a3764d4/pycryptodome-3.19.1-cp35-abi3-musllinux_1_1_i686.whl", hash = "sha256:f34976c5c8eb79e14c7d970fb097482835be8d410a4220f86260695ede4c3e17", size = 2182446, upload-time = "2023-12-28T06:52:05.588Z" },
-    { url = "https://files.pythonhosted.org/packages/af/cd/ed6e429fb0792ce368f66e83246264dd3a7a045b0b1e63043ed22a063ce5/pycryptodome-3.19.1-cp35-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:7c9e222d0976f68d0cf6409cfea896676ddc1d98485d601e9508f90f60e2b0a2", size = 2144914, upload-time = "2023-12-28T06:52:07.44Z" },
-    { url = "https://files.pythonhosted.org/packages/05/56/00a9147d1d439e1ff1c90e23917b1d82c6b4ee91c40ff5af7113cd312c78/pycryptodome-3.19.1-pp310-pypy310_pp73-macosx_10_9_x86_64.whl", hash = "sha256:37e531bf896b70fe302f003d3be5a0a8697737a8d177967da7e23eff60d6483c", size = 1555298, upload-time = "2023-12-28T06:52:18.183Z" },
-    { url = "https://files.pythonhosted.org/packages/94/cb/7e60730946756f9fef0e0a1d06c9687522293aee40bce2884bb6534bc0f6/pycryptodome-3.19.1-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cd4e95b0eb4b28251c825fe7aa941fe077f993e5ca9b855665935b86fbb1cc08", size = 1596086, upload-time = "2023-12-28T06:52:21.099Z" },
-    { url = "https://files.pythonhosted.org/packages/4e/c5/a8db81dab2b5ae2e0e2cbfef4fe8a4c07a6b04ba510105c9f3b0720ddb3b/pycryptodome-3.19.1-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:c22c80246c3c880c6950d2a8addf156cee74ec0dc5757d01e8e7067a3c7da015", size = 1626967, upload-time = "2023-12-28T06:52:23.921Z" },
+    { url = "https://files.pythonhosted.org/packages/96/b6/f84b8784b6e0250d40d3265207efeca77cc4fa61acfb98b2d853284c9e97/pycryptodome-4.5.0-cp315-cp315t-macosx_10_15_universal2.whl", hash = "sha256:0fc718c17bf9611f489e8f87630ca44e7424598320ee1444f6a52fa0dab0a326", size = 1834006, upload-time = "2026-11-15T13:02:52.127Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/d6/e2a4282286673beb968488f82e2a95dcec95984d6be50f8fede5f9e0e693/pycryptodome-4.5.0-cp315-cp315t-macosx_10_15_x86_64.whl", hash = "sha256:4510c875794c4cdf81cf3ef43651ca137fc4482cac8b8bbc5ba6525057e2ca76", size = 1585202, upload-time = "2026-11-15T13:02:54.157Z" },
+    { url = "https://files.pythonhosted.org/packages/09/70/d01acb6a417d1a91a7483f9282f44ef5b1fd42c1b5433117030f4362032c/pycryptodome-4.5.0-cp315-cp315t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:7962a15df4e2206b9e409764337107a66e6f3d04857f3f0a0af5c937f277304c", size = 2595607, upload-time = "2026-11-15T13:02:55.913Z" },
+    { url = "https://files.pythonhosted.org/packages/60/13/71f416a8d709f2187bdc6f8f7a1e3889cf585ed39bc5cd7ed8da9158db56/pycryptodome-4.5.0-cp315-cp315t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:bc275973d04ba8629434e3e9d78154de679014a9c6c32da0170556a035d29422", size = 3114197, upload-time = "2026-11-15T13:02:57.728Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/7e/2b235a796ad2b6dde64c7c3c485bb6d6928e78afe7723b43909ab73ea157/pycryptodome-4.5.0-cp315-cp315t-musllinux_1_2_aarch64.whl", hash = "sha256:d2f9904c7dbb72be5c35f6b59bc79f8314b26c2cd65908efbd7fb8619e2c17dc", size = 2620856, upload-time = "2026-11-15T13:02:59.314Z" },
+    { url = "https://files.pythonhosted.org/packages/79/08/b3904c4623efcd5a93e49e7d33761debde3fd707c64ae004c484df3885ca/pycryptodome-4.5.0-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:8910dce36ec2ebaec9925a1f8284d776c9eb63bc6193710a7cd8c4e5a5204a6f", size = 3672501, upload-time = "2026-11-15T13:03:01.223Z" },
+    { url = "https://files.pythonhosted.org/packages/33/73/d1058461b29c5092cea78316a033918253223d8f64e928ba10b59e72a75b/pycryptodome-4.5.0-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:081af2cbd5d85ff282b0f22013b60bd87b7507d87790e0227e42050880adb1d4", size = 1828280, upload-time = "2026-11-15T13:03:07.867Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/9d/2f38ba3af1f024adc50eb113d1ff472603756e1e86b73b3c80e2ac958c83/pycryptodome-4.5.0-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:e031a0a430ce1d8a11ef37f2caaf51c5f1c0d9a037db8ffa2753b28a93fc5005", size = 1578107, upload-time = "2026-11-15T13:03:09.607Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/7a/47fcebddc746738a5ca6adb7fb0b19ea74188b83aac8ba03011755861742/pycryptodome-4.5.0-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:04c1b9feaf73db4f6aae714589bdabdf2c3d991b579976e1f734de6de133a099", size = 2591108, upload-time = "2026-11-15T13:03:11.352Z" },
+    { url = "https://files.pythonhosted.org/packages/41/2d/e4d8e0ac2e1192c05ac7078fc37aaeb2bd21083af7c0561092ff3268e19f/pycryptodome-4.5.0-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:3afbe7ecd62357203a588d451c604a61af7d7c9d3f0aa0b792de0612cffb8f8d", size = 3101721, upload-time = "2026-11-15T13:03:13.479Z" },
+    { url = "https://files.pythonhosted.org/packages/75/46/e4e348fb1b4bc56704f7696a67f08a39afd7ea6bb751eca858bafbf459b7/pycryptodome-4.5.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:38229c875772dea2bbbe46061e2e5573b5810c52cd7bb5a9225f07cb2c9c00a9", size = 2610488, upload-time = "2026-11-15T13:03:15.134Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/c5/6cbd9d4394a94a3c0ee2081f3283736ce17df7e11dfc811ee8722a8a8ced/pycryptodome-4.5.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:33094d990610bf205f2b841599f514429d9ef61aca40e6c11ff1a08aeef5cbb9", size = 3663825, upload-time = "2026-11-15T13:03:16.913Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/a8/519fef8d2bab6674bde717229874ab0876b24e990193332897042ea1f09c/pycryptodome-4.5.0-pp310-pypy310_pp73-macosx_10_15_x86_64.whl", hash = "sha256:7c212b2c8312aef5e4c457e01330d54df3e42df2e3309ecad34374d7fde61b9e", size = 1538582, upload-time = "2026-11-15T13:03:24.009Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/d4/cdd151e729bbb4a65e6cbc9042bb34053c193cd0b466b47de843d0f178cc/pycryptodome-4.5.0-pp310-pypy310_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2d7eed2a1042296f8cffdd07b0289d508472258dbf878105f53f45158769d2c2", size = 1363497, upload-time = "2026-11-15T13:03:25.675Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/b3/e1d7c210fbf68beb2bd8e0d0529342f791e448febef89dbe6559b9407074/pycryptodome-4.5.0-pp310-pypy310_pp73-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:298b54c6bee5e23ec4add59ea8d9ad04aa125d4106fbafe9ecfb17d08637aaf1", size = 1495139, upload-time = "2026-11-15T13:03:27.115Z" },
+    { url = "https://files.pythonhosted.org/packages/26/9a/59082c9d809d2b683b30d173dfb07b61625f77e57fa66e66ce0afb8f6b9f/pycryptodome-4.5.0-pp311-pypy311_pp80-macosx_10_15_x86_64.whl", hash = "sha256:b1bf14c0bf44fd44510ed2e6f707bb0cfb0d8e562f2d3218def6c840c635cff5", size = 1533569, upload-time = "2026-11-15T13:03:30.278Z" },
+    { url = "https://files.pythonhosted.org/packages/34/c7/0f060025610eaba809cffbedf1c7386f85f8fdb8a824a74177a099b87b24/pycryptodome-4.5.0-pp311-pypy311_pp80-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:950856be7d0e1ef12b853f51ebae8b26e8c2578c4c191e27cca8976024172272", size = 1363499, upload-time = "2026-11-15T13:03:32.02Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/f7/f5f473c28eaa532b0b2378e7f7cf7853addea903c53b1f6669ee10473285/pycryptodome-4.5.0-pp311-pypy311_pp80-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c256da4ef688656cd1ecd4230df762164847623e974848b3304cc6bf9b454748", size = 1495140, upload-time = "2026-11-15T13:03:33.684Z" },
+    { url = "https://files.pythonhosted.org/packages/68/80/807817ca726c8eb6ef2c7b5fe3db15348178ee44c3bf18fc99c0a413888c/pycryptodome-4.5.0-pp312-pypy312_pp80-macosx_10_15_x86_64.whl", hash = "sha256:c09594b1f6d02b673592e9f202ae95456a81e4f883cc9780fdef1fdb79df84e8", size = 1533560, upload-time = "2026-11-15T13:03:38.072Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/43/79ffdf74894419b3be19e9e53f5ff32605795a9d01486300a4e7ac4d867e/pycryptodome-4.5.0-pp312-pypy312_pp80-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b59c59a96fb6ec25a778fa8ed6e26c952f7e94e70da81dcfc1adf9a57b934ada", size = 1363495, upload-time = "2026-11-15T13:03:39.802Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/a3/4865e4d948599772dd1782ce5e9ee38fe5216056c604ec1c548279c3ca26/pycryptodome-4.5.0-pp312-pypy312_pp80-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:16116a0a6aa37fd1f7a58acd5a63ffd81cd223f6393376a9f2137176b05eb54c", size = 1495140, upload-time = "2026-11-15T13:03:41.441Z" },
 ]
 
 [[package]]
@@ -4179,8 +4187,8 @@ requires-dist = [
     { name = "azure-mgmt-compute", specifier = "==33.1.0" },
     { name = "azure-mgmt-keyvault", specifier = "==12.0.0" },
     { name = "azure-mgmt-msi", specifier = "==7.0.0" },
-    { name = "azure-mgmt-network", specifier = "==28.1.0" },
-    { name = "azure-mgmt-resource", specifier = "==23.2.0" },
+    { name = "azure-mgmt-network", specifier = "==33.1.0" },
+    { name = "azure-mgmt-resource", specifier = "==26.0.0" },
     { name = "azure-mgmt-resourcegraph", specifier = "==8.0.0" },
     { name = "azure-mgmt-subscription", specifier = "==3.1.1" },
     { name = "azure-storage-blob", specifier = "==12.16.0" },
@@ -4214,7 +4222,7 @@ requires-dist = [
     { name = "pre-commit-hooks", specifier = "==6.0.0" },
     { name = "prettytable", specifier = "==3.10.2" },
     { name = "prometheus-client", specifier = "==0.11.0" },
-    { name = "pycryptodome", specifier = "==3.19.1" },
+    { name = "pycryptodome", specifier = "==4.5.0" },
     { name = "pydantic", specifier = "==2.14.0" },
     { name = "pygithub", specifier = "==2.1.1" },
     { name = "pytest", specifier = "==8.3.4" },

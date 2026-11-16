@@ -25,6 +25,11 @@ from azure.mgmt.resource.resources.models import ResourceGroup
 from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
 
 
+def rest_body(parameters: Any) -> Dict[str, Any]:
+    """The JSON body the SDK sends: an SDK model is serialized, a plain dict is sent as is."""
+    return parameters.as_dict() if hasattr(parameters, "as_dict") else parameters
+
+
 def snake_case_to_camel_case(string):
     temp = string.split("_")
     return temp[0] + "".join(ele.title() for ele in temp[1:])
@@ -82,12 +87,12 @@ class FakeResourceGroups:
         (self.path / resource_group_name).mkdir(exist_ok=True)
         with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file_obj:
             json.dump(res_group, fp=file_obj, indent=2)
-        return ResourceGroup.deserialize(res_group)
+        return ResourceGroup(res_group)
 
     def get(self, name) -> ResourceGroup:
         try:
             with open(self.path / name / "resource_group.json", "r", encoding="utf-8") as file:
-                return ResourceGroup.deserialize(json.load(file))
+                return ResourceGroup(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Resource group not found") from None
 
@@ -96,7 +101,7 @@ class FakeResourceGroups:
         for name in os.listdir(self.path):
             try:
                 with open(self.path / str(name) / "resource_group.json", "r", encoding="utf-8") as file:
-                    rgs.append(ResourceGroup.deserialize(json.load(file)))
+                    rgs.append(ResourceGroup(json.load(file)))
             except FileNotFoundError:
                 raise ResourceNotFoundError("Resource group not found") from None
         return rgs
@@ -118,7 +123,7 @@ class FakeNetworkSecurityGroup:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(NetworkSecurityGroup.deserialize(json.load(file_obj)))
+                elements.append(NetworkSecurityGroup(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -129,7 +134,7 @@ class FakeNetworkSecurityGroup:
             f"/Microsoft.Network/networkSecurityGroups/default",
             "name": network_security_group_name,
             "type": "Microsoft.Network/networkSecurityGroups",
-            "location": parameters["location"],
+            "location": rest_body(parameters)["location"],
             "etag": 'W/"90369d69-7507-4e77-8b90-66e1f971f290"',
             "properties": {
                 "subnets": [],
@@ -138,7 +143,7 @@ class FakeNetworkSecurityGroup:
             },
         }
         rules = []
-        for rule in parameters["security_rules"]:
+        for rule in rest_body(parameters)["properties"]["securityRules"]:
             rules.append(
                 {
                     "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
@@ -147,23 +152,16 @@ class FakeNetworkSecurityGroup:
                     "etag": 'W/"90369d69-7507-4e77-8b90-66e1f971f290"',
                     "type": "Microsoft.Network/networkSecurityGroups/securityRules",
                     "properties": {
-                        "protocol": rule["protocol"],
-                        "sourcePortRange": rule["source_port_range"],
-                        "destinationPortRange": rule["destination_port_range"],
-                        "sourceAddressPrefix": rule["source_address_prefix"],
                         "sourceAddressPrefixes": [],
-                        "destinationAddressPrefix": rule["destination_address_prefix"],
                         "destinationAddressPrefixes": [],
                         "sourcePortRanges": [],
                         "destinationPortRanges": [],
-                        "access": rule["access"],
-                        "priority": rule["priority"],
-                        "direction": rule["direction"],
+                        **rule["properties"],
                         "provisioningState": "Succeeded",
                     },
                 }
             )
-        base.update({"securityRules": rules})
+        base["properties"]["securityRules"] = rules
         with open(
             self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "w", encoding="utf-8"
         ) as file:
@@ -175,7 +173,7 @@ class FakeNetworkSecurityGroup:
             with open(
                 self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r", encoding="utf-8"
             ) as file:
-                return NetworkSecurityGroup.deserialize(json.load(file))
+                return NetworkSecurityGroup(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
 
@@ -192,7 +190,7 @@ class FakeVirtualNetwork:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(VirtualNetwork.deserialize(json.load(file_obj)))
+                elements.append(VirtualNetwork(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -203,10 +201,10 @@ class FakeVirtualNetwork:
             f"/Microsoft.Network/virtualNetworks/{virtual_network_name}",
             "name": virtual_network_name,
             "type": "Microsoft.Network/virtualNetworks",
-            "location": parameters["location"],
+            "location": rest_body(parameters)["location"],
             "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "properties": {
-                "addressSpace": {"addressPrefixes": [parameters["address_space"]["address_prefixes"]]},
+                "addressSpace": rest_body(parameters)["properties"]["addressSpace"],
                 "subnets": [],
                 "virtualNetworkPeerings": [],
                 "resourceGuid": "e9660f35-9f2b-4134-8b0e-309bd9b3792c",
@@ -223,7 +221,7 @@ class FakeVirtualNetwork:
             with open(
                 self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8"
             ) as file:
-                return VirtualNetwork.deserialize(json.load(file))
+                return VirtualNetwork(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
 
@@ -244,12 +242,13 @@ class FakeSubnet:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(Subnet.deserialize(json.load(file_obj)))
+                elements.append(Subnet(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
         self, resource_group_name: str, virtual_network_name: str, subnet_name: str, subnet_parameters: Dict[str, Any]
     ) -> WaitableObject:
+        requested = rest_body(subnet_parameters)["properties"]
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/virtualNetworks/{virtual_network_name}/subnets/{subnet_name}",
@@ -257,8 +256,7 @@ class FakeSubnet:
             "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "type": "Microsoft.Network/virtualNetworks/subnets",
             "properties": {
-                "addressPrefix": subnet_parameters["address_prefix"],
-                "networkSecurityGroup": {"id": subnet_parameters["network_security_group"]["id"]},
+                **requested,
                 "ipConfigurations": [],
                 "delegations": [],
                 "provisioningState": "Succeeded",
@@ -279,7 +277,7 @@ class FakeSubnet:
                 "r",
                 encoding="utf-8",
             ) as file:
-                return Subnet.deserialize(json.load(file))
+                return Subnet(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Subnet group not found") from None
 
@@ -296,23 +294,24 @@ class FakeIpAddress:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(PublicIPAddress.deserialize(json.load(file_obj)))
+                elements.append(PublicIPAddress(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
         self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        requested = rest_body(parameters)
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/publicIPAddresses/{public_ip_address_name}",
             "name": public_ip_address_name,
             "type": "Microsoft.Network/publicIPAddresses",
-            "location": parameters["location"],
-            "sku": {"name": parameters["sku"]["name"], "tier": "Regional"},
+            "location": requested["location"],
+            "sku": {"name": requested["sku"]["name"], "tier": "Regional"},
             "etag": 'W/"c6bd8f78-66eb-4fc6-90d0-98d790c5467e"',
             "properties": {
-                "publicIPAllocationMethod": parameters["public_ip_allocation_method"],
-                "publicIPAddressVersion": parameters["public_ip_address_version"],
+                "publicIPAllocationMethod": requested["properties"]["publicIPAllocationMethod"],
+                "publicIPAddressVersion": requested["properties"]["publicIPAddressVersion"],
                 "ipConfiguration": {},
                 "ipTags": [],
                 "ipAddress": "52.240.59.45",
@@ -332,7 +331,7 @@ class FakeIpAddress:
             with open(
                 self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r", encoding="utf-8"
             ) as file:
-                return PublicIPAddress.deserialize(json.load(file))
+                return PublicIPAddress(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Public IP address not found") from None
 
@@ -353,39 +352,40 @@ class FakeNetworkInterface:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(NetworkInterface.deserialize(json.load(file_obj)))
+                elements.append(NetworkInterface(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
         self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        requested = rest_body(parameters)
+        ip_config = requested["properties"]["ipConfigurations"][0]
+        public_ip_id = ip_config["properties"]["publicIPAddress"]["id"]
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/networkInterfaces/{network_interface_name}",
             "name": network_interface_name,
             "type": "Microsoft.Network/networkInterfaces",
-            "location": parameters["location"],
+            "location": requested["location"],
             "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
             "properties": {
                 "ipConfigurations": [
                     {
                         "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
                         f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/"
-                        f"{network_interface_name}/ipConfigurations/{parameters['ip_configurations'][0]['name']}",
-                        "name": parameters["ip_configurations"][0]["name"],
+                        f"{network_interface_name}/ipConfigurations/{ip_config['name']}",
+                        "name": ip_config["name"],
                         "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
                         "type": "Microsoft.Network/networkInterfaces/ipConfigurations",
                         "properties": {
                             "privateIPAddress": "10.0.0.4",
                             "privateIPAllocationMethod": "Dynamic",
                             "privateIPAddressVersion": "IPv4",
-                            "subnet": {"id": parameters["ip_configurations"][0]["subnet"]["id"]},
+                            "subnet": {"id": ip_config["properties"]["subnet"]["id"]},
                             "primary": True,
                             "publicIPAddress": {
-                                "id": parameters["ip_configurations"][0]["public_ip_address"]["id"],
-                                "name": parameters["ip_configurations"][0]["public_ip_address"]["id"].split("/", -1)[
-                                    -1
-                                ],
+                                "id": public_ip_id,
+                                "name": public_ip_id.split("/", -1)[-1],
                                 "type": "Microsoft.Network/publicIPAddresses",
                                 "sku": {"name": "Basic", "tier": "Regional"},
                                 "properties": {
@@ -395,7 +395,7 @@ class FakeNetworkInterface:
                                         "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
                                         f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces"
                                         f"/{network_interface_name}/ipConfigurations"
-                                        f"/{parameters['ip_configurations'][0]['name']}"
+                                        f"/{ip_config['name']}"
                                     },
                                     "ipTags": [],
                                     "idleTimeoutInMinutes": 4,
@@ -416,7 +416,7 @@ class FakeNetworkInterface:
                 },
                 "macAddress": "00-0D-3A-14-3F-92",
                 "primary": True,
-                "enableAcceleratedNetworking": parameters["enable_accelerated_networking"],
+                "enableAcceleratedNetworking": requested["properties"]["enableAcceleratedNetworking"],
                 "enableIPForwarding": False,
                 "hostedWorkloads": [],
                 "resourceGuid": "3232a287-da4c-40eb-b5c8-cadb487d6dce",
@@ -435,7 +435,7 @@ class FakeNetworkInterface:
             with open(
                 self.path / resource_group_name / f"nic-{network_interface_name}.json", "r", encoding="utf-8"
             ) as file:
-                return NetworkInterface.deserialize(json.load(file))
+                return NetworkInterface(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("NIC not found") from None
 
