@@ -96,6 +96,16 @@ class InstanceNameTakenError(InstanceConfigurationError):
     """
 
 
+class ZeroQuotaError(InstanceConfigurationError):
+    """Raised when the cloud rejects the request on a quota whose limit is 0 in the region.
+
+    Unlike a quota that is used up, a zero limit is never freed by waiting or by another zone of
+    the same region; only a quota grant or another region fixes it. It is an
+    `InstanceConfigurationError` so that it fails at once and is never retried, relocated, or
+    softened into a nemesis skip.
+    """
+
+
 class ProvisionerError(Exception):
     pass
 

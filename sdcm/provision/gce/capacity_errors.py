@@ -13,6 +13,8 @@
 
 """Centralized GCE capacity and provisioning error classification."""
 
+import re
+
 CAPACITY_ERROR_MARKERS: list[str] = [
     "ZONE_RESOURCE_POOL_EXHAUSTED",
     "RESOURCE_POOL_EXHAUSTED",
@@ -23,6 +25,10 @@ QUOTA_ERROR_MARKERS: list[str] = [
     "QUOTA_EXCEEDED",
     "quotaExceeded",
 ]
+
+# GCE names the limit in the quota error, e.g. "Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 0.0 in
+# region us-central1." A limit of 0 means the project has no quota for that family in the region.
+ZERO_QUOTA_LIMIT_PATTERN = re.compile(r"Limit:\s*0(?:\.0+)?(?![\d.])")
 
 TYPE_NOT_AVAILABLE_MARKERS: list[str] = [
     "RESOURCE_NOT_FOUND",
@@ -71,6 +77,15 @@ def is_quota_error(exception: BaseException) -> bool:
     """Return True if `exception` is a GCE regional quota exhaustion error."""
     error_str = str(exception)
     return any(marker in error_str for marker in QUOTA_ERROR_MARKERS)
+
+
+def is_zero_quota_error(exception: BaseException) -> bool:
+    """Return True if `exception` is a quota error whose limit is 0 in the region.
+
+    A used-up quota can free up when other runs end, so it stays retryable. A zero limit never
+    does: retrying only waits out the stage timeout.
+    """
+    return is_quota_error(exception) and bool(ZERO_QUOTA_LIMIT_PATTERN.search(str(exception)))
 
 
 def is_type_unavailable_error(exception: BaseException) -> bool:
