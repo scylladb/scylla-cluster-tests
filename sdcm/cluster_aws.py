@@ -50,7 +50,7 @@ from sdcm.remote import NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 from sdcm.utils.aws_ssm_runner import SSMCommandRunner
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, tags_as_ec2_tags
@@ -907,7 +907,7 @@ class AWSNode(cluster.BaseNode):
                     datetime.strptime(terminate_action["time"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
                 )
                 next_check_delay = terminate_action["time-left"] = terminate_action_timestamp - time.time()
-                SpotTerminationEvent(node=self, message=terminate_action).publish()
+                self.report_spot_termination(terminate_action)
 
                 return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 

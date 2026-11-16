@@ -25,7 +25,6 @@ from sdcm.provision.network_configuration import (
     network_interfaces_count,
 )
 from sdcm.provision.provisioner import PricingModel, VmInstance
-from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.azure_utils import (
@@ -295,7 +294,7 @@ class AzureNode(cluster.BaseNode):
                 self.last_event_document_incarnation = status["DocumentIncarnation"]
                 if event["EventType"] == "Preempt":
                     message = f"Got spot termination event for node: {event['Resources']}. VM eviction time is {event['NotBefore']}."
-                    SpotTerminationEvent(node=self, message=message).publish()
+                    self.report_spot_termination(message)
                 else:
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
                     self.log.warning(f"Unhandled Azure scheduled event: {event}")

@@ -155,7 +155,13 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
-from sdcm.sct_events.system import INSTANCE_STATUS_EVENTS_PATTERNS, AwsKmsEvent, InfoEvent, TestFrameworkEvent
+from sdcm.sct_events.system import (
+    INSTANCE_STATUS_EVENTS_PATTERNS,
+    AwsKmsEvent,
+    InfoEvent,
+    SpotTerminationEvent,
+    TestFrameworkEvent,
+)
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 from sdcm.snitch_configuration import SnitchConfig
 from sdcm.test_config import TestConfig
@@ -526,6 +532,8 @@ def terminate_on_failure(func):
 
 
 class BaseNode(AutoSshContainerMixin):
+    # set by report_spot_termination(); a class default so nodes built without __init__ have it too
+    spot_reclaimed = False
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
     MANAGER_AGENT_PORT = 10001
@@ -651,6 +659,11 @@ class BaseNode(AutoSshContainerMixin):
         When `remoter` is ready but cluster is not configured yet, `nodetool status` (and other Scylla commands) cannot be run.
         Wait when it became available.
         """
+        # A reclaimed node is gone: each command would wait out its SSH timeout (40 minutes of diagnostics in SCT-707)
+        if self.spot_reclaimed:
+            self.log.warning("Spot instance was reclaimed, skipping Scylla commands")
+            return False
+
         # During first cluster remoter is not available and may cause to failure
         if not self.remoter:
             self.log.warning("Remoter is not available")
@@ -1789,6 +1802,11 @@ class BaseNode(AutoSshContainerMixin):
             target=self.spot_monitoring_thread, name="SpotMonitoringThread", daemon=True
         )
         self._spot_monitoring_thread.start()
+
+    def report_spot_termination(self, message):
+        """Mark the node as reclaimed, so teardown stops running commands on it, and publish the event."""
+        self.spot_reclaimed = True
+        SpotTerminationEvent(node=self, message=message).publish()
 
     def start_spot_monitoring_if_needed(self):
         if (self.is_spot or self.is_gce()) and self._spot_monitoring_thread is None:
