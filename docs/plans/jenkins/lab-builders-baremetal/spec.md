@@ -39,7 +39,7 @@ sequenceDiagram
     R->>J: one holder branch per needed host
     J-->>R: executors taken, node names known
     R->>R: resolve the addresses (DNS for lab hostnames)
-    R->>H: preflight over SSH (key, sudo, docker, SELinux)
+    R->>H: preflight over SSH (key, sudo, SELinux)
     R->>R: write lab-<test_id>.json, set SCT_S3_BAREMETAL_CONFIG
     R->>H: SCT test over SSH (outside Jenkins)
     R->>H: collect logs, baremetal host cleanup
@@ -67,7 +67,7 @@ flowchart LR
 | Hosts file step (library) | Writes and archives the hosts file, exports its name |
 | `perfRegressionParallelPipeline` lab mode | Runs the sub-test on the runner label, skips the SCT runner and cloud provisioning, as `local_agent` does in `longevityPipeline` |
 | Lab overlay | Switches the test-case to the `baremetal` backend and sets `simulated_racks` to match the RF |
-| Lab host runbook | The one-time setup of a host: test user, key, passwordless sudo, docker on the monitor host, SELinux on loader hosts, the `lab-baremetal` label on the eligible hosts |
+| Lab host runbook | The one-time setup of a host: test user, key, passwordless sudo, Docker Engine 20.10 or newer that the test user can run on loader and monitor hosts, the monitoring stack's ports free on the monitor host, SELinux on loader hosts, the `lab-baremetal` label on the eligible hosts |
 
 The sub-test runs these stages in order: sizing, hold, preflight, hosts
 file, test, log collection, host cleanup, release. Lab mode runs the
@@ -81,8 +81,12 @@ reports a name that neither resolves nor has an entry. An AWS builder agent,
 used for staging checks, is named by its instance id, so the runner uses the
 EC2 API.
 
-Preflight checks every host for the key, passwordless sudo and docker. On
-loader hosts it also checks that SELinux is not enforcing. DB hosts don't
+Preflight checks every host for the key and passwordless sudo. On loader
+hosts it also checks that SELinux is not enforcing. It leaves Docker to SCT:
+SCT never installs or changes Docker on a baremetal loader or monitor
+(#16535), and its own host preflight checks the Docker version, the free
+space for the images, and the monitoring stack's ports before the first
+image pull (#16538, `docs/plans/baremetal/host-preflight`). DB hosts don't
 need the check: `scylla_setup` runs `setenforce 0`. Loaders never run
 `scylla_setup`, so an enforcing loader stays enforcing. SCT already handles
 the two failures seen on an enforcing Fedora 44 loader: stress containers
@@ -182,7 +186,7 @@ The build description lists the runner and the held hosts.
 | One loader host cannot drive the target rates and skews the results | Measure the loader CPU before the overlay uses one loader. Keep more loader hosts when the loader saturates first |
 | The runner cannot reach S3, Argus, or the KeyStore from the lab network | The proof of concept on lab hosts runs hydra on a minipc runner |
 | A host is set up wrong | Preflight fails the run in minutes with one report |
-| A test changes the host for its other users: the disk setup and `SELINUX=disabled` | Tell the host owners before the first run, and record it in the runbook |
+| A test changes the host for its other users: the disk setup, `SELINUX=disabled`, and a prune of unused Docker images when the image store is short of space (#16538) | Tell the host owners before the first run, and record it in the runbook |
 | The baremetal backend cannot reboot a node | The throughput-steps test does not reboot nodes |
 
 ## Deferred work
@@ -213,6 +217,9 @@ The build description lists the runner and the held hosts.
   `builders_x86`, so a run never takes Scylla CI builders or a host without
   spare disks. (review)
 - Preflight fails a loader host whose SELinux is enforcing. (review)
+- The library preflight doesn't check Docker: SCT's host preflight (#16538)
+  already checks it on every loader and monitor, with the disk and the
+  ports. (series)
 - The monitoring stack runs on the runner agent instead of on one more held
   host. (open)
 - One large lab host does the work of the 4 `c7i.8xlarge` loaders, with
