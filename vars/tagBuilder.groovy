@@ -16,6 +16,14 @@ def call() {
                 NodeType: "builder",
                 keep_action: "terminate",
                 billing_project:"${GetBillingProjectTag()}"]
+    // Builders launch with a one-week keep; a test that runs longer raises it here
+    if (params.builder_keep) {
+        // cleanup reads anything but whole hours as its 14h default, and the value reaches the shell
+        if (!(params.builder_keep ==~ /[1-9][0-9]*/)) {
+            error("builder_keep must be whole hours, got '${params.builder_keep}'")
+        }
+        tags.keep = params.builder_keep
+    }
     applyTagsWithCreds(cloudInfo, tags)
 }
 
