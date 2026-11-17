@@ -46,6 +46,10 @@ Release branches get a reduced version of the same jobs, selected by `include_ve
   branches new enough to support Graviton.
 - **perf-simple-query microbenchmarks**, arm64 and x86_64, read and write — no version gating,
   so these run for every branch on every firing.
+- **perf-cql-raw and perf-alternator microbenchmarks**, arm64 and x86_64, read and write —
+  `exclude_versions` drops every release before 2026.2, where `perf-cql-raw` does not exist and
+  `perf-alternator` cannot write its result file. The PGO offline-installer trigger also runs
+  them, together with perf-simple-query, under the `pgo-x86` / `pgo-arm` labels.
 
 Release entries typically carry a shorter `sub_tests` list than their master counterparts
 (often `test_mixed_gradual_increase_load` or `test_latency_mixed_with_nemesis` alone), because

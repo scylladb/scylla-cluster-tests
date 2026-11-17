@@ -269,6 +269,7 @@ Throughput `fixed_limit` values carry a provenance comment in the YAMLs:
 | `latency-decorator-error-thresholds-steps-ent-tablets-custom-d3-w1.yaml` | custom scenario | same |
 | `perf_simple/...-perf-simple-query-microbenchmark_{x86_64,arm64}.yaml` | *none* — metrics sit directly under `write`/`read` | `allocs_per_op`, `cpu_cycles_per_op`, `instructions_per_op` |
 | `perf_cql_raw/...-perf-cql-raw-microbenchmark_{x86_64,arm64}.yaml` | same | same (all `null`) |
+| `perf_alternator/...-perf-alternator-microbenchmark_{x86_64,arm64}.yaml` | same | same (all `null`) |
 
 ### Loading
 

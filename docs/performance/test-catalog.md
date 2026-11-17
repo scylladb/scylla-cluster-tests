@@ -18,7 +18,7 @@ still run". Everything scheduled there falls into one of four families:
 | **Throughput staircase** | Can the cluster hold rate X with P99 under Y, sustained? | `PerformanceRegressionPredefinedStepsTest.test_{read,write,mixed,read_disk_only}_gradual_increase_load` |
 | **Performance under operations** | How much does a nemesis or a rolling upgrade hurt, and for how long? | `PerformanceRegressionTest.test_latency_{read,write,mixed}_with_nemesis`, `PerformanceRegressionUpgradeTest.test_latency_*_with_upgrade` |
 | **Customer steady state** | What is latency for a specific customer workload, run on latte? | `PerformanceRegressionTest.test_latency_steady_state` |
-| **Microbenchmarks** | Per-operation CPU cost, no cluster involved | `PerfSimpleQueryTest`, `PerfCqlRawTest` |
+| **Microbenchmarks** | Per-operation CPU cost, no cluster involved | `PerfSimpleQueryTest`, `PerfCqlRawTest`, `PerfAlternatorTest` |
 
 Plus one weekly Alternator job (`PerformanceRegressionAlternatorTest.test_full`), owned outside
 the perf team.
@@ -101,10 +101,15 @@ parses its JSON, calls `send_microbenchmark_result_to_argus`.
 | Class | Test methods | Notes |
 |---|---|---|
 | `PerfSimpleQueryTest` | `test_perf_simple_query` | `scylla perf-simple-query --json-result ... --smp 1 -m 1G`. In-process query processor; no ports or config collide with the live scylla-server. `perf_simple_query_extra_command: --write` selects the write workload. |
-| `PerfCqlRawTest` | `test_read`, `test_write` | `scylla perf-cql-raw` — full networking and CQL frame parsing. Boots a real scylla in-process, writes its own `SCYLLA_CONFIG` under `--workdir /tmp/scylla-perf-cql-raw-workdir/`, **stops the node's scylla-server** for the run and restarts it in `finally`. |
+| `PerfCqlRawTest` | `test_read`, `test_write` | `scylla perf-cql-raw` — full networking and CQL frame parsing. Argus tables `<workload> - Perf CQL Raw`. |
+| `PerfAlternatorTest` | `test_read`, `test_write` | `scylla perf-alternator` — DynamoDB API requests over HTTP to the in-process Alternator server. Its `SCYLLA_CONFIG` adds `alternator_port: 8000` and `alternator_write_isolation: forbid`. Writes `--json-result` only from 2026.2. Argus tables `<workload> - Perf Alternator`. |
 
-`PerfCqlRawTest.RESOURCE_OPTIONS = "--smp 2 --cpus 0,1 -m 2G"` and `DURATION = 60` are
-constants **because changing them invalidates the Argus baseline**.
+`PerfCqlRawTest` and `PerfAlternatorTest` share `InProcessServerMicrobenchmarkTest`: the tool
+boots a real scylla in-process, so the test writes its own `SCYLLA_CONFIG` under
+`--workdir /tmp/scylla-<tool>-workdir/`, passes the node's `io_properties.yaml`, **stops the
+node's scylla-server** for the run and restarts it in `finally`.
+`RESOURCE_OPTIONS = "--smp 2 --cpus 0,1 -m 3G"` and `DURATION = 60` are constants **because
+changing them invalidates the Argus baseline**.
 
 ---
 
@@ -120,10 +125,10 @@ defines per-step keys.
 | Directory | Holds |
 |---|---|
 | `test-cases/performance/` | The test case: cluster shape, dataset size, stress commands, duration |
-| `configurations/performance/` | Overlays: gradual load steps per (tool, hardware), `latency-decorator-error-thresholds-*` threshold files, microbenchmark thresholds under `perf_simple/` and `perf_cql_raw/` |
+| `configurations/performance/` | Overlays: gradual load steps per (tool, hardware), `latency-decorator-error-thresholds-*` threshold files, microbenchmark thresholds under `perf_simple/`, `perf_cql_raw/` and `perf_alternator/` |
 | `configurations/triggers/perf-regression.yaml` | The trigger matrix — see [pipelines-and-scheduling.md](pipelines-and-scheduling.md) |
 | `configurations/stress_images/` | Pinned Docker tags per stress tool |
-| `test-cases/microbenchmarking/` | `amazon_perf_{cql_raw,simple_query}_{ARM,x86}.yaml` |
+| `test-cases/microbenchmarking/` | `amazon_perf_{alternator,cql_raw,simple_query}_{ARM,x86}.yaml` |
 | `test-cases/upgrades/rolling-upgrade-latency-regression*.yaml` | The rolling-upgrade latency test cases |
 
 Naming conventions, which matter because the pipeline picks files by name:
