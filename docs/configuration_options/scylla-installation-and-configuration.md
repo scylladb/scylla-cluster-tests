@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**45 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -130,6 +130,17 @@ when enabled scylla will enforce mutual authentication when client-to-node encry
 **default:** False
 
 **type:** bool
+
+
+<a id="cluster_config"></a>
+
+## **cluster_config** / SCT_CLUSTER_CONFIG
+
+CQL cluster configuration options stored at CLUSTER scope with ALTER CLUSTER once the DB cluster<br>is set up. They are part of the schema, so they apply to every node, including nodes added later.<br>Needs a ScyllaDB release with CQL cluster configuration.<br>For example, {'auto_repair_enabled': True, 'auto_repair_threshold_in_seconds': 3600}<br>or SCT_CLUSTER_CONFIG__auto_repair_enabled=true
+
+**default:** N/A
+
+**type:** sdcm.sct_config.ClusterConfig
 
 
 <a id="db_type"></a>

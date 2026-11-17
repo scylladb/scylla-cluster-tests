@@ -175,6 +175,7 @@ from sdcm.utils.aws_utils import (
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.cloud_catalog.cost import estimate_run_cost
+from sdcm.utils.cluster_config import apply_cluster_config
 from sdcm.utils.common import (
     change_default_password,
     download_dir_from_cloud,
@@ -1421,6 +1422,9 @@ class ClusterTester(unittest.TestCase):
                         # TODO: Replace with strong password generation
             else:
                 self.set_system_auth_rf(db_cluster=self.db_cluster)
+
+            if (cluster_config := self.params.get("cluster_config")) and cluster_config.root:
+                apply_cluster_config(self.db_cluster, cluster_config.root)
 
             if self.db_cluster.vector_store_cluster:
                 self.db_cluster.vector_store_cluster.configure_with_scylla_cluster(self.db_cluster)

@@ -37,6 +37,7 @@ lazy from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_F
 lazy from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
 lazy from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,
+    ClusterConfig,
     IntOrList,
     SctField,
     StringOrList,
@@ -49,6 +50,7 @@ __all__ = [
     "AWS_SUPPORTED_REGIONS",
     "BACKEND_IMAGE_FIELD",
     "AdaptiveTimeoutMultipliers",
+    "ClusterConfig",
     "IntOrList",
     "SCTConfiguration",
     "SctField",

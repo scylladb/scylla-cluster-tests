@@ -28,7 +28,7 @@ import yaml
 from pydantic import BaseModel, Field, RootModel, model_validator
 from pydantic.fields import FieldInfo
 from pydantic.functional_validators import BeforeValidator
-from pydantic.types import confloat
+from pydantic.types import confloat, constr
 from typing_extensions import Annotated
 
 from sdcm.utils.adaptive_timeouts import Operations
@@ -304,6 +304,32 @@ class AdaptiveTimeoutMultipliers(RootModel):
     def get_multiplier(self, operation_key: str) -> float:
         """Return multiplier for the given operation key, or 1.0 if not configured."""
         return float(self.root.get(operation_key, 1.0))
+
+
+class ClusterConfig(RootModel):
+    """CQL cluster configuration options stored at CLUSTER scope with ALTER CLUSTER, keyed by option name.
+
+    Option names must be CQL identifiers, so a malformed one fails when the configuration is loaded
+    instead of after the cluster is set up. Scylla checks that the option exists and validates its
+    value, so options of newer releases need no change here. A string value is sent quoted and Scylla
+    parses it as the option's type, which is how values set from environment variables arrive.
+
+    YAML config example::
+
+        cluster_config:
+          auto_repair_enabled: true
+          auto_repair_threshold_in_seconds: 3600
+
+    Environment variable examples:
+
+        SCT_CLUSTER_CONFIG="{'auto_repair_enabled': True, 'auto_repair_threshold_in_seconds': 3600}"
+
+    Or using double-underscore notation:
+
+        SCT_CLUSTER_CONFIG__auto_repair_enabled=true
+    """
+
+    root: dict[constr(pattern=r"^[a-z_][a-z0-9_]*$"), bool | int | str] = Field(default_factory=dict)
 
 
 class GrafanaPanelScreenshot(BaseModel):
