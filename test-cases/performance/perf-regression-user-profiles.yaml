@@ -12,7 +12,7 @@ test_metadata:
     - cassandra-stress
   workload: user-profile
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 # TODO: need to qualify
 

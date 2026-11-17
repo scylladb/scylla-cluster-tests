@@ -12,7 +12,7 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 680
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..62500000",

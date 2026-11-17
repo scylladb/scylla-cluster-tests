@@ -14,7 +14,7 @@ test_metadata:
     - latte
   workload: read
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 1440
 n_db_nodes: 3

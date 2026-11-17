@@ -11,7 +11,7 @@ test_metadata:
   stress_tools: []
   nemesis_labels:
     - NoOpMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 backtrace_decoding: false
 cluster_backend: 'docker'

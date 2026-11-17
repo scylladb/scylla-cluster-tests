@@ -16,7 +16,7 @@ test_metadata:
   features:
     - tablets
     - large-partitions
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # Headroom for resharding 1 GiB partitions on every node restart; tune after the first run
 test_duration: 720

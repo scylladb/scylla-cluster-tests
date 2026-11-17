@@ -18,7 +18,7 @@ test_metadata:
     - SisyphusMonkey
   features:
     - tls-ssl
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 1360
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(25)' -pop seq=1..275050075",

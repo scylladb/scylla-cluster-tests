@@ -17,7 +17,7 @@ test_metadata:
     - SisyphusMonkey
   features:
     - large-collections
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 840
 stress_cmd: [

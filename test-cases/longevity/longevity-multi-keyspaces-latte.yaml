@@ -22,7 +22,7 @@ test_metadata:
     - SisyphusMonkey
   features:
     - tablets
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 3600
 prepare_stress_duration: 600

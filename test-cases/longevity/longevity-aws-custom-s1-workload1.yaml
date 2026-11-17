@@ -16,7 +16,7 @@ test_metadata:
   workload: mixed
   features:
     - tablets
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 # NOTE: the main load runs for 360m. Population of the 90M rows is expected to take ~1h47m,
 #       and draining its compaction debt ~20 more minutes, see 'prepare_wait_no_compactions_timeout'.

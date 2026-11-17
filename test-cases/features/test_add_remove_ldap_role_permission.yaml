@@ -13,7 +13,7 @@ test_metadata:
   workload: write
   features:
     - authorization
-  team_ownership: core-qa
+  team_ownership: scylladb/core-qa
 
 test_duration: 120
 
