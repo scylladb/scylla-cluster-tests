@@ -5,6 +5,11 @@ on:
     branches:
       - master
 
+# The newest run checks the current labels of the PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   label:
     if: github.event.pull_request.draft == false

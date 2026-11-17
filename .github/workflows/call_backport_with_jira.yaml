@@ -57,9 +57,16 @@ jobs:
       dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
       dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  # A backport/* label was added to a (closed) PR: create the backport PR(s).
+  # A backport/<version> label was added to a closed PR: create the backport PR(s).
+  # The shared workflow does no work for other labels or for open PRs.
   backport-on-label:
-    if: github.event_name == 'pull_request_target' && github.event.action == 'labeled'
+    if: >-
+      github.event_name == 'pull_request_target'
+      && github.event.action == 'labeled'
+      && github.event.pull_request.state == 'closed'
+      && startsWith(github.event.label.name, 'backport/')
+      && github.event.label.name != 'backport/none'
+      && !endsWith(github.event.label.name, '-done')
     uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@6f8c5ad21c767863f375fb343bbee8a1995ef8ff # main
     with:
       event_type: 'labeled'
