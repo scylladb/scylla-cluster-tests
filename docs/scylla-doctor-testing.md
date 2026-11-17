@@ -113,12 +113,16 @@ cluster. The gate therefore does not cover these analyzers, or covers them with 
 | `ScyllaSnitchAnalyzer` | turned off |
 | `ScyllaUpdateAnalyzer` | turned off |
 | `ScyllaClusterSystemKeyspacesReplicationAnalyzer` | turned off |
+| `AuthenticationAnalyzer` | turned off, unless the test sets an `authenticator` other than `AllowAllAuthenticator` |
+| `ScyllaKeyspacesReplicationAnalyzer` | turned off when a DC has fewer than 3 DB nodes (`n_db_nodes`), so RF 3 is not possible |
 | `RAMAnalyzer` | lower recommended RAM, total and per logical core |
 | `SwapAnalyzer` | RAM to swap ratio `3.5` |
 | `StorageRAMRatioAnalyzer` | disk to RAM ratio up to `120` |
 | `ScyllaConfigurationConsistencyAnalyzer` | skips some keys in the source and persisted validation |
 
-See the constant for the exact values and the reason for each.
+`ScyllaDoctor.analyzer_config()` adds the two conditional sections
+([SCT-1350](https://scylladb.atlassian.net/browse/SCT-1350)). See the constants for the exact
+values and the reason for each.
 
 ### Where SD is tested
 
@@ -505,8 +509,11 @@ What the gate does not check, or cannot pass, today:
     recommended types. The Ubuntu 24.04 job resolves to `n2d-standard-2` (GCE) and the ARM AMI job
     uses `im4gn.xlarge`; neither is on the list. The RHEL 10 job resolves to `i4i.large`, which is.
   - Other analyzers that have failed gating runs: `DriverVersionAnalyzer`
-    ([SCT-420](https://scylladb.atlassian.net/browse/SCT-420)), `ScyllaSSTablesAnalyzer`,
-    `AuthenticationAnalyzer`, `ScyllaKeyspacesReplicationAnalyzer` and `NICsAnalyzer`.
+    ([SCT-420](https://scylladb.atlassian.net/browse/SCT-420)), `ScyllaSSTablesAnalyzer` and
+    `NICsAnalyzer`. `AuthenticationAnalyzer` and `ScyllaKeyspacesReplicationAnalyzer` also failed
+    them; they are now turned off on clusters without authentication or with fewer than 3 DB nodes
+    per DC ([SCT-1350](https://scylladb.atlassian.net/browse/SCT-1350)), so the 1-node gate does
+    not cover them.
 - **Skipped results pass.** Collectors with status `2` (skipped) and analyzers with status `1`
   (skipped) do not fail the test. A change that makes a collector skip, and the analyzers that
   depend on it skip too, is not caught. There is no list of what may be skipped on which

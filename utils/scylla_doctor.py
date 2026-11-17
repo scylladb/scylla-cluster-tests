@@ -109,6 +109,17 @@ class ScyllaDoctor:
         skip_source_validation_keys = abort_on_ebadf, abort_on_internal_error, abort_on_lsa_bad_alloc, enable_sstable_key_validation
         skip_persisted_validation_keys = kms_hosts
     """)
+    SCYLLA_DOCTOR_AUTHENTICATION_ANALYZER_OFF = dedent("""
+        [AuthenticationAnalyzer]
+        ; the test cluster runs without authentication (SCT-1350)
+        run = no
+    """)
+    SCYLLA_DOCTOR_KEYSPACES_REPLICATION_ANALYZER_OFF = dedent("""
+        [ScyllaKeyspacesReplicationAnalyzer]
+        ; fewer than 3 DB nodes in a DC, RF 3 is not possible (SCT-1350)
+        run = no
+    """)
+    MIN_DB_NODES_FOR_REPLICATION_ANALYZER = 3
 
     def __init__(self, node: BaseNode, test_config: TestConfig, offline_install=False):
         self.node = node
@@ -506,6 +517,33 @@ class ScyllaDoctor:
             f.write(config)
         self.scylla_doctor_exec += f" -cf {self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF} "
 
+    @property
+    def is_authentication_enabled(self) -> bool:
+        authenticator = self.test_config.tester_obj().params.get("authenticator")
+        return bool(authenticator) and not authenticator.endswith("AllowAllAuthenticator")
+
+    @property
+    def min_db_nodes_per_dc(self) -> int:
+        n_db_nodes = self.test_config.tester_obj().params.get("n_db_nodes")
+        if isinstance(n_db_nodes, int):
+            return n_db_nodes
+        if isinstance(n_db_nodes, str):
+            n_db_nodes = n_db_nodes.split()
+        return min(int(nodes) for nodes in n_db_nodes) if n_db_nodes else 0
+
+    def analyzer_config(self) -> str:
+        """Build the full edition analyzer settings for this test cluster.
+
+        AuthenticationAnalyzer runs only when the cluster has authentication enabled, and
+        ScyllaKeyspacesReplicationAnalyzer only when every DC has enough nodes for RF 3.
+        """
+        config = self.SCYLLA_DOCTOR_ANALYZER_CONFIG
+        if not self.is_authentication_enabled:
+            config += self.SCYLLA_DOCTOR_AUTHENTICATION_ANALYZER_OFF
+        if self.min_db_nodes_per_dc < self.MIN_DB_NODES_FOR_REPLICATION_ANALYZER:
+            config += self.SCYLLA_DOCTOR_KEYSPACES_REPLICATION_ANALYZER_OFF
+        return config
+
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package("ethtool")
@@ -522,7 +560,7 @@ class ScyllaDoctor:
         if self.node.is_nonroot_install:
             additional_config += self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
         if self.is_full_edition:
-            additional_config += self.SCYLLA_DOCTOR_ANALYZER_CONFIG
+            additional_config += self.analyzer_config()
 
         if additional_config:
             self.update_scylla_doctor_config(self.scylla_install_home, additional_config=additional_config)

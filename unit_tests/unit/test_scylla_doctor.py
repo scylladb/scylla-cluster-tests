@@ -660,6 +660,56 @@ def test_install_scylla_doctor_uses_scylla_install_home_for_python3(mock_node, m
     mock_find.assert_called_once_with("/home/ubuntu")
 
 
+# --- analyzer_config tests ---
+
+
+@pytest.mark.parametrize(
+    "n_db_nodes,authenticator,auth_analyzer_off,replication_analyzer_off",
+    [
+        pytest.param([1], None, True, True, id="1_node_no_auth"),
+        pytest.param([1], "PasswordAuthenticator", False, True, id="1_node_with_auth"),
+        pytest.param([3], None, True, False, id="3_nodes_no_auth"),
+        pytest.param([3], "PasswordAuthenticator", False, False, id="3_nodes_with_auth"),
+        pytest.param([3, 1], None, True, True, id="multi_dc_one_small_dc"),
+        pytest.param("3 3", None, True, False, id="multi_dc_str"),
+        pytest.param(3, "org.apache.cassandra.auth.AllowAllAuthenticator", True, False, id="int_allow_all_auth"),
+    ],
+)
+def test_analyzer_config(
+    mock_node, mock_test_config, n_db_nodes, authenticator, auth_analyzer_off, replication_analyzer_off
+):
+    """AuthenticationAnalyzer is off without auth; ScyllaKeyspacesReplicationAnalyzer is off below 3 nodes per DC."""
+    test_config, params = mock_test_config
+    params["n_db_nodes"] = n_db_nodes
+    params["authenticator"] = authenticator
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+
+    config = doc.analyzer_config()
+
+    assert config.startswith(ScyllaDoctor.SCYLLA_DOCTOR_ANALYZER_CONFIG)
+    assert ("[AuthenticationAnalyzer]" in config) is auth_analyzer_off
+    assert ("[ScyllaKeyspacesReplicationAnalyzer]" in config) is replication_analyzer_off
+
+
+def test_install_scylla_doctor_writes_analyzer_config_for_full_edition(mock_node, mock_test_config):
+    """The full edition writes the per-cluster analyzer config into scylla_doctor.conf."""
+    test_config, params = mock_test_config
+    params.update({"scylla_doctor_edition": "full", "n_db_nodes": [1], "authenticator": None})
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+    doc._full_edition_downloaded = True
+
+    with (
+        patch.object(doc, "download_scylla_doctor"),
+        patch.object(doc, "find_scylla_bundled_python3", return_value=""),
+        patch.object(doc, "update_scylla_doctor_config") as mock_update,
+        patch.object(type(doc), "scylla_install_home", new_callable=lambda: property(lambda self: "/home/ubuntu")),
+    ):
+        doc.install_scylla_doctor()
+
+    mock_update.assert_called_once_with("/home/ubuntu", additional_config=doc.analyzer_config())
+    assert "[AuthenticationAnalyzer]" in mock_update.call_args.kwargs["additional_config"]
+
+
 # --- run_analysis_phase tests ---
 
 
