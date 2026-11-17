@@ -88,6 +88,14 @@ class InstanceConfigurationError(ProvisionUnrecoverableError):
     """
 
 
+class InstanceNameTakenError(InstanceConfigurationError):
+    """Raised when GCE rejects a create because a VM with that name already exists.
+
+    Names are unique across a project's zones, so a VM left over from an earlier attempt blocks the
+    name in every zone and region: retrying the same request a few seconds later can only fail again.
+    """
+
+
 class ProvisionerError(Exception):
     pass
 

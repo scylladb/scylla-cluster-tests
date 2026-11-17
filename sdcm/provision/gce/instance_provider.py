@@ -25,6 +25,7 @@ from google.cloud import compute_v1
 from sdcm.provision.provisioner import (
     InstanceConfigurationError,
     InstanceDefinition,
+    InstanceNameTakenError,
     OperationPreemptedError,
     PricingModel,
     ProvisionError,
@@ -303,6 +304,11 @@ class VirtualMachineProvider:
             if _is_zone_exhausted(error_to_raise):
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {error_to_raise}"
+                ) from error_to_raise
+            if isinstance(error_to_raise, google.api_core.exceptions.Conflict):
+                raise InstanceNameTakenError(
+                    f"Failed to create instances, a VM left over from an earlier attempt holds the name: "
+                    f"{error_to_raise}"
                 ) from error_to_raise
             raise ProvisionError(f"Failed to create instances: {error_to_raise}") from error_to_raise
         return instances
