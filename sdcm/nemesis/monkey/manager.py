@@ -32,7 +32,7 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.object_storage import backup_bucket_region
+from sdcm.utils.object_storage import backup_bucket_region, object_storage_endpoints
 
 LOGGER = logging.getLogger(__name__)
 
@@ -312,8 +312,29 @@ class ManagerMonkeyBase(NemesisBaseClass):
         return None
 
 
+class ManagerBackupMonkeyBase(ManagerMonkeyBase):
+    """Base class for the Scylla Manager backup nemesis."""
+
+    def precheck(self, node) -> str | None:
+        """Require the Manager agent to have backup credentials.
+
+        On OCI the agent gets its S3 endpoint and keys only from `object_storage_endpoints`
+        (see `BaseNode.update_manager_agent_backup_config()`), without them every upload fails.
+        """
+        if reason := super().precheck(node):
+            return reason
+        params = self.runner.cluster.params
+        if (
+            params.get("cluster_backend") == "oci"
+            and not params.get("use_cloud_manager")
+            and not object_storage_endpoints(params)
+        ):
+            return "Manager backup on OCI needs object_storage_endpoints in append_scylla_yaml"
+        return None
+
+
 @target_data_nodes
-class MgmtBackup(ManagerMonkeyBase):
+class MgmtBackup(ManagerBackupMonkeyBase):
     """Run a full Scylla Manager backup of all keyspaces."""
 
     disruptive = False
@@ -326,7 +347,7 @@ class MgmtBackup(ManagerMonkeyBase):
 
 
 @target_data_nodes
-class MgmtBackupSpecificKeyspaces(ManagerMonkeyBase):
+class MgmtBackupSpecificKeyspaces(ManagerBackupMonkeyBase):
     """Run a Scylla Manager backup of test keyspaces only."""
 
     disruptive = False
