@@ -97,7 +97,8 @@ def _zero_quota_message(what: str, error: BaseException) -> str:
     """Message of the ZeroQuotaError raised, instead of a retry, on a quota whose limit is 0.
 
     Retrying such a request 15 minutes apart can never succeed; it only holds the run until its
-    stage timeout aborts it, with the cause buried in retry warnings (SCT-1550).
+    stage timeout aborts it, with the cause buried in retry warnings (SCT-1550). Region fallback,
+    when enabled, moves the cluster to another region on this error instead.
     """
     return (
         f"Failed to create {what}: the GCE quota limit is 0 in this region for the project; "
