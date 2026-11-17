@@ -14,7 +14,7 @@ test_metadata:
     - cassandra-stress
   workload: mixed
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 1200
 

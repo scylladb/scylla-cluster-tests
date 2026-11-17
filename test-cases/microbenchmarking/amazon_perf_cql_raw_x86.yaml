@@ -10,7 +10,7 @@ test_metadata:
     - aws
   stress_tools: []
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 instance_type_db: 'c8i.xlarge'
 user_prefix: 'perf-cql-raw-amazon-x86'

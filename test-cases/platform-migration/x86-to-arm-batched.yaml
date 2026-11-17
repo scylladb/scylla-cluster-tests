@@ -12,7 +12,7 @@ test_metadata:
   features:
     - tablets
     - rack-aware
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 n_db_nodes: 6
 simulated_racks: 3

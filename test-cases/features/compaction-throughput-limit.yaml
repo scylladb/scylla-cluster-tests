@@ -12,7 +12,7 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   workload: write
-  team_ownership: qa-tools
+  team_ownership: scylladb/testing-infrastructure
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM n=20000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -pop seq=1..20000000 -col 'n=FIXED(10) size=FIXED(256)' -log interval=5"
 

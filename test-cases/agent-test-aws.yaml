@@ -16,7 +16,7 @@ test_metadata:
   workload: write
   nemesis_labels:
     - NoOpMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 10
 prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10"

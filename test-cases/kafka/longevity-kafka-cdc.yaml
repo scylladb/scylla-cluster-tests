@@ -17,7 +17,7 @@ test_metadata:
     - NoOpMonkey
   features:
     - cdc
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 60
 # CDC log cannot be created for a table if keyspace uses tablets (issue scylladb/scylladb#16317).
