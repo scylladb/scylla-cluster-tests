@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   jira-sync:
+    # The shared script ignores a removed backport/* label.
+    if: >-
+      !(github.event.action == 'unlabeled' && startsWith(github.event.label.name, 'backport/'))
     uses: scylladb/github-automation/.github/workflows/main_pr_events_jira_sync.yml@6f8c5ad21c767863f375fb343bbee8a1995ef8ff # main
     with:
       caller_action: ${{ github.event.action }}

@@ -20,8 +20,15 @@ permissions:
   actions: write
   contents: write
 
+# One build per PR at a time. Events of other labels get a unique group and cannot cancel a build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'New Hydra Version' && 'build' || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   check_org_membership:
+    # Build only when 'New Hydra Version' is added. To build again, remove and add the label.
+    if: github.event.label.name == 'New Hydra Version'
     runs-on: ubuntu-latest
     outputs:
       isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
@@ -39,7 +46,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-    if: ( github.event.pull_request.user.type == 'Bot' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
+    if: github.event.pull_request.user.type == 'Bot' || needs.check_org_membership.outputs.isTeamMember == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -32,12 +32,12 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: backport-hydra-fixup
-  cancel-in-progress: false
-
 jobs:
   fixup:
+    # Job-level group: a run whose job skips does not replace a pending run.
+    concurrency:
+      group: backport-hydra-fixup
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # run only on the main repository, the bot's token doesn't exist on forks
     if: >-
