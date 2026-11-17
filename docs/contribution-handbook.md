@@ -448,7 +448,6 @@ with the PR workflow and reduced Jenkins dependency.
 | [`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml) | Push to `master`/`branch-*`/`manager-*`; `backport/*` label added | Legacy in-repo auto-backport — superseded by `call_backport_with_jira` (see section 3.3) |
 | [`auto_assign`](../.github/workflows/auto_assign.yaml) | PR/issue opened | Auto-assigns the author to their PR/issue |
 | [`claude`](../.github/workflows/claude.yml) | `@claude` mention in comments/issues | Triggers Claude AI agent for code tasks |
-| [`ai-assisted-label`](../.github/workflows/ai-assisted-label.yaml) | PR open/sync | Labels PRs that contain AI-assistance markers as `ai-assisted` |
 | [`skill-review`](../.github/workflows/skill-review.yml) | PR touching `skills/**` | Reviews skill definitions for quality |
 | [`call_jira_sync`](../.github/workflows/call_jira_sync.yml) | PR events | Syncs PR status to Jira tickets |
 | [`build-docker-image`](../.github/workflows/build-docker-image.yaml) | `New Hydra Version` label | Builds and pushes a new Hydra Docker image |
