@@ -266,6 +266,7 @@ class VirtualMachineProvider:
                         self.zone,
                         normalized_name,
                     )
+                    self._drain_pending_creations(pending_instance_creations, pricing_model)
                     raise ZoneResourcesExhaustedError(f"Zone {self.zone} resource pool exhausted: {err}") from err
                 LOGGER.error("Error when sending create vm request for instance %s: %s", normalized_name, str(err))
                 error_to_raise = err
@@ -279,14 +280,12 @@ class VirtualMachineProvider:
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
-            except OperationPreemptedError, ProvisionError:
+            except OperationPreemptedError, ProvisionError, ProvisionUnrecoverableError:
                 # ProvisionError: the insert timed out, or the VM it created never reached RUNNING.
+                # ProvisionUnrecoverableError (zone exhaustion): the zone fallback deletes this zone's
+                # VMs and recreates the same names elsewhere. A delete issued while an insert is still
+                # running queues behind it and can outlive its 5 minute wait, leaving the name taken.
                 self._drain_pending_creations(pending_instance_creations, pricing_model)
-                raise
-            except ProvisionUnrecoverableError:
-                # Zone exhaustion and configuration errors are unrecoverable; let them propagate
-                # immediately. Successfully-created instances remain in self._cache so callers
-                # can clean them up before retrying in a different zone.
                 raise
             except google.api_core.exceptions.GoogleAPIError as err:
                 LOGGER.error("Error when waiting for instance %s: %s", normalized_name, str(err))
