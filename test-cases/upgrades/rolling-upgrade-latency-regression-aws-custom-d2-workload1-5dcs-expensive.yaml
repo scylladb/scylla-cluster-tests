@@ -17,7 +17,7 @@ test_metadata:
   features:
     - multi-dc
     - tls-ssl
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 1440
 

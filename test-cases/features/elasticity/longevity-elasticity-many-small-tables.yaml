@@ -14,7 +14,7 @@ test_metadata:
   features:
     - elasticity
     - tablets
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # This is a test case for having 90% disk utilization with a lot of small tables.
 # The data is split equally among 500 tables.

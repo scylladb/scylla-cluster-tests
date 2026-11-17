@@ -12,7 +12,7 @@ test_metadata:
   features:
     - twcs
     - tombstone-gc
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # LONGEVITY TEST: TWCS 48H WITH ZSTD DICTIONARY COMPRESSION
 #

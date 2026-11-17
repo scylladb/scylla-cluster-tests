@@ -42,7 +42,7 @@ test_metadata:
   workload: write
   nemesis_labels:
     - NoOpMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 3600
 

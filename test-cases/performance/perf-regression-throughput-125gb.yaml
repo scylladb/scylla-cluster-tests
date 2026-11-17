@@ -12,7 +12,7 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 580
 

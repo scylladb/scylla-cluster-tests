@@ -10,7 +10,7 @@ test_metadata:
     - aws
   stress_tools: []
   features: []
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 test_duration: 240
 stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]

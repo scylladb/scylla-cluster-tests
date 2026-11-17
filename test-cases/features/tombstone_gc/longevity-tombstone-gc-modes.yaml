@@ -14,7 +14,7 @@ test_metadata:
   features:
     - tombstone-gc
     - twcs
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # Maintained by Storage QA
 test_duration: 200

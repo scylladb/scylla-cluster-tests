@@ -11,7 +11,7 @@ test_metadata:
     - aws
   stress_tools: []
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 60
 backtrace_decoding: false
