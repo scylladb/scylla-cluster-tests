@@ -58,6 +58,7 @@ from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE, is_tablets_
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
+from sdcm.utils.stress_keep_alive import StressKeepAlive, finish_all
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
@@ -917,6 +918,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         entire_write_cs_thread_pools = self._run_all_stress_cmds(
             [], params={"stress_cmd": write_stress_during_entire_test}
         )
+        entire_write_keepers = self._keep_alive(
+            write_stress_during_entire_test, entire_write_cs_thread_pools, self._relaunch_all_stress_cmds
+        )
 
         # Let to write_stress_during_entire_test complete the schema changes
         self.metric_has_data(
@@ -1036,6 +1040,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.actions_log.info("Starting read workload for 60m")
             stress_cmd_read_60m = self.params.get("stress_cmd_read_60m")
             read_60m_cs_thread_pools = self._run_all_stress_cmds([], params={"stress_cmd": stress_cmd_read_60m})
+            read_60m_keepers = self._keep_alive(
+                stress_cmd_read_60m, read_60m_cs_thread_pools, self._relaunch_all_stress_cmds
+            )
             self.actions_log.info("Waiting 60s for cassandra-stress to start before rollback")
             time.sleep(60)
 
@@ -1069,11 +1076,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.actions_log.info("Step6 - Verify stress results after upgrade ")
         self.actions_log.info("Waiting for stress threads to complete after upgrade")
         # wait for the 60m read workload to finish
-        for pool in read_60m_cs_thread_pools:
-            self.verify_stress_thread(pool)
-
-        for pool in entire_write_cs_thread_pools:
-            self.verify_stress_thread(pool)
+        finish_all(read_60m_keepers + entire_write_keepers)
 
         self.actions_log.info("Step7 - Upgrade sstables to latest supported version ")
         # figure out what is the last supported sstable version
@@ -1222,6 +1225,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.rollback_node(node, upgrade_sstables=self.params.get("upgrade_sstables"))
         node.check_node_health()
 
+    def _keep_alive(self, stress_cmds, pools: list, relaunch) -> list[StressKeepAlive]:
+        """Wrap the thread pools of a during-upgrade workload so that finish() waits for them.
+
+        With keep_stress_alive_during_upgrade, a command that ends early is rerun in timed passes
+        until finish(). This needs one pool per command, so with stress_multiplier the pools are
+        only verified: a rerun would multiply its command again.
+        """
+        commands = [stress_cmds] if isinstance(stress_cmds, str) else list(stress_cmds or [])
+        one_pool_per_command = (self.params.get("stress_multiplier") or 1) <= 1 and len(commands) == len(pools)
+        if self.params.get("keep_stress_alive_during_upgrade") and one_pool_per_command:
+            return [StressKeepAlive(self, command, [pool], relaunch) for command, pool in zip(commands, pools)]
+        return [StressKeepAlive(self, "", [pool], None) for pool in pools]
+
+    def _relaunch_all_stress_cmds(self, stress_cmd: str) -> list:
+        """Start one more pass of a stress command the way test_rolling_upgrade starts its workloads."""
+        return self._run_all_stress_cmds([], params={"stress_cmd": [stress_cmd]})
+
     def _run_stress_workload(
         self,
         workload_name: str,
@@ -1305,6 +1325,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         step = itertools_count(start=1)
         self._run_stress_workload("stress_before_upgrade", wait_for_finish=True)
         stress_thread_pools = self._run_stress_workload("stress_during_entire_upgrade", wait_for_finish=False)
+        keepers = self._keep_alive(
+            self.params.get("stress_during_entire_upgrade"),
+            stress_thread_pools,
+            lambda cmd: [self.run_stress_thread(stress_cmd=cmd)],
+        )
 
         # generate random order to upgrade
         nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
@@ -1332,8 +1357,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.validate_limited_voters_feature_enabled()
 
         self.actions_log.info("Waiting for stress_during_entire_upgrade to finish")
-        for stress_thread_pool in stress_thread_pools:
-            self.verify_stress_thread(stress_thread_pool)
+        finish_all(keepers)
 
         self._run_stress_workload("stress_after_cluster_upgrade", wait_for_finish=True)
 
