@@ -13,6 +13,7 @@
 
 from .base import FailuresWatcher, RetryableNetworkException, SSHConnectTimeoutError, shell_script_cmd
 from .local_cmd_runner import LocalCmdRunner
+from .remote_asyncssh_cmd_runner import RemoteAsyncSSHCmdRunner
 from .remote_base import RemoteCmdRunnerBase
 from .remote_cmd_runner import RemoteCmdRunner
 from .remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
@@ -20,6 +21,7 @@ from .remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
 __all__ = (
     "LocalCmdRunner",
     "RemoteLibSSH2CmdRunner",
+    "RemoteAsyncSSHCmdRunner",
     "RemoteCmdRunner",
     "NETWORK_EXCEPTIONS",
     "LOCALRUNNER",
@@ -35,5 +37,6 @@ NETWORK_EXCEPTIONS = (
     (SSHConnectTimeoutError, RetryableNetworkException)
     + RemoteLibSSH2CmdRunner.get_retryable_exceptions()
     + RemoteCmdRunner.get_retryable_exceptions()
+    + RemoteAsyncSSHCmdRunner.get_retryable_exceptions()
 )
 LOCALRUNNER = LocalCmdRunner()

@@ -65,12 +65,12 @@ def ssh_server_container(test_data_dir):
         subprocess.run(["docker", "rm", "-f", container_id], check=True)
 
 
-@pytest.mark.parametrize("ssh_transport", ["libssh2", "fabric"])
+@pytest.mark.parametrize("ssh_transport", ["libssh2", "fabric", "asyncssh"])
 @pytest.mark.integration
 def test_ssh_none_auth(ssh_server_container, ssh_transport):
     """Test 'none' authentication for SSH transports.
 
-    Verifies that both libssh2 and fabric can authenticate using the 'none' method.
+    Verifies that libssh2, fabric and asyncssh can authenticate using the 'none' method.
     """
     ssh_login_info = ssh_server_container
     RemoteCmdRunnerBase.set_default_ssh_transport(ssh_transport)
