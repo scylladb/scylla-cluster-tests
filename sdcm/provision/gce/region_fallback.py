@@ -15,7 +15,8 @@
 
 Both the modern provisioning path (`sct.py` -> `instances_provider.provision_sct_resources`) and the
 legacy tester path (`tester.ClusterTester.get_cluster_gce`) relocate the full cluster to another
-region when region capacity is exhausted. This module shares their placement and cleanup logic.
+region when region capacity is exhausted or the quota limit is 0 in the region. This module shares
+their placement and cleanup logic.
 
 Unlike AWS region fallback, GCE needs neither VPC-peering checks (single global VPC) nor per-region
 image re-resolution (images are global resources), so switching is a plain config/env update.
@@ -35,7 +36,7 @@ from sdcm.provision.common.region_fallback import (
 from sdcm.provision.gce.capacity_errors import is_zone_capacity_error
 from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce.zone_resolver import GceAZResolver
-from sdcm.provision.provisioner import ProvisionError, ZoneResourcesExhaustedError
+from sdcm.provision.provisioner import ProvisionError, ZeroQuotaError, ZoneResourcesExhaustedError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,47 @@ def is_capacity_error(exc: BaseException) -> bool:
     if isinstance(exc, ZoneResourcesExhaustedError):
         return True
     return isinstance(exc, ProvisionError) and is_zone_capacity_error(exc)
+
+
+def is_region_relocation_error(exc: BaseException) -> bool:
+    """True for errors that another region can fix: capacity exhaustion, or a quota whose limit is 0.
+
+    A zero quota is regional, so the zone fallback (which uses `is_capacity_error`) skips it and only
+    the region / multi-DC loops act on it. Each region without the quota answers the insert with the
+    same 403 within seconds, so trying the candidates one by one costs little (SCT-1550).
+    """
+    return is_capacity_error(exc) or isinstance(exc, ZeroQuotaError)
+
+
+def _relocation_classifier(
+    error_factory: Callable[[str], BaseException],
+) -> tuple[Callable[[BaseException], bool], Callable[[str], BaseException]]:
+    """Return the relocation predicate and the final-error factory of one fallback run.
+
+    When every region failed on a zero quota, the final error is a `ZeroQuotaError` rather than the
+    caller's `error_factory` type: that keeps it out of the on-demand last resort, which a
+    `ProvisionUnrecoverableError` would trigger, and on-demand needs the same quota.
+
+    The errors are collected over the whole run, across all DCs of a multi-DC cluster. When any of
+    them was a capacity error, the caller's type is kept and the on-demand last resort stays open,
+    even if the DC that ran out of candidates failed only on a zero quota. On-demand may fix the
+    capacity part, and a DC without the quota fails it again within seconds, so this costs one short
+    attempt at most.
+    """
+    relocation_errors: list[BaseException] = []
+
+    def should_relocate(exc: BaseException) -> bool:
+        if is_region_relocation_error(exc):
+            relocation_errors.append(exc)
+            return True
+        return False
+
+    def final_error(message: str) -> BaseException:
+        if relocation_errors and all(isinstance(exc, ZeroQuotaError) for exc in relocation_errors):
+            return ZeroQuotaError(message)
+        return error_factory(message)
+
+    return should_relocate, final_error
 
 
 def current_datacenters(params) -> list[str]:
@@ -243,7 +285,8 @@ def provision_with_region_fallback(
     error_factory: Callable[[str], BaseException],
     partial_cleanup: Callable[[], None] | None = None,
 ) -> None:
-    """Provision in the configured GCE region, relocating to fallback regions on capacity exhaustion.
+    """Provision in the configured GCE region, relocating to fallback regions on capacity exhaustion
+    or on a quota whose limit is 0 in the region.
 
     Thin GCE binding over the backend-agnostic loop in
     :func:`sdcm.provision.common.region_fallback.provision_with_region_fallback`: it enforces the
@@ -259,6 +302,7 @@ def provision_with_region_fallback(
         provision_once: Provisions the whole cluster in the currently configured region/AZ.
         error_factory: Builds the exception raised when every region is exhausted (each path keeps
             its own failure type, e.g. ``CriticalTestFailure`` vs ``ProvisionUnrecoverableError``).
+            When every region failed on a zero quota, a ``ZeroQuotaError`` is raised instead.
         partial_cleanup: Optional per-region cleanup (the legacy path destroys in-memory clusters).
 
     Raises:
@@ -270,6 +314,7 @@ def provision_with_region_fallback(
     original_az = params.get("availability_zone")
     original_env_region = os.environ.get("SCT_GCE_DATACENTER")
 
+    should_relocate, final_error = _relocation_classifier(error_factory)
     _provision_with_region_fallback(
         original_region=original_region,
         region_candidates=region_candidates,
@@ -279,8 +324,8 @@ def provision_with_region_fallback(
         cleanup_region=lambda region: cleanup_region(
             test_id, region, network_name=network_name, partial_cleanup=partial_cleanup
         ),
-        is_capacity_error=is_capacity_error,
-        error_factory=error_factory,
+        is_capacity_error=should_relocate,
+        error_factory=final_error,
     )
 
 
@@ -314,6 +359,7 @@ def provision_with_dc_fallback(
         for region in dict.fromkeys(current_datacenters(params)):
             cleanup_region(test_id, region, network_name=network_name, partial_cleanup=None)
 
+    should_relocate, final_error = _relocation_classifier(error_factory)
     _provision_with_dc_fallback(
         dc_candidates=resolver.get_dc_fallback_candidates,
         provision_once=provision_once,
@@ -321,8 +367,8 @@ def provision_with_dc_fallback(
         switch_dc_region=lambda index, region, az_letters: switch_dc_region(params, index, region, az_letters),
         restore=restore,
         cleanup=cleanup,
-        is_capacity_error=is_capacity_error,
-        error_factory=error_factory,
+        is_capacity_error=should_relocate,
+        error_factory=final_error,
     )
 
 

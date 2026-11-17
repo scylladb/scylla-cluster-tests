@@ -101,8 +101,10 @@ class ZeroQuotaError(InstanceConfigurationError):
 
     Unlike a quota that is used up, a zero limit is never freed by waiting or by another zone of
     the same region; only a quota grant or another region fixes it. It is an
-    `InstanceConfigurationError` so that it fails at once and is never retried, relocated, or
-    softened into a nemesis skip.
+    `InstanceConfigurationError` so that it fails at once: it is never retried, moved to another
+    zone, sent to the on-demand last resort, or softened into a nemesis skip. GCE region fallback
+    is the one place that acts on it, by moving the cluster to another region (see
+    `sdcm.provision.gce.region_fallback.is_region_relocation_error`).
     """
 
 
