@@ -39,6 +39,14 @@ matching labels in `vars/getJenkinsLabels.groovy`, plus the labels pinned outsid
 label in the PR and hydra jenkinsfiles, `<assignedNode>` in job XMLs), in one commit, so a branch
 switches image and labels together.
 
+### One builder bump at a time
+
+Two open PRs that bump the builders pick the same next versions, and the second `configure` run
+changes the first one's live builders. Every PR that bumps a builder `VERSION` carries the
+`New Builders Version` label. Before you bump, list the open PRs with that label: if one exists,
+wait for it to merge, rebase on it, and take the version after its version. A version configured
+from a branch without the earlier PR's change silently drops that change from the new builders.
+
 ### Old builders stay until every branch moves
 
 `configure-jenkins-builders` adds new clouds and templates next to the old ones. The release
@@ -77,7 +85,7 @@ The full commands are in [rollout.md](workflows/rollout.md).
 | 2 | List existing images of the version on every cloud | No stale image, or the user approved deleting it |
 | 3 | `create-runner-image` per cloud | Log has "All packages successfully installed" and no traceback |
 | 4 | Boot, check, reboot, check one runner per cloud | All four pass, user's go |
-| 5 | Bump builder versions, the groovy labels and the pinned labels, one commit | No old label pin left |
+| 5 | Bump builder versions, the groovy labels and the pinned labels, one commit | No other open `New Builders Version` PR, no old label pin left |
 | 6 | `configure-jenkins-builders` per cloud | User's go, then `check-jenkins-builder-labels` passes |
 | 7 | Run a test job on each new label, add the backport labels | Jobs pass on the new builders |
 | 8 | Retire the old builder versions: Jenkins clouds, ASGs, launch and instance templates | Every backport merged, no live branch or queued build asks for them, user's go |
@@ -104,6 +112,7 @@ The full commands are in [rollout.md](workflows/rollout.md).
 
 - [ ] No stale image was reused: every image of the version was built in this rollout
 - [ ] One runner per cloud booted, answered SSH, survived a reboot, and was terminated
+- [ ] No other `New Builders Version` PR was open when the versions were picked, and this PR carries the label
 - [ ] Builder versions, groovy labels and pinned labels changed in one commit
 - [ ] `check-jenkins-builder-labels` passes before the label commit merges
 - [ ] `configure-jenkins-builders` ran only after the user's go
