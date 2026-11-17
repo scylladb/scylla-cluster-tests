@@ -4,14 +4,12 @@
 # since its own last repair; ScyllaDB spreads the work over time, nodes and
 # shards, so this is a repair period rather than a synchronised hourly burst.
 #
-# Requires ScyllaDB 2026.1 or newer and tablet-enabled keyspaces. On vnode
-# tables it does nothing, and on older releases the two options are logged as
-# "Unknown option" at warn level without affecting startup.
-#
-# Both values have to be identical on every node, which is what
-# append_scylla_yaml guarantees.
+# Set with ALTER CLUSTER right after the cluster is set up. The values are part
+# of the schema, so every node, including nodes added later, uses them.
+# Requires a ScyllaDB release with CQL cluster configuration (Automatic Repair
+# MS2) and tablet-enabled keyspaces; on vnode tables it does nothing.
 #
 # https://docs.scylladb.com/manual/master/features/automatic-repair.html
-append_scylla_yaml:
-  auto_repair_enabled_default: true
-  auto_repair_threshold_default_in_seconds: 3600
+cluster_config:
+  auto_repair_enabled: true
+  auto_repair_threshold_in_seconds: 3600

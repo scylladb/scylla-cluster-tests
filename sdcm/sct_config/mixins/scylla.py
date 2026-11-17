@@ -16,8 +16,18 @@
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel
+from pydantic.functional_validators import BeforeValidator
+from typing_extensions import Annotated
 
-from sdcm.sct_config.types import Boolean, DictOrStrOrPydantic, SctField, String, StringOrList
+from sdcm.sct_config.types import (
+    Boolean,
+    ClusterConfig,
+    DictOrStrOrPydantic,
+    SctField,
+    String,
+    StringOrList,
+    dict_or_str_or_pydantic,
+)
 
 
 class ScyllaConfigMixin(BaseModel):
@@ -69,6 +79,13 @@ class ScyllaConfigMixin(BaseModel):
     )
     client_encrypt_mtls: Boolean = SctField(
         description="when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled",
+    )
+    cluster_config: Annotated[ClusterConfig, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
+        description="""CQL cluster configuration options stored at CLUSTER scope with ALTER CLUSTER once the DB cluster
+            is set up. They are part of the schema, so they apply to every node, including nodes added later.
+            Needs a ScyllaDB release with CQL cluster configuration.
+            For example, {'auto_repair_enabled': True, 'auto_repair_threshold_in_seconds': 3600}
+            or SCT_CLUSTER_CONFIG__auto_repair_enabled=true""",
     )
     db_type: String = SctField(
         description="Db type to install into db nodes, scylla/cassandra",
