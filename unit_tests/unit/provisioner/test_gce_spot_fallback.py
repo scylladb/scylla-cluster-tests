@@ -311,6 +311,32 @@ def test_preemption_mid_batch_drains_the_operations_still_in_flight(vm_provider)
     assert sorted(vm_provider._cache) == ["node-1", "node-3"]
 
 
+def test_zone_exhaustion_mid_batch_drains_the_operations_still_in_flight(vm_provider):
+    """SCT-1551: the zone fallback deletes this zone's VMs and recreates the same names elsewhere.
+
+    A delete sent while an insert still runs queues behind it and can outlive its wait, so the next
+    zone's insert of that name gets AlreadyExists. The inserts must be resolved before the raise.
+    """
+    definitions = [_definition(name=f"node-{index}") for index in range(1, 4)]
+    operations = [MagicMock() for _ in definitions]
+
+    def wait(operation, _description, **_):
+        if operation is operations[0]:
+            raise google.api_core.exceptions.BadRequest("ZONE_RESOURCE_POOL_EXHAUSTED")
+
+    with (
+        patch.object(vm_provider, "_build_and_insert_instance", side_effect=operations),
+        patch("sdcm.provision.gce.instance_provider.wait_for_extended_operation", side_effect=wait) as waited,
+        patch.object(vm_provider, "delete"),
+    ):
+        with pytest.raises(ZoneResourcesExhaustedError):
+            vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
+
+    # node-2 and node-3 came up after the abort, so the zone cleanup deletes them with no insert in the way.
+    assert [call.args[0] for call in waited.call_args_list] == operations
+    assert sorted(vm_provider._cache) == ["node-2", "node-3"]
+
+
 @pytest.mark.parametrize("drain_error", [TimeoutError("timed out"), RuntimeError("operation failed")])
 def test_drain_errors_do_not_mask_the_preemption(vm_provider, drain_error):
     """`wait_for_extended_operation` can also raise TimeoutError/RuntimeError; the drain must swallow those.
