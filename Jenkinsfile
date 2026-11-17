@@ -507,7 +507,6 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                 timeout(time: 300, unit: 'MINUTES') {
                                                     dir(working_dir) {
                                                         echo "Run provision test"
@@ -553,7 +552,6 @@ pipeline {
                                             try {
                                                 withEnv(["SCT_REUSE_CLUSTER=${env.SCT_TEST_ID}"]) {
                                                     wrap([$class: 'BuildUser']) {
-                                                        env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                         timeout(time: 300, unit: 'MINUTES') {
                                                             dir(working_dir) {
                                                                 echo "Reuse the cluster and re-run provision test"

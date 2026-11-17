@@ -10,7 +10,13 @@ def call() {
     def buildTag = env.BUILD_TAG
     def jenkinsJobTag = buildTag ?: ""
     def jenkinsJob = deriveJenkinsJob(jenkinsJobTag)
-    def tags = [RunByUser: "${getRunningUserId()}",
+    def owner = getRunningUserId()
+    if (owner != "jenkins") {
+        // SCT's get_username reads this first, and hydra forwards every BUILD_* variable, so the
+        // SCT runner, cluster and Argus run get the same owner as the builder
+        env.BUILD_USER_REQUESTED_BY = owner
+    }
+    def tags = [RunByUser: owner,
                 JenkinsJobTag: jenkinsJobTag,
                 JenkinsJob: jenkinsJob,
                 NodeType: "builder",
@@ -70,6 +76,8 @@ private String GetBillingProjectTag() {
 }
 
 def getRunningUserId () {
+    // The person behind the run, first match wins: requested_by_user, manual starter, PR author,
+    // then the owner of the upstream build that triggered this one
     String runningUserID = "jenkins"
 
     try {
@@ -84,6 +92,28 @@ def getRunningUserId () {
         echo "Build cause: |${buildCause.toString()}|"
         if (buildCause != null && !buildCause.isEmpty()) {
             runningUserID = buildCause[0].userId
+        }
+    }
+
+    if (runningUserID == "jenkins" && env.CHANGE_AUTHOR) {
+        // a GitHub login, as the CI provision tests already used
+        runningUserID = env.CHANGE_AUTHOR
+    }
+
+    if (runningUserID == "jenkins") {
+        for (upstream in currentBuild.upstreamBuilds) {
+            // a pipeline's buildVariables hold only env.* it set, not its params; this one is set
+            // by call() above when the upstream build ran tagBuilder
+            def upstreamUser = upstream.buildVariables.BUILD_USER_REQUESTED_BY
+            if (!upstreamUser) {
+                def upstreamCause = upstream.getBuildCauses('hudson.model.Cause$UserIdCause')
+                upstreamUser = upstreamCause ? upstreamCause[0].userId : null
+            }
+            if (upstreamUser) {
+                echo "Owner '${upstreamUser}' taken from upstream build ${upstream.fullProjectName} #${upstream.number}"
+                runningUserID = upstreamUser
+                break
+            }
         }
     }
 
