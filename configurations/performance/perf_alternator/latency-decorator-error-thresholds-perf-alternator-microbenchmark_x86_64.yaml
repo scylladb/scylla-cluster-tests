@@ -1,0 +1,28 @@
+# Thresholds are deliberately null until perf-alternator has a baseline of its own.
+#
+# perf-alternator sends DynamoDB API requests over HTTP to an embedded server, so its per-operation
+# numbers have nothing in common with the CQL microbenchmarks, and their thresholds do not carry
+# over.
+#
+# Null is not the same as deleting this file. sdcm/argus_results.py falls back to
+# ValidationRule(best_pct=5) when a metric has no entry at all, which would flag every run
+# against a baseline that does not exist yet. An explicit null produces a ValidationRule with no
+# limit, so results are recorded in Argus without being validated.
+#
+# To set real values: let the weekly jobs collect a few runs, take the stable numbers from the
+# Argus graphs for this test, and replace each null with a fixed_limit slightly above them.
+latency_decorator_error_thresholds:
+  write:
+      allocs_per_op:
+        fixed_limit: null
+      cpu_cycles_per_op:
+        fixed_limit: null
+      instructions_per_op:
+        fixed_limit: null
+  read:
+      allocs_per_op:
+        fixed_limit: null
+      cpu_cycles_per_op:
+        fixed_limit: null
+      instructions_per_op:
+        fixed_limit: null

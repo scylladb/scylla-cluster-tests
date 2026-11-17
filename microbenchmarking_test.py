@@ -47,8 +47,8 @@ class PerfSimpleQueryTest(MicrobenchmarkTest):
     The tool drives the query processor in process, against a cql_test_env: it builds its own
     db::config so it reads no config file, it starts no CQL server so it binds no ports, and its
     data goes to a throwaway temp directory. Nothing about it collides with the scylla-server that
-    SCT runs on the node, so it needs no special handling here - unlike perf-cql-raw, see
-    PerfCqlRawTest.
+    SCT runs on the node, so it needs no special handling here - unlike perf-cql-raw and
+    perf-alternator, see InProcessServerMicrobenchmarkTest.
 
     The read workload is the default; `perf_simple_query_extra_command` passes `--write` for the
     write workload.
@@ -66,14 +66,11 @@ class PerfSimpleQueryTest(MicrobenchmarkTest):
             self.submit_results(node, result_file, benchmark_name="Perf Simple Query")
 
 
-class PerfCqlRawTest(MicrobenchmarkTest):
+class InProcessServerMicrobenchmarkTest(MicrobenchmarkTest):
     """
-    Run the `scylla perf-cql-raw` microbenchmark, which exercises the full networking and protocol
-    parsing path using handcrafted CQL binary frames.
-
-    Unlike perf-simple-query, this tool boots a full scylla server in process - it calls
-    scylla_main and then speaks the CQL protocol to itself over a real socket - so it needs
-    everything a server needs, and each of those needs is handled below:
+    Base for the microbenchmarks that boot a full scylla server in process: the tool calls
+    scylla_main and then drives the server over a real socket. Such a tool needs everything a
+    server needs, and each of those needs is handled here:
 
     * A config file. scylla resolves its config as <cwd>/conf/scylla.yaml, and the test does not
       run from a scylla source tree the way the tool's developers do, so it gets SCYLLA_CONFIG
@@ -90,12 +87,17 @@ class PerfCqlRawTest(MicrobenchmarkTest):
       in. It describes the data disk while --workdir is on /tmp, which is fine: seastar registers
       a placeholder queue for devid 0 and routes any unconfigured device to it.
 
-    The command line matches what the tool's developers run, so results stay comparable with
+    The command line matches what the tools' developers run, so results stay comparable with
     theirs. Changing RESOURCE_OPTIONS or DURATION invalidates the Argus baseline, which is why
     they are constants here rather than config options.
+
+    A subclass sets BENCHMARK (the scylla subcommand), BENCHMARK_NAME (the suffix of its Argus
+    tables) and WORKDIR, and extends SCYLLA_CONFIG with what its tool needs on top.
     """
 
-    WORKDIR = "/tmp/scylla-perf-cql-raw-workdir"
+    BENCHMARK = ""
+    BENCHMARK_NAME = ""
+    WORKDIR = ""
     IO_PROPERTIES_FILE = "/etc/scylla.d/io_properties.yaml"
     # -m must cover 1 GiB per shard plus the 50 MiB per shard scylla takes out of it for wasm
     # UDFs, or it refuses to start: 2G over 2 shards left 974 MiB/shard and died. 3G leaves
@@ -122,7 +124,7 @@ endpoint_snitch: SimpleSnitch
         node = self.db_cluster.nodes[0]
         scylla_bin = node.add_install_prefix("/usr/bin/scylla")
         io_properties_file = node.add_install_prefix(self.IO_PROPERTIES_FILE)
-        result_file = "perf-cql-raw-result.json"
+        result_file = f"{self.BENCHMARK}-result.json"
         conf_file = f"{self.WORKDIR}/conf/scylla.yaml"
 
         node.remoter.run(f"rm -rf {self.WORKDIR}")
@@ -137,15 +139,59 @@ endpoint_snitch: SimpleSnitch
         try:
             node.stop_scylla_server(ignore_status=True)
             results = node.remoter.run(
-                f"{scylla_bin} perf-cql-raw --json-result {result_file}"
+                f"{scylla_bin} {self.BENCHMARK} --json-result {result_file}"
                 f" --workdir {self.WORKDIR} --options-file {conf_file}"
                 f" --io-properties-file {io_properties_file}"
                 f" {self.RESOURCE_OPTIONS} --workload {workload} --duration {self.DURATION}"
             )
             if results.ok:
-                self.submit_results(node, result_file, benchmark_name="Perf CQL Raw")
+                self.submit_results(node, result_file, benchmark_name=self.BENCHMARK_NAME)
         finally:
             node.start_scylla_server()
+
+
+class PerfCqlRawTest(InProcessServerMicrobenchmarkTest):
+    """
+    Run the `scylla perf-cql-raw` microbenchmark, which exercises the full networking and protocol
+    parsing path using handcrafted CQL binary frames, sent to the in-process server over a socket.
+    """
+
+    BENCHMARK = "perf-cql-raw"
+    BENCHMARK_NAME = "Perf CQL Raw"
+    WORKDIR = "/tmp/scylla-perf-cql-raw-workdir"
+
+    def test_read(self):
+        self.run_workload("read")
+
+    def test_write(self):
+        self.run_workload("write")
+
+
+class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
+    """
+    Run the `scylla perf-alternator` microbenchmark, which sends DynamoDB API requests over HTTP to
+    the Alternator server of the in-process scylla, against a table with all the DynamoDB types.
+
+    The tool exists on every supported release, but writes the --json-result file only from
+    2026.2, so the trigger matrix runs it from 2026.2 on.
+
+    Alternator is off unless the config sets its port: without alternator_port the tool waits for
+    the port and then fails. The write isolation is `forbid`, as the tool's author runs the read
+    and write workloads; `only_rmw_uses_lwt` is only meaningful for the write_rmw workload.
+    A failed request stops the tool with no result file (its --continue-after-error defaults to
+    false), so the test fails with nothing sent to Argus.
+    """
+
+    BENCHMARK = "perf-alternator"
+    BENCHMARK_NAME = "Perf Alternator"
+    WORKDIR = "/tmp/scylla-perf-alternator-workdir"
+    SCYLLA_CONFIG = (
+        InProcessServerMicrobenchmarkTest.SCYLLA_CONFIG
+        + """\
+alternator_port: 8000
+alternator_write_isolation: forbid
+"""
+    )
 
     def test_read(self):
         self.run_workload("read")
