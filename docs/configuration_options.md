@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-543 options across 29 groups.
+544 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -55,7 +55,7 @@ concerns first, then one page per backend, then one per test type.
 | [Minicloud](configuration_options/minicloud.md) | 25 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
-| [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
+| [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
 | [Jepsen tests](configuration_options/jepsen-tests.md) | 4 | Jepsen consistency test runs. |
@@ -306,6 +306,7 @@ concerns first, then one page per backend, then one per test type.
 | [`k8s_use_chaos_mesh`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_use_chaos_mesh) | `SCT_K8S_USE_CHAOS_MESH` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`kafka_backend`](configuration_options/kafka-cdc-connectors.md#kafka_backend) | `SCT_KAFKA_BACKEND` | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) |
 | [`kafka_connectors`](configuration_options/kafka-cdc-connectors.md#kafka_connectors) | `SCT_KAFKA_CONNECTORS` | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) |
+| [`keep_stress_alive_during_upgrade`](configuration_options/upgrade-tests.md#keep_stress_alive_during_upgrade) | `SCT_KEEP_STRESS_ALIVE_DURING_UPGRADE` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`keyspace_num`](configuration_options/stress-commands-and-load-generation.md#keyspace_num) | `SCT_KEYSPACE_NUM` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`keystore_backend`](configuration_options/general-and-provisioning.md#keystore_backend) | `SCT_KEYSTORE_BACKEND` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`keystore_sm_prefix`](configuration_options/general-and-provisioning.md#keystore_sm_prefix) | `SCT_KEYSTORE_SM_PREFIX` | [General and provisioning](configuration_options/general-and-provisioning.md) |
