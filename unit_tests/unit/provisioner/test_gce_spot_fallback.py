@@ -27,12 +27,13 @@ from sdcm.keystore import SSHKey
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider, build_scheduling
 from sdcm.provision.provisioner import (
     InstanceDefinition,
+    InstanceNameTakenError,
     OperationPreemptedError,
     PricingModel,
     ProvisionError,
     ZoneResourcesExhaustedError,
 )
-from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback, provision_with_retry
 
 
 FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", private_key=b"fake-private\n")
@@ -336,6 +337,20 @@ def test_zone_exhaustion_mid_batch_drains_the_operations_still_in_flight(vm_prov
     # node-2 and node-3 came up after the abort, so the zone cleanup deletes them with no insert in the way.
     assert [call.args[0] for call in waited.call_args_list] == operations
     assert sorted(vm_provider._cache) == ["node-2", "node-3"]
+
+
+def test_taken_instance_name_is_not_retried(vm_provider, monkeypatch):
+    """SCT-1551: a VM left in another zone holds the name; retrying it 5 s later can only get 409 again."""
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    taken = google.api_core.exceptions.Conflict("The resource 'node-1' already exists")
+    provisioner = MagicMock()
+    provisioner.get_or_create_instances.side_effect = vm_provider.get_or_create
+
+    with patch.object(vm_provider, "_build_and_insert_instance", side_effect=taken):
+        with pytest.raises(InstanceNameTakenError):
+            provision_with_retry(provisioner, definitions=[_definition()], pricing_model=PricingModel.ON_DEMAND)
+
+    assert provisioner.get_or_create_instances.call_count == 1
 
 
 @pytest.mark.parametrize("drain_error", [TimeoutError("timed out"), RuntimeError("operation failed")])
