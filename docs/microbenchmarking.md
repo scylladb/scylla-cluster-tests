@@ -14,5 +14,7 @@ Tests run by  SCT. SCT also controls which env to run it
 1. - [scylla-pkg pipeline](https://github.com/scylladb/scylla-pkg/blob/next/scripts/jenkins-pipelines/microbenchmarks.jenkinsfile)
     - [main SCT file](../sdcm/microbenchmarking.py)
  ---
-2.  - [perf-simple-query test pipeline](../jenkins-pipelines/performance_staging/perf-simple-query.jenkinsfile)
-    - [main SCT test file](../microbenchmarking_test.py)
+2.  - [weekly microbenchmark pipelines](../jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/)
+      (`scylla-enterprise-perf-{simple-query,cql-raw,alternator}-weekly-microbenchmark_*`)
+    - [main SCT test file](../microbenchmarking_test.py): `PerfSimpleQueryTest`, `PerfCqlRawTest`,
+      `PerfAlternatorTest`. See [test-catalog.md](performance/test-catalog.md#microbenchmarking_testpy)
