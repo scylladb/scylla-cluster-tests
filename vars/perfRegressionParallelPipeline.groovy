@@ -371,7 +371,7 @@ def call(Map pipelineParams) {
                                                                     loadEnvFromString(params_mapping[sub_test].extra_environment_variables)
                                                                     dir('scylla-cluster-tests') {
                                                                         checkout scm
-                                                                        checkoutQaInternal(params_mapping[sub_test])
+                                                                        checkoutQaInternal(params_mapping[sub_test] + pipelineParams.subMap(['qa_internal_repo', 'qa_internal_branch']))
                                                                     }
                                                                 dockerLogin(params_mapping[sub_test])
                                                                 }

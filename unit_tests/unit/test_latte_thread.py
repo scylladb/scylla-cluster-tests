@@ -11,7 +11,10 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import concurrent.futures
 import re
+import threading
+import time
 import types
 
 import pytest
@@ -264,3 +267,36 @@ def test_nothing_is_staged_by_default():
 def test_a_staged_file_needs_an_absolute_container_path():
     with pytest.raises(ValueError, match="not absolute"):
         _staging_thread([("/local/documents.tsv", "documents.tsv")])
+
+
+class _SlowSchemaRunner(_ContainerRunner):
+    """Counts 'latte schema' calls; each takes a moment, like the real one, so a racing thread overlaps it."""
+
+    def __init__(self):
+        super().__init__()
+        self.schema_calls = 0
+
+    def run(self, cmd="", *_, **__):
+        if cmd.startswith("latte schema"):
+            self.schema_calls += 1
+            time.sleep(0.2)
+        return super().run()
+
+
+def test_threads_that_start_together_run_schema_once(monkeypatch):
+    """One preload command per loader starts at the same moment; only one of them may run 'schema'."""
+    monkeypatch.setattr(LatteStressThread, "SCHEMA_CMD_CALL_COUNTER", {})
+    runner = _SlowSchemaRunner()
+    threads = [_staging_thread(None) for _ in range(4)]
+    for thread in threads:
+        thread.params["enable_argus"] = True
+    start = threading.Barrier(len(threads))
+
+    def build(thread):
+        start.wait()
+        thread.build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
+
+    with concurrent.futures.ThreadPoolExecutor(len(threads)) as pool:
+        list(pool.map(build, threads))
+
+    assert runner.schema_calls == 1

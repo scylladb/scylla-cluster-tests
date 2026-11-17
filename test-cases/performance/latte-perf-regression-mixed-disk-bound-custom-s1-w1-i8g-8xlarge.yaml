@@ -1,0 +1,172 @@
+# Mixed 50% write / 50% read, served mostly from disk, with writes and reads in two service
+# levels of 300 and 700 shares. It reproduces the load where io_properties that overstate the
+# disks hurt the most (SMI-324): with the I/O budget N times too high, the I/O scheduler never
+# saturates, so it never throttles and never enforces priorities; the device queue is the only
+# limiter, and commitlog and memtable-flush writes wait behind compaction and reads.
+#
+# The workload is scylla-qa-internal/custom_s1/workload1 (see its README): custom_s1's
+# production schema, 5 tables with ~55 KB rows of compressible blobs, zstd.
+# Disk-bound by size: 120M rows x ~20 KB on disk (~55 KB raw, zstd saves ~63%), RF=3 on 3 nodes,
+# is ~2.4 TB per node, ~9x the RAM of an i8g.8xlarge (256 GiB, 2 x 3.75 TB NVMe). With
+# distribution "random", steps read and write uniformly random rows over the whole data set,
+# so few reads hit the cache.
+#
+# 'service_levels' makes the rune's schema function create the 's1w1_writer' role on a
+# 300-share service level and the 's1w1_reader' role on a 700-share one; each command picks its
+# role with --user/--password. The preload runs as the superuser.
+#
+# The test runs one stress command per loader and splits each step's rate evenly between them:
+# 2 'insert' commands as 's1w1_writer' and 2 'get' commands as 's1w1_reader' on 4 loaders give a
+# 50/50 mix. Run with configurations/auth_cassandra.yaml.
+
+test_metadata:
+  description: >-
+    Disk-bound mixed predefined-throughput-steps test driven by latte on custom_s1's
+    workload1 production schema: preloads 120M rows (~2.4 TB per node) into a
+    3-node i8g.8xlarge cluster, then runs 50% full-row writes and 50% full-row reads
+    on uniformly random rows at fixed throughput steps, with writes in a 300-share
+    service level and reads in a 700-share one. Shows the effect of io_properties
+    that overstate multi-disk instances.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  features:
+    - sla
+    - authorization
+    - tablets
+  team_ownership: core-test-infra
+
+test_duration: 600
+
+prepare_write_cmd:
+  - >-
+    latte run --function insert --consistency ALL --duration 30000000
+    --threads 60 --concurrency 15 --rate 5000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 0 --end-cycle 30000000
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function insert --consistency ALL --duration 30000000
+    --threads 60 --concurrency 15 --rate 5000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 30000000 --end-cycle 60000000
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function insert --consistency ALL --duration 30000000
+    --threads 60 --concurrency 15 --rate 5000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 60000000 --end-cycle 90000000
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function insert --consistency ALL --duration 30000000
+    --threads 60 --concurrency 15 --rate 5000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 90000000 --end-cycle 120000000
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+
+stress_cmd_m:
+  - >-
+    latte run --function insert --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 0
+    -P row_count=120000000 -P distribution=\"random\"
+    --user s1w1_writer --password s1w1_writer
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function insert --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 1000000000000
+    -P row_count=120000000 -P distribution=\"random\"
+    --user s1w1_writer --password s1w1_writer
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function get --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 2000000000000
+    -P row_count=120000000 -P distribution=\"random\"
+    --user s1w1_reader --password s1w1_reader
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+  - >-
+    latte run --function get --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 3000000000000
+    -P row_count=120000000 -P distribution=\"random\"
+    --user s1w1_reader --password s1w1_reader
+    scylla-qa-internal/custom_s1/workload1/latte/custom_s1_workload1.rn
+
+# SCT passes these as -P to 'latte schema' and to every 'latte run'. The rune's 'table' param is
+# left unset, so every command spreads over the 5 tables by their production data shares.
+# 'service_levels' is a string: SCT would turn a YAML boolean into 1. The keyspace is the rune's
+# default, 'custom_s1_w1'.
+latte_schema_parameters:
+  replication_factor: 3
+  compression: 'zstd'
+  service_levels: 'true'
+# The gradual test needs a keyspace and table name for 'post_prepare_cql_cmds' and keyspace drops;
+# these don't reach the rune, so the weighted 5-table mix stays.
+perf_stress_keyspace: 'custom_s1_w1'
+perf_stress_table: 't_large'
+
+# TODO(SCT-1383): the steps and the latency thresholds below were calibrated on the earlier
+# synthetic workload (150M x 16 KB incompressible cells). Re-calibrate them on this workload.
+# Measured peak (unthrottled, 4 loaders x 32 threads, concurrency swept 2 to 128, 10 min each):
+# - iotune figures: ~210k mixed ops/s, flat from concurrency 2 to 64 (P99 1.6 ms write, 2.9 ms
+#   read at concurrency 2). At 128, reads queue past the 30 s timeout and exhaust their retries.
+# - old io_properties preset: ~177k at concurrency 128 and still rising, but only with write P99
+#   1.6 s and read P99 635 ms. Its best step under 50 ms write P99 is ~132k (concurrency 8).
+# Runs vary by 10-15% (an earlier iotune sweep peaked at ~240k). The old preset falls behind at a
+# fixed ~145k, so the throttled steps span it.
+# Throttled steps: threads x concurrency is 2,048 in flight per loader, enough to hold the top
+# step's rate per loader through ~50 ms stalls (rate per loader x latency budget) without being
+# the limit.
+# Unthrottled step: concurrency 16 (512 in flight per loader). With iotune, throughput is flat
+# past concurrency 2, and more in flight only adds queueing and timeouts.
+perf_gradual_throttle_steps:
+  mixed:
+    - {threads: 32, concurrency: 64, rate: '40000'}
+    - {threads: 32, concurrency: 64, rate: '80000'}
+    - {threads: 32, concurrency: 64, rate: '120000'}
+    - {threads: 32, concurrency: 64, rate: '160000'}
+    - {threads: 32, concurrency: 16, rate: 'unthrottled'}
+perf_gradual_step_duration:
+  mixed: '30m'
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 4
+
+instance_type_db: 'i8g.8xlarge'
+instance_type_loader: 'c7i.8xlarge'
+instance_type_monitor: 't3.small'
+use_capacity_reservation: true
+nemesis_add_node_cnt: 0
+
+use_preinstalled_scylla: true
+
+user_prefix: 'latte-perf-mixed-disk-custom-s1-w1'
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+use_mgmt: false
+email_recipients: ['']
+
+use_hdrhistogram: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+use_placement_group: true
+use_prepared_loaders: false
+
+adaptive_timeout_store_metrics: false

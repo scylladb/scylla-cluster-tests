@@ -15,6 +15,7 @@ import contextlib
 import logging
 import os
 import re
+import threading
 import uuid
 from pathlib import Path
 
@@ -94,6 +95,9 @@ def get_latte_operation_type(stress_cmd):
 class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
+    # Held across the check, the 'latte schema' run and the count, so stress threads that start
+    # together (e.g. one preload command per loader) run 'schema' once, not all at the same moment.
+    SCHEMA_CMD_LOCK = threading.Lock()
 
     def __init__(self, *args, extra_files_to_stage=None, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
@@ -194,26 +198,25 @@ class LatteStressThread(DockerBasedStressThread):
         # NOTE: use superuser creds for the 'latte schema' cmd because test users will only be created with it.
         schema_cmd = f"latte schema {script_name} {ssl_config}{auth_config}{custom_schema_params} -- {hosts}"
         # NOTE: allow schema creation repetition for non-argus usages (unit and integration tests)
-        if LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] < 1 or not self.params.get("enable_argus"):
-            LOGGER.debug("Calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
-            result = cmd_runner.run(cmd=schema_cmd, timeout=self.timeout, retry=0)
-            try:
-                LOGGER.debug(
-                    "Output for 'latte schema' (tag: %s) cmd\nstdout: %s\nstderr: %s",
-                    first_tag_or_op,
-                    result.stdout,
-                    result.stderr,
-                )
-            except Exception as e:  # noqa: BLE001
-                LOGGER.error("Failed to print out the results of the `latte schema` command. e: %s", e)
-            # NOTE: it should not require any locking because practically we have multiple seconds
-            #       diff reaching this code out by different stress threads.
-            LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] += 1
-            tester = self.loader_set.test_config.tester_obj()
-            if hasattr(tester, "run_post_latte_schema_cmd"):
-                tester.run_post_latte_schema_cmd()
-        else:
-            LOGGER.debug("Skip calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
+        with LatteStressThread.SCHEMA_CMD_LOCK:
+            if LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] < 1 or not self.params.get("enable_argus"):
+                LOGGER.debug("Calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
+                result = cmd_runner.run(cmd=schema_cmd, timeout=self.timeout, retry=0)
+                try:
+                    LOGGER.debug(
+                        "Output for 'latte schema' (tag: %s) cmd\nstdout: %s\nstderr: %s",
+                        first_tag_or_op,
+                        result.stdout,
+                        result.stderr,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    LOGGER.error("Failed to print out the results of the `latte schema` command. e: %s", e)
+                LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] += 1
+                tester = self.loader_set.test_config.tester_obj()
+                if hasattr(tester, "run_post_latte_schema_cmd"):
+                    tester.run_post_latte_schema_cmd()
+            else:
+                LOGGER.debug("Skip calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
 
         # NOTE: set '--user' and '--password' params only if not defined explicitly
         if " --user" in self.stress_cmd and " --password" in self.stress_cmd:
