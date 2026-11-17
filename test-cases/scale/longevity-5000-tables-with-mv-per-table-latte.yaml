@@ -16,7 +16,7 @@ test_metadata:
     - SisyphusMonkey
   features:
     - tablets
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 1060 # ~3h prepare schema + 3h of prepare data+ 7h mixed/MV reads + 4h margin
 prepare_stress_duration: 360

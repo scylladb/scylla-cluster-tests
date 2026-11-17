@@ -13,7 +13,7 @@ test_metadata:
     - cassandra-stress
   workload: mv
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 # TODO: need to qualify
 test_duration: 90

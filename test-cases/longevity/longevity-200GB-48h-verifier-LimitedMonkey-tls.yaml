@@ -20,7 +20,7 @@ test_metadata:
   features:
     - tls-ssl
     - authorization
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 3100
 prepare_write_cmd:

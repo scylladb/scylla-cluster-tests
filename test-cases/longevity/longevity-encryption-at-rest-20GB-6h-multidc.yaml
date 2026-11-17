@@ -15,7 +15,7 @@ test_metadata:
     - encryption-at-rest
     - tls-ssl
     - multi-dc
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 test_duration: 550
 

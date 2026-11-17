@@ -24,7 +24,7 @@ test_metadata:
   workload: mixed
   nemesis_labels:
     - SisyphusMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 3600
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]

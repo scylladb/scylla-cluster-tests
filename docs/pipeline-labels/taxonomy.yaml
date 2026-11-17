@@ -108,12 +108,11 @@ features:
     - elasticity
 
 team_ownership:
-  description: "QA team, or the GitHub team (scylladb/<team>) that owns the feature, responsible for maintaining this test"
+  description: "GitHub team (scylladb/<team>) responsible for maintaining this test; each value maps to its Jira team"
   values:
-    - core-test-infra
-    - core-qa
-    - storage-qa
-    - cloud-qa
-    - qa-tools
-    - scylladb/alternator
-    - scylladb/mgmt
+    scylladb/testing-infrastructure: "Core Test Infra, QA Tools"
+    scylladb/core-qa: "Core QA"
+    scylladb/storage-qa: "Storage QA"
+    scylladb/rnd-cloud-qa: "Cloud QA"
+    scylladb/alternator: "Alternator"
+    scylladb/mgmt: "Cloud Data"  # Scylla Manager

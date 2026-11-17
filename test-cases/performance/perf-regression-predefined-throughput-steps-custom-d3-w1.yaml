@@ -14,7 +14,7 @@ test_metadata:
   workload: mixed
   features:
     - tablets
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 600
 

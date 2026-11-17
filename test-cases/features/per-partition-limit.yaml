@@ -13,7 +13,7 @@ test_metadata:
   stress_tools:
     - scylla-bench
   workload: mixed
-  team_ownership: qa-tools
+  team_ownership: scylladb/testing-infrastructure
 # using scylla-bench instead cassandra-stress as c-s rapidly retries on failure (e.g. due per-partition limit error)
 # causing overloading cluster due flood of failing requests
 
