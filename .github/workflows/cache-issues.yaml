@@ -18,6 +18,32 @@ jobs:
       - run: |
           set -euo pipefail
 
+          # Retry a call that fails on a secondary rate limit or a gateway error.
+          # Wait 60, 120 and 240 s between the attempts, as the GitHub docs advise. Then fail the step.
+          gh_graphql() {
+            local query="$1"
+            local delay=60
+            local attempt
+            local out
+            local err_file
+            err_file=$(mktemp)
+            for attempt in 1 2 3 4; do
+              if out=$(gh api graphql -f query="$query" 2>"$err_file"); then
+                rm -f "$err_file"
+                printf '%s\n' "$out"
+                return 0
+              fi
+              cat "$err_file" >&2
+              if [ "$attempt" -eq 4 ] || ! grep -qiE 'HTTP (403|502|504)|secondary rate limit' "$err_file"; then
+                rm -f "$err_file"
+                return 1
+              fi
+              echo "Retry $attempt of 3 in $delay s" >&2
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+          }
+
           fetch_issues_graphql() {
             local repo="$1"
             local state="$2"
@@ -31,7 +57,7 @@ jobs:
               if [ -n "$cursor" ]; then
                 after_clause=", after: \"$cursor\""
               fi
-              response=$(gh api graphql -f query="
+              response=$(gh_graphql "
                 query {
                   repository(owner: \"scylladb\", name: \"$repo\") {
                     issues(states: [$gql_state], first: 100, orderBy: {field: CREATED_AT, direction: ASC}$after_clause) {
@@ -67,7 +93,7 @@ jobs:
               if [ -n "$cursor" ]; then
                 after_clause=", after: \"$cursor\""
               fi
-              response=$(gh api graphql -f query="
+              response=$(gh_graphql "
                 query {
                   repository(owner: \"scylladb\", name: \"$repo\") {
                     pullRequests(states: [$states], first: 100, orderBy: {field: CREATED_AT, direction: ASC}$after_clause) {
