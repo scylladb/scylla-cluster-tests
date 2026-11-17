@@ -8,6 +8,8 @@ import pytest
 from sdcm.exceptions import FilesNotCorrupted, UnsupportedNemesis
 from sdcm.mgmt.common import ObjectStorageUploadMode, RepairIncrementalMode, TaskStatus
 from sdcm.nemesis.monkey.manager import (
+    MgmtBackup,
+    MgmtBackupSpecificKeyspaces,
     MgmtCorruptThenRepair,
     MgmtRepair,
     MgmtRestore,
@@ -383,6 +385,37 @@ def test_restore_precheck(runner, set_params, cluster_backend, region_names, iss
 
     with patch(f"{MODULE}.SkipPerIssues", return_value=issues_open):
         assert MgmtRestore(runner).precheck(node=runner.target_node) == expected
+
+
+OCI_ENDPOINTS = {"object_storage_endpoints": [{"name": "https://oci.example/{region}", "aws_region": "{region}"}]}
+OCI_BACKUP_SKIP = "Manager backup on OCI needs object_storage_endpoints in append_scylla_yaml"
+
+
+@pytest.mark.parametrize("monkey_cls", [MgmtBackup, MgmtBackupSpecificKeyspaces])
+@pytest.mark.parametrize(
+    "params,expected",
+    [
+        pytest.param({"cluster_backend": "oci", "use_mgmt": True}, OCI_BACKUP_SKIP, id="oci-without-endpoints"),
+        pytest.param(
+            {"cluster_backend": "oci", "use_mgmt": True, "append_scylla_yaml": {"auto_snapshot": False}},
+            OCI_BACKUP_SKIP,
+            id="oci-append-scylla-yaml-without-endpoints",
+        ),
+        pytest.param(
+            {"cluster_backend": "oci", "use_mgmt": True, "append_scylla_yaml": OCI_ENDPOINTS},
+            None,
+            id="oci-with-endpoints",
+        ),
+        pytest.param({"cluster_backend": "oci", "use_cloud_manager": True}, None, id="oci-cloud-manager"),
+        pytest.param({"cluster_backend": "aws", "use_mgmt": True}, None, id="aws"),
+        pytest.param({"cluster_backend": "oci"}, "Scylla-manager configuration is not defined!", id="no-manager"),
+    ],
+)
+def test_backup_precheck(runner, set_params, monkey_cls, params, expected):
+    """The backup nemeses skip OCI clusters whose Manager agent has no object storage endpoint."""
+    set_params(**params)
+
+    assert monkey_cls(runner).precheck(node=runner.target_node) == expected
 
 
 def test_restore_happy_path_existing_keyspace(restore_snapshot_runner, snapshot_tag, restored_ks):
