@@ -15,7 +15,7 @@ test_metadata:
     - SisyphusMonkey
   features:
     - large-partitions
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 6480
 

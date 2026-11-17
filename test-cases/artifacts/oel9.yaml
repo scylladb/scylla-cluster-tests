@@ -10,7 +10,7 @@ test_metadata:
   stress_tools: []
   nemesis_labels:
     - NoOpMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 user_prefix: "artifacts-oel9-oci"
 

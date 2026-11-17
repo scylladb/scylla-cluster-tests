@@ -15,7 +15,7 @@ test_metadata:
     - elasticity
     - twcs
     - tablets
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # Test case for ScyllaDB elasticity at 90% utilization
 # The test writes approximately 1.5 TB of data to fill the cluster at around 90% utilization.

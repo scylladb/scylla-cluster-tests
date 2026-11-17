@@ -17,7 +17,7 @@ test_metadata:
     - multi-dc
     - tls-ssl
     - rack-aware
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 360
 # Workloads

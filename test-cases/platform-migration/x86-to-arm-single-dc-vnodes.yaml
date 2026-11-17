@@ -10,7 +10,7 @@ test_metadata:
   tier: ondemand
   features:
     - vnodes
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 append_scylla_yaml:
   enable_tablets: false

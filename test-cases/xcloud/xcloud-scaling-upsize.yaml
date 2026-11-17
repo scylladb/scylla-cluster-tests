@@ -12,7 +12,7 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   workload: mixed
-  team_ownership: cloud-qa
+  team_ownership: scylladb/rnd-cloud-qa
 
 test_duration: 300
 

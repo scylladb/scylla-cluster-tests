@@ -10,7 +10,7 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   workload: write
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 60
 
