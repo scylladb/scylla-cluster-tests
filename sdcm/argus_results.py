@@ -269,6 +269,22 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
         ]
 
 
+class MinicloudHostSizingTable(StaticGenericResultTable):
+    class Meta:
+        name = "Minicloud host sizing"
+        description = "Host figures and the guest sizes SCT derived from them"
+        Columns = [
+            ColumnMetadata(name="cpu_threads", unit="threads", type=ResultType.INTEGER),
+            ColumnMetadata(name="mem_total_gib", unit="GiB", type=ResultType.FLOAT),
+            ColumnMetadata(name="budget_gib", unit="GiB", type=ResultType.FLOAT),
+            ColumnMetadata(name="peak_guests", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="db_memory_gib", unit="GiB", type=ResultType.FLOAT),
+            ColumnMetadata(name="db_vcpus", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="loader_vcpus", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="loader_memory_gib", unit="GiB", type=ResultType.FLOAT),
+        ]
+
+
 class LatteStressLatencyComparison(StaticGenericResultTable):
     class Meta:
         name = "Latency comparison"

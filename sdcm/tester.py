@@ -13,6 +13,7 @@
 import configparser
 import contextlib
 import importlib
+import json
 import logging
 import os
 import random
@@ -223,7 +224,8 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.minicloud.config import MinicloudConfig
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
-from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.manager import MinicloudManager, resolve_minicloud_sizing
+from sdcm.utils.minicloud.sizing import load_sizing_record, submit_minicloud_sizing_to_argus
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
 from sdcm.utils.object_storage import object_storage_endpoints
 from sdcm.utils.operations_thread import ThreadParams
@@ -476,6 +478,8 @@ class ClusterTester(unittest.TestCase):
         self.test_config = TestConfig()
         self.prepare_phase_active = threading.Event()
         self.minicloud: MinicloudManager | None = None
+        # a minicloud size param was `auto`: setUp() resolved it, init_resources() reports the sizes
+        self.minicloud_auto_sizing = False
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
@@ -1297,6 +1301,9 @@ class ClusterTester(unittest.TestCase):
         self.start_time = time.time()
         self.teardown_started = False
         self._init_params()
+        if is_minicloud_active(self.params):
+            # before init_argus_run(), so the config stored in Argus holds the numbers
+            self.minicloud_auto_sizing = resolve_minicloud_sizing(self.params)
         reuse_cluster_id = self.params.get("reuse_cluster")
         if reuse_cluster_id:
             self.test_config.reuse_cluster(True)
@@ -2979,6 +2986,22 @@ class ClusterTester(unittest.TestCase):
             self.monitors.targets["db_cluster"] = self.db_cluster
             self.monitors.promproxy_config = self.db_cluster.get_promproxy_config()
 
+    def _report_minicloud_sizing(self, config: MinicloudConfig) -> None:
+        """Publish the host figures and the guest sizes derived from them, when a size knob was `auto`."""
+        if not self.minicloud_auto_sizing:
+            return
+        if record := load_sizing_record(config):
+            InfoEvent(message=f"minicloud sizing derived from the host: {json.dumps(record)}").publish()
+            try:
+                submit_minicloud_sizing_to_argus(self.test_config.argus_client(), record)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("cannot submit the minicloud sizing to Argus: %s", exc)
+            return
+        memory, vcpus = config.lightweight_flag_values()
+        InfoEvent(
+            message=f"minicloud sizes adopted from a running minicloud, probe not recorded: memory={memory} vcpus={vcpus}"
+        ).publish()
+
     def init_resources(self, loader_info=None, db_info=None, monitor_info=None):
         if loader_info is None:
             loader_info = {
@@ -3034,6 +3057,7 @@ class ClusterTester(unittest.TestCase):
                 manager.prepare_gce_network()
                 self.prepare_gcp_kms()
             self.minicloud = manager
+            self._report_minicloud_sizing(cfg)
 
         self.get_cluster_kafka()
         self.get_cluster_emr()
