@@ -617,6 +617,17 @@ outside the container.
 The weekly-minicloud rolling-upgrade twins in `configurations/triggers/rolling-upgrade.yaml` set
 the three size params to `auto`, so they need no per-host values (see "Sizes derived from the host").
 
+#### Stress during the upgrade
+
+`configurations/minicloud.yaml` sets `keep_stress_alive_during_upgrade: true` for every minicloud
+upgrade run. Stress commands sized for a real cloud can end before the last node is upgraded, so
+the upgrade tests rerun them in 5-minute passes until the test waits for them. This applies to
+`write_stress_during_entire_test` and `stress_cmd_read_60m` in `test_rolling_upgrade`, and to each
+command of `stress_during_entire_upgrade` in `test_generic_cluster_upgrade`. The first pass runs
+the command as written, so later reads find every row it writes. Only cassandra-stress (`n=`
+becomes `duration=5m`) and YCSB (`maxexecutiontime=300`) can be limited by time. Other commands
+run once.
+
 ### Guest memory locking
 
 Guest RAM swapped out on the host freezes every guest at once, and Scylla reads that as a

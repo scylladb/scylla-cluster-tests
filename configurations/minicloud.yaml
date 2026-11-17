@@ -49,3 +49,6 @@ sizing_loader:
   arch: x86_64
 sizing_monitor:
   arch: x86_64
+
+# cloud-sized stress can end before the upgrade does, so rerun it in 5-minute passes until the upgrade is done.
+keep_stress_alive_during_upgrade: true

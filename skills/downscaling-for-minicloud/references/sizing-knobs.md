@@ -194,6 +194,7 @@ Shrink these, never the shape around them:
 | `-partition-count`, `-clustering-row-count`, `-concurrency` | inside `scylla-bench` commands | tens instead of thousands |
 | `cassandra_stress_population_size` | config key | 50000 instead of the 1M default |
 | `cassandra_stress_threads` | config key | 10 instead of the 1000 default |
+| `keep_stress_alive_during_upgrade` | config key, on in `configurations/minicloud.yaml` | Relaunches a during-upgrade cassandra-stress or YCSB command that ends early, in 5-minute passes, until the last node is upgraded |
 
 `threads=1000` against a 1-vCPU guest does not produce more load — it produces client-side
 timeouts and a test that fails for a reason unrelated to the change under test.

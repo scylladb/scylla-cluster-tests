@@ -4,7 +4,7 @@
 
 Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade.
 
-**19 options.**
+**20 options.**
 
 
 <a id="disable_raft"></a>
@@ -82,6 +82,17 @@ Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="keep_stress_alive_during_upgrade"></a>
+
+## **keep_stress_alive_during_upgrade** / SCT_KEEP_STRESS_ALIVE_DURING_UPGRADE
+
+Relaunch a during-upgrade stress command that ends before the last node is upgraded, in 5-minute passes
+
+**default:** False
+
+**type:** bool
 
 
 <a id="num_nodes_to_rollback"></a>
