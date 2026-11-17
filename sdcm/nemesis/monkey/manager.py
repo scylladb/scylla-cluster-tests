@@ -32,7 +32,7 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.object_storage import backup_bucket_region
+from sdcm.utils.object_storage import backup_bucket_region, object_storage_endpoints
 
 LOGGER = logging.getLogger(__name__)
 
@@ -173,6 +173,11 @@ def mgmt_backup(runner, backup_specific_tables):
     else:
         if not runner.cluster.params.get("backup_bucket_location"):
             raise UnsupportedNemesis("backup bucket location configuration is not defined!")
+        if runner.cluster.params.get("cluster_backend") == "oci" and not object_storage_endpoints(
+            runner.cluster.params
+        ):
+            # without the endpoints the manager agent gets no OCI credentials, see update_manager_agent_backup_config()
+            raise UnsupportedNemesis("OCI backup needs object_storage_endpoints in append_scylla_yaml")
 
         backup_bucket_backend = runner.cluster.params.get("backup_bucket_backend")
         region = backup_bucket_region(runner.cluster.params)

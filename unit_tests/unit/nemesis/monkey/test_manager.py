@@ -233,6 +233,35 @@ def test_mgmt_backup_raises_when_no_bucket_location(runner, set_params):
         mgmt_backup(runner, backup_specific_tables=False)
 
 
+def test_mgmt_backup_on_oci_without_object_storage_endpoints_is_unsupported(runner, set_params, backup_mgr_cluster):
+    """Without the endpoints the manager agent gets no OCI credentials, and the backup fails with NoCredentialProviders."""
+    set_params(
+        use_mgmt=True,
+        cluster_backend="oci",
+        backup_bucket_backend="s3",
+        backup_bucket_location=["manager-backup-tests-{region}"],
+    )
+
+    with pytest.raises(UnsupportedNemesis, match="object_storage_endpoints"):
+        mgmt_backup(runner, backup_specific_tables=False)
+    backup_mgr_cluster.create_backup_task.assert_not_called()
+
+
+def test_mgmt_backup_on_oci_with_object_storage_endpoints_runs(runner, set_params, backup_mgr_cluster):
+    set_params(
+        use_mgmt=True,
+        cluster_backend="oci",
+        oci_region_name="us-ashburn-1",
+        backup_bucket_backend="s3",
+        backup_bucket_location=["manager-backup-tests-{region}"],
+        append_scylla_yaml={"object_storage_endpoints": [{"name": "oci.example/{region}", "aws_region": "{region}"}]},
+    )
+
+    mgmt_backup(runner, backup_specific_tables=False)
+
+    backup_mgr_cluster.create_backup_task.assert_called_once()
+
+
 @pytest.fixture()
 def backup_mgr_cluster(runner):
     """Manager cluster of ``runner`` with no previous backup tasks, whose new backup task finishes successfully."""
