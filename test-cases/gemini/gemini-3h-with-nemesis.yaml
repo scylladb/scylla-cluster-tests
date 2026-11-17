@@ -1,4 +1,38 @@
 test_duration: 300
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Standard Gemini fuzz test comparing a 6-node Scylla cluster against an oracle
+    DB under mixed read/write load for ~3h, with the full SisyphusMonkey nemesis
+    set (excluding ENOSPC and node-isolation disruptions) to validate consistency
+    under chaos.
+  test_type: gemini
+  tier: release
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
+=======
+test_metadata:
+  description: >-
+    Standard Gemini fuzz test comparing a 6-node Scylla cluster against an oracle
+    DB under mixed read/write load for ~3h, with the full SisyphusMonkey nemesis
+    set (excluding ENOSPC and node-isolation disruptions) to validate consistency
+    under chaos.
+  test_type: gemini
+  tier: release
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: scylladb/testing-infrastructure
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1

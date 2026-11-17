@@ -1,3 +1,37 @@
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB OCI image: provisions a single
+    VM.DenseIO.E5.Flex node in us-phoenix-1 from the published image and runs the artifact smoke
+    checks. On-demand provisioning only, since DenseIO shapes cannot be spot.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - oci
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+=======
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB OCI image: provisions a single
+    VM.DenseIO.E5.Flex node in us-phoenix-1 from the published image and runs the artifact smoke
+    checks. On-demand provisioning only, since DenseIO shapes cannot be spot.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - oci
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 cluster_backend: "oci"
 oci_region_name: "us-phoenix-1"
 use_preinstalled_scylla: true

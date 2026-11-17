@@ -21,7 +21,7 @@ test_metadata:
   workload: write
   nemesis_labels:
     - SisyphusMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 60
 data_validation: |

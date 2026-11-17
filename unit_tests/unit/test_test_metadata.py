@@ -137,6 +137,54 @@ def test_all_valid_workloads(workload):
     assert m.workload == workload
 
 
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+def test_invalid_team_ownership():
+    with pytest.raises(ValueError, match="Invalid team_ownership"):
+        TestMetadata(team_ownership="not-a-team")
+
+
+@pytest.mark.parametrize(
+    "team", ["core-test-infra", "core-qa", "storage-qa", "cloud-qa", "qa-tools", "scylladb/alternator", "scylladb/mgmt"]
+)
+def test_all_valid_team_ownership(team):
+    m = TestMetadata(team_ownership=team)
+    assert m.team_ownership == team
+
+
+def test_team_ownership_none_by_default():
+    m = TestMetadata()
+    assert m.team_ownership is None
+
+
+=======
+def test_invalid_team_ownership():
+    with pytest.raises(ValueError, match="Invalid team_ownership"):
+        TestMetadata(team_ownership="not-a-team")
+
+
+@pytest.mark.parametrize(
+    "team",
+    [
+        "scylladb/testing-infrastructure",
+        "scylladb/core-qa",
+        "scylladb/storage-qa",
+        "scylladb/rnd-cloud-qa",
+        "scylladb/alternator",
+        "scylladb/mgmt",
+    ],
+)
+def test_all_valid_team_ownership(team):
+    m = TestMetadata(team_ownership=team)
+    assert m.team_ownership == team
+
+
+def test_team_ownership_none_by_default():
+    m = TestMetadata()
+    assert m.team_ownership is None
+
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 def test_from_dict():
     data = {
         "description": "Upgrade test with TLS.",

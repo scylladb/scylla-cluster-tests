@@ -1,3 +1,39 @@
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the Debian repository onto a stock Ubuntu
+    24.04 LTS (noble) GCE image and runs the standard artifact smoke checks. The GCE counterpart of
+    test-cases/artifacts/ubuntu2404-aws.yaml; the ARM variant runs the same config on AWS Graviton.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+=======
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the Debian repository onto a stock Ubuntu
+    24.04 LTS (noble) GCE image and runs the standard artifact smoke checks. The GCE counterpart of
+    test-cases/artifacts/ubuntu2404-aws.yaml; the ARM variant runs the same config on AWS Graviton.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'

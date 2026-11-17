@@ -1,3 +1,35 @@
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Oracle Linux
+    9 platform image on OCI and runs the standard artifact smoke checks.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - oci
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+=======
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Oracle Linux
+    9 platform image on OCI and runs the standard artifact smoke checks.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - oci
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 user_prefix: "artifacts-oel9-oci"
 
 cluster_backend: "oci"

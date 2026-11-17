@@ -1,4 +1,38 @@
 test_duration: 180
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Streaming-features test validating the per-partition request-rate limit:
+    measures write/read latency and throughput with the limit set, with and
+    without additional heavy several-partition load, asserting the limit adds
+    negligible baseline overhead while significantly improving latency and
+    throughput when hot partitions are stressed. Uses scylla-bench instead of
+    cassandra-stress to avoid retry storms.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  team_ownership: qa-tools
+=======
+test_metadata:
+  description: >-
+    Streaming-features test validating the per-partition request-rate limit:
+    measures write/read latency and throughput with the limit set, with and
+    without additional heavy several-partition load, asserting the limit adds
+    negligible baseline overhead while significantly improving latency and
+    throughput when hot partitions are stressed. Uses scylla-bench instead of
+    cassandra-stress to avoid retry storms.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  team_ownership: scylladb/testing-infrastructure
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 # using scylla-bench instead cassandra-stress as c-s rapidly retries on failure (e.g. due per-partition limit error)
 # causing overloading cluster due flood of failing requests
 

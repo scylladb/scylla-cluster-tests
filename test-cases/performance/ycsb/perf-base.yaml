@@ -1,3 +1,37 @@
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Base config for the YCSB latency regression tests: a 3-node i4i.4xlarge cluster
+    with a 10-field usertable and 1 c5.9xlarge loader. The test class sets the
+    dataset size (1M to 1B records) and the YCSB workload mix.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  features: []
+  team_ownership: core-test-infra
+
+=======
+test_metadata:
+  description: >-
+    Base config for the YCSB latency regression tests: a 3-node i4i.4xlarge cluster
+    with a 10-field usertable and 1 c5.9xlarge loader. The test class sets the
+    dataset size (1M to 1B records) and the YCSB workload mix.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  features: []
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 test_duration: 600
 
 pre_create_keyspace: [

@@ -16,7 +16,7 @@ test_metadata:
     - scylla-bench
   workload: mixed
   features: []
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 test_duration: 800
 

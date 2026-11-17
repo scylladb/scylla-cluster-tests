@@ -1,0 +1,31 @@
+# Quarantined: the AdmissionControlOverloadTest implementation was removed in
+# 95db65f672 ("improvement(treewide): Remove unused tests", Aug 2025), so this
+# config and its pipeline could not run. See jenkins-pipelines/quarantined/README.md.
+test_metadata:
+  description: >-
+    Admission-control overload test: 12 loaders deliberately overwhelm a single i4i.large node with
+    3000 write threads and 1000 read threads (errors ignored) using a background-reads user profile,
+    checking that admission control sheds load instead of letting the node collapse.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels: []
+  team_ownership: scylladb/testing-infrastructure
+
+test_duration: 50
+
+prepare_write_cmd: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=10)' no-warmup cl=ONE -mode cql3 native -rate threads=1000 -errors ignore"
+stress_cmd_r: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(simple1=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=1000 -errors ignore"
+stress_cmd_w: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"
+
+n_db_nodes: 1
+n_loaders: 12
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c5.4xlarge'
+instance_type_monitor: 't3.small'
+user_prefix: 'overload_admission_control'

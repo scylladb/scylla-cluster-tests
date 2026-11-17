@@ -1,4 +1,62 @@
 # Test
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+#
+# NOTE: 'longevity-multi-keyspaces-latte.yaml' replaced this test for the tier2,
+#       vnodes, raft, and gce pipelines. Keep this cassandra-stress version for
+#       on-demand runs, such as reproducing older results or comparing stress
+#       tools. No pipeline uses it, so run it explicitly with:
+#
+#           longevity_test.LongevityTest.test_batch_custom_time
+
+test_metadata:
+  description: >-
+    60-hour schema-scale longevity test: 1000 keyspaces pre-created on a 6-node cluster, each driven
+    in batch mode by cassandra-stress from 10 loaders, with random-keyspace fullscans and
+    SisyphusMonkey. Exercises how metadata, schema propagation and per-table overhead behave at high
+    keyspace counts.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
+=======
+#
+# NOTE: 'longevity-multi-keyspaces-latte.yaml' replaced this test for the tier2,
+#       vnodes, raft, and gce pipelines. Keep this cassandra-stress version for
+#       on-demand runs, such as reproducing older results or comparing stress
+#       tools. No pipeline uses it, so run it explicitly with:
+#
+#           longevity_test.LongevityTest.test_batch_custom_time
+
+test_metadata:
+  description: >-
+    60-hour schema-scale longevity test: 1000 keyspaces pre-created on a 6-node cluster, each driven
+    in batch mode by cassandra-stress from 10 loaders, with random-keyspace fullscans and
+    SisyphusMonkey. Exercises how metadata, schema propagation and per-table overhead behave at high
+    keyspace counts.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 test_duration: 3600
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=48h -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..4000000 -log interval=90"]

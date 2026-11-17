@@ -25,6 +25,46 @@
 #
 #         10900 seconds = 7 days * 24 hours a day * 60 minutes an hour
 #         3600  seconds = 60 minutes
+<<<<<<< HEAD:test-cases/longevity/longevity-ycsb-a-1M.yaml
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership):test-cases/quarantined/longevity-ycsb-a-1M.yaml
+
+test_metadata:
+  description: >-
+    YCSB workload A load phase with two 500k-record streams against a 3-node cluster, using the Scylla
+    native YCSB binding and a pre-created ycsb keyspace, with no nemesis. The smallest step of the
+    YCSB comparison family, run on demand rather than from a pipeline.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+=======
+
+test_metadata:
+  description: >-
+    YCSB workload A load phase with two 500k-record streams against a 3-node cluster, using the Scylla
+    native YCSB binding and a pre-created ycsb keyspace, with no nemesis. The smallest step of the
+    YCSB comparison family, run on demand rather than from a pipeline.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership):test-cases/quarantined/longevity-ycsb-a-1M.yaml
 test_duration: 1800
 
 pre_create_keyspace: [

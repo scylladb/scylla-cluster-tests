@@ -1,3 +1,37 @@
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Red Hat
+    Enterprise Linux 10 AMI (resolved from Red Hat's owner id) and runs the standard artifact smoke
+    checks. Backs both the x86_64 and the ARM RHEL 10 pipelines.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+=======
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Red Hat
+    Enterprise Linux 10 AMI (resolved from Red Hat's owner id) and runs the standard artifact smoke
+    checks. Backs both the x86_64 and the ARM RHEL 10 pipelines.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: scylladb/testing-infrastructure
+
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 backtrace_decoding: false
 cluster_backend: 'aws'
 ami_db_scylla_user: 'ec2-user'

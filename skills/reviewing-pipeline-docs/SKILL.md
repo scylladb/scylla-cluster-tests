@@ -42,6 +42,20 @@ It flows to Argus at test runtime.
 | `workload` | Literal | no | write/read/mixed/scan/counter |
 | `nemesis_labels` | list | no | nemesis class names used |
 | `features` | list | no | tls-ssl, multi-dc, cdc, etc. |
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+| `team_ownership` | Literal | no | QA team, or GitHub team (`scylladb/<team>`), responsible for maintaining this test |
+
+Note: `nemesis_labels` appears in older examples but is not currently a validated
+`TestMetadata` field (no taxonomy/pydantic support) — omit it from new
+`test_metadata:` blocks rather than add unenforced data.
+=======
+| `team_ownership` | Literal | no | GitHub team (`scylladb/<team>`) responsible for maintaining this test |
+
+Note: `nemesis_labels` appears in older examples but is not currently a validated
+`TestMetadata` field (no taxonomy/pydantic support) — omit it from new
+`test_metadata:` blocks rather than add unenforced data.
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 
 For the full list of valid values per field, see `references/taxonomy-values.md`.
 The authoritative source is always `docs/pipeline-labels/taxonomy.yaml`.
@@ -67,6 +81,12 @@ test_metadata:
   nemesis_labels:
     - SisyphusMonkey
   features: []
+<<<<<<< HEAD
+||||||| parent of 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
+  team_ownership: core-test-infra
+=======
+  team_ownership: scylladb/testing-infrastructure
+>>>>>>> 2a6cb6c61 (refactor(test-metadata): use GitHub team slugs for team_ownership)
 ```
 
 ## Cross-Reference Rules

@@ -1,0 +1,34 @@
+test_metadata:
+  description: >-
+    Sanity test for a 3-node Scylla Cloud cluster: a 30-minute cassandra-stress write with
+    non-disruptive nemeses. Runs every other week and for each new Scylla release candidate.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - xcloud
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  team_ownership: scylladb/testing-infrastructure
+
+test_duration: 60
+
+stress_cmd:
+    - "cassandra-stress write cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -log interval=5"
+
+n_db_nodes: 3
+n_loaders: 1
+
+sizing_db:
+  vcpu: 2
+  memory: '>=16'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive and xcloud"
+nemesis_seed: 111
+nemesis_interval: 5
+
+run_db_node_benchmarks: false
+
+user_prefix: 'longevity-scylla-cloud-sanity-30m'

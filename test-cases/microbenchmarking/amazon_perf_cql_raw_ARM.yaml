@@ -1,0 +1,32 @@
+test_metadata:
+  description: >-
+    Weekly ScyllaDB perf-cql-raw microbenchmark run directly on a single c8g.xlarge
+    (ARM) DB node with no loaders: boots an in-process server and sends handcrafted
+    CQL binary frames over a real socket, covering the network and protocol-parsing
+    path. Read and write pipelines.
+  test_type: microbenchmarking
+  tier: release
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: scylladb/testing-infrastructure
+
+test_duration: 60
+backtrace_decoding: false
+cluster_backend: 'aws'
+
+n_loaders: 0
+n_monitor_nodes: 0
+n_db_nodes: 1
+use_mgmt: false
+
+instance_type_db: 'c8g.xlarge'
+data_volume_disk_num: 1
+user_prefix: 'perf-cql-raw-amazon-ARM'
+argus_email_report_template: email_report_performance_microbenchmarks.yaml
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true
+
+email_recipients: ['scylla-perf-results@scylladb.com']
