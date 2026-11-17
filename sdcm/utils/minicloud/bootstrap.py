@@ -10,7 +10,7 @@ from sdcm.utils.minicloud.activation import (
 )
 from sdcm.utils.minicloud.config import MinicloudConfig
 from sdcm.utils.minicloud.endpoint import get_minicloud_endpoint
-from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.manager import MinicloudManager, resolve_minicloud_sizing
 from sdcm.utils.minicloud.tls import ca_bundle_for
 
 LOGGER = logging.getLogger(__name__)
@@ -30,6 +30,8 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
     ``check_minicloud_reachability`` and fail closed instead.
     """
     endpoint = get_minicloud_endpoint(params)
+    if params is not None:
+        resolve_minicloud_sizing(params)
     cfg = MinicloudConfig.from_env(params=params)
     if not cfg.backend:
         cfg.backend = backend

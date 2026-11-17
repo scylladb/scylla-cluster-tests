@@ -22,12 +22,14 @@ from sdcm.utils.minicloud.activation import (
 )
 from sdcm.utils.minicloud.azure import setup_azure_credentials, wait_for_tls
 from sdcm.utils.minicloud.config import (
+    AUTO_SIZE_PARAMS,
     MINICLOUD_BINARY,
     MINICLOUD_HEALTH_INTERVAL,
     MINICLOUD_HEALTH_TIMEOUT,
     MINICLOUD_TUND_SOCKET,
     MinicloudConfig,
     MinicloudError,
+    is_auto,
 )
 from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, SCT_ENDPOINT_ENV_VARS
 from sdcm.utils.minicloud.gcp import prepare_gce_network, setup_gcp_credentials
@@ -40,6 +42,7 @@ from sdcm.utils.minicloud.preflight import (
     parse_memory_gib,
     sum_node_counts,
 )
+from sdcm.utils.minicloud.sizing import resolve_auto_sizing
 
 LOGGER = logging.getLogger(__name__)
 DOCKER_LOGS_TIMEOUT = 20
@@ -155,7 +158,30 @@ class MinicloudManager:
     _parse_memory_gib = staticmethod(parse_memory_gib)
 
     def _check_host_memory(self, params) -> None:
-        check_host_memory(self.config, params)
+        try:
+            check_host_memory(self.config, params)
+        except MinicloudError as exc:
+            if self.running_lightweight_cmd() is not None:
+                how = (
+                    f"the process in {self.config.pid_file}"
+                    if self.config.native
+                    else f"docker rm -f {self.config.container_name}"
+                )
+                exc.add_note(
+                    f"A running minicloud set these sizes. To size 'auto' params from the host again, stop it ({how})."
+                )
+            raise
+
+    def running_lightweight_cmd(self) -> list[str] | None:
+        """Arguments of the running minicloud (`auto` sizes reuse them).
+
+        Checks the container or process, not the health probe. A busy minicloud that misses
+        a probe must still be reused, or start() restarts it and kills every guest.
+        """
+        if not self.config.native and self._inspect_container("{{json .State.Running}}") is not True:
+            return None
+        cmd = self._running_cmd()
+        return [str(arg) for arg in cmd] if cmd else None
 
     @staticmethod
     def _check_scylla_memory_budget(params) -> None:
@@ -499,6 +525,10 @@ class MinicloudManager:
         current backend needs, reuse it. Otherwise stop it and start fresh — a container
         that merely answers health probes may still be unusable for this backend.
         """
+        if self.config.unresolved_auto:
+            raise MinicloudError(
+                "the minicloud sizes are still 'auto': resolve_minicloud_sizing() has to run before start()"
+            )
         self._setup_gcp_credentials()
         if self.config.native:
             self._start_native()
@@ -1000,3 +1030,15 @@ class MinicloudManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
         return False
+
+
+def resolve_minicloud_sizing(params) -> bool:
+    """Replace `auto` sizes in ``params`` with the running minicloud sizes, or else size them from the host.
+
+    Call it before minicloud starts and before anything reads a size. Returns whether any size was `auto`.
+    """
+    if not any(is_auto(params.get(knob)) for knob in AUTO_SIZE_PARAMS):
+        return False
+    manager = MinicloudManager(MinicloudConfig.from_env(params=params))
+    resolve_auto_sizing(params, manager.config, manager.running_lightweight_cmd())
+    return True

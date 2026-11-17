@@ -49,6 +49,13 @@ def no_mem_in_use():
         yield
 
 
+@pytest.fixture(autouse=True)
+def no_running_minicloud():
+    """Pin the running-minicloud lookup to none, so no test probes a real endpoint or docker daemon."""
+    with patch("sdcm.utils.minicloud.manager.MinicloudManager.running_lightweight_cmd", return_value=None):
+        yield
+
+
 def _patch_probe_session(response=None, side_effect=None):
     """Patch the retry session used by check_minicloud_reachability's POST probe."""
     session = MagicMock()

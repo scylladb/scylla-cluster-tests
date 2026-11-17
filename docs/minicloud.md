@@ -128,7 +128,10 @@ The whole test must fit in the host's free RAM:
 ```
 
 where db guests are `n_db_nodes` plus the zero-token, vector-store and (for the mixed db types)
-oracle nodes, counted at `cluster_target_size` when the test grows the cluster.
+oracle nodes, counted at their peak: `cluster_target_size` when the test grows the cluster, plus
+`nemesis_add_node_cnt` for each nemesis thread whose selection can hold a `disruptive` nemesis
+(every nemesis that adds nodes is disruptive). A run whose nemeses add no node sets
+`nemesis_add_node_cnt: 0`. This count applies to fixed sizes too.
 
 `preflight_check(params=...)` enforces exactly this before the container starts and prints the
 arithmetic when it fails. Without the check, an oversized test dies mid-run as a cgroup OOM kill
@@ -150,6 +153,43 @@ The arithmetic is deliberately conservative. `minicloud_skip_memory_check: true`
 `SCT_MINICLOUD_SKIP_MEMORY_CHECK=true`) disables the
 gate for development on a machine you know can handle the workload - at the price of the
 exit-137 failure mode above if you were wrong.
+
+#### Sizes derived from the host
+
+`minicloud_lightweight_memory`, `minicloud_lightweight_vcpus`,
+`minicloud_lightweight_vcpus_loader` and `minicloud_lightweight_memory_loader` accept `auto`. SCT
+then sizes them from the host, with the guests counted at their peak as above. A number still sets
+the size explicitly.
+
+- db guest memory: the largest whole GiB, from `minicloud_auto_memory_max` (6GiB by default) down to
+  the smallest size that gives each Scylla shard 1GiB (4GiB at 2 vCPUs), for which the guests, the
+  gate headroom and a 2GiB margin fit the budget. The margin keeps 2GiB of the host free and lets the
+  gate pass again after provisioning. If the smallest size does not fit, the start fails and prints
+  the numbers. A job for big hosts can raise `minicloud_auto_memory_max`; the default keeps runs on
+  different hosts comparable and leaves a laptop room for the desktop.
+- db guest vCPUs: the most, from `minicloud_auto_vcpus_max` (2 by default) down to 2, for which the
+  db guests, the monitor and the loader (2 vCPUs if it is `auto`) fit the host threads and the
+  memory still gives each shard 1GiB. More vCPUs raise the memory floor (6GiB at 4 vCPUs).
+- loader memory: after the db guests (sized with the loader at 2GiB), the largest of 4GiB, 3GiB
+  and 2GiB that still fits the budget.
+- loader vCPUs: 2 to 4, from the host threads left after the db guests and the monitor, and at
+  most 1 per GiB of loader memory. A cassandra-stress JVM takes a 512MiB heap or more, and its
+  native memory grows with the vCPUs: in the 6-node rolling upgrade, two of them ran out of a 2GiB
+  loader at 3 and 4 vCPUs.
+
+With `minicloud_container_cpus` set, the host threads are that number, rounded down.
+
+With `minicloud_skip_memory_check: true`, `auto` does not measure the host memory: the db guests
+get the per-shard floor and an `auto` loader 2GiB.
+
+SCT sizes once, when minicloud starts (in `start-minicloud`, the test process, or
+`provision-resources`). It writes the host figures and the sizes to `sizing.json` in
+`minicloud_state_dir`. Later stages read the sizes from the running minicloud command line, so
+they do not restart it. To size again, stop minicloud. The test process logs the sizes as an
+`InfoEvent` and stores them in the Argus table "Minicloud host sizing".
+
+Jobs that pass `unified_package` or a vector-store count as a job parameter use explicit sizes:
+`start-minicloud` does not see those exports, so it would size for too few guests.
 
 ## Container lifecycle
 
@@ -552,11 +592,13 @@ config option with a default in `defaults/test_default.yaml`; the pipeline layer
 
 | Job parameter | SCT config option | Empty means |
 |---|---|---|
-| `minicloud_lightweight_memory` | `minicloud_lightweight_memory` | keep the yaml value (4GiB) |
-| `minicloud_lightweight_vcpus` | `minicloud_lightweight_vcpus` | keep the yaml value (1) |
+| `minicloud_lightweight_memory` | `minicloud_lightweight_memory` (`auto` derives it) | keep the yaml value (4GiB) |
+| `minicloud_lightweight_vcpus` | `minicloud_lightweight_vcpus` (`auto` derives it) | keep the yaml value (1) |
 | (`extra_environment_variables` only) | `minicloud_lightweight_memory_loader` | the db size (`minicloud_lightweight_memory`); unset keeps the yaml value (2GiB) |
 | (`extra_environment_variables` only) | `minicloud_lightweight_memory_monitor` | the db size (`minicloud_lightweight_memory`); unset keeps the yaml value (2GiB) |
-| (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_loader` | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
+| (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_loader` (`auto` derives it) | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
+| (`extra_environment_variables` only) | `minicloud_auto_memory_max` | keep the yaml value (6GiB) |
+| (`extra_environment_variables` only) | `minicloud_auto_vcpus_max` | keep the yaml value (2) |
 | (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_monitor` | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
 | `minicloud_container_memory` | `minicloud_container_memory` | no docker cap on the container |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
@@ -580,6 +622,9 @@ instead of the host's free memory - the cgroup OOM killer enforces the cap, so m
 would pass a test the cap then kills. The guests' QEMU processes run inside the cap, so the gate
 adds their 1 GiB per guest to it; the 2 GiB base headroom stays out, since dockerd and SCT run
 outside the container.
+
+The weekly-minicloud rolling-upgrade twins in `configurations/triggers/rolling-upgrade.yaml` set
+the four size params to `auto`, so they need no per-host values (see "Sizes derived from the host").
 
 ### Guest memory locking
 

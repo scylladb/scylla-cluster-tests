@@ -5,7 +5,9 @@ import os
 import pytest
 
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+from sdcm.sct_config.types import positive_int_auto_or_none
 from sdcm.utils.minicloud.config import (
+    AUTO_SIZE_PARAMS,
     MINICLOUD_CONTAINER_NAME,
     MINICLOUD_DEFAULT_REGION,
     MINICLOUD_GCP_PROJECT_DEFAULT,
@@ -352,3 +354,13 @@ def test_minicloud_error_preserves_message():
     msg = "KVM not available on this host"
     err = MinicloudError(msg)
     assert str(err) == msg
+
+
+def test_minicloud_config_builds_with_unresolved_auto():
+    config = MinicloudConfig.from_env(params=dict.fromkeys(AUTO_SIZE_PARAMS, "auto"))
+    assert config.unresolved_auto is True
+    assert (config.lightweight_memory, config.lightweight_vcpus, config.lightweight_vcpus_loader) == ("4GiB", 1, None)
+
+
+def test_vcpu_knobs_accept_auto_in_any_case():
+    assert positive_int_auto_or_none(" AUTO ") == "auto"
