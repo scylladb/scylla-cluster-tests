@@ -40,6 +40,16 @@ MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT = "4GiB"
 # One shard per vCPU. minicloud's own default is also 1, but pass it explicitly so the value a
 # run used is visible in its config rather than inherited from whichever image version ran.
 MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT = 1
+# a size param set to "auto" is sized from the host (see sizing.py).
+AUTO = "auto"
+AUTO_SIZE_PARAMS = ("minicloud_lightweight_memory", "minicloud_lightweight_vcpus", "minicloud_lightweight_vcpus_loader")
+
+
+def is_auto(value) -> bool:
+    """Whether a size param is "auto" (case-insensitive)."""
+    return isinstance(value, str) and value.strip().lower() == AUTO
+
+
 # Role tag SCT sets on every guest. minicloud matches it ignoring case, so it also matches GCE lowercase label.
 MINICLOUD_ROLE_TAG_KEY = "NodeType"
 # Image cache, per-instance qcow2 disks and minicloud.log all live here - tens of GiB.
@@ -112,6 +122,12 @@ def _param_or_none(params, name: str):
     """Return a param value, or None when it is missing or empty; a 0 passes through."""
     value = params.get(name) if params else None
     return None if value in (None, "") else value
+
+
+def _size_param_or_none(params, name: str):
+    """Return a size param, or None when it is missing, empty or still `auto`."""
+    value = _param_or_none(params, name)
+    return None if is_auto(value) else value
 
 
 def _monitor_size_param(params, name: str):
@@ -195,6 +211,7 @@ class MinicloudConfig:
     # minicloud_lock_guest_memory: lock guest RAM in the host instead of dropping Scylla's own
     # --lock-memory in the guests. See MinicloudManager.start() for what each side changes.
     lock_guest_memory: bool = True
+    unresolved_auto: bool = False
     tls_port: int = MINICLOUD_TLS_PORT
     # set at runtime once the Azure credentials have been read
     azure_subscription_id: str = ""
@@ -292,8 +309,9 @@ class MinicloudConfig:
             # (a bare dict from a caller or a test) must not turn lightweight mode off
             if (explicit_lightweight := params.get("minicloud_lightweight")) is not None:
                 lightweight = bool(explicit_lightweight)
-            lightweight_memory = params.get("minicloud_lightweight_memory") or lightweight_memory
-            lightweight_vcpus = int(params.get("minicloud_lightweight_vcpus") or lightweight_vcpus)
+            # an `auto` param keeps the shipped default until sizing.resolve_auto_sizing() replaces it
+            lightweight_memory = _size_param_or_none(params, "minicloud_lightweight_memory") or lightweight_memory
+            lightweight_vcpus = int(_size_param_or_none(params, "minicloud_lightweight_vcpus") or lightweight_vcpus)
             # These three are genuinely optional: empty has to mean "no docker limit" / "keep the
             # default name", so they only ever widen, never blank a value the caller set.
             container_memory = params.get("minicloud_container_memory") or ""
@@ -334,7 +352,7 @@ class MinicloudConfig:
             lightweight_vcpus=lightweight_vcpus,
             lightweight_memory_loader=_param_or_none(params, "minicloud_lightweight_memory_loader"),
             lightweight_memory_monitor=_monitor_size_param(params, "minicloud_lightweight_memory_monitor"),
-            lightweight_vcpus_loader=_param_or_none(params, "minicloud_lightweight_vcpus_loader"),
+            lightweight_vcpus_loader=_size_param_or_none(params, "minicloud_lightweight_vcpus_loader"),
             lightweight_vcpus_monitor=_monitor_size_param(params, "minicloud_lightweight_vcpus_monitor"),
             container_memory=container_memory,
             container_cpus=container_cpus,
@@ -348,6 +366,7 @@ class MinicloudConfig:
             log_file=os.path.join(state_dir, "minicloud.log"),
             backend=backend,
             skip_memory_check=skip_memory_check,
+            unresolved_auto=any(is_auto(_param_or_none(params, name)) for name in AUTO_SIZE_PARAMS),
             lock_guest_memory=lock_guest_memory,
             azure_scratch_resource_group=azure_scratch_resource_group,
         )

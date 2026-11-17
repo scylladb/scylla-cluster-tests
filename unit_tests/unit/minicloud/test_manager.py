@@ -10,10 +10,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.minicloud.azure import write_azure_env_file
-from sdcm.utils.minicloud.config import MinicloudConfig
+from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
 from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT
-from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.manager import MinicloudManager, resolve_minicloud_sizing
 from sdcm.utils.minicloud.tls import build_ca_bundle, system_ca_bundle
+
+# the package conftest pins the lookup to None; this is the real one, taken before any test runs
+REAL_RUNNING_LIGHTWEIGHT_CMD = MinicloudManager.running_lightweight_cmd
 
 
 def test_start_runs_docker_container(tmp_path, monkeypatch):
@@ -774,3 +777,29 @@ def test_write_azure_env_file_is_private_and_complete(tmp_path):
     write_azure_env_file(str(path), {"tenant_id": "t", "client_id": "c", "client_secret": "s", "subscription_id": "x"})
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert path.read_text() == "AZURE_TENANT_ID=t\nAZURE_CLIENT_ID=c\nAZURE_CLIENT_SECRET=s\n"
+
+
+def test_start_refuses_unresolved_auto(tmp_path):
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), unresolved_auto=True))
+    with pytest.raises(MinicloudError, match="auto"):
+        manager.start()
+
+
+def test_resolve_minicloud_sizing_does_nothing_without_auto():
+    with patch.object(MinicloudManager, "is_endpoint_healthy") as healthy:
+        assert (
+            resolve_minicloud_sizing({"minicloud_lightweight_memory": "4GiB", "minicloud_lightweight_vcpus": 2})
+            is False
+        )
+    healthy.assert_not_called()
+
+
+def test_running_lightweight_cmd_follows_the_container_not_the_health_probe(tmp_path):
+    # a busy minicloud that misses a health probe must still be adopted, not re-derived
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+    cmd = ["--lightweight", "--lightweight-memory", "4GiB", "--lightweight-vcpus", "2"]
+    with (
+        patch.object(MinicloudManager, "is_endpoint_healthy", return_value=False),
+        patch.object(MinicloudManager, "_inspect_container", side_effect=[True, cmd]),
+    ):
+        assert REAL_RUNNING_LIGHTWEIGHT_CMD(manager) == cmd

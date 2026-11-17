@@ -17,7 +17,14 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, OptionalPositiveInt, SctField, String, StringOrList
+from sdcm.sct_config.types import (
+    Boolean,
+    OptionalPositiveInt,
+    OptionalPositiveIntOrAuto,
+    SctField,
+    String,
+    StringOrList,
+)
 
 
 class MinicloudConfigMixin(BaseModel):
@@ -40,7 +47,8 @@ class MinicloudConfigMixin(BaseModel):
     )
     minicloud_container_cpus: String = SctField(
         description="Cap the minicloud container's CPU allowance, in docker --cpus form "
-        "(e.g. '8' or '7.5'). Empty means no limit",
+        "(e.g. '8' or '7.5'). Empty means no limit. `auto` sizing then counts only this many host "
+        "threads, rounded down",
     )
     minicloud_container_memory: String = SctField(
         description="Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker "
@@ -79,7 +87,18 @@ class MinicloudConfigMixin(BaseModel):
         description="Enable lightweight mode for minicloud deployments",
     )
     minicloud_lightweight_memory: String = SctField(
-        description="Memory allocation for lightweight minicloud deployments",
+        description="Memory allocation for lightweight minicloud deployments, "
+        "or `auto`: SCT derives it from the host when minicloud starts",
+    )
+    minicloud_auto_memory_max: String = SctField(
+        description="Largest db guest memory that `auto` sizing picks, for example 16GiB on a big host. "
+        "It steps down in 1GiB steps to the smallest size that gives each Scylla shard 1GiB",
+    )
+    minicloud_auto_vcpus_max: int = SctField(
+        ge=2,
+        description="Largest db guest vCPU count that `auto` sizing picks, for example 4 on a big host. "
+        "It steps down to 2 until the db guests, the monitor and the loader fit the host threads "
+        "and the memory gives each Scylla shard 1GiB",
     )
     minicloud_lightweight_memory_loader: String = SctField(
         description="RAM for loader guests in lightweight mode (minicloud matches their NodeType tag), "
@@ -90,14 +109,15 @@ class MinicloudConfigMixin(BaseModel):
         "for example 2GiB. Empty gives them minicloud_lightweight_memory, the db size. "
         "Ignored with use_mgmt on: Scylla Manager local Scylla needs the db size",
     )
-    minicloud_lightweight_vcpus: int = SctField(
+    minicloud_lightweight_vcpus: OptionalPositiveIntOrAuto = SctField(
         description="vCPUs per db guest in lightweight mode. Scylla runs one shard per vCPU, so this "
         "multiplies with minicloud_lightweight_memory across every db guest in the test; raise it "
-        "only on a host with cores to spare",
+        "only on a host with cores to spare. Or `auto`: SCT derives it from the host when minicloud starts",
     )
-    minicloud_lightweight_vcpus_loader: OptionalPositiveInt = SctField(
+    minicloud_lightweight_vcpus_loader: OptionalPositiveIntOrAuto = SctField(
         description="vCPUs for loader guests in lightweight mode (minicloud matches their NodeType tag). "
-        "Empty gives them minicloud_lightweight_vcpus, the db count",
+        "Empty gives them minicloud_lightweight_vcpus, the db count. "
+        "Or `auto`: SCT derives it from the host when minicloud starts",
     )
     minicloud_lightweight_vcpus_monitor: OptionalPositiveInt = SctField(
         description="vCPUs for monitor guests in lightweight mode (minicloud matches their NodeType tag). "

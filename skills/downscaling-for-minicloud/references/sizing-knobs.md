@@ -18,6 +18,7 @@ automatic `SCT_*` environment form (the code reads no bare `MINICLOUD_*` variabl
 | `n_vector_store_nodes` | 1 guest each | Vector-store tests |
 | `cluster_target_size` | 1 guest per node above `n_db_nodes` | **This**, not `n_db_nodes`, is what the memory gate budgets for a growing test |
 | `add_node_cnt` | none directly | How many nodes are added per step; smaller means more steps, longer run |
+| `nemesis_add_node_cnt` | 1 db guest each, per nemesis thread whose selection can hold a `disruptive` nemesis | The gate counts the nodes a nemesis can add. Set it to `0` for a run whose nemeses add no node |
 
 `GUEST_NODE_COUNT_PARAMS` and `ORACLE_GUEST_DB_TYPES` in `sdcm/utils/minicloud/preflight.py`
 are the authority if they ever diverge from this table.
@@ -93,10 +94,12 @@ it to a lab host rather than dropping below a floor.
 | Param | Default | Effect |
 |---|---|---|
 | `minicloud_lightweight` | `true` | Every guest gets the fixed vCPU/RAM below, **ignoring the instance type the test asked for** |
-| `minicloud_lightweight_memory` | `4GiB` | Per db guest (zero-token, oracle and vector-store included). Floor ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` (~3 GiB at 1 vCPU): Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
-| `minicloud_lightweight_vcpus` | `1` | Per db guest. One Scylla shard per vCPU. Multiplies across every db guest; raise only on a host with cores to spare |
+| `minicloud_lightweight_memory` | `4GiB` | Per db guest (zero-token, oracle and vector-store included). `auto`: the largest whole GiB from `minicloud_auto_memory_max` (6GiB) down to the per-shard floor (4GiB at 2 vCPUs) that fits the host with a 2GiB margin. Floor ~1.7 GiB + 1 GiB × `minicloud_lightweight_vcpus` (~3 GiB at 1 vCPU): Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
+| `minicloud_lightweight_vcpus` | `1` | Per db guest. One Scylla shard per vCPU. Multiplies across every db guest; raise only on a host with cores to spare. `auto`: from `minicloud_auto_vcpus_max` (2) down to 2, as the host threads allow |
 | `minicloud_lightweight_memory_loader` / `_monitor` | `2GiB` | Per loader / monitor, matched on the guest's `NodeType` tag. Empty means the db size. A minicloud image without tag-matched ceilings rejects these at start (`unknown instance type 'NodeType'`); set all four empty to run one. With `use_mgmt` on, the monitor gets the db size: Scylla Manager local Scylla does not start in 2GiB |
-| `minicloud_lightweight_vcpus_loader` / `_monitor` | `1` | The same for vCPUs. A loader running full-size stress commands may want 2; vCPUs cost no host memory |
+| `minicloud_lightweight_vcpus_loader` / `_monitor` | `1` | The same for vCPUs. A loader running full-size stress commands may want 2; vCPUs cost no host memory. `auto` (loader only): 2 to 4 from the host threads to spare |
+| `minicloud_auto_memory_max` | `6GiB` | The largest db guest memory `auto` picks. Raise it for a job on big hosts; the default keeps hosts comparable and a laptop usable |
+| `minicloud_auto_vcpus_max` | `2` | The largest db guest vCPU count `auto` picks. More vCPUs need more memory (6GiB at 4 vCPUs) and more host threads |
 
 Because lightweight mode ignores instance types, `instance_type_db`, `instance_type_loader`
 and the `gce_instance_type_*` keys only have to **exist in the emulated catalog and pass SCT
@@ -153,7 +156,7 @@ It prints `arm64` or `x86_64`. Check every role the test-case pins, not just the
 | Param | Default | Effect |
 |---|---|---|
 | `minicloud_container_memory` | empty (no limit) | A docker `--memory` cap. Setting it also makes **the cap**, not host free memory, the budget the preflight gate measures against |
-| `minicloud_container_cpus` | empty | A docker `--cpus` cap |
+| `minicloud_container_cpus` | empty | A docker `--cpus` cap. `auto` sizing counts this many host threads |
 | `minicloud_skip_memory_check` | `false` | Disables the preflight gate. Price: an oversized run dies as a cgroup OOM kill (exit 137) that takes every guest with it |
 | `minicloud_state_dir` | `~/.cache/minicloud` | Image cache, per-instance disks, `minicloud.log`. Tens of GiB — never delete casually |
 | `minicloud_container_name` | `minicloud` | One container per host; the name is a host singleton |
