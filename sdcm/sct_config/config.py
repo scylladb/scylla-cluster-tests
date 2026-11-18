@@ -857,8 +857,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     )
                     scylla_oci_images.append(oci_image)
                 self["oci_image_db"] = " ".join(image[2] for image in scylla_oci_images)
-            elif self.get("cluster_backend") == "xcloud" and ":" in scylla_version:
-                self._resolve_xcloud_version_tag(self.get("scylla_version"))
+            elif self.get("cluster_backend") == "xcloud":
+                if ":" in scylla_version:
+                    self._resolve_xcloud_version_tag(self.get("scylla_version"))
             elif self._restored_from_placement("ami_id_db_scylla") and self.get("use_preinstalled_scylla"):
                 # region fallback in the provisioning step already resolved scylla_version to AMIs
                 # and handed them over via resolved placement; nothing is left to look up.

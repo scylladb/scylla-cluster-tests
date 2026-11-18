@@ -1,0 +1,9 @@
+// AUTO-GENERATED from configurations/triggers/xcloud.yaml — do not edit manually.
+// Run: python utils/build_system/generate_trigger_jenkinsfiles.py
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+triggerMatrixPipeline(
+    matrix_file: 'configurations/triggers/xcloud.yaml',
+    cron: '''00 12 1-7,15-21 * 6 % scylla_version=release:latest;job_folder=scylla-master;labels_selector=xcloud-aws;requested_by_user=dimakr
+00 12 1-7,15-21 * 6 % scylla_version=release:latest;job_folder=scylla-master;labels_selector=xcloud-gce;requested_by_user=dimakr'''
+)

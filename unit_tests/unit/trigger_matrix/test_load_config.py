@@ -106,7 +106,7 @@ def test_invalid_backend_raises(tmp_path):
         load_matrix_config(path)
 
 
-@pytest.mark.parametrize("backend", sorted(["aws", "gce", "azure", "docker", "oci"]))
+@pytest.mark.parametrize("backend", sorted(["aws", "gce", "azure", "docker", "oci", "xcloud"]))
 def test_valid_backends_accepted(tmp_path, backend):
     path = tmp_path / "valid.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test", "backend": backend}]}))

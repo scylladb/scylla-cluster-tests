@@ -58,6 +58,7 @@ def test_yaml_jobs_have_required_fields(filename):
     [
         "configurations/triggers/pgo-offline-installer.yaml",
         "configurations/triggers/scylla-doctor-gating.yaml",
+        "configurations/triggers/xcloud.yaml",
     ],
 )
 def test_new_yaml_loads_successfully(filename):
