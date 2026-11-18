@@ -8,6 +8,7 @@ import yaml
 from sdcm.utils.common import get_sct_root_path
 
 from utils.staging_trigger.constants import SCT_REPO, _default_folder, _get_jenkins_url
+from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, find_jenkinsfile
 
 
@@ -62,6 +63,19 @@ def _ensure_folders(server, folder_tree: list[tuple[str, str, str]], dry_run: bo
             click.echo(f"  [folder] {rel_path}/")
 
 
+def _check_jobs_created(server, job_names: list[str]) -> None:
+    """Stop when Jenkins doesn't have a job we asked it to create.
+
+    JenkinsPipelines only logs a refused create, e.g. a 403 when the caller's Jenkins user can't create jobs in the
+    folder, so without this check `generate` reports success and the next `trigger` fails on a missing job.
+    """
+    if missing := [name for name in job_names if not server.jenkins.job_exists(name)]:
+        raise click.ClickException(
+            f"Jenkins did not create {len(missing)} job(s): {', '.join(missing)}. The error is logged above; "
+            "a 403 means your Jenkins user can't create jobs in that folder."
+        )
+
+
 def generate_job(
     name: str,
     folder: str = "",
@@ -109,13 +123,16 @@ def generate_job(
 
     from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
 
-    server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
+    server = JenkinsPipelines(
+        base_job_dir=folder, sct_branch_name=branch, sct_repo=repo, client=JenkinsJobTrigger().jenkins
+    )
 
     if folder_tree:
         click.echo("Creating folders:")
         _ensure_folders(server, folder_tree)
 
     server.create_pipeline_job(jenkins_file=jenkinsfile, group_name=group_name, job_name_suffix=job_name_suffix)
+    _check_jobs_created(server, [full_job_name])
 
     job_url = f"{_get_jenkins_url()}/job/{full_job_name.replace('/', '/job/')}/"
     click.secho(f"Created: {job_url}", fg="green")
@@ -171,7 +188,9 @@ def generate_jobs(
 
     from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
 
-    server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
+    server = JenkinsPipelines(
+        base_job_dir=folder, sct_branch_name=branch, sct_repo=repo, client=JenkinsJobTrigger().jenkins
+    )
 
     if folder_tree:
         click.echo("\nCreating folders:")
@@ -183,6 +202,7 @@ def generate_jobs(
         server.create_pipeline_job(jenkins_file=jf, group_name=group, job_name_suffix=job_name_suffix)
         click.echo(f"  {full_name}")
         created.append(full_name)
+    _check_jobs_created(server, created)
 
     click.secho(f"\nSuccessfully created {len(created)} job(s) in {folder}", fg="green", bold=True)
     return created
@@ -217,3 +237,147 @@ def generate_from_path(
     return generate_jobs(
         jenkinsfiles, folder=folder, branch=branch, repo=repo, job_name_suffix=job_name_suffix, dry_run=dry_run
     )
+<<<<<<< HEAD
+||||||| parent of e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
+
+    symlinked_jobs = []
+    for root, _, _ in os.walk(full_path):
+        rel_dir = str(Path(root).relative_to(full_path))
+        symlinked = _resolve_symlinks(Path(root), sct_root)
+        if symlinked:
+            click.echo(f"Found {len(symlinked)} symlinked pipeline(s) in {pipeline_path}/{rel_dir}")
+            symlinked_jobs.extend(
+                _generate_symlinked_jobs(
+                    symlinked,
+                    pipeline_path=pipeline_path,
+                    symlinks_rel_dir=rel_dir,
+                    folder=folder,
+                    branch=branch,
+                    repo=repo,
+                    job_name_suffix=job_name_suffix,
+                    dry_run=dry_run,
+                )
+            )
+
+    created.extend(symlinked_jobs)
+    return created
+
+
+def _generate_symlinked_jobs(
+    symlinks: list[tuple[str, Path, str]],
+    pipeline_path: str,
+    symlinks_rel_dir: str,
+    folder: str,
+    branch: str,
+    repo: str,
+    job_name_suffix: str,
+    dry_run: bool,
+) -> list[str]:
+    """Create Jenkins jobs for symlinked pipelines, placed in the symlink file's directory."""
+    group_name = f"{pipeline_path}/{symlinks_rel_dir}" if symlinks_rel_dir != "." else pipeline_path
+    created = []
+
+    if not dry_run:
+        from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
+
+        server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
+        parts = Path(group_name).parts
+        for i in range(1, len(parts) + 1):
+            intermediate = str(Path(*parts[:i]))
+            server.create_directory(intermediate, display_name=parts[i - 1])
+    else:
+        server = None
+
+    for name, target_path, suffix_override in symlinks:
+        suffix = suffix_override or job_name_suffix
+        full_job_name = f"{folder}/{group_name}/{name}{suffix}"
+
+        if dry_run:
+            click.echo(f"  [symlink] {full_job_name} -> {target_path.name}")
+            created.append(full_job_name)
+            continue
+
+        server.create_pipeline_job(
+            jenkins_file=target_path,
+            group_name=group_name,
+            job_name=name,
+            job_name_suffix=suffix,
+        )
+        click.echo(f"  [symlink] {full_job_name}")
+        created.append(full_job_name)
+
+    return created
+=======
+
+    symlinked_jobs = []
+    for root, _, _ in os.walk(full_path):
+        rel_dir = str(Path(root).relative_to(full_path))
+        symlinked = _resolve_symlinks(Path(root), sct_root)
+        if symlinked:
+            click.echo(f"Found {len(symlinked)} symlinked pipeline(s) in {pipeline_path}/{rel_dir}")
+            symlinked_jobs.extend(
+                _generate_symlinked_jobs(
+                    symlinked,
+                    pipeline_path=pipeline_path,
+                    symlinks_rel_dir=rel_dir,
+                    folder=folder,
+                    branch=branch,
+                    repo=repo,
+                    job_name_suffix=job_name_suffix,
+                    dry_run=dry_run,
+                )
+            )
+
+    created.extend(symlinked_jobs)
+    return created
+
+
+def _generate_symlinked_jobs(
+    symlinks: list[tuple[str, Path, str]],
+    pipeline_path: str,
+    symlinks_rel_dir: str,
+    folder: str,
+    branch: str,
+    repo: str,
+    job_name_suffix: str,
+    dry_run: bool,
+) -> list[str]:
+    """Create Jenkins jobs for symlinked pipelines, placed in the symlink file's directory."""
+    group_name = f"{pipeline_path}/{symlinks_rel_dir}" if symlinks_rel_dir != "." else pipeline_path
+    created = []
+
+    if not dry_run:
+        from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
+
+        server = JenkinsPipelines(
+            base_job_dir=folder, sct_branch_name=branch, sct_repo=repo, client=JenkinsJobTrigger().jenkins
+        )
+        parts = Path(group_name).parts
+        for i in range(1, len(parts) + 1):
+            intermediate = str(Path(*parts[:i]))
+            server.create_directory(intermediate, display_name=parts[i - 1])
+    else:
+        server = None
+
+    for name, target_path, suffix_override in symlinks:
+        suffix = suffix_override or job_name_suffix
+        full_job_name = f"{folder}/{group_name}/{name}{suffix}"
+
+        if dry_run:
+            click.echo(f"  [symlink] {full_job_name} -> {target_path.name}")
+            created.append(full_job_name)
+            continue
+
+        server.create_pipeline_job(
+            jenkins_file=target_path,
+            group_name=group_name,
+            job_name=name,
+            job_name_suffix=suffix,
+        )
+        click.echo(f"  [symlink] {full_job_name}")
+        created.append(full_job_name)
+
+    if server:
+        _check_jobs_created(server, created)
+    return created
+>>>>>>> e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
