@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-539 options across 29 groups.
+540 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -53,7 +53,7 @@ concerns first, then one page per backend, then one per test type.
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 22 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
-| [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
+| [Longevity tests](configuration_options/longevity-tests.md) | 14 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
@@ -363,6 +363,7 @@ concerns first, then one page per backend, then one per test type.
 | [`minicloud_scylla_reserve_memory`](configuration_options/minicloud.md#minicloud_scylla_reserve_memory) | `SCT_MINICLOUD_SCYLLA_RESERVE_MEMORY` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_skip_memory_check`](configuration_options/minicloud.md#minicloud_skip_memory_check) | `SCT_MINICLOUD_SKIP_MEMORY_CHECK` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_state_dir`](configuration_options/minicloud.md#minicloud_state_dir) | `SCT_MINICLOUD_STATE_DIR` | [Minicloud](configuration_options/minicloud.md) |
+| [`minimum_nemesis_to_execute`](configuration_options/longevity-tests.md#minimum_nemesis_to_execute) | `SCT_MINIMUM_NEMESIS_TO_EXECUTE` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`monitor_branch`](configuration_options/monitoring-events-and-reporting.md#monitor_branch) | `SCT_MONITOR_BRANCH` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`monitor_nodes_private_ip`](configuration_options/baremetal-backend.md#monitor_nodes_private_ip) | `SCT_MONITOR_NODES_PRIVATE_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
 | [`monitor_nodes_public_ip`](configuration_options/baremetal-backend.md#monitor_nodes_public_ip) | `SCT_MONITOR_NODES_PUBLIC_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
