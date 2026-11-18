@@ -73,10 +73,13 @@ Any new or modified `import` statement in a `.py` file.
 # WRONG - inline import
 def do_something():
     from sdcm.utils import common  # BAD: inline import
+
     return common.get_data()
+
 
 # RIGHT - top-level import
 from sdcm.utils import common
+
 
 def do_something():
     return common.get_data()

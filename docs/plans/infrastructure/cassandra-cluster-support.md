@@ -658,8 +658,7 @@ class BaseCassandraCluster:
         minor = int(self.cassandra_version.split(".")[1])
         dist_name = f"{major}{minor}x"  # e.g., "41x" for 4.1, "50x" for 5.0
         cmds = [
-            "curl -s -o /etc/apt/trusted.gpg.d/cassandra.asc "
-            "https://downloads.apache.org/cassandra/KEYS",
+            "curl -s -o /etc/apt/trusted.gpg.d/cassandra.asc https://downloads.apache.org/cassandra/KEYS",
             f'echo "deb https://debian.cassandra.apache.org {dist_name} main" '
             f"| sudo tee /etc/apt/sources.list.d/cassandra.sources.list",
             "sudo apt-get update",
@@ -690,12 +689,10 @@ class BaseCassandraCluster:
         # cassandra-env.sh has MAX_HEAP_SIZE and HEAP_NEWSIZE commented out;
         # sed uncomments and sets them
         node.remoter.run(
-            f"sudo sed -i 's/#MAX_HEAP_SIZE=.*/MAX_HEAP_SIZE=\"{max_heap}M\"/' "
-            f"{CASSANDRA_ENV_SH_PATH}",
+            f"sudo sed -i 's/#MAX_HEAP_SIZE=.*/MAX_HEAP_SIZE=\"{max_heap}M\"/' {CASSANDRA_ENV_SH_PATH}",
         )
         node.remoter.run(
-            f"sudo sed -i 's/#HEAP_NEWSIZE=.*/HEAP_NEWSIZE=\"{heap_new}M\"/' "
-            f"{CASSANDRA_ENV_SH_PATH}",
+            f"sudo sed -i 's/#HEAP_NEWSIZE=.*/HEAP_NEWSIZE=\"{heap_new}M\"/' {CASSANDRA_ENV_SH_PATH}",
         )
 
     def _write_rackdc_properties(self, node):
@@ -946,6 +943,7 @@ New config parameters: `gce_image_db_cassandra_oracle` (defaults to empty string
 ```python
 class CassandraAzureCluster(BaseCassandraCluster, AzureCluster):
     """Cassandra cluster provisioned on Azure Virtual Machines."""
+
     ...
 ```
 
@@ -1001,7 +999,7 @@ class CassandraLogCollector(LogCollector):
         CommandLog(
             name="cassandra_gc.log",
             command="cat /var/log/cassandra/gc.log.0.current 2>/dev/null || "
-                    "ls /var/log/cassandra/gc.log* 2>/dev/null || echo 'gc.log not found'",
+            "ls /var/log/cassandra/gc.log* 2>/dev/null || echo 'gc.log not found'",
         ),
         # Configuration files
         CommandLog(
@@ -1095,20 +1093,28 @@ In `collect_logs()`, add a new entry to the `clusters` collection tuple:
 
 ```python
 # Existing entries (unchanged):
-("db_cluster", ScyllaLogCollector, "db_log"),
-("loaders", LoaderLogCollector, "loader_log"),
-("monitors", MonitorLogCollector, "monitor_log"),
+(("db_cluster", ScyllaLogCollector, "db_log"),)
+(("loaders", LoaderLogCollector, "loader_log"),)
+(("monitors", MonitorLogCollector, "monitor_log"),)
 
 # New entries:
 # Cassandra oracle logs (mixed_cassandra flow)
-("cs_db_cluster",
- CassandraLogCollector if isinstance(self.cs_db_cluster, BaseCassandraCluster) else None,
- "cassandra_oracle_log"),
+(
+    (
+        "cs_db_cluster",
+        CassandraLogCollector if isinstance(self.cs_db_cluster, BaseCassandraCluster) else None,
+        "cassandra_oracle_log",
+    ),
+)
 
 # Scylla oracle logs — FIXES PRE-EXISTING BUG where mixed_scylla oracle logs are dropped
-("cs_db_cluster",
- ScyllaLogCollector if isinstance(self.cs_db_cluster, BaseScyllaCluster) else None,
- "scylla_oracle_log"),
+(
+    (
+        "cs_db_cluster",
+        ScyllaLogCollector if isinstance(self.cs_db_cluster, BaseScyllaCluster) else None,
+        "scylla_oracle_log",
+    ),
+)
 ```
 
 Add `"cassandra_oracle_log": ""` and `"scylla_oracle_log": ""` to the `logs_dict` initialization.

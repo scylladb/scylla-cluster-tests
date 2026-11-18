@@ -70,11 +70,14 @@ Create a single generic type `MultitenantValue[T]` that wraps any existing type 
 ```python
 from typing import TypeVar, Generic, get_origin, get_args
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class MultitenantValueMarker:
     """Marker class to identify MultitenantValue types at runtime."""
+
     pass
+
 
 def multitenancy_value_validator(value: T | dict[str, T]) -> T | dict[str, T]:
     """
@@ -87,6 +90,7 @@ def multitenancy_value_validator(value: T | dict[str, T]) -> T | dict[str, T]:
         return value
     # Non-dict values are returned as-is for the inner type's validator
     return value
+
 
 # Generic type that adds dict support to any existing type
 # Usage: MultitenantValue[IntOrList], MultitenantValue[StringOrList], etc.
@@ -116,14 +120,15 @@ def sct_field(*args, **kwargs):
         kwargs.pop(key, None)
     return Field(*args, **kwargs)
 
+
 def is_multitenant_field(field: Field) -> bool:
     """Check if a field uses MultitenantValue type by looking for the marker."""
-    if hasattr(field, 'metadata'):
+    if hasattr(field, "metadata"):
         for meta in field.metadata:
             if isinstance(meta, MultitenantValueMarker):
                 return True
     # Also check annotation for MultitenantValueMarker
-    if hasattr(field, 'annotation'):
+    if hasattr(field, "annotation"):
         origin = get_origin(field.annotation)
         if origin is Annotated:
             for arg in get_args(field.annotation):
@@ -267,9 +272,11 @@ for field_name, field in test_class_instance.params.model_fields.items():
             if tenant_key in param_value:
                 current_param_value = param_value[tenant_key]
                 # Apply stress_cmd single-element list unwrapping if needed
-                if (param_name.startswith("stress_")
+                if (
+                    param_name.startswith("stress_")
                     and isinstance(current_param_value, list)
-                    and len(current_param_value) == 1):
+                    and len(current_param_value) == 1
+                ):
                     current_param_value = current_param_value[0]
                 tenant.params[param_name] = current_param_value
                 tenant.db_cluster.params[param_name] = current_param_value
@@ -280,9 +287,11 @@ for field_name, field in test_class_instance.params.model_fields.items():
         for i, tenant in enumerate(tenants):
             current_param_value = param_value[i]
             # Apply stress_cmd single-element list unwrapping if needed
-            if (param_name.startswith("stress_")
+            if (
+                param_name.startswith("stress_")
                 and isinstance(current_param_value, list)
-                and len(current_param_value) == 1):
+                and len(current_param_value) == 1
+            ):
                 current_param_value = current_param_value[0]
             tenant.params[param_name] = current_param_value
             tenant.db_cluster.params[param_name] = current_param_value

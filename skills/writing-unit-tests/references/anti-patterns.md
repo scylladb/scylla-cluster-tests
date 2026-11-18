@@ -33,10 +33,13 @@ def test_all_config_options():
 
 ✅ **Good:**
 ```python
-@pytest.mark.parametrize("option,value,expected", [
-    pytest.param("cluster_backend", "aws", "aws", id="backend-aws"),
-    pytest.param("cluster_backend", "docker", "docker", id="backend-docker"),
-])
+@pytest.mark.parametrize(
+    "option,value,expected",
+    [
+        pytest.param("cluster_backend", "aws", "aws", id="backend-aws"),
+        pytest.param("cluster_backend", "docker", "docker", id="backend-docker"),
+    ],
+)
 def test_config_option(option, value, expected, monkeypatch):
     monkeypatch.setenv(f"SCT_{option.upper()}", value)
     assert SCTConfiguration().get(option) == expected
@@ -71,8 +74,7 @@ class TestEvaluateSkip:
         nemesis = CustomNemesisA(runner=...)
         assert nemesis.evaluate_skip() == []
 
-    def test_skippable_excluded(self):
-        ...
+    def test_skippable_excluded(self): ...
 ```
 
 ✅ **Good — flat module-level functions:**
@@ -81,8 +83,8 @@ def test_evaluate_skip_default_returns_empty_list():
     nemesis = CustomNemesisA(runner=...)
     assert nemesis.evaluate_skip() == []
 
-def test_evaluate_skip_skippable_excluded():
-    ...
+
+def test_evaluate_skip_skippable_excluded(): ...
 ```
 
 Group related tests with a comment block (e.g. `# --- filtering tests ---`) instead of a class.
@@ -97,8 +99,10 @@ Writing new fake objects, base classes, runner stubs, or fixture setup code when
 ```python
 captured_events = []
 
+
 def fake_publish(event):
     captured_events.append(str(event))
+
 
 with patch("sdcm.sct_events.base.SctEvent.publish", fake_publish):
     run_something()
@@ -157,6 +161,7 @@ class FakeDockerCluster:
             ...
         return new_nodes
 
+
 def test_round_robin_rack_assignment():
     cluster = FakeDockerCluster(racks_count=3)
     nodes = cluster._create_nodes(6)
@@ -168,11 +173,15 @@ def test_round_robin_rack_assignment():
 from unittest.mock import MagicMock, patch
 from sdcm.cluster_docker import DockerCluster
 
-@pytest.mark.parametrize("racks_count,node_count,expected_racks", [
-    pytest.param(3, 6, [0, 1, 2, 0, 1, 2], id="round-robin-3-racks"),
-    pytest.param(2, 5, [0, 1, 0, 1, 0],    id="round-robin-2-racks"),
-    pytest.param(1, 3, [0, 0, 0],           id="single-rack"),
-])
+
+@pytest.mark.parametrize(
+    "racks_count,node_count,expected_racks",
+    [
+        pytest.param(3, 6, [0, 1, 2, 0, 1, 2], id="round-robin-3-racks"),
+        pytest.param(2, 5, [0, 1, 0, 1, 0], id="round-robin-2-racks"),
+        pytest.param(1, 3, [0, 0, 0], id="single-rack"),
+    ],
+)
 def test_create_nodes_round_robin(racks_count, node_count, expected_racks, params):
     params["simulated_racks"] = racks_count
     params["n_db_nodes"] = node_count

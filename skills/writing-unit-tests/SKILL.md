@@ -128,6 +128,7 @@ def test_config(monkeypatch):
 ```python
 from unittest.mock import patch, MagicMock
 
+
 def test_s3_download():
     with patch("sdcm.utils.common._s3_download_file") as mock_dl:
         mock_dl.return_value = "/tmp/file.tar.gz"
@@ -140,6 +141,7 @@ def test_s3_download():
 ```python
 import boto3
 from moto import mock_aws
+
 
 @mock_aws
 def test_ec2_provisioning():
@@ -154,6 +156,7 @@ def test_ec2_provisioning():
 ```python
 import re
 from invoke import Result
+
 
 def test_node_command(fake_remoter):
     # fake_remoter is the FakeRemoter CLASS (not an instance).
@@ -209,6 +212,7 @@ Use the pattern `test_<function>_<scenario>_<expected>`:
 def test_parse_version_invalid_string_returns_none(): ...
 def test_config_missing_backend_raises_value_error(): ...
 def test_health_check_single_node_failure_does_not_block_others(): ...
+
 
 # Bad — generic, unclear what's being tested
 def test_parse(): ...

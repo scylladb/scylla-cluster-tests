@@ -489,7 +489,10 @@ These monkey classes import shared helpers from both utils modules:
 ```python
 from sdcm.nemesis.utils.topology_ops import add_and_init_new_cluster_nodes  # placed by Phase 5
 from sdcm.nemesis.utils.common_ops import (  # placed by Phases 4 and 8a
-    reboot_node, destroy_data_and_restart_scylla, rebuild_or_repair, run_repair,
+    reboot_node,
+    destroy_data_and_restart_scylla,
+    rebuild_or_repair,
+    run_repair,
 )
 ```
 The streaming-exclusive helper `_call_disrupt_func_after_expression_logged` stays in `streaming.py`.
