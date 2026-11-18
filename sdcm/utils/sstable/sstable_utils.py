@@ -52,16 +52,32 @@ class SstableUtils:
         return tombstones_num
 
     def get_sstables(self, from_minutes_ago: int = 0):
+        """Return the "-Data.db" paths of the complete sstables of the table.
+
+        An sstable without a "TOC.txt" is left out. It is incomplete: Scylla stopped while it wrote
+        the sstable (e.g. a tablet migration stream aborted by the stop) or while it deleted it,
+        and removes it on start. The "scylla sstable" tool fails on such an sstable.
+        """
         selected_sstables = []
         ks_cf_path = self.ks_cf.replace(".", "/")
-        find_cmd = f"find /var/lib/scylla/data/{ks_cf_path}-*/*-big-Data.db -maxdepth 1 -type f"
-        if from_minutes_ago:
-            find_cmd += f" -cmin -{from_minutes_ago}"
+        time_filter = f" -cmin -{from_minutes_ago}" if from_minutes_ago else ""
+        find_cmd = (
+            f"find /var/lib/scylla/data/{ks_cf_path}-*/ -maxdepth 1 -type f"
+            rf" \( -name '*-big-Data.db'{time_filter} -o -name '*-big-TOC.txt' \)"
+        )
         sstables_res = self.db_node.remoter.sudo(find_cmd, verbose=True, ignore_status=True)
         if sstables_res.stderr:
             self.log.debug("Failed to get sstables for %s. Error: %s", self.ks_cf, sstables_res.stderr)
         else:
-            selected_sstables = sstables_res.stdout.split()
+            files = sstables_res.stdout.split()
+            tocs = {path for path in files if path.endswith("-TOC.txt")}
+            for path in files:
+                if not path.endswith("-Data.db"):
+                    continue
+                if path.removesuffix("Data.db") + "TOC.txt" in tocs:
+                    selected_sstables.append(path)
+                else:
+                    self.log.debug("Skip the incomplete sstable %s: it has no TOC.txt", path)
 
         message = f"filtered by last {from_minutes_ago} minutes" if from_minutes_ago else "(not filtered by time)"
         self.log.debug("Got %s sstables %s", len(selected_sstables), message)
