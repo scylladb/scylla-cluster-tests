@@ -54,35 +54,28 @@ class StartedNode(NodetoolDummyNode):
     def __str__(self):
         return self.name
 
+    @property
+    def ip_address(self):
+        return self.name
+
     def reported_names(self):
         """The names of the last report of this node to Argus."""
         return self.update_rack_info_in_argus.call_args.args
 
 
 class StartedScyllaCluster(DummyScyllaCluster):
-    """A Scylla cluster that goes through `wait_for_init_wrap`, with the node setup and startup left out.
-
-    The real `node_setup` and `node_startup` install and configure Scylla over SSH. The real UN check runs
-    `nodetool status` too, and retries for minutes when the status does not list a node.
-    """
+    """A Scylla cluster that goes through `wait_for_init_wrap` and its real UN check."""
 
     node_type = "scylla-db"
     parallel_startup = True
+    params = {}
 
-    def update_db_binary(self, *_, **__):
-        pass
-
-    def update_db_packages(self, *_, **__):
-        pass
-
+    # The real `node_setup` and `node_startup` install, configure and start Scylla over SSH.
     def node_setup(self, node, **_):
         pass
 
     def node_startup(self, node, **_):
         node._db_up = True
-
-    def wait_for_nodes_up_and_normal(self, *_, **__):
-        pass
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, timeout=None):
@@ -102,7 +95,8 @@ def test_names_of_all_nodes_come_from_one_nodetool_status_of_the_first_node(db_c
     """One `nodetool status` of the first node gives the names of the nodes of both datacenters."""
     db_cluster.wait_for_init(critical_node_setup_events=[])
 
-    assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [1, 0, 0]
+    # one for the UN check, one for the names of all nodes
+    assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [2, 0, 0]
     assert {node.name: node.reported_names() for node in db_cluster.nodes} == NAMES_IN_STATUS
 
 
@@ -112,6 +106,8 @@ def test_node_that_the_status_does_not_list_asks_itself(db_cluster):
     missing = StartedNode("10.0.0.9", status=own_status)
     missing.parent_cluster = db_cluster
     db_cluster.nodes.append(missing)
+    # A node can be missing only when the UN check does not read the same status, as on Scylla Cloud (its API).
+    db_cluster.wait_for_nodes_up_and_normal = MagicMock()
 
     db_cluster.wait_for_init(critical_node_setup_events=[])
 
@@ -125,6 +121,7 @@ def test_first_node_that_cannot_run_scylla_commands_is_not_asked(db_cluster):
     """No `nodetool status` runs on a node with no SSH connection, as on Scylla Cloud without SSH access."""
     for node in db_cluster.nodes:
         node.remoter = None
+    db_cluster.wait_for_nodes_up_and_normal = MagicMock()  # Scylla Cloud checks UN through its API
 
     db_cluster.wait_for_init(critical_node_setup_events=[])
 
@@ -138,7 +135,7 @@ def test_failed_read_of_the_names_does_not_fail_wait_for_init(db_cluster):
 
     db_cluster.wait_for_init(critical_node_setup_events=[])
 
-    assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [0, 2, 2]
+    assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [1, 2, 2]  # node 1: the UN check
     assert db_cluster.nodes[1].reported_names() == NAMES_IN_STATUS["10.0.0.2"]
     assert db_cluster.nodes[2].reported_names() == NAMES_IN_STATUS["2a05:d018:223:f00::1"]
 
