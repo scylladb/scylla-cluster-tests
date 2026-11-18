@@ -1,9 +1,11 @@
 # (60min * 500 nodes) + 240min of margin. After the cluster reaches its target size, the test runs one
-# more stress_cmd round (10min) on it and ends.
+# more stress_cmd round (10min) on it, and more rounds until minimum_nemesis_to_execute nemeses were
+# executed.
 test_duration: 30240
 n_db_nodes: 450
 cluster_target_size: 500
 add_node_cnt: 50
+minimum_nemesis_to_execute: 3
 
 user_prefix: 'cluster-scale-450-500-test'
 
