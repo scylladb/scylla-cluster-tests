@@ -15,20 +15,20 @@ stress_cmd_w:
     latte run --function write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 402653185 --end-cycle 805306368
-    -P row_count=1610612736 -P offset=402653184
+    -P row_count=1610612736 -P offset=0
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 805306369 --end-cycle 1207959552
-    -P row_count=1610612736 -P offset=805306368
+    -P row_count=1610612736 -P offset=0
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 1207959553 --end-cycle 1610612736
-    -P row_count=1610612736 -P offset=1207959552
+    -P row_count=1610612736 -P offset=0
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
