@@ -21,6 +21,12 @@ The output is a PR whose `### Testing` section lists, for each pipeline the chan
 
 ## Essential Principles
 
+### Trigger as yourself
+
+`staging_trigger.py` calls Jenkins with your own API token, so each build shows who started it.
+Set it up once, as described in [Jenkins credentials](../../docs/contrib.md#jenkins-credentials) (1Password or the OS keyring).
+Each run prints `Jenkins: calling ... as <user>, token from <source>`. Check that the user is you before you trigger anything.
+
 ### Pick jobs by what the change exercises
 
 A staging run proves only the code paths that the chosen pipelines execute.

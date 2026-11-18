@@ -1,25 +1,161 @@
 """Low-level Jenkins API client for staging trigger operations."""
 
 import fnmatch
+import functools
+import json
 import logging
+import os
+import re
+import subprocess
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 
+import click
 import jenkins
 
-from sdcm.keystore import KeyStore
 from sdcm.utils.get_username import get_username
-from utils.staging_trigger.constants import ParamDefinition
+from utils.staging_trigger.constants import ParamDefinition, _get_jenkins_url
 
 logger = logging.getLogger(__name__)
+
+KEYRING_SERVICE = "jenkins.scylladb.com"
+ONEPASSWORD_ITEM = "Jenkins API token"
+AUTH_REJECTED_RE = re.compile(r"authentication failed \[40[13]\]")
+
+
+def _run_secret_command(cmd: list[str]) -> tuple[str, str]:
+    """Run a secret-store CLI and return (stdout, stderr), or empty strings when the CLI is missing or fails.
+
+    A missing CLI is expected (not everyone has both stores) and stays quiet. A CLI that fails says why on
+    stderr, so a locked keyring or a locked 1Password app is not mistaken for a missing entry.
+    """
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=60)
+        return result.stdout, result.stderr
+    except FileNotFoundError:
+        logger.debug("%s is not installed", cmd[0])
+    except subprocess.CalledProcessError as exc:
+        reason = (exc.stderr or "").strip().splitlines()
+        click.echo(f"Jenkins: {cmd[0]} failed: {reason[-1] if reason else f'exit code {exc.returncode}'}", err=True)
+    except (OSError, subprocess.SubprocessError) as exc:
+        click.echo(f"Jenkins: {cmd[0]} failed: {exc}", err=True)
+    return "", ""
+
+
+def _credentials_from_keyring() -> tuple[str, str]:
+    """Read (user, token) from the OS keyring item with attribute service=jenkins.scylladb.com.
+
+    `secret-tool search` prints the secret on stdout and the item's attributes on stderr.
+    """
+    stdout, stderr = _run_secret_command(["secret-tool", "search", "service", KEYRING_SERVICE])
+    fields = {}
+    for line in (stdout + stderr).splitlines():
+        key, sep, value = line.partition(" = ")
+        if sep:
+            fields[key] = value
+    return fields.get("attribute.user", ""), fields.get("secret", "")
+
+
+def _credentials_from_1password() -> tuple[str, str]:
+    """Read (username, credential) from the 1Password item titled "Jenkins API token"."""
+    output, _ = _run_secret_command(
+        [
+            "op",
+            "item",
+            "get",
+            ONEPASSWORD_ITEM,
+            "--fields",
+            "label=username,label=credential",
+            "--reveal",
+            "--format",
+            "json",
+        ]
+    )
+    if not output:
+        return "", ""
+    try:
+        fields = json.loads(output)
+        # `op` prints a list for several fields, but a single object when only one of them exists
+        if isinstance(fields, dict):
+            fields = [fields]
+        values = {field.get("label"): field.get("value") or "" for field in fields}
+    except (ValueError, AttributeError) as exc:
+        logger.warning("Ignoring unexpected 1Password output for %r: %s", ONEPASSWORD_ITEM, exc)
+        return "", ""
+    return values.get("username", ""), values.get("credential", "")
+
+
+def _credentials_from_env() -> tuple[str, str]:
+    return os.environ.get("JENKINS_USERNAME", ""), os.environ.get("JENKINS_API_TOKEN", "")
+
+
+# JENKINS_CREDENTIALS_SOURCE value -> (name shown to the user, lookup), in the default order
+CREDENTIAL_SOURCES = {
+    "env": ("environment", _credentials_from_env),
+    "1password": ("1Password", _credentials_from_1password),
+    "keyring": ("OS keyring", _credentials_from_keyring),
+}
+
+
+def iter_jenkins_credentials() -> Iterator[tuple[str, str, str]]:
+    """Yield the caller's own (Jenkins user id, API token, source), best first.
+
+    Order: JENKINS_USERNAME + JENKINS_API_TOKEN, 1Password, then the OS keyring. JENKINS_USERNAME alone
+    overrides the user id stored next to a token. A store is only queried when the ones before it were
+    not enough, so the keyring is not asked when 1Password works.
+
+    JENKINS_CREDENTIALS_SOURCE (env, keyring or 1password) limits the lookup to that one source.
+    """
+    env_user = os.environ.get("JENKINS_USERNAME", "")
+    sources = CREDENTIAL_SOURCES
+    if wanted := os.environ.get("JENKINS_CREDENTIALS_SOURCE", "").lower():
+        if wanted not in CREDENTIAL_SOURCES:
+            raise click.ClickException(
+                f"JENKINS_CREDENTIALS_SOURCE={wanted!r} is not one of: {', '.join(CREDENTIAL_SOURCES)}"
+            )
+        sources = {wanted: CREDENTIAL_SOURCES[wanted]}
+    for source, lookup in sources.values():
+        user, token = lookup()
+        if token and (env_user or user):
+            yield env_user or user, token, source
+
+
+@functools.cache
+def _login(url: str) -> jenkins.Jenkins:
+    """Return a Jenkins client logged in with the first working credentials of the caller.
+
+    Cached per process: a command builds a client for each job, and the secret stores, the `whoAmI` check and
+    the messages below must happen once, not once per job.
+    """
+    # Try each source in turn: a stale or misnamed entry in one store must not hide a good one in the next.
+    # Messages go to stderr, so a rejected login can be traced to the store that supplied it.
+    for username, token, source in iter_jenkins_credentials():
+        client = jenkins.Jenkins(url, username=username, password=token)
+        try:
+            client.get_whoami()
+        except jenkins.JenkinsException as exc:
+            reason = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+            # python-jenkins raises a plain JenkinsException for 401, 403 and 500 alike; only 401/403 mean the
+            # credentials are bad. A timeout or a server error is not the store's fault: stop, don't try the next.
+            if not AUTH_REJECTED_RE.search(str(exc)):
+                raise click.ClickException(f"Jenkins at {url} did not answer whoAmI: {exc}") from exc
+            click.echo(f"Jenkins: {username} from {source} was rejected, trying the next source ({reason})", err=True)
+            continue
+        click.echo(f"Jenkins: calling {url} as {username}, token from {source}", err=True)
+        return client
+    raise click.ClickException(
+        "No working Jenkins credentials of your own found. Store your Jenkins user id and API token in the OS "
+        f"keyring or 1Password, or set JENKINS_USERNAME and JENKINS_API_TOKEN (create a token at "
+        f"{url}/me/security). See docs/contrib.md, 'Jenkins credentials'."
+    )
 
 
 class JenkinsJobTrigger:
     """Core Jenkins job interaction: find, configure, and trigger jobs."""
 
     def __init__(self):
-        creds = KeyStore().get_json("jenkins.json")
-        self.url = creds["url"].rstrip("/")
-        self.jenkins = jenkins.Jenkins(**creds)
+        self.url = _get_jenkins_url()
+        self.jenkins = _login(self.url)
 
     def get_job_info(self, job_name: str) -> dict:
         return self.jenkins.get_job_info(job_name)
@@ -69,8 +205,8 @@ class JenkinsJobTrigger:
     def trigger(self, job_name: str, parameters: dict) -> int:
         """Trigger a job and return the expected build number.
 
-        Fills an empty or missing `requested_by_user` with the caller's username: the jenkins.json
-        token may belong to someone else, and the build tags its cloud resources with this user.
+        Fills an empty or missing `requested_by_user` with the caller's username: the build tags
+        its cloud resources with this user.
 
         Parameters the job does not define are dropped: Jenkins rejects the
         whole build with 400 Bad Request when it gets one.
