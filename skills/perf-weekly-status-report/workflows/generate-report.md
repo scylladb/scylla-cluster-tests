@@ -48,12 +48,10 @@ Step-by-step process for generating the Gmail-compatible HTML performance report
 Example filter logic:
 ```python
 import re
+
 MASTER_RE = re.compile(r"^\d{4}\.\d+\.\d+.+dev$")
 
-master_runs = [
-    run for run in all_runs
-    if MASTER_RE.match(run.get("scylla_version") or "")
-]
+master_runs = [run for run in all_runs if MASTER_RE.match(run.get("scylla_version") or "")]
 ```
 
 **Exit criteria:** Only master (~dev) version runs remain per test.

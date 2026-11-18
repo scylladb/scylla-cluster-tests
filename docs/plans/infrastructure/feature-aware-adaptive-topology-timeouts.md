@@ -111,7 +111,9 @@ A master switch `adaptive_timeout_feature_enabled` (boolean, default `true`) dis
        materialized_views: bool = False
        lwt: bool = False
        counters: bool = False
-       detector_values: tuple[tuple[str, float], ...] = ()  # (metric_name, summed_value) pairs; telemetry only, not used for scaling
+       detector_values: tuple[
+           tuple[str, float], ...
+       ] = ()  # (metric_name, summed_value) pairs; telemetry only, not used for scaling
        # (feature_name, metric_name) pairs recording which metric triggered each active feature,
        # e.g. (("cdc", "scylla_cdc_operations_total"), ("lwt", "scylla_storage_proxy_coordinator_cas_prune")).
        # Telemetry/debugging only; never used for scaling.
@@ -287,8 +289,8 @@ The multiplier has two parts: **active feature signals gate and select a feature
        adjusted_hard_timeout: float | None
        feature_profile: ClusterFeatureProfile
        cpu_load_5: float
-       cpu_scale: float        # 1.0..CPU_SCALE_CAP, 1.0 for idle node
-       feature_factor: float   # 1.0 when no features
+       cpu_scale: float  # 1.0..CPU_SCALE_CAP, 1.0 for idle node
+       feature_factor: float  # 1.0 when no features
        combined_factor: float  # 1.0 when no features; applied to both soft and hard
    ```
 
@@ -305,17 +307,23 @@ The multiplier has two parts: **active feature signals gate and select a feature
 
    ```python
    _FEATURE_BASE_FACTOR = {"cdc": 1.3, "mv": 1.5, "lwt": 1.2, "counter": 1.2}
-   CPU_SCALE_CAP = 2.0        # a busy node may at most double the feature uplift
+   CPU_SCALE_CAP = 2.0  # a busy node may at most double the feature uplift
    MAX_COMBINED_FACTOR = 3.0  # never more than 3x baseline
+
 
    def _cpu_scale(cpu_load_5: float, shards_count: int) -> float:
        """Load per shard, floored at 1.0 (idle node keeps feature factor) and capped."""
        load_per_shard = cpu_load_5 / max(shards_count, 1)
        return min(max(load_per_shard, 1.0), CPU_SCALE_CAP)
 
-   def compose_factor(profile: ClusterFeatureProfile, cpu_load_5: float, shards_count: int,
-                      factor_overrides: dict | None = None, max_combined_override: float | None = None
-                      ) -> tuple[float, float, float]:
+
+   def compose_factor(
+       profile: ClusterFeatureProfile,
+       cpu_load_5: float,
+       shards_count: int,
+       factor_overrides: dict | None = None,
+       max_combined_override: float | None = None,
+   ) -> tuple[float, float, float]:
        """Return (feature_factor, cpu_scale, combined_factor).
 
        factor_overrides: per-feature base factor overrides from config (adaptive_timeout_feature_factors).
@@ -430,9 +438,9 @@ Make feature-aware timeout behavior observable in stored telemetry so post-failu
 1. Keep the `AdaptiveTimeoutStore.store()` interface unchanged in `sdcm/utils/adaptive_timeouts/load_info_store.py:245-253`:
 
    ```python
-   def store(self, metrics: dict[str, Any], operation: str, duration: int | float, timeout: int,
-             timeout_occurred: bool) -> None:
-       ...
+   def store(
+       self, metrics: dict[str, Any], operation: str, duration: int | float, timeout: int, timeout_occurred: bool
+   ) -> None: ...
    ```
 
    Add new telemetry fields to the `metrics` dict in `adaptive_timeout` before calling `stats_storage.store()`. This preserves existing store implementations and test doubles.

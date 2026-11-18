@@ -12,10 +12,11 @@ Sct creates ES Index using the Class name of maing test,
 
 ```python
 class PerformanceTest(ClusterTester):
-	pass
+    pass
+
 
 class LongevityTest(ClusterTester):
-	pass
+    pass
 ```
 
 Once test is configured to store results and is run, SCT create new index, if it is not yet exists, with name `performancetest` or `longevitytest`, but field mapping will be done dynamically and by fields of first inserted document.
