@@ -9,6 +9,7 @@ from sdcm.nemesis.utils.node_operations import (
     block_loaders_payload_for_scylla_node,
     block_scylla_ports,
     is_node_destroyed,
+    is_node_seen_as_down,
     pause_scylla_with_sigstop,
 )
 from unit_tests.unit.nemesis import make_mock_node, sudo_commands
@@ -72,6 +73,31 @@ def test_is_node_destroyed_detects_either_half_of_destroy(destroyed, has_remoter
     node.remoter = MagicMock() if has_remoter else None
 
     assert is_node_destroyed(node) is expected
+
+
+# ---------------------------------------------------------------------------
+# is_node_seen_as_down
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "nodes_status,expected",
+    [
+        pytest.param({"10.0.0.5": {"state": "DN"}}, True, id="down"),
+        pytest.param({"10.0.0.5": {"state": "XN"}}, True, id="excluded-after-failed-removenode"),
+        pytest.param({"10.0.0.5": {"state": "UN"}}, False, id="up"),
+        pytest.param({}, True, id="not-listed"),
+    ],
+)
+def test_is_node_seen_as_down_accepts_down_and_excluded(nodes_status, expected):
+    """A node banned by a failed removenode shows as XN, not DN. It must count as down,
+    or ``_remove_node_add_node`` times out and never retries the removenode.
+    """
+    down_node = make_mock_node("node2", ip_address="10.0.0.5")
+    verification_node = make_mock_node("node1")
+    verification_node.parent_cluster.get_nodetool_status.return_value = nodes_status
+
+    assert is_node_seen_as_down(down_node, verification_node) is expected
 
 
 # ---------------------------------------------------------------------------
