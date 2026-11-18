@@ -41,7 +41,12 @@ from sdcm.provision.provisioner import (
     VmInstance,
 )
 from sdcm.provision.user_data import UserDataBuilder
-from sdcm.utils.oci_utils import OciService, build_hostname_label, build_image_source_details
+from sdcm.utils.oci_utils import (
+    OCI_INSTANCE_ACTION_RETRY_STRATEGY,
+    OciService,
+    build_hostname_label,
+    build_image_source_details,
+)
 from sdcm.utils.parallel_object import ParallelObject
 lazy from sdcm.utils.oci_region import OciRegion  # lazy, or it closes a cycle: oci_region -> sdcm.provision -> here
 
@@ -635,17 +640,20 @@ class VirtualMachineProvider:
         )
         self._compute_client.update_instance(inst.id, details)
 
+    def _instance_action(self, instance_id: str, action: str):
+        self._compute_client.instance_action(instance_id, action, retry_strategy=OCI_INSTANCE_ACTION_RETRY_STRATEGY)
+
     def start(self, name_or_id: str, wait: bool = True):
         inst = self._resolve_instance(name_or_id)
         if inst:
-            self._compute_client.instance_action(inst.id, "START")
+            self._instance_action(inst.id, "START")
             if wait:
                 self._wait_for_state(inst.id, Instance.LIFECYCLE_STATE_RUNNING)
 
     def stop(self, name_or_id: str, wait: bool = True):
         inst = self._resolve_instance(name_or_id)
         if inst:
-            self._compute_client.instance_action(inst.id, "STOP")
+            self._instance_action(inst.id, "STOP")
             if wait:
                 self._wait_for_state(inst.id, Instance.LIFECYCLE_STATE_STOPPED)
 
@@ -658,7 +666,7 @@ class VirtualMachineProvider:
         inst = self._resolve_instance(name_or_id)
         if inst:
             action = "RESET" if hard else "SOFTRESET"
-            self._compute_client.instance_action(inst.id, action)
+            self._instance_action(inst.id, action)
             if wait:
                 self._wait_for_state(inst.id, Instance.LIFECYCLE_STATE_RUNNING)
 

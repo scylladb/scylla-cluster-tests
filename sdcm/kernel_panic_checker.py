@@ -29,6 +29,9 @@ class BaseKernelPanicChecker(threading.Thread):
     SSH_FAILURE_THRESHOLD = 3
     # ~5 minutes of failed probes: well past a GCE live-migration pause, well short of a stress command timeout
     SSH_LOST_CRITICAL_THRESHOLD = 10
+    # A check takes up to ~40s: the console capture waits up to 30s, the SSH probe up to 5s.
+    # Do not hold a reboot for longer, e.g. when the cloud API throttles the check and the SDK retries.
+    SUSPEND_WAIT_TIMEOUT_SECONDS = 60
 
     provider_name: str = "unknown"
 
@@ -40,6 +43,8 @@ class BaseKernelPanicChecker(threading.Thread):
         self._stop_event = threading.Event()
         self._panic_detected = threading.Event()
         self._suspended = threading.Event()
+        # Held during a check, so that `suspend()` can wait for a check that is already running
+        self._check_lock = threading.Lock()
         self._ssh_was_reachable = False
         self._ssh_consecutive_failures = 0
         # Set for nodes that are never taken down on purpose, where losing SSH means the node is dead
@@ -108,49 +113,49 @@ class BaseKernelPanicChecker(threading.Thread):
 
     def run(self):
         while not self._stop_event.is_set():
-            try:
+            with self._check_lock:
                 # Skip panic detection while suspended — cloud providers
                 # (especially OCI) report the instance as STOPPED during a hard reboot,
                 # which would otherwise trigger a false KernelPanicEvent.
-                if self._suspended.is_set():
-                    self._stop_event.wait(self.CHECK_INTERVAL_SECONDS)
-                    continue
-
-                output = self._get_console_output()
-
-                if output:
-                    self._save_console_output(output)
-
-                if output and self._check_for_panic(output) and not self._panic_detected.is_set():
-                    self._panic_detected.set()
-                    self._publish_panic_event(output, self._get_instance_identifier())
-                    self._stop_event.set()
-                    break
-
-                # SSH connectivity check — detects node death when console API is unreliable
-                ssh_ok = self._check_ssh_connectivity()
-                if ssh_ok:
-                    self._ssh_was_reachable = True
-                    self._ssh_consecutive_failures = 0
-                elif self._ssh_was_reachable:
-                    self._ssh_consecutive_failures += 1
-                    if self._ssh_consecutive_failures >= self.SSH_FAILURE_THRESHOLD:
-                        LOGGER.warning(
-                            "[%s] SSH unreachable for %d consecutive checks on %s",
-                            self.provider_name,
-                            self._ssh_consecutive_failures,
-                            self.host,
-                        )
-                    if self.fail_on_ssh_lost and self._ssh_consecutive_failures >= self.SSH_LOST_CRITICAL_THRESHOLD:
-                        self._publish_ssh_lost_event()
-                        self._stop_event.set()
-                        break
-
-            except Exception as exc:  # noqa: BLE001
-                if not self._stop_event.is_set():
-                    LOGGER.error("[%s] Error checking for kernel panic: %s", self.provider_name, exc)
-
+                if not self._suspended.is_set():
+                    self._check()
             self._stop_event.wait(self.CHECK_INTERVAL_SECONDS)
+
+    def _check(self):
+        """Run one check for a kernel panic and for lost SSH. Sets the stop event when the node is dead."""
+        try:
+            output = self._get_console_output()
+
+            if output:
+                self._save_console_output(output)
+
+            if output and self._check_for_panic(output) and not self._panic_detected.is_set():
+                self._panic_detected.set()
+                self._publish_panic_event(output, self._get_instance_identifier())
+                self._stop_event.set()
+                return
+
+            # SSH connectivity check — detects node death when console API is unreliable
+            ssh_ok = self._check_ssh_connectivity()
+            if ssh_ok:
+                self._ssh_was_reachable = True
+                self._ssh_consecutive_failures = 0
+            elif self._ssh_was_reachable:
+                self._ssh_consecutive_failures += 1
+                if self._ssh_consecutive_failures >= self.SSH_FAILURE_THRESHOLD:
+                    LOGGER.warning(
+                        "[%s] SSH unreachable for %d consecutive checks on %s",
+                        self.provider_name,
+                        self._ssh_consecutive_failures,
+                        self.host,
+                    )
+                if self.fail_on_ssh_lost and self._ssh_consecutive_failures >= self.SSH_LOST_CRITICAL_THRESHOLD:
+                    self._publish_ssh_lost_event()
+                    self._stop_event.set()
+
+        except Exception as exc:  # noqa: BLE001
+            if not self._stop_event.is_set():
+                LOGGER.error("[%s] Error checking for kernel panic: %s", self.provider_name, exc)
 
     @property
     def ssh_lost(self) -> bool:
@@ -169,8 +174,23 @@ class BaseKernelPanicChecker(threading.Thread):
             LOGGER.debug("[%s] Failed to get final console output: %s", self.provider_name, exc)
 
     def suspend(self):
+        """Stop the checks, and wait for a check that is already running.
+
+        A running check must not overlap the reboot that follows. On OCI, the console capture keeps
+        the instance "being modified", and OCI rejects a power action with 409 Conflict until it ends.
+        And a state check made during the reboot would report the stopped instance as a kernel panic.
+        """
         LOGGER.debug("[%s] Suspending kernel panic detection", self.provider_name)
         self._suspended.set()
+        if self._check_lock.acquire(timeout=self.SUSPEND_WAIT_TIMEOUT_SECONDS):
+            self._check_lock.release()
+        else:
+            LOGGER.warning(
+                "[%s] A kernel panic check on %s is still running after %ss, not waiting for it anymore",
+                self.provider_name,
+                self.node_name,
+                self.SUSPEND_WAIT_TIMEOUT_SECONDS,
+            )
 
     def resume(self):
         LOGGER.debug("[%s] Resuming kernel panic detection", self.provider_name)

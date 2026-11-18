@@ -42,13 +42,26 @@ LOGGER = logging.getLogger(__name__)
 # OCI refuses to create a boot volume smaller than this.
 MIN_BOOT_VOLUME_SIZE_IN_GBS = 50
 
-OCI_RETRY_STRATEGY = oci.retry.RetryStrategyBuilder(
+_OCI_RETRY_STRATEGY_KWARGS = dict(
     max_attempts_check=True,
     max_attempts=10,
     retry_max_wait_between_calls_seconds=60,
     retry_base_sleep_time_seconds=3,
     service_error_retry_on_any_5xx=True,
+)
+OCI_RETRY_STRATEGY = oci.retry.RetryStrategyBuilder(
+    **_OCI_RETRY_STRATEGY_KWARGS,
     service_error_retry_config={429: []},
+).get_retry_strategy()
+
+# For power actions (START, STOP, RESET, ...) on an instance, retry a 409 as well.
+# OCI rejects a power action with "409 Conflict: instance is currently being modified" while another
+# operation on the instance runs, e.g. a console history capture by the kernel panic checker.
+# Only the "Conflict" code: "IncorrectState" (e.g. a terminating instance) does not clear, so a retry only delays the error.
+# It is safe: the SDK sends the same opc-retry-token on each retry, so OCI runs the action only once.
+OCI_INSTANCE_ACTION_RETRY_STRATEGY = oci.retry.RetryStrategyBuilder(
+    **_OCI_RETRY_STRATEGY_KWARGS,
+    service_error_retry_config={409: ["Conflict"], 429: []},
 ).get_retry_strategy()
 
 # Suppress verbose OCI SDK logging

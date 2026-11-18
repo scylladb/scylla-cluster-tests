@@ -418,3 +418,100 @@ def test_kernel_panic_wins_over_ssh_lost(mock_unreachable_cls, mock_panic_cls):
 
     mock_panic_cls.assert_called_once()
     mock_unreachable_cls.assert_not_called()
+
+
+class BlockingCheckChecker(FakeKernelPanicChecker):
+    """Its check runs until the test releases it, like a slow console capture on OCI."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.check_started = threading.Event()
+        self.release_check = threading.Event()
+
+    def _get_console_output(self) -> str:
+        self.check_started.set()
+        self.release_check.wait(timeout=5)
+        return NORMAL_BOOT_OUTPUT
+
+
+class CountingEvent(threading.Event):
+    """Counts the waits, so a test can tell how many loop iterations the checker made."""
+
+    def __init__(self):
+        super().__init__()
+        self.waits = 0
+
+    def wait(self, timeout=None):
+        self.waits += 1
+        return super().wait(timeout)
+
+
+def wait_for(condition, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.005)
+    return False
+
+
+@pytest.fixture
+def start_checker():
+    """Start a checker thread, and stop it after the test, also when the test fails."""
+    started = []
+
+    def _start(checker):
+        checker.CHECK_INTERVAL_SECONDS = 0.01
+        started.append(checker)
+        checker.start()
+        return checker
+
+    yield _start
+
+    for checker in started:
+        checker._stop_event.set()
+        if isinstance(checker, BlockingCheckChecker):
+            checker.release_check.set()
+        checker.join(timeout=5)
+
+
+def test_suspend_waits_for_running_check(start_checker):
+    checker = start_checker(BlockingCheckChecker(node_name="node-1"))
+    assert checker.check_started.wait(timeout=5)
+    suspend_thread = threading.Thread(target=checker.suspend, daemon=True)
+    suspend_thread.start()
+
+    # suspend() sets the flag before it waits for the running check
+    assert wait_for(checker._suspended.is_set)
+    suspend_thread.join(timeout=0.2)
+    assert suspend_thread.is_alive(), "suspend() returned while a check was still running"
+
+    checker.release_check.set()
+    suspend_thread.join(timeout=5)
+    assert not suspend_thread.is_alive()
+
+
+def test_suspend_stops_waiting_for_check_after_timeout(start_checker):
+    checker = BlockingCheckChecker(node_name="node-1")
+    checker.SUSPEND_WAIT_TIMEOUT_SECONDS = 0.05
+    start_checker(checker)
+    assert checker.check_started.wait(timeout=5)
+
+    started = time.monotonic()
+    checker.suspend()
+
+    assert time.monotonic() - started < 2
+    assert checker._suspended.is_set()
+
+
+def test_no_check_starts_after_suspend(start_checker):
+    checker = FakeKernelPanicChecker(node_name="node-1")
+    checker._stop_event = CountingEvent()
+    start_checker(checker)
+    checker.suspend()
+    calls_at_suspend = checker._call_count
+    waits_at_suspend = checker._stop_event.waits
+
+    # Each loop iteration ends with one wait: let the suspended loop go around a few times
+    assert wait_for(lambda: checker._stop_event.waits >= waits_at_suspend + 3)
+    assert checker._call_count == calls_at_suspend
