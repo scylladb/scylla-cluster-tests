@@ -25,9 +25,18 @@ class TaskManagerClient(RemoteCurlClient):
         return json.loads(result.stdout)
 
     def get_active_repair_tasks(self) -> list[dict]:
-        """Return repair-module tasks in an active state on the node.
+        """Return the repair tasks that block a new repair.
 
-        This is the same listing Scylla Manager's "ensure no active repairs" guard checks
-        before starting a repair, so an empty result means that guard will pass.
+        Repair-module tasks in an active state on the node are what Scylla Manager's "ensure no
+        active repairs" guard checks before starting a repair. The tablets module lists the tablet
+        repair requests of the whole cluster, user-requested or scheduled by auto-repair. A request
+        stays there until its tablet repair succeeds, also between retries after a failed attempt,
+        and Scylla refuses another repair of that tablet meanwhile (SCT-1385).
         """
-        return [task for task in self.list_module_tasks("repair") if task.get("state") in ("created", "running")]
+        repair_tasks = [
+            task for task in self.list_module_tasks("repair") if task.get("state") in ("created", "running")
+        ]
+        tablet_repair_requests = [
+            task for task in self.list_module_tasks("tablets") if task.get("type") in ("user_repair", "auto_repair")
+        ]
+        return repair_tasks + tablet_repair_requests
