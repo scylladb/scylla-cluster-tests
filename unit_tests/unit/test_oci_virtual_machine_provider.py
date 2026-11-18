@@ -8,7 +8,11 @@ import pytest
 
 from sdcm.provision.oci.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.provisioner import PricingModel, ProvisionError
-from sdcm.utils.oci_utils import MIN_BOOT_VOLUME_SIZE_IN_GBS, build_image_source_details
+from sdcm.utils.oci_utils import (
+    MIN_BOOT_VOLUME_SIZE_IN_GBS,
+    OCI_INSTANCE_ACTION_RETRY_STRATEGY,
+    build_image_source_details,
+)
 
 
 @patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock())
@@ -432,3 +436,79 @@ def test_az_fallback_moves_the_data_volumes_with_the_instance(fallback_provider_
     provider._bs_client.delete_volume.assert_called_once_with("vol-0")
     attached = provider._compute_client.launch_instance.call_args.args[0].launch_volume_attachments
     assert [attachment.volume_id for attachment in attached] == ["vol-1"]
+
+
+def _instance_action(instance_id, action):
+    """Stands for ComputeClient.instance_action: the SDK retry needs a callable with a name."""
+
+
+INSTANCE_BEING_MODIFIED = oci.exceptions.ServiceError(
+    409, "Conflict", {}, "instance ocid1.instance.oc1..example is currently being modified, try again later"
+)
+
+
+@pytest.mark.parametrize(
+    "method, kwargs, expected_action",
+    [
+        pytest.param("start", {}, "START", id="start"),
+        pytest.param("stop", {}, "STOP", id="stop"),
+        pytest.param("reboot", {"hard": False}, "SOFTRESET", id="soft-reboot"),
+        pytest.param("reboot", {"hard": True}, "RESET", id="hard-reboot"),
+    ],
+)
+@patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock())
+@patch("sdcm.utils.oci_utils.OciService.get_network_client", return_value=MagicMock())
+@patch("sdcm.utils.oci_utils.OciService.get_identity_client", return_value=MagicMock())
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
+def test_power_actions_retry_while_instance_is_being_modified(
+    mock_compute, mock_identity, mock_network, mock_bs, method, kwargs, expected_action
+) -> None:
+    """Test that power actions use the retry strategy that retries a 409 from OCI."""
+    compute_client = mock_compute.return_value
+    compute_client.get_instance.return_value = SimpleNamespace(data=SimpleNamespace(id="ocid1.instance.oc1..example"))
+    provider = _make_provider(az="1")
+
+    getattr(provider, method)("ocid1.instance.oc1..example", wait=False, **kwargs)
+
+    compute_client.instance_action.assert_called_once_with(
+        "ocid1.instance.oc1..example", expected_action, retry_strategy=OCI_INSTANCE_ACTION_RETRY_STRATEGY
+    )
+
+
+def test_instance_action_retry_strategy_retries_instance_being_modified() -> None:
+    """Test that a power action rejected with 409 Conflict is sent again until OCI accepts it."""
+    instance_action = MagicMock(
+        spec=_instance_action, side_effect=[INSTANCE_BEING_MODIFIED, INSTANCE_BEING_MODIFIED, "accepted"]
+    )
+
+    with patch.object(OCI_INSTANCE_ACTION_RETRY_STRATEGY, "do_sleep") as mock_sleep:
+        result = OCI_INSTANCE_ACTION_RETRY_STRATEGY.make_retrying_call(instance_action, "ocid", "RESET")
+
+    assert result == "accepted"
+    assert instance_action.call_count == 3
+    assert mock_sleep.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(oci.exceptions.ServiceError(400, "InvalidParameter", {}, "Invalid action."), id="invalid"),
+        pytest.param(
+            oci.exceptions.ServiceError(
+                409,
+                "IncorrectState",
+                {},
+                "Instance ocid1.instance.oc1..example is in Terminating state, when it was expected to be in Running state",
+            ),
+            id="terminating",
+        ),
+    ],
+)
+def test_instance_action_retry_strategy_does_not_retry_errors_that_do_not_pass(error) -> None:
+    """Test that a power action rejected for a reason that does not pass is not sent again."""
+    instance_action = MagicMock(spec=_instance_action, side_effect=error)
+
+    with patch.object(OCI_INSTANCE_ACTION_RETRY_STRATEGY, "do_sleep"), pytest.raises(oci.exceptions.ServiceError):
+        OCI_INSTANCE_ACTION_RETRY_STRATEGY.make_retrying_call(instance_action, "ocid", "RESET")
+
+    assert instance_action.call_count == 1
