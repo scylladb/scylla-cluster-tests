@@ -51,6 +51,8 @@ from sdcm.utils.parallel_object import ParallelObject
 GROWTH_NAME = "GrowCluster"
 # How long a stopped test waits for the nodes of a growth batch that are being created, in seconds.
 GROWTH_BATCH_CREATION_TIMEOUT = 30 * 60
+# One more stress_cmd round is expected to take as long as the last one did, and up to this many seconds more.
+STRESS_ROUND_MARGIN = 5 * 60
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -220,6 +222,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         stress_cmd = self.params.get("stress_cmd")
         stress_round_start = len(stress_queue)
+        stress_round_started = time.time()
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
         stress_round = stress_queue[stress_round_start:]
 
@@ -260,7 +263,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         # The growth already ran stress_cmd again for the nemesis, after the round on the full-size cluster.
         if not grow_during_stress and self.params.get("minimum_nemesis_to_execute"):
-            self._rerun_stress_cmd(stress_queue, stress_round, keyspace_num)
+            self._rerun_stress_cmd(stress_queue, stress_round, keyspace_num, round_started=stress_round_started)
 
         for stress in stress_queue:
             self.verify_stress_thread(stress)
@@ -317,6 +320,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         stress_round: list,
         keyspace_num: int,
         growth: concurrent.futures.Future | None = None,
+        round_started: float | None = None,
     ) -> None:
         """Wait for `stress_round`, and run stress_cmd again for as long as there is a reason to.
 
@@ -328,14 +332,18 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         size from the first round on.
 
         After a full round on the full-size cluster, the only reason is `minimum_nemesis_to_execute`, see
-        `_reason_to_rerun_stress_cmd_for_nemesis`.
+        `_reason_to_rerun_stress_cmd_for_nemesis`. That check needs the time that the round took:
+        `round_started` is when `stress_round` was started, and it defaults to now. With `growth`, the
+        default is enough: the first round is never checked for the nemesis.
 
         A round that failed is not run again, whatever the reason.
         """
         on_full_size_cluster = growth is None  # whether the round that is running started on the full-size cluster
+        round_started = round_started or time.time()
         # An empty round (no stress_cmd, or main_load skipped) has nothing to re-run.
         while stress_round:
-            concurrent.futures.wait([future for thread in stress_round for future in thread.results_futures])
+            self._wait_for_stress_round(stress_round)
+            round_duration = time.time() - round_started
             grown = growth is None or growth.done()
             if growth and grown and growth.exception():
                 break
@@ -345,7 +353,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                     if grown
                     else "stress_cmd finished before the cluster reached its target size, running it again"
                 )
-            elif not (reason := self._reason_to_rerun_stress_cmd_for_nemesis(stress_round)):
+            elif not (reason := self._reason_to_rerun_stress_cmd_for_nemesis(round_duration)):
                 break
             if not all([self.verify_stress_thread(thread) for thread in stress_round]):
                 TestFrameworkEvent(
@@ -359,10 +367,20 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=reason).publish()
             on_full_size_cluster = grown
             stress_round_start = len(stress_queue)
+            round_started = time.time()
             self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get("stress_cmd"), keyspace_num)
             stress_round = stress_queue[stress_round_start:]
 
-    def _reason_to_rerun_stress_cmd_for_nemesis(self, stress_round: list) -> str | None:
+    @staticmethod
+    def _wait_for_stress_round(stress_round: list) -> None:
+        """Wait for every stress thread of the round to end, without reading its results."""
+        for thread in stress_round:
+            if isinstance(thread, threading.Thread):  # a python_thread command is a plain thread, with no futures
+                thread.join()
+            else:
+                concurrent.futures.wait(thread.results_futures)
+
+    def _reason_to_rerun_stress_cmd_for_nemesis(self, round_duration: float) -> str | None:
         """Tell why stress_cmd is to run again for `minimum_nemesis_to_execute`, or None when it is not.
 
         A nemesis counts once it ran to its end, succeeded or failed, in any nemesis thread of the test. A
@@ -370,8 +388,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         Below the minimum, stress_cmd is still not run again, and a warning event tells why, when:
         - no nemesis thread is running, so the minimum cannot be reached.
-        - one more round could outlast `test_duration`. `stress_round` is the round that just ended: the next
-          one can take as long as its threads are allowed to.
+        - one more round could outlast `test_duration`. `round_duration` is the time in seconds that the last
+          round took: the next one is expected to take as long, and up to `STRESS_ROUND_MARGIN` more.
         """
         if not (minimum := self.params.get("minimum_nemesis_to_execute")):
             return None
@@ -380,12 +398,14 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=f"{executed} nemeses were executed, the minimum of {minimum} is reached").publish()
             return None
 
-        round_timeout = max(thread.hard_timeout for thread in stress_round)
         time_left = int(self.start_time + int(self.test_duration) * 60 - time.time())
         if not any(thread.is_alive() for thread in self.db_cluster.nemesis_threads):
             obstacle = "no nemesis thread is running"
-        elif time_left < round_timeout:
-            obstacle = f"one more round can take {round_timeout} seconds, and the test times out in {time_left} seconds"
+        elif time_left < round_duration + STRESS_ROUND_MARGIN:
+            obstacle = (
+                f"the last round took {int(round_duration)} seconds, one more can take {STRESS_ROUND_MARGIN} seconds"
+                f" longer, and the test times out in {time_left} seconds"
+            )
         else:
             return f"{executed} of the minimum of {minimum} nemeses were executed, running stress_cmd again"
         TestFrameworkEvent(
