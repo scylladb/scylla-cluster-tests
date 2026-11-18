@@ -486,10 +486,10 @@ suggestions to verify against the code, not as rulings.
 
 To run a reviewer on your machine before you push, or without a PR comment,
 follow the [`running-ai-reviewers`](../skills/running-ai-reviewers/SKILL.md) skill.
-It runs Claude (the `code-review` skill, with your Claude team login) or the
-CodeRabbit CLI (GitHub login; reviews count against the scylladb plan) with the
-same `REVIEW.md`, and posts nothing.
-Qodo and Copilot run only on the PR; for a branch without one, open a draft PR.
+It runs Claude (the `code-review` skill, with your Claude team login), the
+CodeRabbit CLI (GitHub login; reviews count against the scylladb plan), or the
+Qodo CLI (a Qodo login with credits) with the same `REVIEW.md`, and posts nothing.
+Copilot runs only on the PR; for a branch without one, open a draft PR.
 
 **On-demand task execution** — mentioning `@claude` in a PR comment or issue
 triggers the [`claude`](../.github/workflows/claude.yml) workflow, except a
