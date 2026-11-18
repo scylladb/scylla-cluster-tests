@@ -347,8 +347,8 @@ class TestScyllaCloudClusterUpdateKeepTag:
         assert mock_cluster.name == "test-user-abc12345-keep-024h"
 
 
-class TestCloudServiceInstallationOrdering:
-    """Test suite for _wait_for_cloud_service_installations."""
+class TestWaitForVectorSearchInstalled:
+    """Test suite for _wait_for_vector_search_installed."""
 
     @pytest.fixture
     def mock_cluster(self):
@@ -357,63 +357,53 @@ class TestCloudServiceInstallationOrdering:
         mock._cluster_id = 456
         mock.log = MagicMock()
         mock._api_client = MagicMock()
-
-        mock._wait_for_cloud_service_installations = lambda: ScyllaCloudCluster._wait_for_cloud_services(mock)
-        mock._get_pending_service_requests = lambda *args, **kwargs: ScyllaCloudCluster._get_pending_service_requests(
+        mock._find_cluster_request = lambda *args, **kwargs: ScyllaCloudCluster._find_cluster_request(
             mock, *args, **kwargs
         )
         mock._wait_for_cloud_request_completed = MagicMock()
         return mock
 
-    def test_manager_in_progress_vs_queued(self, mock_cluster):
-        """When Manager is IN_PROGRESS and VS is QUEUED, wait for Manager first."""
+    def test_waits_for_vs_request_in_progress(self, mock_cluster):
         mock_cluster._api_client.get_cluster_requests.return_value = [
-            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "IN_PROGRESS"},
-            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "QUEUED"},
-        ]
-
-        mock_cluster._wait_for_cloud_service_installations()
-
-        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
-        assert len(calls) == 2
-        assert calls[0] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
-        assert calls[1] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
-
-    def test_vs_in_progress_manager_queued(self, mock_cluster):
-        """When VS is IN_PROGRESS and Manager is QUEUED, wait for VS first."""
-        mock_cluster._api_client.get_cluster_requests.return_value = [
-            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "QUEUED"},
             {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
         ]
 
-        mock_cluster._wait_for_cloud_service_installations()
+        ScyllaCloudCluster._wait_for_vector_search_installed(mock_cluster)
 
-        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
-        assert len(calls) == 2
-        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
-        assert calls[1] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
+        mock_cluster._wait_for_cloud_request_completed.assert_called_once_with(
+            request_id=2, request_type="INSTALL_VECTOR_SEARCH"
+        )
 
-    def test_one_already_completed(self, mock_cluster):
-        """When one service is already COMPLETED, only wait for the other."""
+    def test_skips_wait_when_vs_request_completed(self, mock_cluster):
         mock_cluster._api_client.get_cluster_requests.return_value = [
-            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
-            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
-        ]
-
-        mock_cluster._wait_for_cloud_service_installations()
-
-        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
-        assert len(calls) == 1
-        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
-
-    def test_both_already_completed(self, mock_cluster):
-        """When both services are already COMPLETED, no waiting needed."""
-        mock_cluster._api_client.get_cluster_requests.return_value = [
-            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
             {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "COMPLETED"},
         ]
 
-        mock_cluster._wait_for_cloud_service_installations()
+        ScyllaCloudCluster._wait_for_vector_search_installed(mock_cluster)
+
+        mock_cluster._wait_for_cloud_request_completed.assert_not_called()
+
+    @patch("sdcm.cluster_cloud.time.sleep")
+    def test_retries_until_vs_request_appears(self, mock_sleep, mock_cluster):
+        mock_cluster._api_client.get_cluster_requests.side_effect = [
+            [],
+            [{"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "QUEUED"}],
+        ]
+
+        ScyllaCloudCluster._wait_for_vector_search_installed(mock_cluster)
+
+        assert mock_sleep.call_count == 1
+        mock_cluster._wait_for_cloud_request_completed.assert_called_once_with(
+            request_id=2, request_type="INSTALL_VECTOR_SEARCH"
+        )
+
+    @patch("sdcm.cluster_cloud.time.sleep")
+    def test_raises_when_vs_request_never_appears(self, mock_sleep, mock_cluster):
+        mock_cluster._api_client.get_cluster_requests.return_value = []
+
+        with pytest.raises(ScyllaCloudError, match="INSTALL_VECTOR_SEARCH request did not appear"):
+            ScyllaCloudCluster._wait_for_vector_search_installed(mock_cluster)
+
         mock_cluster._wait_for_cloud_request_completed.assert_not_called()
 
 
