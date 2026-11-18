@@ -1,4 +1,8 @@
-test_duration: 600
+# One hour from the end of the cluster setup: the prepare, the growth to 60 nodes and the stress_cmd rounds.
+# After the cluster reaches its target size, the test runs one more stress_cmd round (10min) on it, and
+# more rounds until minimum_nemesis_to_execute nemeses were executed. An extra round is started only
+# while a full one still fits in the test_duration, so this is also what bounds the extra rounds.
+test_duration: 60
 n_db_nodes: 40
 cluster_target_size: 60
 add_node_cnt: 10
