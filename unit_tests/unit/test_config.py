@@ -2237,3 +2237,13 @@ def test_azure_minicloud_yaml_only_activation_is_refused(monkeypatch, tmp_path):
 
     with pytest.raises(MinicloudActivationError, match="SCT_MINICLOUD_ENDPOINT_URL"):
         sct_config.SCTConfiguration()
+
+
+def test_minimum_nemesis_to_execute_rejects_a_negative_number(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_MINIMUM_NEMESIS_TO_EXECUTE", "-1")
+
+    with pytest.raises(ValueError, match="minimum_nemesis_to_execute"):
+        sct_config.SCTConfiguration()
