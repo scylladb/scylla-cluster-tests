@@ -6023,6 +6023,15 @@ def _drain_queued_failures(task_queue: queue.Queue) -> list[tuple]:
             failures.append((node, exception_details))
 
 
+def _report_dc_and_rack_to_argus(node: BaseNode) -> None:
+    """Report the datacenter and the rack name of `node` to Argus. A failure is logged and not raised."""
+    try:
+        node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Failure setting dc/rack information for %s in Argus.", node)
+        LOGGER.debug("Exception details:\n", exc_info=True)
+
+
 def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
@@ -6077,13 +6086,6 @@ def wait_for_init_wrap(method):
                 exception_details = (str(ex), traceback.format_exc())
             task_queue.put((_node, exception_details))
             task_queue.task_done()
-
-        def update_rack_info_in_argus(_node: BaseNode):
-            try:
-                _node.update_rack_info_in_argus(_node.datacenter, _node.node_rack)
-            except Exception:  # noqa: BLE001
-                LOGGER.warning("Failure setting dc/rack information for %s in Argus.", _node)
-                LOGGER.debug("Exception details:\n", exc_info=True)
 
         def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
             time_elapsed = time.perf_counter() - start_time
@@ -6167,13 +6169,17 @@ def wait_for_init_wrap(method):
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
                 cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
-                cl_inst.read_dc_and_rack_names(nodes=node_list, verification_node=node_list[0])
-                cl_inst.run_func_parallel(func=update_rack_info_in_argus, node_list=node_list)
+                try:
+                    cl_inst.read_dc_and_rack_names(nodes=node_list, verification_node=node_list[0])
+                except Exception:  # noqa: BLE001
+                    LOGGER.warning("Failure reading dc/rack names from nodetool status of %s.", node_list[0])
+                    LOGGER.debug("Exception details:\n", exc_info=True)
+                cl_inst.run_func_parallel(func=_report_dc_and_rack_to_argus, node_list=node_list)
             else:
                 # A node of another cluster type takes its rack name from the tester, which asks the DB cluster
                 # on every call, so these nodes are not asked all at once.
                 for node in node_list:
-                    update_rack_info_in_argus(node)
+                    _report_dc_and_rack_to_argus(node)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug("TestConfig duration -> %s s", int(time_elapsed))

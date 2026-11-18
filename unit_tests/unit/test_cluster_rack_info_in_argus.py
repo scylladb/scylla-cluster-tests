@@ -60,7 +60,11 @@ class StartedNode(NodetoolDummyNode):
 
 
 class StartedScyllaCluster(DummyScyllaCluster):
-    """A Scylla cluster that goes through `wait_for_init_wrap`, with the node setup and startup left out."""
+    """A Scylla cluster that goes through `wait_for_init_wrap`, with the node setup and startup left out.
+
+    The real `node_setup` and `node_startup` install and configure Scylla over SSH. The real UN check runs
+    `nodetool status` too, and retries for minutes when the status does not list a node.
+    """
 
     node_type = "scylla-db"
     parallel_startup = True
@@ -126,6 +130,17 @@ def test_first_node_that_cannot_run_scylla_commands_is_not_asked(db_cluster):
 
     assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [0, 0, 0]
     assert [node.reported_names() for node in db_cluster.nodes] == [(None, None)] * 3
+
+
+def test_failed_read_of_the_names_does_not_fail_wait_for_init(db_cluster):
+    """`wait_for_init` passes when the status of the first node raises, and the other nodes ask themselves."""
+    db_cluster.nodes[0].get_nodes_status = MagicMock(side_effect=RuntimeError("no events device"))
+
+    db_cluster.wait_for_init(critical_node_setup_events=[])
+
+    assert [node.run_nodetool.call_count for node in db_cluster.nodes] == [0, 2, 2]
+    assert db_cluster.nodes[1].reported_names() == NAMES_IN_STATUS["10.0.0.2"]
+    assert db_cluster.nodes[2].reported_names() == NAMES_IN_STATUS["2a05:d018:223:f00::1"]
 
 
 def test_node_whose_report_fails_does_not_stop_the_others(db_cluster):
