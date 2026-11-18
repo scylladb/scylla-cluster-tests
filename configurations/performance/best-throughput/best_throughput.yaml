@@ -3,7 +3,7 @@
 # table. Used on top of a predefined-steps test-case; its perf_gradual_throttle_steps only give each workload's
 # latte threads, and perf_gradual_threads are ignored while the search is set.
 
-# The bounds are per DB shard, so they fit any cluster size: 3 x i8g.4xlarge (~42 shards) searches 42k-2.5M op/s.
+# The bounds are per DB shard, so they fit any cluster size: 3 x i8g.4xlarge (45 shards) searches 45k-2.7M op/s.
 # They are a first guess, to check on i4i, i8g and z4d: each runs only when the search narrows to it, and there
 # the minimum must pass and the maximum must fail. A loader over max_loader_cpu_pct during a step stops the search
 # with an error: the step measured the loaders, not Scylla.
@@ -20,11 +20,16 @@ perf_best_throughput_search:
 # Per-shard best throughput by DB instance family and sub-test, from the first runs on each family. With a
 # baseline the search starts at it, within +-25%, and takes about 4 steps instead of 7. Results that don't scale
 # with the shards move the bounds out and show in the Argus history.
-perf_best_throughput_baselines: {}
+# i8g read: four runs of 3 x i8g.4xlarge on 2026.3.4 found 1.378M-1.566M op/s (30.6K-34.8K per shard); 32700 is
+# their middle, so +-25% covers them all (SCT-580).
+perf_best_throughput_baselines:
+  i8g:
+    read: 32700
 
 # Write and mixed get 30 minutes, so that compactions and tablet splits run within a step. Read and
-# read_disk_only don't write, and get 10. First values: the shortest durations that still give a stable result
-# are to be measured on i8g.
+# read_disk_only don't write, and get 10. On i8g read, every step of four runs either held steady to its end or
+# broke down within 8 minutes, so 15-minute steps would not have changed a result (SCT-580). The write and mixed
+# durations are still to be measured.
 perf_gradual_step_duration: {"read": '10m', "write": '30m', "mixed": '30m', "read_disk_only": '10m'}
 
 # Steps over the latency limit are expected here: they bound the search. Drop the per-step P99 limits of

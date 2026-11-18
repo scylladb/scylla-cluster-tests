@@ -13,7 +13,8 @@ without preparing a job or a config for it ([SCT-580](https://scylladb.atlassian
    `min rate fails` or `max rate passes`, change the default `min_rate_per_shard` or `max_rate_per_shard` in
    `configurations/performance/best-throughput/best_throughput.yaml`. Then add each workload's best throughput
    per shard to `perf_best_throughput_baselines` there, for the instance family (`i8g`), so later runs start from
-   it.
+   it. Take the middle of a few runs rather than one, since one run's number varies by about +-10% (section 4).
+   i8g read has one already, from four runs.
 
 ## 2. Start the launcher
 
@@ -149,6 +150,29 @@ Each workload (read, write, mixed, read_disk_only) runs on its own cluster, one 
 - A step that measured under 98% of its rate fails, whatever its P99. A loader over 90% CPU during a step stops
   the search with an error and sends no best-throughput row, as the step measured the loaders, not the cluster:
   raise `n_loaders`.
+- A failing step's P99 is not a latency. Latte measures each request from when it was scheduled, so in an
+  overloaded step P99 is how far the loaders fell behind: it grows through the step, and with the step's length.
+  Compare failing steps by their measured throughput against their rate, not by P99.
+
+### How much one run's number varies
+
+On 3 x i8g.4xlarge read (Scylla 2026.3.4), four runs of the same job found 1,378,334, 1,378,343, 1,470,060 and
+1,566,399 op/s, a 13% spread. The search behaved the same in all four; the cluster did not:
+
+- The limit is the busiest shard: with tablets, one shard per node holds 18 tablets instead of 17 and serves
+  5.5% more reads, and the cluster fails when that shard on the slowest node runs out of CPU.
+- That shard holds a rate steadily at 99%+ of its CPU, or tips into an overload it doesn't recover from: once a
+  backlog forms, each read costs it about a third more CPU. Near saturation its load hardly moves with the rate
+  (+10% rate took it from 99.0% to 99.7%), so where it tips moves by 5-10% between runs, even on clusters whose
+  shards cost the same per read within 1%. A node 4% slower than usual (the VM's host) moved one run lower.
+- The search then reports the highest rate it ran below that point, which rounds the limit down by up to a
+  ~6.5% step.
+
+Step length was not a factor: every step held steady to its end or broke down within 8 minutes. The two
+15-minute runs gave the two highest results, but they differ from each other by 6.5%, a whole search step, and
+match each other within 0.2% at every rate both passed. So read one run's number to about +-10%: a single run doesn't show a smaller regression. Compare a new result with
+the range of several earlier runs of the job, and check its busiest shard in the run's monitor (per-shard
+reactor utilization and `sl:default` task time) before calling a change.
 
 ## 5. Variations
 
