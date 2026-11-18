@@ -1538,6 +1538,17 @@ def test_keystore_env_is_exported_before_init_resolves_xcloud_version(monkeypatc
     assert seen == ["s3"], f"KeyStore built during __init__ saw {seen}, config file asked for s3"
 
 
+def test_xcloud_exact_scylla_version_skips_repo_lookup(monkeypatch):
+    """Scylla Cloud deploys an exact version by its name, so SCT must not look for a public repo list."""
+    rc_version = "2027.1.0~rc0-0.20270105.0123456789ab"
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", rc_version)
+
+    with patch("sdcm.sct_config.config.find_scylla_repo", side_effect=ValueError("repo wasn't found")):
+        assert sct_config.SCTConfiguration()["scylla_version"] == rc_version
+
+
 GOSSIPING_SNITCH = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
 

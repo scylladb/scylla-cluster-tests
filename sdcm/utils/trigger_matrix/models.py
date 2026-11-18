@@ -65,7 +65,7 @@ class JobConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     job_name: str
-    backend: Literal["aws", "gce", "azure", "docker", "oci"]
+    backend: Literal["aws", "gce", "azure", "docker", "oci", "xcloud"]
     # CPU architecture the job's DB nodes run on — images are published per architecture,
     # so ARM jobs must declare it to have their version resolved against ARM images.
     # Left empty it is inferred from the job's labels — see job_arch().
