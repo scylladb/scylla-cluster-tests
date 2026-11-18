@@ -1,0 +1,522 @@
+<meta name="dash-one-writer">
+<style>
+.mb { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+.mb-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.mb-head p { margin: var(--cds-gap-sm) 0 0; max-width: 70ch; line-height: 1.5; }
+.mb-sub { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.mb-head .mb-dates { color: var(--color-fg); font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: var(--cds-gap-sm) 0 0; font-variant-numeric: tabular-nums; }
+.mb-take b { font-variant-numeric: tabular-nums; }
+.mb-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: center; }
+.mb-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border-line); border-radius: 999px; background: var(--color-panel); color: var(--color-fg); font: inherit; font-size: var(--cds-font-size-caption); cursor: pointer; }
+.mb-chip[aria-pressed="false"] { opacity: .4; }
+.mb-chip:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.mb-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.mb-errkey { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.mb-errkey i { width: 10px; height: 10px; border-radius: 50%; border: 2.5px solid var(--cds-chart-status-critical); display: inline-block; box-sizing: border-box; }
+.mb-metric { display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+.mb-metric > h2, .mb-group > h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.mb-metric > .mb-sub { margin: 0; }
+.mb-metric.mb-sumsec > h2 { font-size: calc(var(--cds-font-size-heading) * 1.3); }
+.mb-metric.mb-m > h2 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: calc(var(--cds-font-size-title) * 1.1); color: var(--cds-text-accent, var(--color-fg)); text-wrap: balance; }
+.mb-metric.mb-m { padding-top: var(--cds-pad-md); border-top: 1px solid var(--color-border-line); }
+.mb-group.mb-mname > h3 { color: var(--cds-text-accent, var(--color-fg)); font-size: var(--cds-font-size-heading); }
+.mb-group > h3 { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: 0 0 var(--cds-gap-sm); }
+.mb-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--cds-gap-sm); }
+@media (max-width: 900px) { .mb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .mb-grid { grid-template-columns: 1fr; } }
+.mb-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-sm); min-width: 0; }
+.mb-card h4 { margin: 0 0 var(--cds-gap-xs); font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); }
+.mb-chart { position: relative; min-height: 170px; }
+.mb-chart svg { display: block; width: 100%; overflow: visible; }
+.mb-chart .tick text { fill: var(--cds-text-secondary); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+.mb-chart .domain { stroke: var(--cds-chart-axis); }
+.mb-chart .grid line { stroke: var(--cds-chart-grid); }
+.mb-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); box-shadow: var(--cds-shadow-popover); border-radius: var(--cds-radius); padding: 8px 10px; font-size: var(--cds-font-size-caption); line-height: 1.45; white-space: nowrap; z-index: 2; }
+.mb-tip .k { color: var(--cds-text-secondary); }
+.mb-tablewrap { overflow-x: auto; }
+.mb-table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.mb-table th, .mb-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-border-line); text-align: right; white-space: nowrap; }
+.mb-table th:first-child, .mb-table td:first-child { text-align: left; }
+.mb-table th { color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
+.mb-good { color: var(--color-ok); } .mb-bad { color: var(--color-bad); }
+.mb-fail { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: var(--cds-pad-md) 0; }
+.mb-sum { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.mb-sum li { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 8px; align-items: baseline; line-height: 1.5; padding: 6px 0; border-bottom: 1px solid var(--color-border-line); }
+.mb-sum li:last-child { border-bottom: 0; }
+.mb-sum .mb-dot { transform: translateY(1px); }
+.mb-sum .rel { font-weight: var(--cds-font-weight-medium); }
+.mb-sum .ver { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mb-sum .verdict { font-weight: var(--cds-font-weight-medium); }
+.mb-sum .num { font-variant-numeric: tabular-nums; }
+.mb-sumtable { width: auto; }
+.mb-latesttable { width: auto; }
+.mb-latesttable th, .mb-latesttable td { padding: 5px 10px; }
+.mb-sumtable td { text-align: left !important; padding: 6px 14px 6px 0 !important; }
+.mb-sumtable th { text-align: left !important; color: var(--color-fg) !important; font-weight: 600 !important; }
+.mb-sumtable .rel { font-weight: var(--cds-font-weight-medium); }
+.mb-sumtable .ver { color: var(--color-fg-muted); display: block; font-size: 11px; font-weight: 400; }
+.mb-sumtable td:first-child { white-space: normal; }
+.mb-sumtable .verdict { font-weight: var(--cds-font-weight-medium); }
+.mb-sumtable .mb-relcell { vertical-align: top; }
+.mb-sumtable { border-collapse: collapse; }
+.mb-sumtable th, .mb-sumtable td { border: 1px solid color-mix(in srgb, var(--color-fg-muted) 35%, transparent) !important; padding: 6px 12px !important; }
+.mb-sumtable .mb-good { color: color-mix(in srgb, var(--color-ok) 70%, var(--color-fg-muted)); }
+.mb-sumtable .mb-bad { color: color-mix(in srgb, var(--color-bad) 70%, var(--color-fg-muted)); }
+.mb-sumtable tr.mb-relstart > td { border-top: 2px solid color-mix(in srgb, var(--color-fg-muted) 55%, transparent) !important; }
+.mb-sub2 { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+.mb-sub2 > h3 { margin: var(--cds-gap-sm) 0 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); color: var(--cds-text-accent, var(--color-fg)); }
+.mb-sub2 > .mb-sub { margin: 0; }
+.mb-group.mb-mname > h4 { margin: 0 0 4px; font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); }
+.mb-trendcell { display: flex; align-items: center; gap: 8px; }
+.mb-trendtxt { display: flex; flex-direction: column; line-height: 1.2; }
+.mb-trendtxt .ver { font-size: 11px; }
+.mb-delta { display: block; font-size: 11px; }
+.mb-sumtable .mb-metricname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.mb-notes summary { cursor: pointer; font-weight: var(--cds-font-weight-medium); }
+.mb-notes p { max-width: 70ch; line-height: 1.5; }
+</style>
+
+<div class="mb">
+  <header class="mb-head" id="overview">
+    <h1>Microbenchmark Trends</h1>
+    <p class="mb-dates">Runs from <span data-draw="span-start">—</span> to <span data-draw="span-end">—</span></p>
+  </header>
+
+  <section class="mb-metric mb-sumsec" id="summary">
+    <h2>Summary</h2>
+    <div class="mb-sub2" id="master-trend">
+      <h3>Master trend</h3>
+      <p class="mb-sub">Every master run in the window, oldest to newest, then the change of the last run against the first.</p>
+      <div class="mb-group mb-mname" id="trend-query">
+        <h4>perf-simple-query</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>read arm64</th><th>read x86_64</th><th>write arm64</th><th>write x86_64</th></tr></thead>
+            <tbody data-draw="trend-rows" data-benchmark="perf-simple-query" data-source="master_trend"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="mb-group mb-mname" id="trend-raw">
+        <h4>perf-cql-raw</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>read arm64</th><th>read x86_64</th><th>write arm64</th><th>write x86_64</th></tr></thead>
+            <tbody data-draw="trend-rows" data-benchmark="perf-cql-raw" data-source="master_trend"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="mb-sub2" id="release-ladder">
+      <h3>Across releases</h3>
+      <p class="mb-sub">Latest run of each release line, oldest release to master, with the change against the release before it.</p>
+      <div class="mb-group mb-mname" id="ladder-query">
+        <h4>perf-simple-query</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>Chart</th><th>2025.1</th><th>2026.1</th><th>2026.2</th><th>2026.3</th><th>2026.4</th><th>master</th></tr></thead>
+            <tbody data-draw="ladder-rows" data-benchmark="perf-simple-query" data-source="ladder"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="mb-group mb-mname" id="ladder-raw">
+        <h4>perf-cql-raw</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>Chart</th><th>2025.1</th><th>2026.1</th><th>2026.2</th><th>2026.3</th><th>2026.4</th><th>master</th></tr></thead>
+            <tbody data-draw="ladder-rows" data-benchmark="perf-cql-raw" data-source="ladder"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-metric mb-m" id="ipo">
+    <h2>Instructions per operation</h2>
+    <p class="mb-sub">CPU instructions retired per request (instructions_per_op).</p>
+    <div class="mb-legend" id="legend-ipo">
+      <span data-draw="legend" data-source="ipo"></span>
+      <span class="mb-errkey"><i></i>Argus marked the value ERROR</span>
+    </div>
+    <div class="mb-group" id="ipo-sq">
+      <h3>perf-simple-query</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="ipo-sq-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-simple-query read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-sq-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-simple-query read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-sq-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-simple-query write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-sq-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-simple-query write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+    <div class="mb-group" id="ipo-cr">
+      <h3>perf-cql-raw</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="ipo-cr-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-cql-raw read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-cr-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-cql-raw read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-cr-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-cql-raw write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-metric mb-m" id="cycles">
+    <h2>CPU cycles per operation</h2>
+    <p class="mb-sub">CPU cycles spent per request (cpu_cycles_per_op). Argus has no validation rule for this metric, so no point is marked ERROR.</p>
+    <div class="mb-legend" id="legend-cycles">
+      <span data-draw="legend" data-source="ipo"></span>
+      <span class="mb-errkey"><i></i>Argus marked the value ERROR</span>
+    </div>
+    <div class="mb-group" id="cycles-sq">
+      <h3>perf-simple-query</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="cycles-sq-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-simple-query read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-sq-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-simple-query read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-sq-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-simple-query write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-sq-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-simple-query write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+    <div class="mb-group" id="cycles-cr">
+      <h3>perf-cql-raw</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="cycles-cr-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-cr-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-cr-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-metric mb-m" id="allocs">
+    <h2>Allocations per operation</h2>
+    <p class="mb-sub">Memory allocations per request (allocs_per_op).</p>
+    <div class="mb-legend" id="legend-allocs">
+      <span data-draw="legend" data-source="ipo"></span>
+      <span class="mb-errkey"><i></i>Argus marked the value ERROR</span>
+    </div>
+    <div class="mb-group" id="allocs-sq">
+      <h3>perf-simple-query</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="allocs-sq-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-simple-query read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-sq-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-simple-query read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-sq-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-simple-query write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-sq-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-simple-query write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+    <div class="mb-group" id="allocs-cr">
+      <h3>perf-cql-raw</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="allocs-cr-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-cql-raw read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-cr-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-cql-raw read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-cr-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-cql-raw write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <details class="mb-notes" id="notes">
+    <summary>About this data</summary>
+    <p>Each point is one run of the weekly microbenchmark job in the scylla-enterprise/perf-regression folder, taken from Argus result tables (Perf Simple Query and Perf CQL Raw, first row). A red ring means Argus marked that metric ERROR for the run. Runs that produced no result table are left out. Colors group runs by release line: master covers 2026.4.0~dev and 2027.1.0~dev, and 2026.4 covers the rc builds. Point at a run to see its full Scylla version; click it to open the run in Argus.</p>
+    <p>The data is a copy taken from Argus on 2026-11-18, covering the last three months. New runs appear only after the file is updated.</p>
+  </details>
+</div>
+
+<script>
+(function () {
+  const ORDER = ['master', '2026.4', '2026.3', '2026.2', '2026.1', '2025.1'];
+  window.mbHidden = window.mbHidden || new Set();
+  window.mbReleases = function (rows) {
+    const set = new Set(rows.map((r) => r.release));
+    const known = ORDER.filter((r) => set.has(r));
+    const extra = [...set].filter((r) => !ORDER.includes(r)).sort().reverse();
+    return known.concat(extra);
+  };
+  window.mbColor = function (releases, rel) {
+    const i = releases.indexOf(rel);
+    return dash.colors[i % dash.colors.length];
+  };
+})();
+
+
+
+
+
+const MB_CHARTS = ['read arm64', 'read x86_64', 'write arm64', 'write x86_64'];
+const MB_METRICS = ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op'];
+
+dash.calc('span', {
+  title: 'Data window',
+  description: 'First and last run start date in the data file.',
+  inputs: ['ipo'],
+  fn: (ipo) => {
+    if (!ipo.length) return [];
+    const ts = ipo.map((r) => r.run_start).sort();
+    return [{ start: ts[0].slice(0, 10), end: ts[ts.length - 1].slice(0, 10) }];
+  },
+});
+
+dash.calc('master_trend', {
+  title: 'Master trend',
+  description: 'Per benchmark, metric and chart: every master run in the window (oldest first) and the change of the last run against the first.',
+  inputs: ['ipo'],
+  fn: (ipo) => {
+    const out = [];
+    for (const benchmark of ['perf-simple-query', 'perf-cql-raw']) {
+      for (const metric of ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op']) {
+        for (const chart of ['read arm64', 'read x86_64', 'write arm64', 'write x86_64']) {
+          const rs = ipo.filter((r) => r.chart === benchmark + ' ' + chart && r.release === 'master' && r[metric] !== '' && r[metric] != null)
+            .sort((a, b) => (a.run_start < b.run_start ? -1 : 1));
+          if (!rs.length) continue;
+          const first = Number(rs[0][metric]), last = Number(rs[rs.length - 1][metric]);
+          out.push({
+            benchmark, metric, chart, runs: rs.length,
+            first_date: rs[0].run_start.slice(0, 10), last_date: rs[rs.length - 1].run_start.slice(0, 10),
+            first, last, pct: rs.length > 1 ? Math.round((last / first - 1) * 1000) / 10 : null,
+            series: rs.map((r) => Number(r[metric])).join(' '),
+            versions: rs.map((r) => r.scylla_version).join(' '),
+          });
+        }
+      }
+    }
+    return out;
+  },
+});
+
+dash.calc('ladder', {
+  title: 'Across releases',
+  description: 'Per benchmark, metric and chart: the latest run of each release line from oldest to master, and its change against the previous release that has a value.',
+  inputs: ['ipo'],
+  fn: (ipo) => {
+    const LADDER = ['2025.1', '2026.1', '2026.2', '2026.3', '2026.4', 'master'];
+    const key = (rel) => (rel === 'master' ? 'master' : 'r' + rel.replace('.', '_'));
+    const out = [];
+    for (const benchmark of ['perf-simple-query', 'perf-cql-raw']) {
+      for (const metric of ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op']) {
+        for (const chart of ['read arm64', 'read x86_64', 'write arm64', 'write x86_64']) {
+          const row = { benchmark, metric, chart };
+          let prev = null, any = false;
+          for (const rel of LADDER) {
+            const rs = ipo.filter((r) => r.chart === benchmark + ' ' + chart && r.release === rel && r[metric] !== '' && r[metric] != null)
+              .sort((a, b) => (a.run_start < b.run_start ? -1 : 1));
+            if (!rs.length) continue;
+            const v = Number(rs[rs.length - 1][metric]);
+            row[key(rel)] = v;
+            row[key(rel) + '_pct'] = prev == null ? null : Math.round((v / prev - 1) * 1000) / 10;
+            prev = v; any = true;
+          }
+          if (any) out.push(row);
+        }
+      }
+    }
+    return out;
+  },
+});
+
+for (const k of ['span-start', 'span-end']) {
+  dash.draw(k, (el) => {
+    const S = dash.data('span');
+    el.replaceChildren();
+    if (S.status !== 'ok' || !S.data.length) { el.textContent = '—'; return; }
+    const f = k === 'span-start' ? 'start' : 'end';
+    const s = document.createElement('span');
+    s.dataset.source = 'span'; s.dataset.field = f; s.dataset.row = '0';
+    s.textContent = S.data[0][f]; el.append(s);
+  });
+}
+
+function mbSign(p) { return (p > 0 ? '+' : p < 0 ? '-' : '') + Math.abs(p).toFixed(1) + '%'; }
+function mbCls(p) { return p <= -1 ? 'mb-good' : p >= 1 ? 'mb-bad' : ''; }
+function mbFmt(metric, v) { return metric === 'allocs_per_op' ? v.toFixed(2) : d3.format(',.0f')(v); }
+
+dash.draw('trend-rows', (el) => {
+  const T = dash.data('master_trend');
+  el.replaceChildren();
+  if (T.status === 'error') { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 5; td.textContent = 'Failed to load'; tr.append(td); el.append(tr); return; }
+  if (T.status !== 'ok') return;
+  const bench = el.dataset.benchmark;
+  const ns = 'http://www.w3.org/2000/svg';
+  for (const metric of MB_METRICS) {
+    const tr = document.createElement('tr');
+    const tm = document.createElement('td'); tm.className = 'mb-metricname'; tm.textContent = metric; tr.append(tm);
+    for (const chart of MB_CHARTS) {
+      const td = document.createElement('td');
+      const r = T.data.find((x) => x.benchmark === bench && x.metric === metric && x.chart === chart);
+      if (!r) { td.textContent = '–'; tr.append(td); continue; }
+      const vals = r.series.split(' ').map(Number);
+      const box = document.createElement('div'); box.className = 'mb-trendcell';
+      const W = 64, H = 20;
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+      svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `${metric} ${chart} master runs: ${vals.map((v) => mbFmt(metric, v)).join(', ')}`);
+      const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+      const xs = (i) => 3 + (vals.length > 1 ? i * (W - 6) / (vals.length - 1) : (W - 6) / 2);
+      const ys = (v) => H - 3 - (v - lo) / span * (H - 6);
+      const path = document.createElementNS(ns, 'polyline');
+      path.setAttribute('points', vals.map((v, i) => `${xs(i)},${ys(v)}`).join(' '));
+      path.setAttribute('fill', 'none'); path.style.stroke = 'var(--color-fg-muted)'; path.setAttribute('stroke-width', '1.3');
+      svg.append(path);
+      vals.forEach((v, i) => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', xs(i)); c.setAttribute('cy', ys(v)); c.setAttribute('r', i === vals.length - 1 ? 2.6 : 1.6);
+        c.style.fill = i === vals.length - 1 ? 'var(--color-fg)' : 'var(--color-fg-muted)';
+        svg.append(c);
+      });
+      const tt = document.createElementNS(ns, 'title');
+      tt.textContent = r.versions.split(' ').map((v, i) => v + ': ' + mbFmt(metric, vals[i])).join('\n');
+      svg.append(tt);
+      box.append(svg);
+      const txt = document.createElement('div'); txt.className = 'mb-trendtxt';
+      if (r.pct != null) {
+        const n = document.createElement('span'); n.className = 'num ' + mbCls(r.pct);
+        n.dataset.source = 'master_trend'; n.dataset.field = 'pct';
+        n.dataset.where = 'benchmark=' + bench + '&metric=' + metric + '&chart=' + chart;
+        n.textContent = mbSign(r.pct); txt.append(n);
+      }
+      const runs = document.createElement('span'); runs.className = 'ver'; runs.textContent = r.runs + ' runs';
+      txt.append(runs);
+      box.append(txt);
+      td.append(box); tr.append(td);
+    }
+    el.append(tr);
+  }
+});
+
+dash.draw('ladder-rows', (el) => {
+  const L = dash.data('ladder'), D = dash.data('ipo');
+  el.replaceChildren();
+  if (L.status === 'error') { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 8; td.textContent = 'Failed to load'; tr.append(td); el.append(tr); return; }
+  if (L.status !== 'ok' || D.status !== 'ok') return;
+  const bench = el.dataset.benchmark;
+  const keys = ['r2025_1', 'r2026_1', 'r2026_2', 'r2026_3', 'r2026_4', 'master'];
+  MB_METRICS.forEach((metric, mi) => {
+    const rows = L.data.filter((x) => x.benchmark === bench && x.metric === metric);
+    rows.forEach((r, k) => {
+      const tr = document.createElement('tr');
+      tr.style.background = mi % 2 ? 'color-mix(in srgb, var(--color-fg-muted) 5%, transparent)' : '';
+      if (k === 0) {
+        tr.className = 'mb-relstart';
+        const tm = document.createElement('td'); tm.rowSpan = rows.length; tm.className = 'mb-metricname mb-relcell'; tm.textContent = metric; tr.append(tm);
+      }
+      const tc = document.createElement('td'); tc.textContent = r.chart; tc.style.whiteSpace = 'nowrap'; tr.append(tc);
+      for (const kk of keys) {
+        const td = document.createElement('td');
+        const v = r[kk];
+        if (v == null) { td.textContent = '–'; tr.append(td); continue; }
+        const val = document.createElement('span'); val.className = 'num';
+        val.dataset.source = 'ladder'; val.dataset.field = kk;
+        val.dataset.where = 'benchmark=' + bench + '&metric=' + metric + '&chart=' + r.chart;
+        val.textContent = mbFmt(metric, v); td.append(val);
+        const p = r[kk + '_pct'];
+        if (p != null) {
+          const d = document.createElement('span'); d.className = 'mb-delta num ' + mbCls(p);
+          d.dataset.source = 'ladder'; d.dataset.field = kk + '_pct';
+          d.dataset.where = val.dataset.where;
+          d.textContent = mbSign(p); td.append(d);
+        }
+        tr.append(td);
+      }
+      el.append(tr);
+    });
+  });
+});
+
+dash.draw('legend', (el) => {
+  const d = dash.data('ipo');
+  el.replaceChildren();
+  if (d.status !== 'ok') return;
+  const rels = mbReleases(d.data);
+  el.style.display = 'contents';
+  for (const rel of rels) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mb-chip';
+    b.setAttribute('aria-pressed', mbHidden.has(rel) ? 'false' : 'true');
+    const dot = document.createElement('span'); dot.className = 'mb-dot'; dot.style.background = mbColor(rels, rel);
+    const t = document.createElement('span'); t.textContent = rel;
+    b.append(dot, t);
+    b.addEventListener('click', () => {
+      if (mbHidden.has(rel)) mbHidden.delete(rel); else mbHidden.add(rel);
+      dash.draw('legend'); dash.draw('chart');
+    });
+    el.append(b);
+  }
+});
+
+dash.draw('chart', (el) => {
+  const d = dash.data('ipo');
+  el.replaceChildren();
+  if (d.status === 'error') { const f = document.createElement('div'); f.className = 'mb-fail'; f.textContent = 'Failed to load'; el.append(f); return; }
+  if (d.status !== 'ok') { el.textContent = '—'; return; }
+  const all = d.data;
+  const rels = mbReleases(all);
+  const metric = el.dataset.metric || 'instructions_per_op';
+  const stField = { instructions_per_op: 'ipo_status', cpu_cycles_per_op: 'cpu_status', allocs_per_op: 'allocs_status' }[metric];
+  const unit = { instructions_per_op: ' instr/op', cpu_cycles_per_op: ' cycles/op', allocs_per_op: ' allocs/op' }[metric];
+  const rows = all.filter((r) => r.chart === el.dataset.chart && r[metric] !== '' && r[metric] != null)
+    .map((r) => ({ ...r, t: new Date(r.run_start), v: Number(r[metric]), st: r[stField] }))
+    .sort((a, b) => a.t - b.t);
+  const shown = rows.filter((r) => !mbHidden.has(r.release));
+  const W = Math.max(200, el.clientWidth || 260), H = 170;
+  const svg = d3.select(el).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('height', H)
+    .attr('role', 'img').attr('aria-label', `${metric} over time for ${el.dataset.chart}, by release`);
+  const yvals = (shown.length ? shown : rows).map((r) => r.v);
+  const [lo, hi] = d3.extent(yvals);
+  const pad = Math.max((hi - lo) * 0.15, hi * 0.02);
+  const y = d3.scaleLinear().domain([lo - pad, hi + pad]).nice();
+  const fmt = metric === 'allocs_per_op' ? y.tickFormat(4) : d3.format('~s');
+  const fmtFull = metric === 'allocs_per_op' ? d3.format(',.2f') : d3.format(',.0f');
+  // measure left margin from widest tick
+  const probe = svg.append('g');
+  const ticks = y.ticks(4);
+  let wmax = 0;
+  for (const tk of ticks) { const tx = probe.append('text').attr('class', 'tick').style('font-size', 'var(--cds-font-size-caption)').text(fmt(tk)); wmax = Math.max(wmax, tx.node().getComputedTextLength() || 40); }
+  probe.remove();
+  const m = { t: 8, r: 10, b: 24, l: Math.ceil(wmax) + 10 };
+  y.range([H - m.b, m.t]);
+  const tAll = all.map((r) => new Date(r.run_start));
+  const x = d3.scaleUtc().domain([d3.utcDay.floor(d3.min(tAll)), d3.utcDay.offset(d3.utcDay.floor(d3.max(tAll)), 1)]).range([m.l, W - m.r]);
+  svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''))
+    .call((g) => g.select('.domain').remove());
+  svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(fmt))
+    .call((g) => g.select('.domain').remove()).call((g) => g.selectAll('.tick line').remove());
+  const nx = W < 320 ? 3 : 4;
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(nx).tickFormat(d3.utcFormat('%b %d')));
+
+  const byRel = d3.group(shown, (r) => r.release);
+  const line = d3.line().x((r) => x(r.t)).y((r) => y(r.v));
+  for (const [rel, rs] of byRel) {
+    if (rs.length > 1) svg.append('path').attr('d', line(rs)).attr('fill', 'none').style('stroke', mbColor(rels, rel)).attr('stroke-width', 1.5).attr('stroke-opacity', 0.55);
+  }
+  const tip = document.createElement('div'); tip.className = 'mb-tip'; tip.hidden = true; el.append(tip);
+  const show = (ev, r) => {
+    tip.replaceChildren();
+    const lines = [[null, r.run_start.slice(0, 10) + ' ' + r.run_start.slice(11, 16) + ' UTC'], ['Value', fmtFull(r.v) + unit], ['Version', r.scylla_version], ['Argus', (r.st || 'no rule') + ' (run ' + r.status + ')'], ['Started by', r.started_by]];
+    for (const [k, v] of lines) {
+      const div = document.createElement('div');
+      if (k) { const s = document.createElement('span'); s.className = 'k'; s.textContent = k + ': '; div.append(s); }
+      div.append(document.createTextNode(v)); tip.append(div);
+    }
+    tip.hidden = false;
+    const box = el.getBoundingClientRect();
+    const px = x(r.t) * (box.width / W), py = y(r.v) * (el.querySelector('svg').getBoundingClientRect().height / H);
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = px + 12; if (left + tw > box.width) left = Math.max(0, px - tw - 12);
+    let top = py - th - 8; if (top < 0) top = py + 12;
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  };
+  const hide = () => { tip.hidden = true; };
+  for (const r of shown) {
+    const a = svg.append('a').attr('href', r.argus_url).attr('target', '_blank').attr('rel', 'noopener')
+      .attr('aria-label', `${r.scylla_version}: ${fmtFull(r.v)}${unit}`);
+    const err = r.st === 'ERROR' || r.st === 'FAIL';
+    a.append('circle').attr('cx', x(r.t)).attr('cy', y(r.v)).attr('r', err ? 4.5 : 3.5)
+      .style('fill', mbColor(rels, r.release))
+      .style('stroke', err ? 'var(--cds-chart-status-critical)' : 'var(--color-panel)')
+      .attr('stroke-width', err ? 2.5 : 1.5);
+    a.append('circle').attr('cx', x(r.t)).attr('cy', y(r.v)).attr('r', 12).attr('fill', 'transparent')
+      .on('pointerenter', (ev) => show(ev, r)).on('pointerleave', hide)
+      .on('focus', (ev) => show(ev, r)).on('blur', hide);
+  }
+  if (!shown.length) {
+    svg.append('text').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').style('fill', 'var(--cds-text-secondary)').style('font-size', 'var(--cds-font-size-caption)').text('No runs for the selected releases');
+  }
+});
+
+</script>

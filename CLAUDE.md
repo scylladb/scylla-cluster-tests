@@ -28,6 +28,7 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `writing-unit-tests` — Write pytest unit tests for SCT
 - `writing-integration-tests` — Write integration tests with external services
 - `commit-summary` — Generate weekly commit summary reports
+- `perf-microbenchmark-trends` — Build/refresh the microbenchmark trends dashboard and draft its email
 - `writing-nemesis` — Create new chaos engineering disruptions
 - `code-review` — Review PRs for correctness and convention compliance
 - `running-ai-reviewers` — Run Claude or CodeRabbit locally with the `REVIEW.md` rules
