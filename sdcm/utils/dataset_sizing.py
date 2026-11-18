@@ -256,25 +256,32 @@ def _split_ranges(ranges: list[tuple[int, int]], parts: int) -> list[tuple[int, 
 def split_latte_commands(stress_cmds: list[str], parts: int) -> list[str] | None:
     """Split latte commands that differ only in their contiguous cycle ranges into `parts` commands.
 
-    Each command's offset must be its first cycle minus 1, as in the test-cases, so a split command gets the
-    offset of its own range. A --duration in cycles must cover its command's range; it then follows the split
-    range. row_count is the same in every command and stays. Returns None when the commands can't be split.
+    The rune script uses key `cycle % row_count + offset`. Commands that share one offset keep it, so every
+    cycle keeps its key. Commands whose offset is each their first cycle minus 1 (an older form of the
+    test-cases) get the offset of their own split range; their keys then move, as the split can't keep them.
+    A --duration in cycles must cover its command's range; it then follows the split range. row_count is the
+    same in every command and stays. Returns None when the commands can't be split.
     """
     ranges = []
-    templates = set()
+    offsets = []
     for stress_cmd in stress_cmds:
         start, end = LATTE_START.search(stress_cmd), LATTE_END.search(stress_cmd)
         if not (start and end):
             return None
         first, last = int(start.group(1)), int(end.group(1))
-        if (offset := LATTE_OFFSET.search(stress_cmd)) and int(offset.group(1)) != first - 1:
-            return None
         if (cycles := LATTE_CYCLES.search(stress_cmd)) and int(cycles.group(1)) != last - first + 1:
             return None
         ranges.append((first, last))
+        offsets.append(int(offset.group(1)) if (offset := LATTE_OFFSET.search(stress_cmd)) else None)
+    per_range_offset = len(set(offsets)) > 1
+    if per_range_offset and any(offset != first - 1 for offset, (first, _) in zip(offsets, ranges)):
+        return None
+    templates = set()
+    for stress_cmd in stress_cmds:
         template = LATTE_START.sub("--start-cycle $start", stress_cmd, count=1)
         template = LATTE_END.sub("--end-cycle $end", template, count=1)
-        template = LATTE_OFFSET.sub("-P offset=$offset", template, count=1)
+        if per_range_offset:
+            template = LATTE_OFFSET.sub("-P offset=$offset", template, count=1)
         templates.add(LATTE_CYCLES.sub("--duration $cycles", template, count=1))
     if len(templates) != 1 or (split_ranges := _split_ranges(ranges, parts)) is None:
         return None

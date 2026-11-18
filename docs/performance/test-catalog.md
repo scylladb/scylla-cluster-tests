@@ -162,7 +162,9 @@ cover less data per GiB of RAM than on the reference node.
 key range for 4 loaders, and round-robin runs one command per loader. When the rate search runs on
 another `n_loaders`, the workload's commands and its cache warmup are split again over the same range, one
 command per loader, so every loader generates load and a step's rate, divided by the number of loaders, adds
-up to what it asks. A split latte command gets the offset and the cycle-count duration of its own range.
+up to what it asks. A split latte command keeps the offset the commands share, so every cycle keeps its key;
+commands whose offset is each their first cycle minus 1 get their own range's first cycle minus 1, and their
+keys move. A split command's cycle-count duration follows its own range.
 Commands that differ in more than their range run as written, with a warning.
 
 ### `performance_regression_alternator_test.py`

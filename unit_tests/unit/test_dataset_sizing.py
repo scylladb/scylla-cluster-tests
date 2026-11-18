@@ -327,8 +327,12 @@ def test_latte_ranges_offsets_and_row_counts_scale_together(param, factor):
     assert scaled[0]["start"] == 1
     assert all(after["start"] == before["end"] + 1 for before, after in zip(scaled, scaled[1:]))
     assert scaled[-1]["end"] == int(original[-1]["end"] * factor)
+    per_range_offset = len({value["offset"] for value in original}) > 1
     for before, after in zip(original, scaled):
-        assert after["offset"] == after["start"] - 1, "the offset is still the first cycle minus 1"
+        if per_range_offset:
+            assert after["offset"] == after["start"] - 1, "the offset is still the first cycle minus 1"
+        else:
+            assert after["offset"] == int(before["offset"] * factor), "a shared offset scales with the key space"
         assert after["row_count"] == int(before["row_count"] * factor)
         if before["cycles"] is not None:
             assert after["cycles"] == after["end"] - after["start"] + 1, "a whole-range duration follows the range"
@@ -363,13 +367,51 @@ def test_latte_split_commands_cover_the_same_range_in_equal_parts(param, parts):
     assert all(after["start"] == before["end"] + 1 for before, after in zip(values, values[1:]))
     assert max(v["end"] - v["start"] for v in values) - min(v["end"] - v["start"] for v in values) <= 1
     for value in values:
-        assert value["offset"] == value["start"] - 1
         assert value["row_count"] == _latte_values(commands[0])["row_count"]
         if value["cycles"] is not None:
             assert value["cycles"] == value["end"] - value["start"] + 1
+    if len({_latte_values(cmd)["offset"] for cmd in commands}) > 1:
+        assert all(value["offset"] == value["start"] - 1 for value in values)
+    else:
+        _assert_same_keys(split, commands)
+
+
+def _key(cmd, cycle):
+    """The key latte_cs_alike.rn derives from a cycle: 'cycle % row_count + offset'."""
+    value = _latte_values(cmd)
+    return cycle % value["row_count"] + value["offset"]
+
+
+def _assert_same_keys(split, commands):
+    """Each split command's first, middle and last cycle maps to the key of the original command with that cycle."""
+    for cmd in split:
+        value = _latte_values(cmd)
+        for cycle in (value["start"], (value["start"] + value["end"]) // 2, value["end"]):
+            original = next(c for c in commands if _latte_values(c)["start"] <= cycle <= _latte_values(c)["end"])
+            assert _key(cmd, cycle) == _key(original, cycle), f"cycle {cycle} reads or writes another key"
+
+
+def _with_offsets(commands, offset_for):
+    return [LATTE_OFFSET.sub(f"-P offset={offset_for(_latte_values(cmd))}", cmd, count=1) for cmd in commands]
+
+
+@pytest.mark.parametrize("offset", [0, 1000])
+def test_latte_split_commands_with_a_shared_offset_keep_the_keys_of_each_cycle(offset):
+    commands = _with_offsets(_latte_params()["stress_cmd_r"], lambda value: offset)
+    split = split_stress_commands(commands, 3)
+
+    assert all(_latte_values(cmd)["offset"] == offset for cmd in split)
+    _assert_same_keys(split, commands)
+
+
+def test_latte_split_commands_with_an_offset_per_range_get_the_offset_of_their_range():
+    commands = _with_offsets(_latte_params()["stress_cmd_r"], lambda value: value["start"] - 1)
+    split = split_stress_commands(commands, 3)
+
+    assert [_latte_values(cmd)["offset"] for cmd in split] == [_latte_values(cmd)["start"] - 1 for cmd in split]
 
 
 def test_latte_commands_with_another_offset_cant_be_split():
-    commands = _latte_params()["stress_cmd_r"]
-    shifted = [commands[0].replace("-P offset=0", "-P offset=7"), *commands[1:]]
+    commands = _with_offsets(_latte_params()["stress_cmd_r"], lambda value: value["start"] - 1)
+    shifted = [LATTE_OFFSET.sub("-P offset=7", commands[0], count=1), *commands[1:]]
     assert split_stress_commands(shifted, 2) is None
