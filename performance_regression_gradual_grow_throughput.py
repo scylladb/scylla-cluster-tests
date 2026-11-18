@@ -289,6 +289,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
+        if self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
         # run a write workload as a preparation
         if workload.preload_data and not skip_optional_stage("perf_preload_data"):
             self.preload_data()
@@ -357,6 +359,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def prepare_schema(self, workload: Workload):
         if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+            if self.params.get("pre_create_keyspace"):
+                # The write workload drops the keyspace after every step. Recreate it with the configured options
+                # (e.g. S3 storage) before cassandra-stress gets a chance to recreate it with the defaults.
+                self._pre_create_keyspace()
             stress_queue = []
             for stress_cmd in prepare_stress_cmds:
                 self.log.info("Preparing schema using command: %s", stress_cmd)
