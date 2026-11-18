@@ -120,6 +120,15 @@ class ScyllaConfigMixin(BaseModel):
     peer_verification: Boolean = SctField(
         description="enable peer verification for encrypted communication",
     )
+    perftune_irq_on_all_cpus: Boolean = SctField(
+        description="""Put NIC IRQs on every CPU and run Scylla on every CPU, instead of the IRQ cores perftune
+            reserves by default. Sets irq_cpu_mask to cpu_mask in /etc/scylla.d/perftune.yaml and the Scylla cpuset
+            to all CPUs, before Scylla starts. For testing NICs with a queue per CPU, e.g. gVNIC on GCE.""",
+    )
+    perftune_script_url: String = SctField(
+        description="""URL of a perftune.py to install on DB nodes over the packaged one, before Scylla starts.
+            For testing an unreleased seastar perftune change, e.g. the raw file of a seastar pull request branch.""",
+    )
     prepare_saslauthd: Boolean = SctField(
         description="When defined true, will install and start saslauthd service",
     )
