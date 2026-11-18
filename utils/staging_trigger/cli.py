@@ -1,5 +1,7 @@
 """Click CLI for the staging trigger tool."""
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -46,7 +48,9 @@ class _JobNameType(click.ParamType):
     def shell_complete(self, ctx, param, incomplete):
         folder = (ctx.parent.params.get("folder") if ctx.parent else None) or _default_folder()
         try:
-            client = JenkinsJobTrigger()
+            # The credential messages would land in the middle of the user's shell prompt
+            with contextlib.redirect_stderr(io.StringIO()):
+                client = JenkinsJobTrigger()
             jobs = client.list_jobs_in_folder(folder)
         except Exception:  # noqa: BLE001
             return []
