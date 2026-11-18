@@ -2,6 +2,7 @@ test_duration: 600
 n_db_nodes: 40
 cluster_target_size: 60
 add_node_cnt: 10
+minimum_nemesis_to_execute: 5
 
 user_prefix: 'cluster-scale-40-60-test'
 
