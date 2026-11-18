@@ -891,6 +891,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
+        self._init_manager_node()
 
         self.name = cluster_config["cluster_name"]
 
@@ -901,11 +902,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
         if self._deploy_vs_nodes:
-            self._wait_for_cloud_services()
+            self._wait_for_vector_search_installed()
             self._init_vector_store_cluster()
-            self._init_manager_node(wait_for_install=False)
-        else:
-            self._init_manager_node()
 
         if self.vector_store_cluster and len(self.vector_store_cluster.nodes) > 0:
             try:
@@ -997,79 +995,41 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.racks_count = configured_zone_count if configured_zones else 1
 
-    def _init_manager_node(self, wait_for_install: bool = True) -> None:
+    def _init_manager_node(self) -> None:
         localhost = TestConfig().tester_obj().localhost
         if not localhost.xcloud_connect_supported(self.params):
             self.log.debug("XCloud connectivity not supported, skipping Manager node initialization")
             return
 
         self.log.info("Initializing Manager node for cluster %s", self._cluster_id)
-        if wait_for_install:
-            self._wait_for_manager_node_ready()
-
         self.manager_node = CloudManagerNode(parent_cluster=self)
         self.manager_node._init_remoter()
         self.manager_node.wait_ssh_up()
         self.log.info("Manager node SSH connection established")
 
-    def _wait_for_cloud_services(self) -> None:
-        """Wait for both Manager and Vector Search services installation.
+    def _wait_for_vector_search_installed(self) -> None:
+        """Wait for the INSTALL_VECTOR_SEARCH request that Cloud schedules after cluster creation."""
+        self.log.info("Waiting for Vector Search installation")
+        request = self._find_cluster_request("INSTALL_VECTOR_SEARCH")
+        if request.get("status", "").upper() != "COMPLETED":
+            self._wait_for_cloud_request_completed(request_id=request["id"], request_type=request["requestType"])
+        self.log.info("Vector Search installation completed")
 
-        Cloud handles INSTALL_VECTOR_SEARCH and INSTALL_MANAGER requests sequentially
-        without a guaranteed order. This method detects which request is currently being
-        processed and waits for them one by one.
-        """
-        self.log.info("Waiting for cloud service installations (Manager + Vector Search)")
-
-        expected_types = {"INSTALL_MANAGER", "INSTALL_VECTOR_SEARCH"}
-        # wait for IN_PROGRESS first, then QUEUED
-        status_priority = {"IN_PROGRESS": 0, "QUEUED": 1, "COMPLETED": 2}
-
-        pending_requests = self._get_pending_service_requests(expected_types, status_priority)
-
-        for req in pending_requests:
-            self.log.debug("Waiting for %s (request ID: %s) to complete", req["requestType"], req["id"])
-            self._wait_for_cloud_request_completed(request_id=req["id"], request_type=req["requestType"])
-
-        self.log.info("All cloud service installations completed")
-
-    def _get_pending_service_requests(
-        self,
-        expected_types: set[str],
-        status_priority: dict[str, int],
-        retries: int = 5,
-        delay: int = 5,
-    ) -> list[dict]:
-        """Retrieve pending service requests and sort them by status priority."""
+    def _find_cluster_request(self, request_type: str, retries: int = 5, delay: int = 5) -> dict:
+        """Return the cluster request of the given type, polling until Cloud creates it."""
         for attempt in range(1, retries + 1):
             cluster_requests = self._api_client.get_cluster_requests(
                 account_id=self._account_id, cluster_id=self._cluster_id
             )
-            requests = [req for req in cluster_requests if req.get("requestType") in expected_types]
-            found_types = {req["requestType"] for req in requests}
+            request = next((req for req in cluster_requests if req.get("requestType") == request_type), None)
+            if request:
+                self.log.debug("Found %s request %s (status: %s)", request_type, request["id"], request.get("status"))
+                return request
 
-            if found_types == expected_types:
-                pending = [req for req in requests if req.get("status", "").upper() != "COMPLETED"]
-                pending.sort(key=lambda r: status_priority.get(r.get("status", "").upper(), 99))
-                self.log.debug(
-                    "Found all service requests: %s (%d pending)",
-                    ", ".join(f"{r['requestType']}={r['status']}" for r in requests),
-                    len(pending),
-                )
-                return pending
-
-            self.log.debug(
-                "Attempt %d/%d: missing service requests %s, retrying in %ds",
-                attempt,
-                retries,
-                expected_types - found_types,
-                delay,
-            )
+            self.log.debug("Attempt %d/%d: no %s request yet, retrying in %ds", attempt, retries, request_type, delay)
             time.sleep(delay)
 
-        raise ScyllaCloudError(
-            f"Not all expected service requests ({expected_types}) appeared after {retries} attempts"
-        )
+        raise ScyllaCloudError(f"{request_type} request did not appear after {retries} attempts")
 
     def _wait_for_cloud_request_completed(self, request_id: int, request_type: str, timeout: int = 600) -> None:
         """Wait for a specific cluster request to reach COMPLETED status."""
@@ -1298,20 +1258,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 f"Original error: {e}"
             )
             raise WaitForTimeoutError(enhanced_message) from e
-
-    def _wait_for_manager_node_ready(self, timeout: int = 600) -> None:
-        self.log.info("Waiting for Manager node installation to complete")
-        cluster_requests = self._api_client.get_cluster_requests(
-            account_id=self._account_id, cluster_id=self._cluster_id
-        )
-        mgr_request = next((req for req in cluster_requests if req.get("requestType") == "INSTALL_MANAGER"), None)
-        if not mgr_request:
-            self.log.warning("No INSTALL_MANAGER request found for cluster %s", self._cluster_id)
-            return
-
-        self._wait_for_cloud_request_completed(
-            request_id=mgr_request["id"], request_type="INSTALL_MANAGER", timeout=timeout
-        )
 
     def get_promproxy_config(self):
         """Retrieve Prometheus proxy configuration for Scylla Cloud cluster"""
