@@ -462,6 +462,7 @@ cluster_health_check_skip_if_nemesis_skipped: true
 import time
 from contextlib import contextmanager
 
+
 @contextmanager
 def measure_operation(operation_name):
     start = time.time()
@@ -740,11 +741,11 @@ def check_cluster_health(self):
 
 ```python
 def node_health_events(self):
-    nodes_status = self.get_nodes_status()           # nodetool status
-    peers_details = self.get_peers_info()            # CQL: system.peers
-    gossip_info = self.get_gossip_info()             # nodetool gossipinfo
+    nodes_status = self.get_nodes_status()  # nodetool status
+    peers_details = self.get_peers_info()  # CQL: system.peers
+    gossip_info = self.get_gossip_info()  # nodetool gossipinfo
     group0_members = self.raft.get_group0_members()  # Raft query
-    tokenring_members = self.get_token_ring_members() # Token ring query
+    tokenring_members = self.get_token_ring_members()  # Token ring query
 
     # Then 5 validation functions cross-reference all this data
     return itertools.chain(

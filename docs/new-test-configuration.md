@@ -52,14 +52,25 @@ Having one place we define all the available configs, their help test and defaul
 config_option = [
     dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", help="", type=str),
     dict(name="test_duration", end="SCT_TEST_DURATION", help="", type=int),
-    ...
+    ...,
 ]
 
 # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
-aws_required_params = ["instance_type_loader", "instance_type_monitor", "instance_type_db", "instance_type_db",
-                       "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                       "ami_id_monitor", "root_disk_size_monitor", "ami_db_scylla_user", "ami_monitor_user"]
-
+aws_required_params = [
+    "instance_type_loader",
+    "instance_type_monitor",
+    "instance_type_db",
+    "instance_type_db",
+    "region_name",
+    "security_group_ids",
+    "subnet_id",
+    "ami_id_db_scylla",
+    "ami_id_loader",
+    "ami_id_monitor",
+    "root_disk_size_monitor",
+    "ami_db_scylla_user",
+    "ami_monitor_user",
+]
 ````
 
 ## Test cases declared config usage
@@ -67,12 +78,11 @@ aws_required_params = ["instance_type_loader", "instance_type_monitor", "instanc
 TODO: think of a way for test to declare which parameters are mandatory for them and check them
 
 ```python
-    def test_custom_time(self):
-        """
-        Run cassandra-stress with params defined in data_dir/scylla.yaml
-        """
+def test_custom_time(self):
+    """
+    Run cassandra-stress with params defined in data_dir/scylla.yaml
+    """
 
-        self.config.assert_configuration(['prepare_write_cmd', 'keyspace_num', 'pre_create_schema', 'nemesis_interval'])
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
-                                    tester_obj=self)
+    self.config.assert_configuration(["prepare_write_cmd", "keyspace_num", "pre_create_schema", "nemesis_interval"])
+    self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 ```
