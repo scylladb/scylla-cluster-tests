@@ -33,12 +33,14 @@ _TEST_CONFIG_LIST_RE = re.compile(r'test_config:\s*"""?\[([^\]]+)\]')
 
 
 class JenkinsPipelines:
-    def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):
-        if not username and not password:
-            creds = KeyStore().get_json("jenkins.json")
-            username, password = creds.get("username"), creds.get("password")
+    def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None, client=None):
+        if client is None:
+            if not username and not password:
+                creds = KeyStore().get_json("jenkins.json")
+                username, password = creds.get("username"), creds.get("password")
+            client = jenkins.Jenkins("https://jenkins.scylladb.com", username=username, password=password)
 
-        self.jenkins = jenkins.Jenkins("https://jenkins.scylladb.com", username=username, password=password)
+        self.jenkins = client
         self.base_sct_dir = Path(__file__).parent.parent.parent
         self.base_job_dir = base_job_dir
         self.sct_branch_name = sct_branch_name
