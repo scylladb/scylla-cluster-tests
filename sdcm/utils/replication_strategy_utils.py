@@ -8,7 +8,7 @@ from cassandra import InvalidRequest
 
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
-from sdcm.utils.database_query_utils import LOGGER, is_system_keyspace
+from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.decorators import Retry, retrying
 from sdcm.utils.tablets.common import wait_tablets_balanced
 

@@ -2662,7 +2662,7 @@ class NemesisRunner:
         return self._disrupt_show_toppartitions(allow_new_api=True)
 
     @scylla_versions(("4.3.rc1", "4.5"), ("2020.1.rc0", "2022.1"))
-    def disrupt_show_toppartitions(self):
+    def disrupt_show_toppartitions(self):  # noqa: F811 - @scylla_versions picks one by version
         return self._disrupt_show_toppartitions(allow_new_api=False)
 
     def _disrupt_show_toppartitions(self, allow_new_api: bool):
