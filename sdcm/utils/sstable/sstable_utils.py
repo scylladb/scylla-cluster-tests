@@ -67,11 +67,17 @@ class SstableUtils:
         self.log.debug("Got %s sstables %s", len(selected_sstables), message)
         return selected_sstables
 
-    def check_that_sstables_are_encrypted(self, sstables=None, expected_bool_value: bool = True) -> None:
+    def check_that_sstables_are_encrypted(
+        self, sstables=None, expected_bool_value: bool = True, max_sstables: int | None = None
+    ) -> None:
+        """Check that the sstables are encrypted, all of them or a random sample of 'max_sstables'."""
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
             sstables = [sstables]
+        if max_sstables and len(sstables) > max_sstables:
+            self.log.debug("Checking %s random sstables out of %s", max_sstables, len(sstables))
+            sstables = random.sample(sstables, max_sstables)
         sstables_encrypted_mapping = {}
         deleted_count, misordered_count = 0, 0
 
