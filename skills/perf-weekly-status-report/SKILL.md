@@ -8,7 +8,9 @@ description: >-
   latency-650gb-with-nemesis, rolling-upgrade, and microbenchmark tests using
   argus run list and argus run results commands. Also refreshes the Perf Weekly
   Trends dashboard (a Claude Artifact graphing these tests per release branch over
-  months); use when asked to update or preview the perf trends dashboard.
+  months); use when asked to update or preview the perf trends dashboard. Also covers
+  the unattended weekly watcher (cron) that alerts on CapacityReservationError runs
+  and drafts the reports.
 ---
 
 # Performance Weekly Status Report
@@ -366,6 +368,15 @@ other agents skip it. See [workflows/update-trends-dashboard.md](workflows/updat
 - Producing a Gmail-friendly report of test pass/fail status with detailed metrics
 - When asked for "perf weekly report", "perf status", or "weekly performance summary"
 
+## Unattended Weekly Watcher
+
+**To run this report every week without being asked, install the watcher from
+[workflows/install-watcher.md](workflows/install-watcher.md).**
+
+It runs this skill from cron through an interactive Claude session in tmux, because `claude -p`
+from cron gets no Slack, Gmail or Artifact tools. The prompt in `watcher/prompt.md` replaces every
+"ask the user" step with a fixed decision, so change behaviour there, not in this file.
+
 ## When NOT to Use
 
 - Comparing two specific versions (use `perf-comparison-report` skill instead)
@@ -538,6 +549,7 @@ Argus link in every row carries the rest.
 | [references/html-template.md](references/html-template.md) | Gmail-compatible HTML template patterns |
 | [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- four release versions, one Overview table each |
 | [references/perf-weekly-status-report-master-example.html](references/perf-weekly-status-report-master-example.html) | Reference rendering of a **master** report -- three `~dev` builds, one Overview table each, and a row carrying the `Investigation in progress` marker |
+| [workflows/install-watcher.md](workflows/install-watcher.md) | Install the unattended watcher: Sunday/Monday/Tuesday checks with Slack alerts on CapacityReservationError, Wednesday reports and drafts ([watcher/](watcher/) holds the prompt, scripts, config and crontab examples) |
 
 ## Success Criteria
 
