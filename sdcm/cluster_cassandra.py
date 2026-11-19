@@ -317,6 +317,9 @@ class BaseCassandraCluster:
     def start_gcp_key_rotation_thread(self) -> None:
         pass
 
+    def stop_kms_key_rotation_threads(self, timeout: float = 120) -> None:
+        pass
+
     def wait_total_space_used_per_node(self, size=None, keyspace="keyspace1"):
         pass
 
