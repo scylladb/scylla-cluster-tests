@@ -3778,6 +3778,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cluster.stop_nemesis(timeout=1800)
 
     @silence()
+    def stop_kms_key_rotation_threads(self, cluster):
+        cluster.stop_kms_key_rotation_threads()
+
+    @silence()
     def stop_resources_stop_tasks_threads(self, cluster):
         # TODO: this should be run in parallel
         for node in cluster.nodes:
@@ -3802,6 +3806,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.db_cluster:
             self.get_nemesis_report(self.db_cluster)
             self.stop_nemesis(self.db_cluster)
+            # Right after the nemeses: the AWS loop takes nodes from the nemesis allocator to check them over SSH
+            self.stop_kms_key_rotation_threads(self.db_cluster)
             self.stop_resources_stop_tasks_threads(self.db_cluster)
             self.get_backtraces(self.db_cluster)
 

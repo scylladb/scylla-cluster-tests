@@ -16,6 +16,7 @@ import os.path
 import re
 import shutil
 import tempfile
+import threading
 import time
 import unittest
 from datetime import datetime, timezone
@@ -62,6 +63,9 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         self.node_type = "scylla-db"
         self.name = "dummy_db_cluster"
         self.vector_store_cluster = None
+        # BaseScyllaCluster.__init__ is skipped, and the tester's tearDown stops the KMS key rotation threads
+        self.kms_key_rotation_stop_event = threading.Event()
+        self.kms_key_rotation_threads = []
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         for _ in range(count):
