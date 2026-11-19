@@ -26,7 +26,7 @@ Their names describe the *role* in the test (write, read, mixed, prepare, verify
 
 | Tool | Options |
 |---|---|
-| cassandra-stress | cs_user_profiles, prepare_cs_user_profiles, cs_duration, cs_debug, cs_extra_jvm_opts, cs_populating_distribution, c_s_driver_version, user_profile_table_count, add_cs_user_profiles_extra_tables, stress_cmd_no_mv_profile |
+| cassandra-stress | cs_user_profiles, prepare_cs_user_profiles, cs_duration, cs_debug, cs_extra_jvm_opts, cs_docker_memory_limit_percent, cs_populating_distribution, c_s_driver_version, user_profile_table_count, add_cs_user_profiles_extra_tables, stress_cmd_no_mv_profile |
 | gemini | gemini_cmd, gemini_seed, gemini_schema_url, gemini_table_options, gemini_log_cql_statements |
 | latte | latte_schema_parameters |
 | cdc log reader | stress_cdclog_reader_cmd, stress_cdc_log_reader_batching_enable, store_cdclog_reader_stats_in_es |
@@ -36,7 +36,7 @@ Everything else here is loader-side and applies whatever the tool: [`stress_imag
 the [`stress_multiplier`](#stress_multiplier) options, [`stress_duration`](#stress_duration), [`prepare_stress_duration`](#prepare_stress_duration) and
 [`stop_test_on_stress_failure`](#stop_test_on_stress_failure).
 
-**74 options.**
+**75 options.**
 
 
 <a id="add_cs_user_profiles_extra_tables"></a>
@@ -136,6 +136,17 @@ Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. 
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="cs_docker_memory_limit_percent"></a>
+
+## **cs_docker_memory_limit_percent** / SCT_CS_DOCKER_MEMORY_LIMIT_PERCENT
+
+Memory limit of each cassandra-stress container, in percent of the loader memory. Use it when cassandra-stress shares a loader with another tool, such as gemini. Each cassandra-stress command runs in its own container with this limit. Use a value from 1 to 100. Empty means no limit. Not supported for k8s backends and prepared loaders.
+
+**default:** N/A
+
+**type:** int
 
 
 <a id="cs_populating_distribution"></a>
