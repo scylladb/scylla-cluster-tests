@@ -2187,9 +2187,6 @@ class BasePodContainer(cluster.BaseNode):
         # NOTE: We don't support IPv6 for k8s-* backends
         return ""
 
-    def restart(self):
-        raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
-
     def hard_reboot(self):
         self.k8s_cluster.kubectl(
             f"delete pod {self.name} --now",
