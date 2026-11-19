@@ -1,3 +1,8 @@
+Fixes: SCT-
+<!-- Finishes the issue: "Fixes: SCT-xxxx", the only form that closes it and links its backports.
+     Only part of it: "Refs: SCT-xxxx", here and in the commit messages. No Jira: delete the line.
+     See docs/standards/global/commits-and-pull-requests.md, "Jira Reference in the Pull Request". -->
+
 ### Testing
 <!-- Add links to Argus/Jenkins of test test done with this PR -->
 <!-- This would help the reviewer to cross check what was tested, and and review the results as needed -->

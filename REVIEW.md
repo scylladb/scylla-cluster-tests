@@ -60,6 +60,9 @@ in order, so that a reader sees which pass found what.
   description tells why a box stays open.
 - Does a bug fix state its root cause in the commit message and the pull
   request description?
+- When the description names a Jira issue that the pull request finishes,
+  does it say `Fixes: SCT-xxxx`? `Jira:`, `Refs:`, a key in the title, or a
+  key in a sentence leave the issue open after the merge.
 - Does the change follow the standards in `docs/standards/`?
 - Do the commit messages follow Conventional Commits, as `commitlint.config.js`
   defines them?
