@@ -173,7 +173,7 @@ class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
     the Alternator server of the in-process scylla, against a table with all the DynamoDB types.
 
     The tool exists on every supported release, but writes the --json-result file only from
-    2026.2, so the trigger matrix runs it from 2026.2 on.
+    2026.2. The trigger matrix runs it from 2026.4 on, as only new releases are worth tracking.
 
     Alternator is off unless the config sets its port: without alternator_port the tool waits for
     the port and then fails. The write isolation is `forbid`, as the tool's author runs the read
