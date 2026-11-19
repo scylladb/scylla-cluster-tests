@@ -48,6 +48,14 @@ cron_triggers:
       job_folder: "scylla-master"
       labels_selector: "gce-custom-monthly"
       requested_by_user: "valerii.ponomarov"
+  # Every Friday, 20:00 UTC: the logstor jobs. The 2027.1 test plan gates the branch cut on two
+  # consecutive green weekly runs of them.
+  - schedule: "0 20 * * 5"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "logstor-weekly"
+      requested_by_user: "andrei.chekun"
 
 # Performance numbers are only comparable when every job of a run measures the same build,
 # so all jobs get the newest build published on every backend/region/arch in this matrix,
@@ -417,3 +425,83 @@ jobs:
     params:
       region: "eu-north-1"
       sub_tests: '["test_latency_mixed_with_nemesis"]'
+
+  # === Logstor (x86, i4i.4xlarge) - weekly ===
+  # Logstor is new in 2027.1, so the release entries name 2027.1 only. The jobs stay on
+  # i4i.4xlarge until logstor beats the Aerospike numbers on it (dev decision, 2026-06-29).
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_uniform"  # A1, uniform
+    backend: "aws"
+    include_versions: ["master"]
+    labels: ["logstor-weekly"]
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_uniform"  # A1, uniform
+    backend: "aws"
+    include_versions: ["2027.1"]
+    labels: []
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+      requested_by_user: "andrei.chekun"
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_hotspot"  # A1, hotspot
+    backend: "aws"
+    include_versions: ["master"]
+    labels: ["logstor-weekly"]
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_hotspot"  # A1, hotspot
+    backend: "aws"
+    include_versions: ["2027.1"]
+    labels: []
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+      requested_by_user: "andrei.chekun"
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_uniform_ec_twin"  # A0, the uniform workload on a regular LSM table
+    backend: "aws"
+    include_versions: ["master"]
+    labels: ["logstor-weekly"]
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_uniform_ec_twin"  # A0, the uniform workload on a regular LSM table
+    backend: "aws"
+    include_versions: ["2027.1"]
+    labels: []
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+      requested_by_user: "andrei.chekun"
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_lsm_dual_60_40"  # A4, 60% logstor / 40% LSM on one cluster
+    backend: "aws"
+    include_versions: ["master"]
+    labels: ["logstor-weekly"]
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_dual_engine_mixed_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/logstor_lsm_dual_60_40"  # A4, 60% logstor / 40% LSM on one cluster
+    backend: "aws"
+    include_versions: ["2027.1"]
+    labels: []
+    job_throttle_category: "SCT-perf-us-east-1"
+    params:
+      region: "us-east-1"
+      sub_tests: '["test_dual_engine_mixed_gradual_increase_load"]'
+      requested_by_user: "andrei.chekun"

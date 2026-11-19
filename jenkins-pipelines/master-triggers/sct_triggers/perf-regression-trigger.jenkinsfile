@@ -9,5 +9,6 @@ triggerMatrixPipeline(
 00 6 1,16 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-2weeks;requested_by_user=juliayakovlev
 0 23 1 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-3weeks;requested_by_user=juliayakovlev
 0 6 1 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-monthly;requested_by_user=juliayakovlev
-13 6 8-14 * 2 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov'''
+13 6 8-14 * 2 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov
+0 20 * * 5 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=logstor-weekly;requested_by_user=andrei.chekun'''
 )

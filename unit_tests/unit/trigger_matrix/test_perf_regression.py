@@ -303,3 +303,35 @@ def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
             f"Job {job.job_name} new_scylla_repo filename segment for master must be "
             f"'scylladb-master': {new_scylla_repo}"
         )
+
+
+LOGSTOR_JOBS = {"logstor_uniform", "logstor_hotspot", "logstor_uniform_ec_twin", "logstor_lsm_dual_60_40"}
+
+
+@pytest.mark.parametrize(
+    "scylla_version,resolved_version,labels_selector,expected",
+    [
+        pytest.param(
+            "master:latest", "2027.1.0~dev-0.20261105.abc", "logstor-weekly", LOGSTOR_JOBS, id="master-weekly"
+        ),
+        pytest.param("master:latest", "2027.1.0~dev-0.20261105.abc", "master-2weeks", set(), id="master-other-label"),
+        pytest.param("2027.1:latest", "2027.1.0-rc1-0.20261105.abc", "", LOGSTOR_JOBS, id="2027.1"),
+        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", "", set(), id="2026.1"),
+    ],
+)
+def test_logstor_jobs_run_weekly_on_master_and_on_2027_1(
+    production_perf_config, scylla_version, resolved_version, labels_selector, expected
+):
+    """The 2027.1 test plan gates the branch cut on weekly green runs of the logstor jobs, and
+    logstor is new in 2027.1, so no earlier release may select them.
+    """
+    selected = {
+        job.job_name.rsplit("/", 1)[-1]
+        for job in filter_jobs(
+            production_perf_config.jobs,
+            scylla_version=scylla_version,
+            resolved_version=resolved_version,
+            labels_selector=labels_selector,
+        )
+    }
+    assert selected & LOGSTOR_JOBS == expected

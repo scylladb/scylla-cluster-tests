@@ -294,6 +294,10 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
+                                    // This stage can run on a different builder than the stage that checked
+                                    // out SCT, and byoScylladb runs hydra.sh from the checkout.
+                                    checkout scm
+                                    dockerLogin(params)
                                     timeout(time: 240, unit: 'MINUTES') {
                                         byoScylladb(params, false)
                                     }

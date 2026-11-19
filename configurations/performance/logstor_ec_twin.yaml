@@ -1,0 +1,16 @@
+# Eventual-consistency twin of the logstor uniform test: the same cluster, scylla.yaml and
+# workload, but the table is a regular (LSM) table, so the storage engine is the only difference.
+# Must be listed after logstor_uniform_queries.yaml and the logstor thresholds file; dicts are
+# merged, so only the keys below change.
+latte_schema_parameters:
+  storage_engine: ''
+
+# The twin is the reference that logstor is compared with, not a target, so the 3 ms limit of the
+# logstor 600000 step does not apply to it.
+latency_decorator_error_thresholds:
+  mixed:
+    "600000":
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
