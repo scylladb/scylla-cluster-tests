@@ -47,8 +47,9 @@ Release branches get a reduced version of the same jobs, selected by `include_ve
 - **perf-simple-query microbenchmarks**, arm64 and x86_64, read and write — no version gating,
   so these run for every branch on every firing.
 - **perf-cql-raw and perf-alternator microbenchmarks**, arm64 and x86_64, read and write —
-  `exclude_versions` drops every release before 2026.2, where `perf-cql-raw` does not exist and
-  `perf-alternator` cannot write its result file. The PGO offline-installer trigger also runs
+  `exclude_versions` drops every release before 2026.2 for `perf-cql-raw`, which does not exist
+  there, and every release before 2026.4 for `perf-alternator`, as only the numbers of new
+  releases are worth tracking. The PGO offline-installer trigger also runs
   them, together with perf-simple-query, under the `pgo-x86` / `pgo-arm` labels.
 
 Release entries typically carry a shorter `sub_tests` list than their master counterparts

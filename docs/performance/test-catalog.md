@@ -102,7 +102,7 @@ parses its JSON, calls `send_microbenchmark_result_to_argus`.
 |---|---|---|
 | `PerfSimpleQueryTest` | `test_perf_simple_query` | `scylla perf-simple-query --json-result ... --smp 1 -m 1G`. In-process query processor; no ports or config collide with the live scylla-server. `perf_simple_query_extra_command: --write` selects the write workload. |
 | `PerfCqlRawTest` | `test_read`, `test_write` | `scylla perf-cql-raw` — full networking and CQL frame parsing. Argus tables `<workload> - Perf CQL Raw`. |
-| `PerfAlternatorTest` | `test_read`, `test_write` | `scylla perf-alternator` — DynamoDB API requests over HTTP to the in-process Alternator server. Its `SCYLLA_CONFIG` adds `alternator_port: 8000` and `alternator_write_isolation: forbid`. Writes `--json-result` only from 2026.2. Argus tables `<workload> - Perf Alternator`. |
+| `PerfAlternatorTest` | `test_read`, `test_write` | `scylla perf-alternator` — DynamoDB API requests over HTTP to the in-process Alternator server. Its `SCYLLA_CONFIG` adds `alternator_port: 8000` and `alternator_write_isolation: forbid`. Writes `--json-result` only from 2026.2; the release trigger runs it from 2026.4. Argus tables `<workload> - Perf Alternator`. |
 
 `PerfCqlRawTest` and `PerfAlternatorTest` share `InProcessServerMicrobenchmarkTest`: the tool
 boots a real scylla in-process, so the test writes its own `SCYLLA_CONFIG` under

@@ -256,11 +256,32 @@ PERF_ALTERNATOR_JOBS = {
     "scylla_version,resolved_version",
     [
         pytest.param("2026.2:latest", "2026.2.1-0.20261025.abc", id="2026.2"),
-        pytest.param("master:latest", "2026.3.0~dev-0.20260525.abc", id="master"),
+        pytest.param("2026.3:latest", "2026.3.1-0.20261025.abc", id="2026.3"),
     ],
 )
-def test_perf_alternator_microbenchmarks_selected_from_2026_2(production_perf_config, scylla_version, resolved_version):
-    """From 2026.2 the release trigger runs all four perf-alternator jobs, the arm64 ones on aarch64."""
+def test_perf_alternator_not_selected_before_2026_4(production_perf_config, scylla_version, resolved_version):
+    """perf-alternator starts from 2026.4, as only new releases are worth tracking, while
+    perf-cql-raw keeps running on 2026.2 and 2026.3.
+    """
+    selected = {
+        job.job_name.rsplit("/", 1)[-1]
+        for job in filter_jobs(
+            production_perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version
+        )
+    }
+    assert not {name for name in selected if "perf-alternator" in name}
+    assert any("perf-cql-raw" in name for name in selected)
+
+
+@pytest.mark.parametrize(
+    "scylla_version,resolved_version",
+    [
+        pytest.param("2026.4:latest", "2026.4.1-0.20261025.abc", id="2026.4"),
+        pytest.param("master:latest", "2027.1.0~dev-0.20261025.abc", id="master"),
+    ],
+)
+def test_perf_alternator_microbenchmarks_selected_from_2026_4(production_perf_config, scylla_version, resolved_version):
+    """From 2026.4 the release trigger runs all four perf-alternator jobs, the arm64 ones on aarch64."""
     selected = {
         job.job_name.rsplit("/", 1)[-1]: job
         for job in filter_jobs(
