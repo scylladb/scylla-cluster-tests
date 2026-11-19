@@ -41,6 +41,8 @@ MISORDERED_STDERR = (
     f"Could not load SSTable: {FAILED_SSTABLE}: sstables::malformed_sstable_exception ({FAILED_SSTABLE}:"
     " first and last keys of summary are misordered)"
 )
+# Matches none of the known read failures
+UNEXPECTED_STDERR = "scylla-sstable: unexpected failure"
 
 
 @pytest.fixture()
@@ -85,6 +87,24 @@ def test_read_error_on_existing_sstable_fails_check(make_sstable_utils):
 
     with pytest.raises(AssertionError, match=r"Results out of 2: True=1, False=0, None=1"):
         utils.check_that_sstables_are_encrypted(sstables=[ENCRYPTED_SSTABLE, FAILED_SSTABLE])
+
+
+@pytest.mark.parametrize(
+    "sstables_read_before_stop",
+    [pytest.param(0, id="stop-before-start"), pytest.param(2, id="stop-in-the-middle")],
+)
+def test_stop_event_ends_check_between_sstables_without_verdict(make_sstable_utils, sstables_read_before_stop):
+    """Teardown ends a check of hundreds of sstables at once, and the unfinished check fails nothing."""
+    sstables = [f"{TABLE_DIR}/mt-3h4l_{index:04}_5lwio2r3i5kiqk479z-big-Data.db" for index in range(10)]
+    # Every read fails unexpectedly, so a verdict on the sstables read before the stop would fail the check
+    utils = make_sstable_utils(dict.fromkeys(sstables, UNEXPECTED_STDERR), existing=set(sstables))
+    stop_event = MagicMock()
+    stop_event.is_set.side_effect = [False] * sstables_read_before_stop + [True]
+
+    utils.check_that_sstables_are_encrypted(sstables=sstables, stop_event=stop_event)
+
+    read = [call.args[0] for call in utils.db_node.remoter.sudo.call_args_list if call.args[0].startswith("scylla")]
+    assert read == [f"scylla sstable {sstable}" for sstable in sstables[:sstables_read_before_stop]]
 
 
 def test_no_sstables_left_raises_not_found(make_sstable_utils):

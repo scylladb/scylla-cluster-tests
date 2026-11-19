@@ -4022,6 +4022,10 @@ class ClusterTester(unittest.TestCase):
         cluster.stop_nemesis(timeout=1800)
 
     @silence()
+    def stop_kms_key_rotation_threads(self, cluster):
+        cluster.stop_kms_key_rotation_threads()
+
+    @silence()
     def stop_resources_stop_tasks_threads(self, cluster):
         nodes = list(cluster.nodes)
         for node in nodes:
@@ -4437,6 +4441,8 @@ class ClusterTester(unittest.TestCase):
         # diagnostic commands (gather_failure_statistics, validators) hang indefinitely.
         if self.db_cluster:
             self.stop_nemesis(self.db_cluster)
+            # Right after the nemeses: the AWS loop takes nodes from the nemesis allocator to check them over SSH
+            self.stop_kms_key_rotation_threads(self.db_cluster)
         # After stop_nemesis() on purpose: a nemesis rebooting a node brings the collector
         # back up with it (scylla_setup enables it at boot), so stopping it any earlier can be undone.
         with silence(parent=self, name="Stopping perf-collector"):
