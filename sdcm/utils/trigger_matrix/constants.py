@@ -20,9 +20,10 @@ stops `models` from having to import the wait and resolution layers that import 
 
 from typing import Literal
 
-VALID_BACKENDS = {"aws", "gce", "azure", "docker", "oci"}
+VALID_BACKENDS = {"aws", "gce", "azure", "docker", "oci", "xcloud"}
 
-# Backends whose Scylla build is published as an image SCT looks up by version
+# Backends whose Scylla build is published as an image SCT looks up by version.
+# Scylla Cloud (xcloud) installs Scylla itself, so its jobs get scylla_version as requested.
 VALID_IMAGE_BACKENDS = {"aws", "gce", "azure", "oci"}
 
 DEFAULT_ARCH = "x86_64"

@@ -1,0 +1,51 @@
+jenkinsfiles:
+  - path: "jenkins-pipelines/master-triggers/sct_triggers/xcloud-trigger.jenkinsfile"
+
+# Scylla Cloud (xcloud) trigger matrix.
+#
+# Scylla Cloud installs Scylla itself, so the trigger resolves no image: the jobs get
+# scylla_version as it is and SCT resolves `release:latest` through the Scylla Cloud API.
+#
+# A trigger run starts each Jenkins job once, so the AWS and the GCE runs of the same job
+# carry their own label and have their own cron line.
+
+defaults:
+  provision_type: "on_demand"
+  xcloud_env: "staging"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+
+cron_triggers:
+  # 1st and 3rd Saturday of the month, 12:00 UTC: Jenkins ANDs the day-of-month and
+  # day-of-week fields (see tier1.yaml). The weekly xcloud provisioning run starts at 06:00.
+  - schedule: "00 12 1-7,15-21 * 6"
+    params:
+      scylla_version: "release:latest"
+      job_folder: "scylla-master"
+      labels_selector: "xcloud-aws"
+      requested_by_user: "dimakr"
+  - schedule: "00 12 1-7,15-21 * 6"
+    params:
+      scylla_version: "release:latest"
+      job_folder: "scylla-master"
+      labels_selector: "xcloud-gce"
+      requested_by_user: "dimakr"
+
+jobs:
+  # Siren also starts this job for each Scylla release candidate it registers in Scylla Cloud.
+  - job_name: "longevity/longevity-scylla-cloud-sanity-30m-test"
+    backend: "xcloud"
+    params:
+      xcloud_provider: "aws"
+      region: "us-east-1"
+    labels:
+      - "xcloud-aws"
+
+  - job_name: "longevity/longevity-scylla-cloud-sanity-30m-test"
+    backend: "xcloud"
+    params:
+      xcloud_provider: "gce"
+      gce_datacenter: "us-east1"
+    labels:
+      - "xcloud-gce"

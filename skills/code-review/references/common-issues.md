@@ -177,3 +177,27 @@ The PRs changed `test-cases/*.yaml` only; nothing pointed reviewers at `configur
 
 - **During review**: Check 10 in SKILL.md — follow a DB instance/arch change to the job's trigger-matrix entries
 - **Verify**: `uv run sct.py trigger-matrix-audit --remote upstream`; the weekly `qa/trigger-matrix-arch-audit` job mails any drift
+
+---
+
+## Issue 7: Serial Per-Node Loops Slow Large-Cluster Setup and Teardown
+
+**Severity**: MEDIUM
+**Incident**: [SCT-720](https://scylladb.atlassian.net/browse/SCT-720) (setup) and [SCT-719](https://scylladb.atlassian.net/browse/SCT-719) (teardown) — audits found more than twenty serial per-node loops
+
+### What Happens
+
+Setup and teardown block on each node in turn: SSH bootstraps, cloud termination waits, coredump uploads. Each loop
+costs the sum of the per-node times, so a 100-node cluster spends hours in them. Details:
+[serial-node-loops.md](serial-node-loops.md).
+
+### Why It Was Missed
+
+A serial loop is correct code: it passes the unit tests and the small-cluster runs. Only manual audits found the
+pattern, and new code kept adding it.
+
+### Prevention
+
+- **During review**: Check 12 in SKILL.md — flag blocking per-node work in a serial loop; ask for `ParallelObject`
+  with an explicit `timeout`
+- **Examples**: the known instances in [serial-node-loops.md](serial-node-loops.md#known-instances)

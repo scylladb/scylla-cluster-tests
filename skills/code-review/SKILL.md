@@ -1,13 +1,11 @@
 ---
 name: code-review
 description: >-
-  Guides AI-assisted code review of SCT pull requests. Use when reviewing
-  a PR, checking a diff for correctness, evaluating method signature changes
-  across class hierarchies, verifying override compatibility, checking import
-  conventions, error handling patterns, backend impact, test coverage,
-  provision label requirements, or trigger-matrix arch after a test's DB
-  instance type changes. Covers inheritance safety, polymorphic method
-  audits, and SCT-specific review criteria.
+  Reviews SCT pull requests for correctness and SCT conventions. Use when
+  reviewing a PR or a diff, a method signature change (override
+  compatibility), imports, backend impact and provision labels, the
+  trigger-matrix arch after a DB instance type change, or per-node loops in
+  cluster setup or teardown.
 ---
 
 # Code Review for SCT
@@ -61,6 +59,7 @@ Ask: Is there a test for this change? Is there a default value for this config o
 - Evaluating whether a PR needs provision test labels
 - Checking for missing tests, missing defaults, or missing docstrings
 - Reviewing nemesis operations or cluster configuration changes
+- Spotting loops that do SSH, cloud-API, or HTTP work on one node at a time
 
 ## When NOT to Use
 
@@ -205,12 +204,32 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - When `plan.md` exists, every box is checked, or the PR description tells why a box stays open
 - The flow is optional: a PR without a flow directory is not a finding
 
+### Check 12: Serial Per-Node Blocking I/O
+
+**Trigger**: PR adds or changes a loop over the nodes of a cluster (`for node in self.nodes`, `node_list`, the
+created `instances`, a comprehension over nodes) whose body blocks on the node, directly or one call down: SSH
+(`node.remoter.run/sudo/stop`, `remote_scylla_yaml()`, `node.init()`), a cloud API call (`node.destroy()`, tagging),
+an HTTP or CQL request, log or coredump collection and upload, or `wait.wait_for(...)` polling. It also fires when
+the PR adds such a call to an existing loop, or to a function that a node loop calls. It weighs most on
+setup paths (`add_nodes`, `_create_node`, `wait_for_init`, `sdcm/provision/`, `sdcm/sct_provision/`) and teardown
+paths (`tearDown`, `stop_resources*`, `clean_resources`, `destroy()`, `get_backtraces`, `resources_cleanup.py`).
+
+- The loop costs N × the per-node time, and a `wait_for` loop costs up to N × its timeout. On a 100-node cluster
+  one loop costs an hour of setup or teardown. No linter and no unit test sees it
+- Independent iterations → flag the loop and ask for `ParallelObject`. Some loops must stay serial (seed first,
+  rolling restarts, steps that keep quorum, one topology change at a time); ask for a one-line comment that says why
+- A parallel version must keep the timeouts, the error behavior, and the node order. The helpers have traps:
+  the default `timeout=6` of `ParallelObject` (a timeout cancels the nodes still queued), `num_workers=0` on an
+  empty cluster, and the worker cap of `run_func_parallel`
+- Detail, the known instances, and the traps: [serial-node-loops.md](references/serial-node-loops.md)
+
 ## Reference Index
 
 | File | Content |
 |------|---------|
 | [review-checklist.md](references/review-checklist.md) | Full review checklist with per-check details and examples |
 | [common-issues.md](references/common-issues.md) | Catalog of real incidents with root cause analysis and prevention |
+| [serial-node-loops.md](references/serial-node-loops.md) | Check 12: serial per-node loops, the `ParallelObject` traps, and the known instances |
 | [writing-review-comments.md](references/writing-review-comments.md) | Severity tags, comment layout, and the review summary |
 
 | Workflow | Purpose |
@@ -233,5 +252,6 @@ A complete code review:
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
 - [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`
 - [ ] Spec compliance checked — when the PR carries a flow directory, the change matches its `spec.md`
+- [ ] Per-node loops checked — independent blocking I/O over the nodes, on setup or teardown paths, runs in parallel, or a comment says why it stays serial
 - [ ] Each finding proven, or tagged ❓ question
 - [ ] One review posted, with inline comments and the outcome of each `REVIEW.md` pass

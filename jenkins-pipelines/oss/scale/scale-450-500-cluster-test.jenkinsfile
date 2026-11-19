@@ -8,5 +8,7 @@ longevityPipeline(
     region: 'eu-west-1',
     post_behavior_db_nodes: 'destroy',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/scale/scale-cluster.yaml", "configurations/scale/scale-450-500.yaml"]'''
+    test_config: '''["test-cases/scale/scale-cluster.yaml", "configurations/scale/scale-450-500.yaml"]''',
+
+    builder_keep: '510',  // ceil(30240 / 60) + 6, longer than the one-week builder default
 )

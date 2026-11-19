@@ -857,8 +857,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     )
                     scylla_oci_images.append(oci_image)
                 self["oci_image_db"] = " ".join(image[2] for image in scylla_oci_images)
-            elif self.get("cluster_backend") == "xcloud" and ":" in scylla_version:
-                self._resolve_xcloud_version_tag(self.get("scylla_version"))
+            elif self.get("cluster_backend") == "xcloud":
+                if ":" in scylla_version:
+                    self._resolve_xcloud_version_tag(self.get("scylla_version"))
             elif self._restored_from_placement("ami_id_db_scylla") and self.get("use_preinstalled_scylla"):
                 # region fallback in the provisioning step already resolved scylla_version to AMIs
                 # and handed them over via resolved placement; nothing is left to look up.
@@ -1001,6 +1002,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         # 10.5) derive instance_provision from test duration when it was not chosen explicitly
         self._apply_duration_based_provision_policy()
+        self._rerank_sizing_for_final_provision()
 
         # 11) validate that supported instance_provision selected
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
@@ -1678,6 +1680,31 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         return environment_vars
 
+    @staticmethod
+    def _spot_sizing_region(cloud: str, provision: str | None, region: str | None) -> str | None:
+        """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None."""
+        return region if provision in ("spot", "spot_fleet") and cloud == "aws" else None
+
+    def _rerank_sizing_for_final_provision(self) -> None:
+        """Re-rank the sized instance types once the duration policy has settled `instance_provision`.
+
+        Sizing runs before that policy, so an `auto` run that turns spot was not ranked by interruption, and an
+        unset one that turns on_demand was. The ranking keeps the size and arch, so only the type name changes.
+        It keeps the region of the first sizing: `_apply_resolved_placement` may have moved `region_name` since,
+        and ranking for the new region would give the run-test stage another type than provisioning launched.
+        """
+        catalog = None
+        for param_name, role, cloud, value, sizing_region, sized_for in getattr(self, "_sized_constraints", []):
+            spot_region = self._spot_sizing_region(cloud, self.get("instance_provision"), sizing_region)
+            if spot_region == sized_for:
+                continue
+            catalog = catalog or InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
+            resolved = select_instance(catalog, role, cloud, value, spot_region=spot_region).instance_type
+            self.log.info(
+                "Re-ranked %s for instance_provision=%s: %s", param_name, self.get("instance_provision"), resolved
+            )
+            self[param_name] = resolved
+
     def _resolve_instance_sizes(self, env: dict | None = None) -> None:  # noqa: PLR0914
         """Resolve constraint dicts for instance-type params to literal type strings.
 
@@ -1708,6 +1735,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
         }
 
         db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
+        provision = (env.get("instance_provision") if env else None) or self.get("instance_provision")
+        sizing_region = self.region_names[0] if self.region_names else None
+        spot_region = self._spot_sizing_region(cloud, provision, sizing_region)
+        # `auto` or an unset value is only settled by the duration policy: _rerank_sizing_for_final_provision
+        self._sized_constraints = []
         role_params = SIZING_ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
             if role == "db_oracle" and not oracle_cluster_in_use(db_type):
@@ -1730,14 +1762,14 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 is_fallback = True
                 self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
             if isinstance(value, dict):
-                cache_key = (role, cloud, tuple(sorted(value.items())))
+                cache_key = (role, cloud, tuple(sorted(value.items())), spot_region)
                 cached = _SIZING_RESOLUTION_CACHE.get(cache_key)
                 resolved, resolved_arch = cached if cached else (None, None)
                 if resolved is None:
                     try:
                         catalog_dir = pathlib.Path(sct_abs_path("data/instance_catalog"))
                         catalog = InstanceCatalog.from_directory(catalog_dir)
-                        result = select_instance(catalog, role, cloud, value)
+                        result = select_instance(catalog, role, cloud, value, spot_region=spot_region)
                         resolved = result.instance_type
                         resolved_arch = result.arch
                         _SIZING_RESOLUTION_CACHE[cache_key] = (resolved, resolved_arch)
@@ -1761,6 +1793,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                             continue
                         raise ValueError(f"Invalid constraint for {param_name}: {exc}") from exc
                 self.log.info("Resolved %s: %s → %s", param_name, value, resolved)
+                self._sized_constraints.append((param_name, role, cloud, value, sizing_region, spot_region))
                 if resolved_arch:
                     if not hasattr(self, "_sizing_resolved_arch"):
                         self._sizing_resolved_arch = {}

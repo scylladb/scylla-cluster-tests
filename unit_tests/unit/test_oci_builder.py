@@ -52,7 +52,7 @@ def test_script_console_success(builder):
     with patch("sdcm.utils.oci_builder.requests.post", return_value=response) as post:
         builder._add_cloud_configuration_to_jenkins()
     script = post.call_args.kwargs["data"]["script"]
-    assert "oci-sct-builders-us-phoenix-1-v5" in script
+    assert f"oci-sct-builders-us-phoenix-1-{OciBuilder.VERSION}" in script
     assert "maxTotalUses" in script
 
 

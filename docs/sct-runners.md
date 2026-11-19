@@ -54,19 +54,7 @@ The full flow, with the boot check per cloud and the failures seen in past rollo
    ./sct.py create-runner-image -c oci -r us-ashburn-1 -z a
     ```
 3. boot a runner from each image with `create-runner-instance`, reboot it, check SSH again
-4. update version on `aws_builder.py`, `gce_builder.py` and `oci_builder.py`, and
-   `vars/getJenkinsLabels.groovy` with the matching labels, in one commit. Move the
-   `aws-sct-builders-eu-west-1-<version>-CI` label pinned in `Jenkinsfile` and the hydra
-   jenkinsfiles, and any `<assignedNode>` in a job XML, in the same commit
-   (`git grep -n 'sct-builders-' -- Jenkinsfile jenkins-pipelines vars ':!vars/getJenkinsLabels.groovy'`)
-5. build jenkins configuration with new sct runner image
-    ```bash
-    ./sct.py configure-jenkins-builders -c aws
-    ./sct.py configure-jenkins-builders -c gce
-    ./sct.py configure-jenkins-builders -c oci
-    ```
-   This also applies the builder network access rules, see [Jenkins builders: network access](jenkins-builders.md).
-   Run all three before the label change merges, then run `./sct.py check-jenkins-builder-labels`:
-   it fails on any label of `vars/getJenkinsLabels.groovy` that no Jenkins node or cloud serves.
-   OCI builders are on-demand clouds, so a missing OCI cloud otherwise shows up only as OCI jobs
-   waiting forever for their label.
+4. roll the builders onto the new images as a new builder version, following
+   [Changing builder configuration](jenkins-builders.md#changing-builder-configuration).
+   Configure also applies the builder network access rules, see
+   [Jenkins builders: network access](jenkins-builders.md#network-access).
