@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import NetworkInterface
+from azure.mgmt.network.models import NetworkInterface, NetworkInterfaceIPConfiguration, PublicIPAddress, Subnet
 
 from sdcm.utils.azure_utils import AzureService
 
@@ -59,40 +59,27 @@ class NetworkInterfaceProvider:
         return [nic for _, nic in sorted(nics, key=lambda item: item[0])]
 
     @staticmethod
-    def _ip_configurations(nic_name: str, subnet_id: str, interface: Dict, addresses: Dict[str, str | None]) -> List:
+    def _ip_configurations(
+        nic_name: str, subnet_id: str, interface: Dict, addresses: Dict[str, str | None]
+    ) -> List[NetworkInterfaceIPConfiguration]:
         """IpConfigurations of one NIC: an IPv4 one, and an IPv6 one when the NIC asks for it.
 
         Azure requires the primary ipConfiguration to be IPv4, so the IPv6 one is always secondary.
         """
 
-        def with_public_ip(config: Dict, address: str | None) -> Dict:
-            if address is not None:
-                config["public_ip_address"] = {"id": address, "properties": {"deleteOption": "Delete"}}
-            return config
+        def ip_configuration(name: str, primary: bool, version: str) -> NetworkInterfaceIPConfiguration:
+            address = addresses.get(version.lower())
+            return NetworkInterfaceIPConfiguration(
+                name=name,
+                subnet=Subnet(id=subnet_id),
+                primary=primary,
+                private_ip_address_version=version,
+                public_ip_address=None if address is None else PublicIPAddress(id=address, delete_option="Delete"),
+            )
 
-        configurations = [
-            with_public_ip(
-                {
-                    "name": nic_name,
-                    "subnet": {"id": subnet_id},
-                    "primary": True,
-                    "private_ip_address_version": "IPv4",
-                },
-                addresses.get("ipv4"),
-            )
-        ]
+        configurations = [ip_configuration(nic_name, True, "IPv4")]
         if interface["ipv6"]:
-            configurations.append(
-                with_public_ip(
-                    {
-                        "name": f"{nic_name}-ipv6",
-                        "subnet": {"id": subnet_id},
-                        "primary": False,
-                        "private_ip_address_version": "IPv6",
-                    },
-                    addresses.get("ipv6"),
-                )
-            )
+            configurations.append(ip_configuration(f"{nic_name}-ipv6", False, "IPv6"))
         return configurations
 
     def get_or_create(self, plans: Dict[str, List[Dict]]) -> Dict[str, List[NetworkInterface]]:
@@ -111,13 +98,13 @@ class NetworkInterfaceProvider:
                 nic_name = self.get_nic_name(name, index)
                 if nic_name in self._cache:
                     continue
-                parameters = {
-                    "location": self._region,
-                    "ip_configurations": self._ip_configurations(
+                parameters = NetworkInterface(
+                    location=self._region,
+                    ip_configurations=self._ip_configurations(
                         nic_name, entry["subnet_id"], entry["interface"], entry["addresses"]
                     ),
-                    "enable_accelerated_networking": True,
-                }
+                    enable_accelerated_networking=True,
+                )
                 LOGGER.info("Creating nic %s in resource group %s...", nic_name, self._resource_group_name)
                 poller = self._azure_service.network.network_interfaces.begin_create_or_update(
                     resource_group_name=self._resource_group_name,
