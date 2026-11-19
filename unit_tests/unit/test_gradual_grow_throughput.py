@@ -21,7 +21,7 @@ Tests import the production code directly to ensure we're validating real behavi
 import json
 import logging
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -339,3 +339,48 @@ def test_latency_decorator_finds_the_tags_run_step_returns():
     res = _run_step([["WRITE-st"], ["READ-st"]])
     kwargs = {"stress_cmds": ["stress-cmd-0", "stress-cmd-1"], "step_params": {}, "step_duration": None}
     assert _find_hdr_tags(kwargs, res, object()) == ["WRITE-st", "READ-st"]
+
+
+# ---------------------------------------------------------------------------
+# run_gradual_increase_load: the cache warmup before the first step
+# ---------------------------------------------------------------------------
+
+
+def _run_gradual_increase_load(cs_cmd_warm_up):
+    """Call the production run_gradual_increase_load with no steps, and return the mocked warmup and sleep."""
+    workload = gradual_grow_module.Workload(
+        workload_type="mixed",
+        cs_cmd_tmpl=["latte run --function write"],
+        cs_cmd_warm_up=cs_cmd_warm_up,
+        num_threads=[64],
+        throttle_steps=[],
+        preload_data=False,
+        drop_keyspace=False,
+        wait_no_compactions=True,
+        step_duration="60m",
+        prepare_schema=False,
+    )
+    instance = MagicMock()
+    instance.update_num_threads_for_steps.return_value = workload
+    instance.get_sequential_throttle_steps.return_value = []
+    with patch.object(gradual_grow_module.time, "sleep") as sleep:
+        gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_gradual_increase_load(
+            instance, workload, stress_num=1, num_loaders=1, test_name="test"
+        )
+    return instance.warmup_cache, sleep
+
+
+@pytest.mark.parametrize("cs_cmd_warm_up", (pytest.param(None, id="none"), pytest.param([], id="empty-list")))
+def test_run_gradual_increase_load_skips_the_warmup_and_its_wait_without_a_command(cs_cmd_warm_up):
+    """stress_cmd_cache_warmup: [] in a test config means that there is no warmup, and the test must not wait 240s."""
+    warmup_cache, sleep = _run_gradual_increase_load(cs_cmd_warm_up)
+
+    warmup_cache.assert_not_called()
+    sleep.assert_not_called()
+
+
+def test_run_gradual_increase_load_runs_the_warmup_and_waits_after_it():
+    warmup_cache, sleep = _run_gradual_increase_load(["latte run --function read"])
+
+    warmup_cache.assert_called_once_with(["latte run --function read"], {"threads": 64})
+    sleep.assert_called_once_with(240)

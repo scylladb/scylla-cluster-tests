@@ -1,14 +1,44 @@
 experimental_features:
   - logstor
 
+# The pool utilization is the live data of a node divided by the size of the logstor pool of the
+# node. The utilization is an important property of the workload, because it sets how much live
+# data logstor compaction must copy to free a segment. At a higher utilization, compaction copies
+# more data for each segment that it frees, so the write amplification is higher.
+#
+# Three parameters set the utilization, and the logstor workloads (uniform, hotspot and the
+# logstor table of the dual-engine workload) use the same values for them:
+#  - The number of keys is 500M (row_count), and the populate writes each key once. With RF=2 on
+#    4 nodes, each node holds 500M x 2 / 4 = 250M records.
+#  - The size of a record is about 2.2 KB. A record holds a 48-byte key (key_size) and 10 columns
+#    of 200 bytes (column_count and column_size), and the mutation and the framing add the rest.
+#    So the live data of a node is 250M x 2.2 KB, which is about 556 GB.
+#  - The size of the pool is logstor_disk_size_in_mb. Scylla applies this value to each shard,
+#    and not to each node, so with 15 shards the pool of a node is 15 x 80000 MiB, which is
+#    about 1.26 TB.
+#
+# The utilization is therefore 556 GB / 1.26 TB, which is about 44%, and the free segments start
+# at about 56% of the pool after the populate. The conditioning step of the uniform and hotspot
+# workloads is sized for this free fraction. If you change the number of keys, the row shape, the
+# replication factor, the number of nodes, the number of shards or logstor_disk_size_in_mb, then
+# calculate the utilization again and adjust the other parameters or the conditioning step.
 append_scylla_yaml:
   logstor_disk_size_in_mb: 80000
-  logstor_separator_max_memory_in_mb: 256
   logstor_format_on_startup: true
   force_capacity_based_balancing: true
 
-# Append --task-quota-ms 0.2 to existing append_scylla_args (++ prefix appends instead of replacing)
-append_scylla_args: '++ --task-quota-ms 0.2'
+# The ++ prefix appends these flags to the append_scylla_args of the test-case, so the flags of
+# the test-case stay in place.
+#
+# --task-quota-ms 0.2 keeps the task batches of a shard short, so that queued reads wait less
+# time for the dispatch of their I/O.
+#
+# --io-latency-goal-ms 1.0 sets the I/O latency goal explicitly. The Seastar default is
+# 1.5 x task-quota-ms, which is 0.3 ms here. Each shard can reserve I/O tokens for only
+# goal / shard count per round, so at 0.3 ms one 128 KiB logstor compaction read needs
+# several rounds, and the shard dispatches no other I/O, foreground reads included, until the
+# read has its tokens. At 1.0 ms the read gets its tokens in one round.
+append_scylla_args: '++ --task-quota-ms 0.2 --io-latency-goal-ms 1.0'
 
 n_db_nodes: 4
 n_loaders: 1
