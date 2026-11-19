@@ -135,3 +135,15 @@ def test_rate_step_that_did_not_send_its_rate_is_not_the_best():
         name="rate_400000", throughput=399000, p99={"READ": 3.0}, threads=32, rate=400000, concurrency=65
     )
     assert find_best_throughput(summary, P99_LIMIT_MS).name == "rate_600000", "no sent-rate rule without the ratio"
+
+
+def test_rate_step_over_the_busiest_shard_limit_is_not_the_best():
+    summary = {
+        "rate_1336000": _rate_step(1336000, 1335000, 1.3) | {"busiest_shard_util_pct": 98.3},
+        # Within the P99 limit and sent its rate, but the busiest shard had no headroom left.
+        "rate_1470000": _rate_step(1470000, 1469000, 1.5) | {"busiest_shard_util_pct": 99.4},
+        # Not measured (no monitor): the limit doesn't decide it.
+        "rate_1200000": _rate_step(1200000, 1199000, 1.2),
+    }
+    assert find_best_throughput(summary, P99_LIMIT_MS, max_busiest_shard_util_pct=98.5).name == "rate_1336000"
+    assert find_best_throughput(summary, P99_LIMIT_MS).name == "rate_1470000", "no shard rule without the limit"

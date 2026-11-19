@@ -54,6 +54,11 @@ class RateSearchConfig:
     # A loader over this CPU use during a step stops the search: the step measured the loaders, not the cluster.
     # The test checks it, not the search.
     max_loader_cpu_pct: float = 90
+    # A step passes only when the busiest DB shard's average reactor utilization stayed at or under this. The
+    # busiest shard either holds a rate steadily or tips into an overload it doesn't recover from, and where it
+    # tips moves between runs; under this limit the result keeps headroom below that point and repeats closely.
+    # None: not checked. The test measures it, not the search.
+    max_busiest_shard_util_pct: float | None = None
 
     @classmethod
     def from_params(

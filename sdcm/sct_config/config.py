@@ -2237,7 +2237,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
             return
 
         positive_ints = {"min_rate_per_shard", "max_rate_per_shard", "max_steps"}
-        positive_numbers = {"precision_pct", "min_sent_ratio", "baseline_range_pct", "max_loader_cpu_pct"}
+        positive_numbers = {
+            "precision_pct",
+            "min_sent_ratio",
+            "baseline_range_pct",
+            "max_loader_cpu_pct",
+            "max_busiest_shard_util_pct",
+        }
         for workload, settings in search.items():
             if not isinstance(settings, dict) or set(settings) - positive_ints - positive_numbers:
                 raise ValueError(
@@ -2255,10 +2261,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 raise ValueError(f"perf_best_throughput_search for {workload}: 'max_steps' should be at least 2")
             if settings.get("min_sent_ratio", 1) > 1:
                 raise ValueError(f"perf_best_throughput_search for {workload}: 'min_sent_ratio' should be at most 1")
-            if settings.get("max_loader_cpu_pct", 100) > 100:
-                raise ValueError(
-                    f"perf_best_throughput_search for {workload}: 'max_loader_cpu_pct' should be at most 100"
-                )
+            for key in ("max_loader_cpu_pct", "max_busiest_shard_util_pct"):
+                if settings.get(key, 100) > 100:
+                    raise ValueError(f"perf_best_throughput_search for {workload}: '{key}' should be at most 100")
             if settings.get("baseline_range_pct", 0) >= 100:
                 raise ValueError(
                     f"perf_best_throughput_search for {workload}: 'baseline_range_pct' should be below 100"

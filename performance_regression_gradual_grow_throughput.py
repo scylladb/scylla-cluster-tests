@@ -790,6 +790,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload=workload,
             total_summary=total_summary,
             min_sent_ratio=search_config.min_sent_ratio if search_config else None,
+            max_busiest_shard_util_pct=search_config.max_busiest_shard_util_pct if search_config else None,
         )
         # The results log is written before each Argus send, so the run's results survive a failed send.
         self.save_total_summary_in_file(total_summary, best_step=best_step)
@@ -973,22 +974,38 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             if busy_loaders := self.busy_loaders(step_start, time.time(), search.config.max_loader_cpu_pct):
                 search.stop_on_loader_cpu(rate=rate, loaders_cpu_pct=busy_loaders)
                 break
-            if (latency := step_latency(step_name, step_summary[step_name])) is None:
+            step = step_summary[step_name]
+            # Measured in every step, so the results show how close each step came to the busiest shard's limit;
+            # it decides a step only with max_busiest_shard_util_pct.
+            busiest_util = self.busiest_shard_utilization(
+                step.get("stress_start", step_start), step.get("stress_end", time.time())
+            )
+            step["busiest_shard_util_pct"] = busiest_util
+            util_limit = search.config.max_busiest_shard_util_pct
+            within_util = util_limit is None or busiest_util is None or busiest_util <= util_limit
+            if (latency := step_latency(step_name, step)) is None:
                 passed, throughput = False, None
+                self.log.info("Rate search step %s at %s op/s: no results", step_name, rate)
             else:
                 p99, throughput = latency
                 within_limit = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
                 # A step that couldn't send its rate shows a low P99 at a lower rate: it doesn't pass, whatever its
                 # P99. A loader that lags goes over the limit too, as latte measures from the scheduled start.
-                passed = within_limit and throughput >= rate * search.config.min_sent_ratio
-            self.log.info(
-                "Rate search step %s: %s op/s of %s, P99 within %s ms and rate sent: %s",
-                step_name,
-                throughput,
-                rate,
-                p99_limit_ms,
-                passed,
-            )
+                sent_rate = throughput >= rate * search.config.min_sent_ratio
+                passed = within_limit and sent_rate and within_util
+                self.log.info(
+                    "Rate search step %s: %s op/s of %s; P99 within %s ms: %s; rate sent: %s; busiest shard: %s%s; "
+                    "passed: %s",
+                    step_name,
+                    throughput,
+                    rate,
+                    p99_limit_ms,
+                    within_limit,
+                    sent_rate,
+                    "not measured" if busiest_util is None else f"{busiest_util:.2f}%",
+                    "" if util_limit is None else f" (limit {util_limit:g}%: {within_util})",
+                    passed,
+                )
             search.record(rate=rate, passed=passed, throughput=throughput)
         self.log.info(
             "Rate search for '%s' ran %s steps and stopped: %s",
@@ -1039,6 +1056,30 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )
         return busy
 
+    def busiest_shard_utilization(self, start: float, end: float) -> float | None:
+        """The highest average reactor utilization of any DB shard between `start` and `end`, in percent.
+
+        Each shard is averaged over the step, without its first minute, while the load ramps up, and its last 30
+        seconds, when the stress commands end at slightly different times. None without the monitor, or when
+        Prometheus doesn't answer or has no data: the measurement then doesn't decide the step.
+        """
+        if not self.prometheus_db:
+            self.log.warning("No monitor, so the busiest DB shard's utilization during the step is not measured")
+            return None
+        if end - start > 180:
+            start, end = start + 60, end - 30
+        query = f"max(avg_over_time(scylla_reactor_utilization[{max(60, round(end - start))}s]))"
+        try:
+            results = self.prometheus_db.query(query=quote(query), start=end, end=end, scrap_metrics_step=60)
+        except requests.RequestException:
+            self.log.warning("Could not read the busiest DB shard's utilization during the step", exc_info=True)
+            return None
+        values = [float(value) for result in results for _, value in result.get("values", [])]
+        if not values:
+            self.log.warning("The monitor has no reactor utilization of the DB shards during the step")
+            return None
+        return round(max(values), 2)
+
     @staticmethod
     def _instance_address(instance: str) -> str:
         """The address of a Prometheus `instance` label: '10.0.0.1', '10.0.0.1:9100', '[fd00::1]:9100' or 'fd00::1'."""
@@ -1082,12 +1123,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         run_step = (latency_calculator_decorator(legend=f"Gradual test step {step_name} op/s", cycle_name=step_name))(
             self.run_step
         )
+        stress_start = time.time()
         results, _ = run_step(
             stress_cmds=workload.cs_cmd_tmpl,
             step_params=step_params,
             step_duration=step_duration,
             stop_test_on_failure=stop_test_on_failure,
         )
+        stress_end = time.time()
         self.log.debug("All c-s commands results collected and saved in Argus")
 
         summary_result = self.check_latency_during_steps(step=step_name)
@@ -1101,6 +1144,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 else int(step_rate),
                 "failed_ops": self._failed_ops(results),
                 "operation_time_s": self._operation_time_s(results),
+                # When the stress ran, without the schema setup before it and the waits after it.
+                "stress_start": stress_start,
+                "stress_end": stress_end,
             }
         )
         if workload.drop_keyspace:
@@ -1130,12 +1176,20 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )["percentile_99"]
 
     def find_best_step(
-        self, workload: Workload, total_summary: dict, min_sent_ratio: float | None = None
+        self,
+        workload: Workload,
+        total_summary: dict,
+        min_sent_ratio: float | None = None,
+        max_busiest_shard_util_pct: float | None = None,
     ) -> BestThroughputStep | None:
-        """Find the step with the highest throughput within the P99 limit, and that sent its rate when searched."""
+        """Find the step with the highest throughput within the P99 limit, and, when searched, that sent its rate
+        and kept the busiest shard within its limit."""
         p99_limit_ms = self.p99_limit_ms(workload)
         best_step = find_best_throughput(
-            total_summary=total_summary, p99_limit_ms=p99_limit_ms, min_sent_ratio=min_sent_ratio
+            total_summary=total_summary,
+            p99_limit_ms=p99_limit_ms,
+            min_sent_ratio=min_sent_ratio,
+            max_busiest_shard_util_pct=max_busiest_shard_util_pct,
         )
         if best_step:
             self.log.info(

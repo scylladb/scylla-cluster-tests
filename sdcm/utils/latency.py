@@ -216,14 +216,18 @@ def p99_violations(name: str, p99: dict[str, float], p99_limit_ms: float) -> dic
 
 
 def find_best_throughput(
-    total_summary: dict[str, Any], p99_limit_ms: float, min_sent_ratio: float | None = None
+    total_summary: dict[str, Any],
+    p99_limit_ms: float,
+    min_sent_ratio: float | None = None,
+    max_busiest_shard_util_pct: float | None = None,
 ) -> BestThroughputStep | None:
     """Pick the gradual step with the highest measured throughput whose P99 is within the limit.
 
     `total_summary` is the per-step summary of the gradual test, keyed by step name. A step passes when the HDR
     P99 of every operation, in every cycle that reported it, is within `p99_limit_ms` (for mixed, both read and
     write). With `min_sent_ratio`, a step with a fixed 'rate' must also have measured at least that share of
-    it: a step the loaders held back can't be the best one.
+    it: a step the loaders held back can't be the best one. With `max_busiest_shard_util_pct`, a step whose
+    measured 'busiest_shard_util_pct' is over it is skipped too; a step without the measurement is not.
     Steps without HDR results are skipped.
 
     Passing steps are ranked by HDR-measured throughput. The step's 'threads', 'rate' and 'concurrency' entries,
@@ -238,6 +242,13 @@ def find_best_throughput(
             continue
         if min_sent_ratio and (rate := step.get("rate")) and throughput < rate * min_sent_ratio:
             LOGGER.debug("Step %s: sent %s op/s, under %s of its %s op/s rate", name, throughput, min_sent_ratio, rate)
+            continue
+        if (
+            max_busiest_shard_util_pct is not None
+            and (util := step.get("busiest_shard_util_pct")) is not None
+            and util > max_busiest_shard_util_pct
+        ):
+            LOGGER.debug("Step %s: busiest shard at %s%%, over %s%%", name, util, max_busiest_shard_util_pct)
             continue
         passed.append(
             BestThroughputStep(

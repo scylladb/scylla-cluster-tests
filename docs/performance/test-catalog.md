@@ -114,7 +114,12 @@ whatever its P99: latte measures the latency from each request's scheduled start
 over the limit too. A loader over `max_loader_cpu_pct` (90%) CPU during a step, read from its node_exporter on
 the monitor, stops the search with an error and no best-throughput row: the step measured the loaders, not the
 cluster. Raise `n_loaders`. Without a monitor, the check is skipped with a warning, as is a loader the monitor has
-no CPU samples for. Each step gets `rate x P99 limit` requests in flight (Little's law), split over the commands:
+no CPU samples for. Every step also measures the busiest DB shard's average reactor utilization over its stress,
+without the first minute and the last 30 seconds, and logs it and saves it in the step's results as
+`busiest_shard_util_pct`. With `max_busiest_shard_util_pct` set (not by default), a step over it fails too, and
+can't be the best step: the busiest shard either holds a rate steadily or tips into an overload it doesn't recover
+from, and where it tips moves 5-10% between runs, so the limit keeps the result below that point, where it repeats
+closely. Without a monitor, it's not measured and doesn't decide the step. Each step gets `rate x P99 limit` requests in flight (Little's law), split over the commands:
 latte keeps the threads of the sub-test's first `perf_gradual_throttle_steps` entry and gets the requests split
 over them as its concurrency, which is per thread; other tools get them as threads. The cache warmup uses the threads
 and concurrency of that first entry.

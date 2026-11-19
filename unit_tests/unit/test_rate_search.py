@@ -258,6 +258,12 @@ def test_in_flight_for(rate, p99_limit_ms, expected):
             RateSearchConfig(max_steps=8, min_rate_per_shard=2000),
             id="workload overrides default key by key",
         ),
+        pytest.param(
+            {"default": {}, "read": {"max_busiest_shard_util_pct": 98.5}},
+            "read",
+            RateSearchConfig(max_busiest_shard_util_pct=98.5),
+            id="busiest shard limit",
+        ),
     ],
 )
 def test_config_from_params(search_params, workload_type, expected):
@@ -283,6 +289,7 @@ def _test_instance(run_gradual_step, threads=32, stress_cmd=LATTE_READ):
         run_gradual_step=run_gradual_step,
         p99_limit_ms=lambda workload: 10,
         busy_loaders=lambda start, end, max_cpu_pct: {},
+        busiest_shard_utilization=lambda start, end: None,
         params={"perf_gradual_throttle_steps": {"read": [{"threads": threads, "concurrency": 55, "rate": "300000"}]}},
     )
     instance.configured_step_params = lambda workload_type: test_class.configured_step_params(instance, workload_type)
@@ -385,6 +392,96 @@ def test_test_class_stops_when_the_loaders_run_out_of_cpu(monkeypatch):
     assert search.steps == []
     assert [event["severity"] for event in events] == [gradual_grow_module.Severity.ERROR]
     assert "loader-1 95%" in events[0]["message"]
+
+
+def _busiest_shard_step(step_name, throttle_step_dict):
+    rate = int(throttle_step_dict["rate"])
+    # P99 stays low up to 600k op/s; the busiest shard reaches 98.5% at 450k.
+    summary = _step_summary(rate, p99=1.0 if rate <= 600000 else 50.0, throughput=rate)
+    return {step_name: summary | {"stress_start": float(rate), "stress_end": rate + 600.0}}
+
+
+def test_test_class_fails_a_step_over_the_busiest_shard_limit():
+    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+        return _busiest_shard_step(step_name, throttle_step_dict)
+
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    windows = []
+
+    def busiest_shard_utilization(start, end):
+        windows.append((start, end))
+        return 90 + 8.5 * start / 450000
+
+    instance.busiest_shard_utilization = busiest_shard_utilization
+    search = RateSearch(config=RateSearchConfig(max_steps=6, max_busiest_shard_util_pct=98.5), shards=40)
+    total_summary = {}
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary=total_summary, stress_num=1, num_loaders=4
+    )
+
+    # Every step is measured over its stress window, and the value is kept in its results.
+    assert windows == [(float(rate), rate + 600.0) for rate, _, _ in search.steps]
+    assert all("busiest_shard_util_pct" in step for step in total_summary.values())
+    # P99 passes up to 600k, but the steps whose busiest shard went over 98.5% fail.
+    assert all(passed == (rate <= 450000) for rate, passed, _ in search.steps)
+    assert 400000 < search.highest_passing <= 450000
+
+
+def test_test_class_measures_the_busiest_shard_without_deciding_by_it_when_no_limit_is_set():
+    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+        return _busiest_shard_step(step_name, throttle_step_dict)
+
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    instance.busiest_shard_utilization = lambda start, end: 99.9
+    search = RateSearch(config=RateSearchConfig(max_steps=6), shards=40)
+    total_summary = {}
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary=total_summary, stress_num=1, num_loaders=4
+    )
+
+    assert {step["busiest_shard_util_pct"] for step in total_summary.values()} == {99.9}
+    assert all(passed == (rate <= 600000) for rate, passed, _ in search.steps)
+
+
+def test_test_class_keeps_the_p99_result_when_the_busiest_shard_is_not_measured():
+    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+        return _busiest_shard_step(step_name, throttle_step_dict)
+
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    search = RateSearch(config=RateSearchConfig(max_steps=6, max_busiest_shard_util_pct=98.5), shards=40)
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary={}, stress_num=1, num_loaders=4
+    )
+
+    assert all(passed == (rate <= 600000) for rate, passed, _ in search.steps)
+
+
+def _prometheus_util(values, queries):
+    def query(query, start, end, scrap_metrics_step):
+        queries.append((unquote(query), start, end))
+        return [{"metric": {}, "values": [[end, str(value)]]} for value in values]
+
+    return SimpleNamespace(query=query)
+
+
+def _util_instance(prometheus_db):
+    return SimpleNamespace(log=logging.getLogger(__name__), prometheus_db=prometheus_db)
+
+
+def test_busiest_shard_utilization_averages_each_shard_over_the_step_without_its_edges():
+    test_class = gradual_grow_module.PerformanceRegressionPredefinedStepsTest
+    queries = []
+    instance = _util_instance(_prometheus_util([99.2349], queries))
+
+    assert test_class.busiest_shard_utilization(instance, 1000, 1600) == 99.23
+    # The first minute and the last 30 seconds are left out: 1060 to 1570, evaluated at 1570.
+    assert queries == [("max(avg_over_time(scylla_reactor_utilization[510s]))", 1570, 1570)]
+
+
+def test_busiest_shard_utilization_without_the_monitor_or_its_data():
+    test_class = gradual_grow_module.PerformanceRegressionPredefinedStepsTest
+    assert test_class.busiest_shard_utilization(_util_instance(None), 1000, 1600) is None
+    assert test_class.busiest_shard_utilization(_util_instance(_prometheus_util([], [])), 1000, 1600) is None
 
 
 def _prometheus_cpu(*series, queries=None):

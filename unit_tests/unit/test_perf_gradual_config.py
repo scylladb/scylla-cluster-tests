@@ -241,6 +241,7 @@ def test_best_throughput_search_valid():
                     "min_sent_ratio": 0.9,
                     "baseline_range_pct": 20,
                     "max_loader_cpu_pct": 85,
+                    "max_busiest_shard_util_pct": 98.5,
                 },
             },
             "perf_best_throughput_baselines": {"i8g": {"read": 40000}, "i4i.4xlarge": {"write": 15000}},
@@ -265,6 +266,8 @@ def test_best_throughput_search_valid():
         pytest.param({"default": {"baseline_range_pct": 100}}, "below 100", id="baseline_range_too_wide"),
         pytest.param({"default": {"max_loader_cpu_pct": 120}}, "at most 100", id="loader_cpu_above_100"),
         pytest.param({"default": {"max_loader_cpu_pct": 0}}, "positive number", id="zero_loader_cpu"),
+        pytest.param({"read": {"max_busiest_shard_util_pct": 101}}, "at most 100", id="busiest_shard_above_100"),
+        pytest.param({"read": {"max_busiest_shard_util_pct": 0}}, "positive number", id="zero_busiest_shard"),
         pytest.param(
             {"default": {"max_rate_per_shard": 5000}, "read": {"min_rate_per_shard": 5000}},
             "for read: 'min_rate_per_shard'",

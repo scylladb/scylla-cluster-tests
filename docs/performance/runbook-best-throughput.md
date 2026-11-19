@@ -172,7 +172,16 @@ Step length was not a factor: every step held steady to its end or broke down wi
 15-minute runs gave the two highest results, but they differ from each other by 6.5%, a whole search step, and
 match each other within 0.2% at every rate both passed. So read one run's number to about +-10%: a single run doesn't show a smaller regression. Compare a new result with
 the range of several earlier runs of the job, and check its busiest shard in the run's monitor (per-shard
-reactor utilization and `sl:default` task time) before calling a change.
+reactor utilization and `sl:default` task time) before calling a change. The run log gives each step's busiest
+shard utilization (`busiest shard: 98.84%`), and the results log keeps it as `busiest_shard_util_pct`.
+
+For a number that repeats more closely, set `max_busiest_shard_util_pct` in the workload's
+`perf_best_throughput_search` entry, e.g. `read: {max_busiest_shard_util_pct: 98.5}`: a step whose busiest shard
+averaged more fails, whatever its P99. Replayed on the four i8g read runs, 98.5% would have reported 1.29M-1.38M
+op/s (6.6% apart, 3.3% without the run on a slower node) instead of 1.38M-1.57M (13.6%). The number then means
+the highest rate that keeps ~1.5% CPU headroom on the busiest shard, so it is lower than the P99-only one, and a
+baseline has to come from runs with the same setting. It is off by default: write and mixed run compaction on the
+same shards, which counts in that utilization, and their runs have to show first whether the limit fits them.
 
 ## 5. Variations
 
