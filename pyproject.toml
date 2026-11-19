@@ -100,7 +100,7 @@ ssh2-python = [
 [tool.ruff]
 lint.select = [
     "BLE",
-    "F401", "F821", "F823", "F841",
+    "F401", "F811", "F821", "F823", "F841",
     "PL", "PLR0913","PLR0914", "PLR0916",
     "YTT",
     "F541",
@@ -116,6 +116,9 @@ lint.select = [
     "D101", "D102", "D103",  # missing docstrings, enforced only under sdcm/nemesis
 ]
 lint.ignore = ["E501", "PLR2004", "PLR0917"]
+# Only bare underscores are placeholders. The default regex also exempts every `_private` name,
+# so F811 missed a duplicated `_report_provision_error_to_argus` in sct.py.
+lint.dummy-variable-rgx = "^_+$"
 
 lint.preview = true
 lint.explicit-preview-rules = true
