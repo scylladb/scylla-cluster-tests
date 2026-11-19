@@ -397,10 +397,6 @@ class CloudNode(cluster.BaseNode):
         if not self._vector_is_active():
             raise ScyllaCloudError(f"vector.service is not active on node {self.name} after configuring remote logging")
 
-    def _vector_is_active(self) -> bool:
-        result = self.remoter.run("systemctl is-active vector.service", ignore_status=True, verbose=False)
-        return result.stdout.strip() == "active"
-
     def _vector_unit_present(self) -> bool:
         result = self.remoter.run("systemctl list-unit-files vector.service", ignore_status=True, verbose=False)
         return result.return_code == 0 and "vector.service" in result.stdout
