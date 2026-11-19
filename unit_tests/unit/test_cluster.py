@@ -1326,6 +1326,7 @@ def test_vector_store_address_follows_the_re_created_container():
     parent_cluster = unittest.mock.MagicMock()
     parent_cluster.params = {"vector_store_port": 6080}
     vs_set = unittest.mock.MagicMock()
+    vs_set.run_func_parallel = BaseCluster.run_func_parallel.__get__(vs_set)
 
     with unittest.mock.patch("sdcm.cluster_docker.ContainerManager") as container_manager:
         container_manager.get_ip_address.return_value = "172.17.0.4"

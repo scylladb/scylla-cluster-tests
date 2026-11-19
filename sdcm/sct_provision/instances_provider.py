@@ -37,8 +37,12 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
+
+MAX_PROVISION_WAIT_WORKERS = 50
+PROVISION_WAIT_TIMEOUT = 30 * 60
 
 
 @retrying(n=3, sleep_time=5, allowed_exceptions=(ProvisionError,))
@@ -113,7 +117,9 @@ def provision_instances_with_fallback(
     # so a definition that is not in the provisioner cache yet would be re-created at spot pricing -
     # exactly the pricing that just failed.
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions, pricing_model=pricing_model)
-    for definition, v_m in zip(definitions, provisioned_instances):
+
+    def wait_instance_ready(definition_and_vm: tuple[InstanceDefinition, VmInstance]) -> None:
+        definition, v_m = definition_and_vm
         if definition.use_public_ip:
             hostname = v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address
         else:
@@ -126,6 +132,17 @@ def provision_instances_with_fallback(
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         wait_cloud_init_completes(remoter=remoter, instance=v_m)
         # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
+
+    # Wait for cloud-init on all the nodes at once, at most MAX_PROVISION_WAIT_WORKERS at a time.
+    # wait_cloud_init_completes bounds each of its attempts, so PROVISION_WAIT_TIMEOUT is only a
+    # backstop. A failure on any node fails provisioning once the waits have ended.
+    instance_pairs = list(zip(definitions, provisioned_instances))
+    if instance_pairs:
+        ParallelObject(
+            objects=instance_pairs,
+            timeout=PROVISION_WAIT_TIMEOUT,
+            num_workers=min(len(instance_pairs), MAX_PROVISION_WAIT_WORKERS),
+        ).run(wait_instance_ready, ignore_exceptions=False)
     return provisioned_instances
 
 

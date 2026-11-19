@@ -58,7 +58,24 @@ from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import to_inet_ntop_format
+<<<<<<< HEAD
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
+||||||| parent of 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
+from sdcm.utils.vector_store_utils import (
+    VectorStoreClusterMixin,
+    VectorStoreNodeMixin,
+    is_vector_store_source_build,
+    resolve_vector_store_source,
+)
+=======
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.vector_store_utils import (
+    VectorStoreClusterMixin,
+    VectorStoreNodeMixin,
+    is_vector_store_source_build,
+    resolve_vector_store_source,
+)
+>>>>>>> 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
 from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
@@ -78,6 +95,9 @@ SPOT_TERMINATION_CHECK_DELAY = 0
 TRANSIENT_EIP_RELEASE_ERRORS = ("InvalidNetworkInterfaceID.NotFound", "InvalidIPAddress.InUse")
 EIP_RELEASE_RETRIES = 8
 EIP_RELEASE_BACKOFF_THRESHOLD = 10
+
+MAX_NODE_INIT_WORKERS = 20
+NODE_INIT_TIMEOUT = 40 * 60
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -650,15 +670,26 @@ class AWSCluster(cluster.BaseCluster):
                     ami_id=image_id,
                 )
             )
+<<<<<<< HEAD
+||||||| parent of 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
+        new_nodes = []
+=======
+        # node_index and rack follow the instance order, whichever node finishes its init first.
+        node_specs = []
+>>>>>>> 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
             node_rack = node_index % self.racks_count if rack is None else rack
+            node_specs.append((instance, self._node_index, node_rack))
+
+        def _create_and_init_node(node_spec):
+            instance, node_index, node_rack = node_spec
             node = self._create_node(
                 instance,
                 self._ec2_ami_username,
                 self.node_prefix,
-                self._node_index,
+                node_index,
                 self.logdir,
                 dc_idx=dc_idx,
                 rack=node_rack,
@@ -667,8 +698,37 @@ class AWSCluster(cluster.BaseCluster):
             node.enable_auto_bootstrap = enable_auto_bootstrap
             if ssh_connection_ip_type(self.params) == "ipv6" and not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
+            return node
 
+        # _create_node runs node.init(), which waits on EC2, SSH and cloud-init. The nodes that
+        # initialized go into self.nodes, in instance order, so teardown terminates them.
+        results = ParallelObject(
+            objects=node_specs,
+            timeout=NODE_INIT_TIMEOUT,
+            num_workers=min(len(node_specs), MAX_NODE_INIT_WORKERS),
+        ).run(_create_and_init_node, ignore_exceptions=True)
+        new_nodes = [result.result for result in results if result.exc is None]
+        self.nodes.extend(new_nodes)
+
+        if failed := [result for result in results if result.exc is not None]:
+            self.log.error("Failed to initialize %s out of %s node(s)", len(failed), len(node_specs))
+            # These instances are not in self.nodes, so teardown would not terminate them. After a
+            # timeout some may still be initializing, and the queued ones never started.
+            for result in failed:
+                instance = result.obj[0]
+                try:
+                    instance.terminate()
+                except botocore.exceptions.ClientError as error:
+                    self.log.error("Failed to terminate instance %s: %s", instance.id, error)
+            raise failed[0].exc
+
+<<<<<<< HEAD
             self.nodes.append(node)
+||||||| parent of 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
+            self.nodes.append(node)
+            new_nodes.append(node)
+=======
+>>>>>>> 82f9c9e7d (improvement(provision): parallelize node.init() in AWSCluster.add_nodes)
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
         return self.nodes[-count:]
@@ -1378,7 +1438,8 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list if node_list else self.nodes
-        for node in node_list:
+
+        def _wait_for_node_db_up(node):
             wait.wait_for(
                 func=self.check_node_db_up,
                 step=10,
@@ -1387,6 +1448,10 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 throw_exc=True,
                 node=node,
             )
+
+        # run_func_parallel uses the default ThreadPoolExecutor size, so a cluster larger than that
+        # pool is waited on in batches.
+        self.run_func_parallel(func=_wait_for_node_db_up, node_list=node_list)
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
@@ -1587,7 +1652,8 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             return
 
         self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
-        for node in self.nodes:
+
+        def _reconfigure_node(node):
             try:
                 node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
                 node.configure_vector_store_service()
@@ -1595,6 +1661,9 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             except Exception as e:
                 self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
                 raise
+
+        # run_func_parallel re-raises the first failure once every node has finished.
+        self.run_func_parallel(func=_reconfigure_node)
 
     def _create_node(
         self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None

@@ -5,6 +5,11 @@ add_node_cnt: 50
 
 user_prefix: 'cluster-scale-450-500-test'
 
+# The sct-runner holds a live remoter (SSH session + background log threads) per node, so
+# memory scales with cluster size. The default runner (m7i-flex.xlarge, 16G) is already
+# OOM-killed at 180 nodes, so use a memory-optimized runner sized for 450-500 nodes.
+instance_type_runner: 'r6i.4xlarge'  # 16 vcpus, 128G
+
 # Takes too long on big clusters
 cluster_health_check: false
 use_scylla_doctor_on_failure: false
