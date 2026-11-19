@@ -200,3 +200,98 @@ def test_provision_resources_no_argus_report_without_test_id():
 
         # Verify submit_event was NOT called
         assert not mock_argus_client.submit_event.called
+
+
+@pytest.mark.parametrize(
+    "create_instance_effect,expected_error",
+    [
+        pytest.param(
+            {"return_value": None},
+            "RuntimeError: SCT runner image was not found in us-east-1",
+            id="image_not_found",
+        ),
+        pytest.param(
+            {"side_effect": Exception("InsufficientInstanceCapacity")},
+            "Exception: InsufficientInstanceCapacity",
+            id="create_instance_raises",
+        ),
+    ],
+)
+def test_create_runner_instance_reports_creation_failure_to_argus(
+    monkeypatch, tmp_path, create_instance_effect, expected_error
+):
+    """A run whose SCT runner could not be created gets a CRITICAL event in Argus."""
+    monkeypatch.setenv("SCT_TEST_ID", "runner-test-id")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    # The command deletes and writes ./sct_runner_ip, keep it away from a real one.
+    monkeypatch.chdir(tmp_path)
+
+    with (
+        patch("sct.SCTConfiguration") as mock_config,
+        patch("sct.get_sct_runner") as mock_get_sct_runner,
+        patch("sct.get_test_config") as mock_test_config,
+        patch("sct.add_file_logger"),
+        patch("sdcm.utils.sct_cmd_helpers.get_all_regions", return_value=["us-east-1"]),
+    ):
+        mock_config.return_value.get.side_effect = lambda key, default=None: {"test_id": "runner-test-id"}.get(
+            key, default
+        )
+        mock_get_sct_runner.return_value.create_instance.configure_mock(**create_instance_effect)
+        mock_argus_client = MagicMock()
+        mock_test_config.return_value.argus_client.return_value = mock_argus_client
+
+        from sct import create_runner_instance  # noqa: PLC0415
+
+        result = CliRunner().invoke(
+            create_runner_instance,
+            ["--cloud-provider", "aws", "--region", "us-east-1", "--test-id", "runner-test-id", "--duration", "60"],
+        )
+
+    assert result.exit_code == 1
+    event_payload = mock_argus_client.submit_event.call_args.args[0]
+    assert event_payload["run_id"] == "runner-test-id"
+    assert event_payload["severity"] == "CRITICAL"
+    assert f"Failed to provision aws SCT runner: {expected_error}" in event_payload["message"]
+    mock_argus_client.set_sct_run_status.assert_called_once()
+    mock_argus_client.finalize_sct_run.assert_called_once()
+
+
+def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_path):
+    """The case from SCT-245: the runner is created, but SSH to it fails with an authentication error.
+
+    A stale SCT_TEST_ID left in the environment must not take the event away from the --test-id run.
+    """
+    monkeypatch.setenv("SCT_TEST_ID", "stale-test-id")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
+    monkeypatch.chdir(tmp_path)
+
+    with (
+        patch("sct.SCTConfiguration") as mock_config,
+        patch("sct.get_sct_runner") as mock_get_sct_runner,
+        patch("sct.get_test_config") as mock_test_config,
+        patch("sct.add_file_logger"),
+        patch("sdcm.utils.sct_cmd_helpers.get_all_regions", return_value=["us-ashburn-1"]),
+        patch("sdcm.utils.decorators.time.sleep"),
+    ):
+        mock_config.return_value.get.side_effect = lambda key, default=None: {"test_id": "stale-test-id"}.get(
+            key, default
+        )
+        sct_runner = mock_get_sct_runner.return_value
+        sct_runner.get_instance_public_ip.return_value = "10.0.0.1"
+        sct_runner.get_remoter.return_value.run.side_effect = Exception("Authentication failed")
+        mock_argus_client = MagicMock()
+        mock_test_config.return_value.argus_client.return_value = mock_argus_client
+
+        from sct import create_runner_instance  # noqa: PLC0415
+
+        result = CliRunner().invoke(
+            create_runner_instance,
+            ["--cloud-provider", "oci", "--region", "us-ashburn-1", "--test-id", "runner-test-id", "--duration", "60"],
+        )
+
+    assert result.exit_code == 1
+    assert sct_runner.get_remoter.return_value.run.call_count == 3
+    event_payload = mock_argus_client.submit_event.call_args.args[0]
+    assert event_payload["run_id"] == "runner-test-id"
+    assert "Failed to provision oci SCT runner: Exception: Authentication failed" in event_payload["message"]
+    mock_argus_client.set_sct_run_status.assert_called_once()
