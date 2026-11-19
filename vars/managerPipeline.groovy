@@ -251,7 +251,7 @@ def call(Map pipelineParams) {
             }
             stage('Create SCT Runner') {
                 options {
-                    timeout(time: 5, unit: 'MINUTES')
+                    timeout(time: 10, unit: 'MINUTES')
                 }
                 steps {
                     script {

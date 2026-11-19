@@ -18,6 +18,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
+from ssh2.exceptions import AuthenticationError
+
+from sdcm.remote.base import RetryableNetworkException
+from sdcm.remote.libssh2_client.exceptions import ConnectTimeout, FailedToRunCommand
+
+
+def _remoter_error(ssh_error: Exception) -> RetryableNetworkException:
+    """Build the error that 'remoter.run()' raises when the SSH connection fails."""
+    return RetryableNetworkException(str(ssh_error), original=FailedToRunCommand(MagicMock(), ssh_error))
 
 
 def test_provision_resources_sends_error_event_to_argus():
@@ -271,14 +280,15 @@ def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_pa
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.add_file_logger"),
         patch("sdcm.utils.sct_cmd_helpers.get_all_regions", return_value=["us-ashburn-1"]),
-        patch("sdcm.utils.decorators.time.sleep"),
+        patch("sct.time.sleep"),
     ):
         mock_config.return_value.get.side_effect = lambda key, default=None: {"test_id": "stale-test-id"}.get(
             key, default
         )
         sct_runner = mock_get_sct_runner.return_value
         sct_runner.get_instance_public_ip.return_value = "10.0.0.1"
-        sct_runner.get_remoter.return_value.run.side_effect = Exception("Authentication failed")
+        # ssh2-python raises it with no message
+        sct_runner.get_remoter.return_value.run.side_effect = _remoter_error(AuthenticationError())
         mock_argus_client = MagicMock()
         mock_test_config.return_value.argus_client.return_value = mock_argus_client
 
@@ -293,5 +303,36 @@ def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_pa
     assert sct_runner.get_remoter.return_value.run.call_count == 3
     event_payload = mock_argus_client.submit_event.call_args.args[0]
     assert event_payload["run_id"] == "runner-test-id"
-    assert "Failed to provision oci SCT runner: Exception: Authentication failed" in event_payload["message"]
+    assert (
+        "Failed to provision oci SCT runner: RuntimeError: Unable to SSH to the SCT runner at 10.0.0.1: "
+        "the runner refused the SSH key (AuthenticationError)"
+    ) in event_payload["message"]
     mock_argus_client.set_sct_run_status.assert_called_once()
+
+
+def test_verify_runner_ssh_does_not_retry_unreachable_runner():
+    """An unreachable runner already used the whole connect timeout, so it fails at once."""
+    remoter = MagicMock()
+    remoter.run.side_effect = _remoter_error(ConnectTimeout("Failed to connect in 240 seconds"))
+
+    from sct import _verify_runner_ssh  # noqa: PLC0415
+
+    with patch("sct.time.sleep") as mock_sleep, pytest.raises(RuntimeError, match="ConnectTimeout"):
+        _verify_runner_ssh(remoter=remoter, host="10.0.0.1")
+
+    remoter.run.assert_called_once_with("true", timeout=200, verbose=False, retry=0, new_session=True)
+    mock_sleep.assert_not_called()
+
+
+def test_verify_runner_ssh_retries_failed_login():
+    """A login that fails once, right after the runner comes up, passes on the next attempt."""
+    remoter = MagicMock()
+    remoter.run.side_effect = [_remoter_error(AuthenticationError()), MagicMock()]
+
+    from sct import _verify_runner_ssh  # noqa: PLC0415
+
+    with patch("sct.time.sleep") as mock_sleep:
+        _verify_runner_ssh(remoter=remoter, host="10.0.0.1")
+
+    assert remoter.run.call_count == 2
+    mock_sleep.assert_called_once_with(30)
