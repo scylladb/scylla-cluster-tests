@@ -102,7 +102,8 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         if not target_upgrade_agent_version:
             target_upgrade_agent_version = get_manager_repo(target_manager_version, distro=self.db_node.distro)
 
-        new_manager_http_port = 12345
+        # Not 12345: scylla-monitoring 4.17+ runs Grafana Alloy on the same node, on host port 12345
+        new_manager_http_port = 15080
         with self.manager_node.remote_manager_yaml() as scylla_manager_yaml:
             node_ip = scylla_manager_yaml["http"].split(":", maxsplit=1)[0]
             scylla_manager_yaml["http"] = f"{node_ip}:{new_manager_http_port}"
