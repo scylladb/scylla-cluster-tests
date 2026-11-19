@@ -278,49 +278,6 @@ def cli(ctx):
         docker_hub_login(remoter=LOCALRUNNER)
 
 
-def _report_provision_error_to_argus(backend: str, exc: Exception):
-    """Report a provision-stage failure to Argus with TEST_ERROR status."""
-    test_config = get_test_config()
-    try:
-        params = SCTConfiguration()
-        test_id = params.get("test_id")
-        if test_id and test_id != "None":
-            test_config.set_test_id_only(test_id)
-        test_config.init_argus_client(params)
-    except Exception:  # noqa: BLE001
-        LOGGER.warning("Failed to initialize Argus client for error reporting", exc_info=True)
-        return
-
-    error_message = (
-        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
-    )
-    event_payload: RawEventPayload = {
-        "run_id": str(test_config.test_id()),
-        "severity": "CRITICAL",
-        "ts": time.time(),
-        "message": error_message,
-        "event_type": "TestFrameworkEvent",
-        "received_timestamp": None,
-        "nemesis_name": None,
-        "duration": None,
-        "node": None,
-        "target_node": None,
-        "known_issue": None,
-        "nemesis_status": None,
-    }
-
-    try:
-        test_config.argus_client().submit_event(event_payload)
-        LOGGER.info("Error event submitted to Argus successfully")
-    except Exception as argus_exc:  # noqa: BLE001
-        LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
-
-    try:
-        test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
-    except Exception:  # noqa: BLE001
-        LOGGER.warning("Failed to set TEST_ERROR status in Argus", exc_info=True)
-
-
 @cli.command("provision-resources", help="Provision resources for the test")
 @click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option("-t", "--test-name", type=str, help="Test name")
