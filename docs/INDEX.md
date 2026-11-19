@@ -30,8 +30,8 @@ Located in `docs/standards/global/`.
 Conventional Commits types and lengths, one logical change per commit, the
 root cause of a bug in the commit body and the pull request description,
 pre-commit before each commit, the generated nemesis and configuration files
-that a change causes and the unrelated ones to leave out, a draft pull request with the template filled, and the backport and
-provision test labels.
+that a change causes and the unrelated ones to leave out, a draft pull request with the template filled, `Fixes: SCT-xxxx`
+for the Jira issue that the pull request finishes, and the backport and provision test labels.
 
 ### Python standards
 

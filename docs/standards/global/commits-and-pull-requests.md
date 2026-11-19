@@ -49,6 +49,37 @@ Open each pull request as a draft. Fill the template in
 Jenkins links. List the manual tests that a reviewer must run. Link the flow
 directory under `docs/plans/` when the change has a spec.
 
+### Jira Reference in the Pull Request
+
+When the pull request finishes a Jira issue, write `Fixes: SCT-xxxx` on its
+own line in the description. Use this form only:
+
+- The Jira sync (`.github/workflows/call_jira_sync.yml`) reads the
+  description and the commit messages. It moves an issue to Done only when a
+  closing keyword comes right before the key.
+- The backport workflow makes a Jira backport sub-task for each `Fixes` key.
+  It ignores `Closes:` and `Resolves:`, which close the issue but leave the
+  backports without a sub-task.
+
+Both ignore the title, so `[SCT-xxxx]` in the title does nothing. They also
+ignore `Jira: SCT-xxxx`, `Refs: SCT-xxxx`, `Tracked in SCT-xxxx` and a key in a
+sentence. A pull request that uses only these forms merges and leaves the
+issue open.
+
+- The pull request finishes the issue: `Fixes: SCT-xxxx`.
+- The pull request is one part of the issue: `Refs: SCT-xxxx`, in the
+  description and in the commit messages. A `Fixes:` in one of its commits
+  closes the unfinished issue. Close the issue by hand when the last part
+  merges.
+- An example in a description or a commit message never puts a real key
+  after a closing keyword. The sync acts on it, also inside an HTML comment or
+  backticks. Write `SCT-xxxx`.
+- Never put a word that ends in a closing keyword right before a key. The sync
+  matches the end of any word, so `hotfix: SCT-xxxx` or `prefix SCT-xxxx`
+  closes the issue.
+- Never put a closing keyword before a GitHub issue or pull request number
+  that this pull request does not fix. GitHub closes that one on merge.
+
 ### Labels
 
 Each pull request to `master` carries a backport label: `backport/none`, or
