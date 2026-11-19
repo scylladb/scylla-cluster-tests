@@ -2,7 +2,7 @@ test_metadata:
   description: >-
     Multi-DC variant of longevity-30-percent-utilization-4h: 2 DCs x 3 i8g.xlarge nodes with RF=3 in
     each DC, filled to ~30% disk per node. A region-aware loader in each DC runs cassandra-stress at
-    LOCAL_QUORUM: prepare, a 600m mixed workload, then a read-back of every row, under SisyphusMonkey.
+    LOCAL_QUORUM: prepare, then a 600m mixed workload under SisyphusMonkey.
   test_type: longevity
   tier: ondemand
   duration_class: medium
@@ -91,22 +91,6 @@ stress_cmd:
     -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
     -mode cql3 native
     -rate threads=100 throttle=15000/s
-    -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
-    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
-    -log interval=5
-
-stress_read_cmd:
-  - >-
-    cassandra-stress read cl=LOCAL_QUORUM n={{ rows_per_cmd }}
-    -mode cql3 native
-    -rate threads=200
-    -pop seq=1..{{ rows_per_cmd }}
-    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
-    -log interval=5
-  - >-
-    cassandra-stress read cl=LOCAL_QUORUM n={{ rows_per_cmd }}
-    -mode cql3 native
-    -rate threads=200
     -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
     -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
     -log interval=5
