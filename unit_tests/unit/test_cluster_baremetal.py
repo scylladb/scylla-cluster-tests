@@ -22,7 +22,7 @@ keyspace with RF > 1 as not RF-rack-valid.
 import re
 import shlex
 from fnmatch import fnmatch
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1452,7 +1452,8 @@ def test_the_logging_script_leaves_the_apt_timers_of_a_shared_host_on(node_class
     node.test_config = MagicMock(get_logging_service_host_port=MagicMock(return_value=("127.0.0.1", 5003)))
     node.remoter = MagicMock()
 
-    node.configure_remote_logging()
+    with patch.object(sdcm_cluster.BaseNode, "_ensure_vector_is_active"):
+        node.configure_remote_logging()
 
     script = node.remoter.sudo.call_args.args[0]
     assert ("systemctl disable apt-daily.timer" in script) == disabled

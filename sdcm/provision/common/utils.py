@@ -194,7 +194,7 @@ TimeoutStopSec=90s
 EOF
         systemctl daemon-reload
 
-        systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
+        systemctl restart vector || echo "WARNING: vector.service restart failed, SCT checks the service after this script"
     """).format(
         host=host,
         port=port,
