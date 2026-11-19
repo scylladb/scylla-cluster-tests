@@ -172,7 +172,7 @@ def call(Map pipelineParams) {
                     script {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
-                                timeout(time: 5, unit: 'MINUTES') {
+                                timeout(time: 10, unit: 'MINUTES') {
                                     createSctRunner(params, runnerTimeout , builder.region)
                                 }
                             }

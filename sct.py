@@ -42,6 +42,7 @@ lazy import click
 lazy import pytest
 lazy import yaml
 lazy from rich.table import Table
+lazy from ssh2.exceptions import AuthenticationError as SSH2AuthenticationError
 
 lazy import sct_scan_issues
 lazy import sct_sizing
@@ -69,6 +70,7 @@ lazy from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_
 lazy from sdcm.provision.gce.capacity_advisor import get_zone_advice
 lazy from sdcm.provision.provisioner import VmInstance
 lazy from sdcm.remote import LOCALRUNNER
+lazy from sdcm.remote.libssh2_client.exceptions import AuthenticationException
 lazy from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, available_backends, init_and_verify_sct_config
 lazy from sdcm.sct_provision.common.layout import SCTProvisionLayout
 lazy from sdcm.sct_provision.instances_provider import provision_sct_resources
@@ -130,7 +132,6 @@ lazy from sdcm.utils.common import (
 )
 lazy from sdcm.utils.context_managers import environment
 lazy from sdcm.utils.cost_reporting import report_estimated_cost
-lazy from sdcm.utils.decorators import retrying
 lazy from sdcm.utils.docker_utils import docker_hub_login, get_ip_address_of_container, running_in_podman
 lazy from sdcm.utils.gce_builder import GceBuilder
 lazy from sdcm.utils.gce_region import GceRegion
@@ -3183,6 +3184,34 @@ def create_runner_image(cloud_provider, region, availability_zone):
     sct_runner.create_image()
 
 
+SCT_RUNNER_SSH_ATTEMPTS = 3
+
+
+def _verify_runner_ssh(remoter, host: str) -> None:
+    """Check that a new SCT runner accepts SSH.
+
+    Only a failed login is retried: it was seen to fail once right after a successful one.
+    Any other failure is final. An unreachable runner has already used the whole connect timeout,
+    and the 'Create SCT Runner' stage must keep time to report the failure to Argus.
+    """
+    for attempt in range(1, SCT_RUNNER_SSH_ATTEMPTS + 1):
+        try:
+            # One connect attempt: no retries and no reconnect inside the remoter
+            remoter.run("true", timeout=200, verbose=False, retry=0, new_session=True)
+            return
+        except Exception as exc:
+            # The remoter wraps the SSH error: RetryableNetworkException -> FailedToRunCommand -> SSH error
+            cause = getattr(exc, "original", exc)
+            cause = getattr(cause, "exception", cause)
+            login_failed = isinstance(cause, (SSH2AuthenticationError, AuthenticationException))
+            if not login_failed or attempt == SCT_RUNNER_SSH_ATTEMPTS:
+                raise RuntimeError(
+                    f"Unable to SSH to the SCT runner at {host}: {type(cause).__name__}: {cause}"
+                ) from exc
+            LOGGER.warning("SSH login to the SCT runner at %s failed, retrying in 30s: %s", host, cause)
+            time.sleep(30)
+
+
 @cli.command("create-runner-instance", help="Create an SCT runner instance in the selected cloud region")
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
@@ -3248,14 +3277,7 @@ def create_runner_instance(
         LOGGER.info("Verifying SSH connectivity...")
         runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
         remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
-
-        @retrying(n=3, sleep_time=30, message=f"Retrying SSH connection to {runner_public_ip}")
-        def verify_ssh():
-            assert remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok, (
-                f"Unable to SSH to the SCT runner at {runner_public_ip}"
-            )
-
-        verify_ssh()
+        _verify_runner_ssh(remoter=remoter, host=runner_public_ip)
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
