@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import random
+import threading
 from pathlib import Path
 
 from sdcm.paths import SCYLLA_YAML_PATH
@@ -83,7 +84,13 @@ class SstableUtils:
         self.log.debug("Got %s sstables %s", len(selected_sstables), message)
         return selected_sstables
 
-    def check_that_sstables_are_encrypted(self, sstables=None, expected_bool_value: bool = True) -> None:
+    def check_that_sstables_are_encrypted(
+        self, sstables=None, expected_bool_value: bool = True, stop_event: threading.Event | None = None
+    ) -> None:
+        """Check that the sstables are encrypted.
+
+        Once 'stop_event' is set, the check ends before the next sstable and gives no verdict.
+        """
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
@@ -95,7 +102,10 @@ class SstableUtils:
             raise SstablesNotFound(f"sstables for '{self.keyspace}.{self.table}' wasn't found")
 
         dump_cmd = get_sstable_metadata_dump_command(self.db_node, self.keyspace, self.table)
-        for sstable in sstables:
+        for checked_count, sstable in enumerate(sstables):
+            if stop_event and stop_event.is_set():
+                self.log.debug("Stopped the encryption check after %s of %s sstables", checked_count, len(sstables))
+                return
             sstables_res = self.db_node.remoter.sudo(f"{dump_cmd} {sstable}", ignore_status=True, verbose=True)
 
             self.log.debug("sstables_res.stdout: %s", sstables_res.stdout)

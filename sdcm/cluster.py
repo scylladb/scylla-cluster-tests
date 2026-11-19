@@ -5029,6 +5029,8 @@ class BaseScyllaCluster:
         self.nemesis = []
         self.nemesis_threads = []
         self.nemesis_count = 0
+        self.kms_key_rotation_stop_event = threading.Event()
+        self.kms_key_rotation_threads = []
         self.test_config = TestConfig()
         self._node_cycle = None
         self.vector_store_cluster = None
@@ -5667,8 +5669,7 @@ class BaseScyllaCluster:
 
         @raise_event_on_failure
         def _rotate_kms_key(kms_key_alias_name, kms_key_rotation_interval, db_cluster):
-            while True:
-                time.sleep(kms_key_rotation_interval * 60)
+            while not self.kms_key_rotation_stop_event.wait(kms_key_rotation_interval * 60):
                 try:
                     aws_kms.rotate_kms_key(kms_key_alias_name=kms_key_alias_name)
                 except Exception:  # noqa: BLE001
@@ -5676,6 +5677,9 @@ class BaseScyllaCluster:
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc(),
                     ).publish()
+                # Teardown may have asked to stop during the rotation: don't start a check of the nodes then
+                if self.kms_key_rotation_stop_event.is_set():
+                    break
                 try:
                     ready_nodes = [node for node in db_cluster.data_nodes if node.remoter and node.db_up()]
                     if not ready_nodes:
@@ -5688,7 +5692,10 @@ class BaseScyllaCluster:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
                         chosen_ks_cf = db_cluster.get_ks_cf_with_most_sstables(db_node=target_node)
-                        SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted()
+                        # One SSH call per sstable makes a check run for minutes: teardown stops it between sstables
+                        SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted(
+                            stop_event=self.kms_key_rotation_stop_event
+                        )
                 except SstablesNotFound as exc:
                     self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
                 except IndexError:
@@ -5715,6 +5722,7 @@ class BaseScyllaCluster:
             daemon=True,
         )
         kms_key_rotation_thread.start()
+        self.kms_key_rotation_threads.append(kms_key_rotation_thread)
         return None
 
     def start_azure_kms_key_rotation_thread(self) -> None:
@@ -5729,8 +5737,7 @@ class BaseScyllaCluster:
         def _rotate():
             azure_service = AzureService()
 
-            while True:
-                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
+            while not self.kms_key_rotation_stop_event.wait(self.params.get("kms_key_rotation_interval") * 60):
                 try:
                     key_uri = AzureKmsProvider.get_key_uri_for_test(region, test_id)
                     rotated_key_id = azure_service.rotate_vault_key(key_uri)
@@ -5738,7 +5745,9 @@ class BaseScyllaCluster:
                 except AzureResourceNotFoundError as e:
                     self.log.error(f"Azure KMS key not found for rotation: {e}")
 
-        threading.Thread(target=_rotate, daemon=True, name="AzureKmsRotationThread").start()
+        rotation_thread = threading.Thread(target=_rotate, daemon=True, name="AzureKmsRotationThread")
+        rotation_thread.start()
+        self.kms_key_rotation_threads.append(rotation_thread)
         self.log.info("Started Azure KMS rotation thread for test: %s", test_id)
         return None
 
@@ -5758,17 +5767,30 @@ class BaseScyllaCluster:
             location = gcp_kms_config["keyring_location"]
             key_name = GcpKmsProvider.get_key_name_for_test(test_id)
             gcp_kms = GcpKms(project_id, location, key_name)
-            while True:
-                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
+            while not self.kms_key_rotation_stop_event.wait(self.params.get("kms_key_rotation_interval") * 60):
                 try:
                     gcp_kms.rotate_key()
                     self.log.info("GCP KMS key rotated")
                 except GoogleCloudError:
                     self.log.error("Failed to rotate GCP KMS key")
 
-        threading.Thread(target=_rotate, daemon=True, name="GcpKmsRotationThread").start()
+        rotation_thread = threading.Thread(target=_rotate, daemon=True, name="GcpKmsRotationThread")
+        rotation_thread.start()
+        self.kms_key_rotation_threads.append(rotation_thread)
         self.log.info("Started GCP KMS rotation thread for test: %s", test_id)
         return None
+
+    def stop_kms_key_rotation_threads(self, timeout: float = 120) -> None:
+        """End the KMS key rotation loops of all backends.
+
+        Teardown calls it, so the keys stop rotating and the nodes stop being checked while the logs are
+        collected and the cluster is destroyed or kept.
+        """
+        self.kms_key_rotation_stop_event.set()
+        for rotation_thread in self.kms_key_rotation_threads:
+            rotation_thread.join(timeout)
+            if rotation_thread.is_alive():
+                self.log.warning("%s is still running %ss after the stop request", rotation_thread.name, timeout)
 
     def scylla_configure_non_root_installation(self, node, devname):
         node.stop_scylla_server(verify_down=False)
