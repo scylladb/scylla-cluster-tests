@@ -3845,6 +3845,10 @@ class ClusterTester(unittest.TestCase):
         cluster.stop_nemesis(timeout=1800)
 
     @silence()
+    def stop_kms_key_rotation_threads(self, cluster):
+        cluster.stop_kms_key_rotation_threads()
+
+    @silence()
     def stop_resources_stop_tasks_threads(self, cluster):
         # TODO: this should be run in parallel
         for node in cluster.nodes:
@@ -4137,6 +4141,8 @@ class ClusterTester(unittest.TestCase):
         # diagnostic commands (gather_failure_statistics, validators) hang indefinitely.
         if self.db_cluster:
             self.stop_nemesis(self.db_cluster)
+            # Right after the nemeses: the AWS loop takes nodes from the nemesis allocator to check them over SSH
+            self.stop_kms_key_rotation_threads(self.db_cluster)
         with silence(parent=self, name="Enabling teardown filters"):
             enable_teardown_filters()
         with silence(parent=self, name="Sending test end event"):
