@@ -1,76 +1,58 @@
-# Nemesis exclusions for vnode-to-tablet migration tests.
+# Nemeses allowed during vnode-to-tablet migration tests, MS3 scope.
+# MS3: https://scylladb.atlassian.net/browse/SCYLLADB-2455
+# MS4: https://scylladb.atlassian.net/browse/SCYLLADB-775
+# Doc (Limitations and Prerequisites): https://github.com/scylladb/scylladb/blob/master/docs/operating-scylla/procedures/config-change/migrate-vnodes-to-tablets.rst
 #
-# These nemeses are excluded because they violate limitations of the
-# migrate-to-tablets procedure, as documented at:
-# https://github.com/scylladb/scylladb/blob/master/docs/operating-scylla/procedures/config-change/migrate-vnodes-to-tablets.rst
-#
-# Limitation: "No schema changes" — do not create, alter, or drop tables in migrating keyspace
-# Limitation: "No topology changes" — do not add, remove, decommission, or replace nodes
-# Limitation: "No TRUNCATE" on tables in migrating keyspace
-# Limitation: Only CQL base tables — no MV, secondary indexes, CDC, or Alternator tables
-# Limitation: Rebuild and repair do not work properly during the migration
-# Limitation: Backup and restore support during migration is not verified
+# Only the nemeses listed below run. Not allowed during the migration yet:
+# - add, remove, decommission or rebuild a node (doc), bootstrap: https://scylladb.atlassian.net/browse/SCYLLADB-2457
+# - repair (doc): https://scylladb.atlassian.net/browse/SCYLLADB-4498
+# - snapshot, backup and restore (doc): https://scylladb.atlassian.net/browse/SCYLLADB-4341
+#   Scrub takes a pre-scrub snapshot, so the scrub nemeses are not listed either.
+# - DROP TABLE and TRUNCATE (doc): https://scylladb.atlassian.net/browse/SCYLLADB-1098
+# - creating or dropping views and indexes (doc)
+# - compaction strategy other than ICS (doc)
+# - tombstone_gc mode other than repair (doc)
+# - CDC (doc): https://scylladb.atlassian.net/browse/SCYLLADB-1166
+# - tablet options on migrating tables: https://scylladb.atlassian.net/browse/SCYLLADB-2608
+# - taking a node down: the migration keeps one node down while it reshards, so a second node
+#   down in another rack fails CL=QUORUM with RF=3 (doc: one node at a time).
+#   Node replace is supported (https://scylladb.atlassian.net/browse/SCYLLADB-1165) and has its own pipeline.
+#   MemoryStressMonkey pushes Scylla into swap and can freeze the node, so it counts as taking it down.
+# Nemeses that need a setup these tests do not have (SLA, LDAP, scylla-bench tables, TWCS)
+# would only skip, so they are not listed.
+# Add a nemesis to the list once its feature is supported.
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: >-
-  not AddDropColumnMonkey
-  and not ToggleTableIcsMonkey
-  and not ToggleGcModeMonkey
-  and not ToggleCDCMonkey
-  and not NoCorruptRepairMonkey
-  and not EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
-  and not EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
-  and not ToggleAuditNemesisSyslog
-  and not AddRemoveMvNemesis
-  and not ModifyTableCommentMonkey
-  and not ModifyTableGcGraceTimeMonkey
-  and not ModifyTableCachingMonkey
-  and not ModifyTableBloomFilterFpChanceMonkey
-  and not ModifyTableCompactionMonkey
-  and not ModifyTableCompressionMonkey
-  and not ModifyTableCrcCheckChanceMonkey
-  and not ModifyTableDclocalReadRepairChanceMonkey
-  and not ModifyTableDefaultTimeToLiveMonkey
-  and not ModifyTableMaxIndexIntervalMonkey
-  and not ModifyTableMinIndexIntervalMonkey
-  and not ModifyTableMemtableFlushPeriodInMsMonkey
-  and not ModifyTableReadRepairChanceMonkey
-  and not ModifyTableSpeculativeRetryMonkey
-  and not ModifyTableTwcsWindowSizeMonkey
-  and not DecommissionMonkey
-  and not DecommissionSeedNode
-  and not AbortDecommissionMonkey
-  and not TerminateAndRemoveNodeMonkey
-  and not NodeTerminateAndReplace
-  and not DecommissionStreamingErrMonkey
-  and not GrowShrinkClusterNemesis
-  and not AddRemoveRackNemesis
-  and not AddRemoveDcNemesis
-  and not BootstrapStreamingErrorNemesis
-  and not GrowShrinkZeroTokenNode
-  and not DrainKubernetesNodeThenReplaceScyllaNode
-  and not TerminateKubernetesHostThenReplaceScyllaNode
-  and not DrainKubernetesNodeThenDecommissionAndAddScyllaNode
-  and not TerminateKubernetesHostThenDecommissionAndAddScyllaNode
-  and not OperatorNodeReplace
-  and not IsolateNodeWithProcessSignalNemesis
-  and not IsolateNodeWithIptableRuleNemesis
-  and not TruncateMonkey
-  and not TruncateLargeParititionMonkey
-  and not ToggleAuditRulesNemesisSyslog
-  and not SplitMergeTabletsWithAlter
-  and not KillMVBuildingCoordinator
-  and not CreateIndexNemesis
-  and not CDCStressorMonkey
-  and not NodeRestartWithResharding
-  and not CorruptThenRebuildMonkey
-  and not CorruptThenRepairMonkey
-  and not MgmtRepair
-  and not MgmtCorruptThenRepair
-  and not RebuildStreamingErrMonkey
-  and not RepairStreamingErrMonkey
-  and not RestartThenRepairNodeMonkey
-  and not MgmtBackup
-  and not MgmtBackupSpecificKeyspaces
-  and not MgmtRestore
-  and not NemesisSequence
+nemesis_selector: |-
+  (
+  # Altering properties of existing tables (doc)
+  AddDropColumnMonkey
+  or ModifyTableBloomFilterFpChanceMonkey
+  or ModifyTableCachingMonkey
+  or ModifyTableCommentMonkey
+  or ModifyTableCompressionMonkey
+  or ModifyTableCrcCheckChanceMonkey
+  or ModifyTableDclocalReadRepairChanceMonkey
+  or ModifyTableDefaultTimeToLiveMonkey
+  or ModifyTableGcGraceTimeMonkey
+  or ModifyTableMaxIndexIntervalMonkey
+  or ModifyTableMemtableFlushPeriodInMsMonkey
+  or ModifyTableMinIndexIntervalMonkey
+  or ModifyTableReadRepairChanceMonkey
+  or ModifyTableSpeculativeRetryMonkey
+  # Data operations
+  or LoadAndStreamMonkey
+  or RefreshBigMonkey
+  or RefreshMonkey
+  # Compaction and cleanup
+  or MajorCompactionMonkey
+  or NodeToolCleanupMonkey
+  or StartStopCleanupCompaction
+  or StartStopMajorCompaction
+  or StartStopValidationCompaction
+  # Other nemeses that keep every node up
+  or RejectNodeExporterNetworkMonkey
+  or RejectThriftNetworkMonkey
+  or SslHotReloadingNemesis
+  or TopPartitions
+  )
