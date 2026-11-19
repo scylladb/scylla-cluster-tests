@@ -178,8 +178,13 @@ class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
     Alternator is off unless the config sets its port: without alternator_port the tool waits for
     the port and then fails. The write isolation is `forbid`, as the tool's author runs the read
     and write workloads; `only_rmw_uses_lwt` is only meaningful for the write_rmw workload.
-    A failed request stops the tool with no result file (its --continue-after-error defaults to
-    false), so the test fails with nothing sent to Argus.
+
+    Only a tool that checks the HTTP status of each reply (scylladb/scylladb@36eadf9e40, in master
+    since 2026-10, not in 2026.2 - 2026.4) treats an error reply as a failed request. That stops
+    the tool with no result file (its --continue-after-error defaults to false), so the test fails
+    with nothing sent to Argus. An older tool counts an error reply as a successful, fast
+    operation, and nothing here catches it: on those releases a sudden drop in instructions_per_op
+    is the sign that the run measured error replies.
     """
 
     BENCHMARK = "perf-alternator"
