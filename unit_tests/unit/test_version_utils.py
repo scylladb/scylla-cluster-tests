@@ -246,11 +246,11 @@ class ClassWithVersiondMethods:
         return "any 4.3.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
-    def oss_method(self):
+    def oss_method(self):  # noqa: F811
         return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
 
     @scylla_versions(("4.6.rc1", None))
-    def oss_method(self):
+    def oss_method(self):  # noqa: F811
         return "4.6.rc1 and higher"
 
     @scylla_versions((None, "2019.1"))
@@ -258,11 +258,11 @@ class ClassWithVersiondMethods:
         return "any 2019.1.x and lower"
 
     @scylla_versions(("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
-    def es_method(self):
+    def es_method(self):  # noqa: F811
         return "all 2020.1 and 2021.1 except 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("2022.1.rc1", None))
-    def es_method(self):
+    def es_method(self):  # noqa: F811
         return "2022.1.rc1 and higher"
 
     @scylla_versions((None, "4.3"), (None, "2019.1"))
@@ -270,11 +270,11 @@ class ClassWithVersiondMethods:
         return "any 4.3.x and lower, any 2019.1.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"), ("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
-    def mixed_method(self):
+    def mixed_method(self):  # noqa: F811
         return "all 4.4, 4.5, 2020.1 and 2021.1 except 4.4.rc2, 4.4.rc3, 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
-    def mixed_method(self):
+    def mixed_method(self):  # noqa: F811
         return "4.6.rc1 and higher, 2022.1.rc1 and higher"
 
     @scylla_versions(("4.6.rc1", None))
