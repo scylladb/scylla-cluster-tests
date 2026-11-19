@@ -209,6 +209,11 @@ def call(Map pipelineParams) {
                 }
             }
             stage('BYO Scylladb [optional]') {
+                // skip before allocating a builder: each stage agent is a fresh one
+                when {
+                    beforeAgent true
+                    expression { params.byo_scylla_repo && params.byo_scylla_branch }
+                }
                 agent {
                     label {
                         label builder.label
@@ -219,6 +224,9 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
+                                    // a stage agent is a fresh builder, so it has no checkout yet
+                                    checkout scm
+                                    dockerLogin(params)
                                     timeout(time: 240, unit: 'MINUTES') {
                                         byoScylladb(params, false)
                                     }
