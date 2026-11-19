@@ -13,7 +13,7 @@
 
 """AzureNode network interface introspection."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -330,3 +330,14 @@ def test_private_dns_name_without_a_ptr_record_raises_when_dns_names_are_on(node
     node_without_ptr.use_dns_names = True
     with pytest.raises(ValueError, match="Unable to resolve IP"):
         _ = node_without_ptr.private_dns_name
+
+
+@pytest.mark.parametrize("logs_transport,checked", [("vector", True), ("syslog-ng", False)])
+def test_azure_node_checks_vector_only_for_the_vector_transport(logs_transport, checked):
+    node = AzureNode.__new__(AzureNode)
+    node.parent_cluster = Mock(params={"logs_transport": logs_transport})
+
+    with patch.object(AzureNode, "_ensure_vector_is_active") as ensure:
+        node.configure_remote_logging()
+
+    assert ensure.called is checked
