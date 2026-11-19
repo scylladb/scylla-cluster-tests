@@ -502,18 +502,20 @@ def _report_provision_error_to_argus(
     params: "SCTConfiguration | None",
     test_config: object | None,
     backend: str,
+    what: str = "resources",
+    test_id: str | None = None,
 ) -> None:
     """Report a provisioning error to Argus.
 
     Handles scenarios where params or test_config may not be available yet
     (e.g., when init_and_verify_sct_config() itself fails).
+    `what` names the thing that failed to provision, e.g. "resources" or "SCT runner".
     """
     if test_config is None:
         test_config = get_test_config()
 
-    # Determine test_id: prefer params, fall back to environment variable
-    test_id = None
-    if params:
+    # Determine test_id: prefer the caller's, then params, then the environment variable
+    if (not test_id or test_id == "None") and params:
         test_id = params.get("test_id")
     if not test_id or test_id == "None":
         test_id = os.environ.get("SCT_TEST_ID")
@@ -543,7 +545,7 @@ def _report_provision_error_to_argus(
 
     # Create and submit error event to Argus
     error_message = (
-        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} {what}: {type(exc).__name__}: {exc}"
     )
     event_payload: RawEventPayload = {
         "run_id": str(test_id),
@@ -3211,43 +3213,50 @@ def create_runner_instance(
     sct_runner_ip_path.unlink(missing_ok=True)
 
     os.environ.setdefault("SCT_CLUSTER_BACKEND", cloud_provider)
-    sct_config = SCTConfiguration()
-    sct_runner = get_sct_runner(
-        cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone, params=sct_config
-    )
-
-    instance_type = instance_type or sct_config.get("instance_type_runner")
-    root_disk_size_gb = root_disk_size_gb or sct_config.get("root_disk_size_runner")
-    test_name = test_name or test_id
-
-    instance = sct_runner.create_instance(
-        instance_type=instance_type,
-        root_disk_size_gb=root_disk_size_gb,
-        test_id=test_id,
-        test_name=test_name,
-        test_duration=duration,
-        restore_monitor=restore_monitor,
-        restored_test_id=restored_test_id,
-        address_pool=address_pool,
-    )
-    if not instance:
-        sys.exit(1)
-
-    LOGGER.info("Verifying SSH connectivity...")
-    runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
-    remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
-
-    @retrying(n=3, sleep_time=30, message=f"Retrying SSH connection to {runner_public_ip}")
-    def verify_ssh():
-        assert remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok
-
+    sct_config = None
     try:
+        sct_config = SCTConfiguration()
+        sct_runner = get_sct_runner(
+            cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone, params=sct_config
+        )
+
+        instance_type = instance_type or sct_config.get("instance_type_runner")
+        root_disk_size_gb = root_disk_size_gb or sct_config.get("root_disk_size_runner")
+        test_name = test_name or test_id
+
+        instance = sct_runner.create_instance(
+            instance_type=instance_type,
+            root_disk_size_gb=root_disk_size_gb,
+            test_id=test_id,
+            test_name=test_name,
+            test_duration=duration,
+            restore_monitor=restore_monitor,
+            restored_test_id=restored_test_id,
+            address_pool=address_pool,
+        )
+        if not instance:
+            raise RuntimeError(f"SCT runner image was not found in {region}")
+
+        LOGGER.info("Verifying SSH connectivity...")
+        runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
+        remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
+
+        @retrying(n=3, sleep_time=30, message=f"Retrying SSH connection to {runner_public_ip}")
+        def verify_ssh():
+            assert remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok, (
+                f"Unable to SSH to the SCT runner at {runner_public_ip}"
+            )
+
         verify_ssh()
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
-    except Exception:  # noqa: BLE001
-        LOGGER.error("Unable to SSH to %s! Exiting...", runner_public_ip)
+    except Exception as exc:
+        LOGGER.error("Unable to create the SCT runner - aborting the test...", exc_info=True)
+        # The test's events device does not exist yet, so without this the run fails in Argus with no events.
+        _report_provision_error_to_argus(
+            exc, params=sct_config, test_config=None, backend=cloud_provider, what="SCT runner", test_id=test_id
+        )
         sys.exit(1)
 
 
