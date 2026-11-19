@@ -31,3 +31,5 @@ nemesis_interval: 1
 user_prefix: 'PR-provision-docker'
 
 use_mgmt: false
+
+max_events_severities: ["DatabaseLogEvent.OVERSIZED_ALLOCATION=WARNING"]

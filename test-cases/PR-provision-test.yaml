@@ -66,3 +66,5 @@ user_prefix: 'PR-provision-test'
 instance_provision: 'spot'
 
 use_preinstalled_scylla: true
+
+max_events_severities: ["DatabaseLogEvent.OVERSIZED_ALLOCATION=WARNING"]
