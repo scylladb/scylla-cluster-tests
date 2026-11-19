@@ -313,6 +313,15 @@ class CassandraStressThread(DockerBasedStressThread):
 
         return stress_cmd
 
+    @staticmethod
+    def _docker_memory_opts(mem_total_kib: int, percent: int) -> str:
+        """Build the docker options that limit the memory of the container to `percent` of the loader memory.
+
+        `--memory-swap` is equal to `--memory`, so the container cannot use swap above the limit.
+        """
+        limit_kib = mem_total_kib * percent // 100
+        return f" --memory={limit_kib}k --memory-swap={limit_kib}k"
+
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
@@ -347,11 +356,20 @@ class CassandraStressThread(DockerBasedStressThread):
             cmd_runner_name = loader.ip_address
 
             cpu_options = ""
+            memory_options = ""
+            if memory_limit_percent := self.params.get("cs_docker_memory_limit_percent"):
+                mem_total_kib = int(
+                    loader.remoter.run(
+                        "awk '/^MemTotal:/ { print $2 }' /proc/meminfo", ignore_status=False, verbose=False
+                    ).stdout.strip()
+                )
+                memory_options = self._docker_memory_opts(mem_total_kib, memory_limit_percent)
+                LOGGER.info("Limiting cassandra-stress container memory on %s:%s", loader.name, memory_options)
             cmd_runner = cleanup_context = RemoteDocker(
                 loader,
                 self.docker_image_name,
                 command_line="-c 'tail -f /dev/null'",
-                extra_docker_opts=f"{cpu_options} "
+                extra_docker_opts=f"{cpu_options}{memory_options} "
                 "--network=host "
                 "--security-opt seccomp=unconfined "
                 f"--label shell_marker={self.shell_marker}"

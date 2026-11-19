@@ -2070,6 +2070,15 @@ class SCTConfiguration(dict):
         dict(name="cs_duration", env="SCT_CS_DURATION", type=str, help=""),
         dict(name="cs_debug", env="SCT_CS_DEBUG", type=boolean, help="enable debug for cassandra-stress"),
         dict(
+            name="cs_docker_memory_limit_percent",
+            env="SCT_CS_DOCKER_MEMORY_LIMIT_PERCENT",
+            type=int,
+            help="Memory limit of each cassandra-stress container, in percent of the loader memory. "
+            "Use it when cassandra-stress shares a loader with another tool, such as gemini. "
+            "Each cassandra-stress command runs in its own container with this limit. "
+            "Use a value from 1 to 100. Empty means no limit. Not supported for k8s backends and prepared loaders.",
+        ),
+        dict(
             name="stress_cmd_mv",
             env="SCT_STRESS_CMD_MV",
             type=str_or_list,

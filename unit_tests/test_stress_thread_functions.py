@@ -13,7 +13,7 @@
 
 import pytest
 
-from sdcm.stress_thread import get_timeout_from_stress_cmd
+from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.utils.common import time_period_str_to_seconds
 
 
@@ -59,3 +59,15 @@ def test_duration_str_to_seconds_function(duration, seconds):
 )
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
+
+
+@pytest.mark.parametrize(
+    "mem_total_kib,percent,expected",
+    (
+        (8_000_000, 25, " --memory=2000000k --memory-swap=2000000k"),
+        (8_000_003, 25, " --memory=2000000k --memory-swap=2000000k"),
+        (16_000_000, 100, " --memory=16000000k --memory-swap=16000000k"),
+    ),
+)
+def test_docker_memory_opts(mem_total_kib, percent, expected):
+    assert CassandraStressThread._docker_memory_opts(mem_total_kib, percent) == expected
