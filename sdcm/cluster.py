@@ -203,8 +203,8 @@ from sdcm.utils.grafana_api import (
     upload_dashboard,
 )
 from sdcm.utils.health_checker import (
+    CHECK_NODE_HEALTH_MAX_RETRY_DELAY,
     CHECK_NODE_HEALTH_RETRIES,
-    CHECK_NODE_HEALTH_RETRY_DELAY,
     check_group0_tokenring_consistency,
     check_node_status_in_gossip_and_nodetool_status,
     check_nodes_status,
@@ -222,6 +222,7 @@ from sdcm.utils.ldap import (
     LDAP_USERS,
 )
 from sdcm.utils.minicloud.endpoint import MINICLOUD_GUEST_CA_URL, is_minicloud_active
+from sdcm.utils.minicloud.io_properties import override_content
 from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
@@ -243,7 +244,7 @@ from sdcm.utils.version_utils import (
     get_systemd_version,
     is_enterprise,
 )
-from sdcm.wait import wait_for_log_lines
+from sdcm.wait import exponential_backoff_delay, wait_for_log_lines
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -713,6 +714,19 @@ class BaseNode(AutoSshContainerMixin):
                     self._node_rack = str(self.rack)
             LOGGER.debug("Node rack name: %s", self._node_rack)
         return self._node_rack
+
+    def cache_dc_and_rack_names(self, dc_name: str | None, rack_name: str | None) -> None:
+        """Keep the names that `nodetool status` of another node reported for this node.
+
+        `datacenter` and `node_rack` return a kept name without running `nodetool status` on this node.
+        A name that the node already has is not replaced.
+
+        Args:
+            dc_name: the datacenter name of this node, or None when it is not known.
+            rack_name: the rack name of this node, or None when it is not known.
+        """
+        self._datacenter_name = self._datacenter_name or dc_name
+        self._node_rack = self._node_rack or rack_name
 
     @property
     def network_interfaces(self):
@@ -4126,12 +4140,13 @@ class BaseNode(AutoSshContainerMixin):
 
             event.dont_publish()
 
+            delay = exponential_backoff_delay(retry_n, CHECK_NODE_HEALTH_MAX_RETRY_DELAY)
             LOGGER.debug(
                 "Wait for %d secs before next try to validate the health of the node `%s'",
-                CHECK_NODE_HEALTH_RETRY_DELAY,
+                delay,
                 self.name,
             )
-            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+            time.sleep(delay)
 
     def get_nodes_status(self, nodes: list[BaseNode] | None = None) -> dict[BaseNode, dict]:
         nodes_status = {}
@@ -6010,6 +6025,15 @@ def _drain_queued_failures(task_queue: queue.Queue) -> list[tuple]:
             failures.append((node, exception_details))
 
 
+def _report_dc_and_rack_to_argus(node: BaseNode) -> None:
+    """Report the datacenter and the rack name of `node` to Argus. A failure is logged and not raised."""
+    try:
+        node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Failure setting dc/rack information for %s in Argus.", node)
+        LOGGER.debug("Exception details:\n", exc_info=True)
+
+
 def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
@@ -6147,12 +6171,17 @@ def wait_for_init_wrap(method):
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
                 cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
-            for node in node_list:
                 try:
-                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+                    cl_inst.read_dc_and_rack_names(nodes=node_list, verification_node=node_list[0])
                 except Exception:  # noqa: BLE001
-                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
+                    LOGGER.warning("Failure reading dc/rack names from nodetool status of %s.", node_list[0])
                     LOGGER.debug("Exception details:\n", exc_info=True)
+                cl_inst.run_func_parallel(func=_report_dc_and_rack_to_argus, node_list=node_list)
+            else:
+                # A node of another cluster type takes its rack name from the tester, which asks the DB cluster
+                # on every call, so these nodes are not asked all at once.
+                for node in node_list:
+                    _report_dc_and_rack_to_argus(node)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug("TestConfig duration -> %s s", int(time_elapsed))
@@ -6495,9 +6524,11 @@ class BaseScyllaCluster:
         self.log.info("Update DB packages duration -> %s s", int(time_elapsed))
 
     def update_seed_provider(self):
-        for node in self.nodes:
+        def _update_node_seed_provider(node):
             with node.remote_scylla_yaml() as scylla_yml:
                 scylla_yml.seed_provider = node.proposed_scylla_yaml.seed_provider
+
+        self.run_func_parallel(func=_update_node_seed_provider)
 
     def update_db_binary(self, node_list=None, start_service=True):
         if node_list is None:
@@ -6656,6 +6687,23 @@ class BaseScyllaCluster:
             return node_status
         status = self.get_nodetool_status(verification_node=verification_node, dc_aware=False)
         return status.get(ip_address, None)
+
+    def read_dc_and_rack_names(self, nodes: list[BaseNode], verification_node: BaseNode) -> None:
+        """Read the datacenter and the rack names of `nodes` from one `nodetool status` and keep them on the nodes.
+
+        A node that the status does not list keeps no name, and neither does any node when `verification_node`
+        cannot run Scylla commands. Such a node runs `nodetool status` on itself when it is asked for a name.
+
+        Args:
+            nodes: the nodes to keep the names on.
+            verification_node: the node that runs `nodetool status`.
+        """
+        if not verification_node._is_node_ready_run_scylla_commands():
+            return
+        status = verification_node.get_nodes_status(nodes=nodes)
+        for node in nodes:
+            node_status = status.get(node, {})
+            node.cache_dc_and_rack_names(dc_name=node_status.get("dc"), rack_name=node_status.get("rack"))
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
         @retrying(
@@ -6934,11 +6982,20 @@ class BaseScyllaCluster:
     def _deploy_scylla_d_overrides(self, node: BaseNode) -> None:
         for config_file_path in self.params.get("scylla_d_overrides_files"):
             config_file = Path(get_sct_root_path()) / config_file_path
+            text = config_file.read_text()
+            content = override_content(config_file, text, self.params)
+            if content != text:
+                self.log.info(
+                    "minicloud: %s for %s is the host figure scaled per db guest:\n%s",
+                    config_file.name,
+                    node.name,
+                    content,
+                )
             remote_path = f"/etc/scylla.d/{config_file.name}"
             node.remoter.sudo(f"sh -c 'test -e {remote_path} || install -m 0644 /dev/null {remote_path}'")
             with remote_file(remoter=node.remoter, remote_path=remote_path, sudo=True) as fobj:
                 fobj.truncate(0)  # first clear the file
-                fobj.write(config_file.read_text())
+                fobj.write(content)
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

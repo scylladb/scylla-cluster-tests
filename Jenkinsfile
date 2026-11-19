@@ -154,7 +154,7 @@ def runRestoreMonitoringStack(){
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v6-CI"
+            label "aws-sct-builders-eu-west-1-v7-CI"
         }
     }
     parameters {
@@ -171,6 +171,8 @@ pipeline {
     }
     options {
         timestamps()
+        // backstop: the stage timeouts add up to about 15 hours
+        timeout(time: 16, unit: 'HOURS')
         disableConcurrentBuilds(abortPrevious: true)
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }

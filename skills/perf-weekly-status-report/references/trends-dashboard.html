@@ -1,0 +1,685 @@
+<style>
+.pt { position: relative; display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+.pt-head { display: grid; gap: var(--cds-gap-xs); }
+.pt-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.pt-sub { color: var(--color-fg-muted); font-size: var(--cds-font-size-body); margin: 0; max-width: 72ch; }
+.pt-sub b, .pt-fetched b { font-weight: 500; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.pt-fetched { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.pt-fetched.pt-stale, .pt-fetched.pt-stale b { color: var(--color-bad); }
+/* Controls, category tabs and legend stay pinned while the charts scroll; below the expanded overlay (z 20). */
+.pt-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: grid; gap: var(--cds-gap-sm); background: var(--color-bg); padding-block: var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); }
+.pt-controls { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); align-items: center; justify-content: space-between; }
+.pt-group { display: flex; gap: var(--cds-gap-xs); flex-wrap: wrap; align-items: center; }
+.pt-tab { font: inherit; font-size: var(--cds-font-size-body); padding: var(--cds-pad-xs) var(--cds-pad-md); border-radius: var(--cds-radius); border: 1px solid var(--color-border-line); background: transparent; color: var(--color-fg-muted); cursor: pointer; }
+.pt-tab[aria-selected="true"], .pt-btn[aria-pressed="true"] { background: var(--color-panel); color: var(--color-fg); font-weight: 500; }
+.pt-tab:focus-visible, .pt-chip:focus-visible, .pt-btn:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.pt-btn { font: inherit; font-size: var(--cds-font-size-caption); padding: 2px var(--cds-pad-sm); border-radius: var(--cds-radius); border: 1px solid var(--color-border-line); background: transparent; color: var(--color-fg); cursor: pointer; }
+.pt-btn:hover { background: var(--color-bg); }
+.pt-icon { display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0; color: var(--color-fg-muted); }
+.pt-icon:hover { color: var(--color-fg); }
+.pt-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pt-date { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.pt-date input { font: inherit; color: var(--color-fg); background: transparent; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 1px var(--cds-pad-xs); }
+.pt-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); align-items: center; }
+.pt-chip { font: inherit; font-size: var(--cds-font-size-caption); display: inline-flex; align-items: center; gap: var(--cds-gap-xs); padding: 2px var(--cds-pad-sm); border-radius: 999px; border: 1px solid var(--color-border-line); background: transparent; color: var(--color-fg); cursor: pointer; }
+.pt-chip[aria-pressed="false"] { color: var(--color-fg-muted); opacity: .55; }
+.pt-sw { width: .75rem; height: 2px; border-radius: 1px; display: inline-block; }
+.pt-errkey { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.pt-errdot { width: .55rem; height: .55rem; border-radius: 50%; border: 2px solid var(--cds-chart-status-critical); display: inline-block; }
+.pt-week { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); overflow-x: auto; }
+.pt-week summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cds-gap-sm); }
+.pt-week summary:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+/* Headings use the strongest text color so they stand out from the muted chart chrome. */
+.pt-week h2, .pt-test h2 { font-size: var(--cds-font-size-heading); font-weight: 700; margin: 0; color: var(--cds-text-primary, var(--color-fg)); }
+.pt-week h2 { display: inline; }
+.pt-week table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.pt-week th { text-align: left; font-weight: 500; color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border-line); padding: var(--cds-pad-xs) var(--cds-pad-sm); }
+.pt-week td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.pt-week tr.pt-recent td { background: color-mix(in srgb, var(--color-warn) 14%, transparent); }
+.pt-new { margin-left: var(--cds-gap-xs); padding: 0 var(--cds-pad-xs); border-radius: 999px; border: 1px solid var(--color-warn); font-size: var(--cds-font-size-caption); }
+.pt-sort { font: inherit; font-weight: 500; color: var(--color-fg-muted); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+.pt-sort:hover { color: var(--color-fg); }
+.pt-sort:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.pt-scroll { max-height: 60vh; overflow: auto; }
+.pt-week th { position: sticky; top: 0; background: var(--color-panel); }
+.pt-week td.v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pt-st { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); }
+.pt-st::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--st); }
+.pt-test { display: grid; gap: var(--cds-gap-sm); border-bottom: 1px solid var(--color-border-line); padding-bottom: var(--cds-pad-md); }
+.pt-test > summary { cursor: pointer; display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--cds-gap-sm); }
+.pt-test > summary:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.pt-test h2 { display: inline; }
+.pt-test[open] > summary { margin-bottom: var(--cds-gap-sm); }
+.pt-wl { display: grid; gap: var(--cds-gap-sm); }
+/* Flex summaries drop the native disclosure marker, so draw the arrow ourselves. */
+.pt-test > summary, .pt-week > summary { list-style: none; }
+.pt-test > summary::-webkit-details-marker, .pt-week > summary::-webkit-details-marker { display: none; }
+.pt-test > summary::before, .pt-week > summary::before { content: "\25B8"; color: var(--cds-text-primary, var(--color-fg)); }
+.pt-test[open] > summary::before, .pt-week[open] > summary::before { content: "\25BE"; }
+.pt-wl > summary { cursor: pointer; }
+.pt-wl > summary:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.pt-wl h3 { display: inline; }
+.pt-wl[open] > summary { margin-bottom: var(--cds-gap-sm); }
+.pt-wl h3 { margin: 0; font-size: var(--cds-font-size-body); font-weight: 700; color: var(--cds-text-primary, var(--color-fg)); }
+.pt-test h2 span { color: var(--cds-text-primary, var(--color-fg)); font-weight: 500; font-size: var(--cds-font-size-caption); margin-left: var(--cds-gap-sm); }
+.pt-grid { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.pt-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); min-width: 0; }
+/* Expanded: the card grows in place to full width and most of the window height, is scrolled to,
+   and dims the rest of the page. In-flow on purpose: fixed positioning is not anchored to the
+   screen inside the dashboard frame. */
+.pt-card.pt-wide { grid-column: 1 / -1; position: relative; z-index: 15; box-shadow: 0 0 0 100vmax rgb(0 0 0 / .55); }
+.pt-card h3 { margin: 0; font-size: var(--cds-font-size-body); font-weight: 700; color: var(--cds-text-primary, var(--color-fg)); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; cursor: help; }
+[data-hint] { cursor: help; text-decoration: underline dotted var(--color-fg-muted); text-underline-offset: 3px; }
+.pt-hint { position: absolute; z-index: 30; pointer-events: none; max-width: min(40rem, calc(100vw - 32px)); white-space: pre-line; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-sm) var(--cds-pad-md); font-size: var(--cds-font-size-caption); line-height: 1.45; color: var(--cds-text-primary, var(--color-fg)); font-family: var(--font-anthropic-sans); }
+.pt-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); flex-wrap: wrap; }
+.pt-tools { display: flex; gap: var(--cds-gap-xs); }
+.pt-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.pt-plot { position: relative; min-height: 200px; }
+.pt-plot svg { display: block; overflow: visible; }
+.pt-plot .tick text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.pt-plot .domain { stroke: var(--cds-chart-axis); }
+.pt-fail { display: flex; align-items: center; justify-content: center; min-height: 200px; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.pt-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; z-index: 2; font-variant-numeric: tabular-nums; }
+.pt-tip .row { display: flex; align-items: center; gap: var(--cds-gap-xs); }
+.pt-tip .v { font-weight: 500; color: var(--color-fg); }
+.pt-tip .big { font-size: var(--cds-font-size-body); font-weight: 500; color: var(--color-fg); }
+.pt-tip .d { color: var(--cds-text-secondary); }
+.pt-tip .st { color: var(--color-bad); }
+.pt-tip .iss { color: var(--color-fg); max-width: 22rem; overflow: hidden; text-overflow: ellipsis; }
+.pt-pin { pointer-events: auto; white-space: normal; max-width: min(26rem, 100%); display: grid; gap: var(--cds-gap-xs); }
+.pt-pin a { color: var(--color-fg); }
+.pt-pin .pt-close { justify-self: end; }
+.pt-links { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-sm); }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="pt">
+  <header class="pt-head">
+    <h1 class="pt-title">Perf weekly trends</h1>
+    <p class="pt-fetched" id="pt-fetched">Data fetched from Argus <b data-source="summary" data-row="0" data-field="fetched_at" class="dash-skeleton">—</b> <span id="pt-age"></span></p>
+    <p class="pt-sub"><b data-source="summary" data-row="0" data-field="runs" class="dash-skeleton">—</b> runs of the perf weekly report tests, <b data-source="summary" data-row="0" data-field="from" class="dash-skeleton">—</b> to <b data-source="summary" data-row="0" data-field="to" class="dash-skeleton">—</b>. One line per branch: <code>~dev</code> builds are master, releases and rc builds sit on their <code>X.Y</code> branch line. Lower is better, except Throughput.</p>
+  </header>
+
+  <details class="pt-week" id="pt-week" data-source="runs"></details>
+
+  <div class="pt-bar">
+    <div class="pt-controls">
+      <div class="pt-group" role="group" aria-label="Build type" id="pt-views">
+        <button class="pt-btn" id="all" data-view="all">Master + Release</button>
+        <button class="pt-btn" id="master" data-view="master">Master (~dev)</button>
+        <button class="pt-btn" id="release" data-view="release">Release</button>
+      </div>
+      <div class="pt-group" role="group" aria-label="Time range" id="pt-ranges">
+        <button class="pt-btn" data-months="1">1 month</button>
+        <button class="pt-btn" data-months="3">3 months</button>
+        <button class="pt-btn" data-months="6">6 months</button>
+        <label class="pt-date">From <input type="date" id="pt-from"></label>
+        <label class="pt-date">To <input type="date" id="pt-to"></label>
+      </div>
+      <div class="pt-group" role="group" aria-label="Y axis" id="pt-yaxis">
+        <button class="pt-btn" data-y="clip" title="Fit the axis to the typical values; outliers sit on the edge as triangles">Clip outliers</button>
+        <button class="pt-btn" data-y="full">Full range</button>
+        <button class="pt-btn" data-y="log">Log scale</button>
+      </div>
+    </div>
+    <div class="pt-group" role="tablist" aria-label="Category" id="pt-cats"></div>
+    <div class="pt-legend" id="pt-legend" data-source="runs"></div>
+  </div>
+  <div class="pt" id="pt-body" data-source="runs"></div>
+</div>
+
+<script>
+const fmtDay = d3.utcFormat('%d/%m/%Y');
+const fmtStamp = d3.utcFormat('%d/%m/%Y %H:%M UTC');
+const fmtAxis = d3.utcFormat('%b');
+const fmtShort = d3.utcFormat('%d/%m');
+const iso = d3.utcFormat('%Y-%m-%d');
+const num = (v) => v === '' || v == null ? NaN : Number(v);
+// What each metric means, shown when hovering a chart title.
+const METRIC_HELP = (m) => m.startsWith('P99') ? `99th percentile ${m.slice(4)} latency in ms (the worst cycle when the step ran several)`
+  : m === 'Throughput' ? 'Operations per second at the unthrottled step, summed over read and write'
+  : m === 'Duration' ? 'How long the operation took, in minutes (mean of its cycles)'
+  : m === 'allocs_per_op' ? 'Memory allocations per operation'
+  : m === 'cpu_cycles_per_op' ? 'CPU cycles per operation'
+  : m === 'instructions_per_op' ? 'CPU instructions per operation' : m;
+const METRIC_ORDER = (m) => m.startsWith('P99') ? 0 : m === 'Duration' ? 2 : 1;
+const fmtOf = (m) => m === 'Duration' ? { fmt: (v) => `${d3.format(',.1f')(v / 60)} min`, tick: (v) => d3.format(',.1~f')(v / 60) }
+  : m.startsWith('P99') ? { fmt: (v) => `${d3.format(',.2f')(v)} ms`, tick: d3.format(',.3~f') }
+  : m === 'allocs_per_op' ? { fmt: d3.format(',.2f'), tick: d3.format(',.1f') }
+  : { fmt: d3.format(',.0f'), tick: d3.format('~s') };
+const STATUS = { passed: 'var(--cds-chart-status-good)', failed: 'var(--cds-chart-status-critical)', test_error: 'var(--cds-chart-status-serious)', error: 'var(--cds-chart-status-serious)', aborted: 'var(--cds-chart-muted)' };
+
+dash.calc('summary', {
+  inputs: ['runs'],
+  title: 'Run count and date span',
+  description: 'Distinct runs, first and last run date, and when the data was fetched.',
+  fn: (rows) => {
+    const days = rows.map(r => r.date.slice(0, 10)).sort();
+    return [{ runs: new Set(rows.map(r => r.run_id)).size, from: days[0], to: days[days.length - 1], fetched_at: rows[0] ? rows[0].fetched_at : '' }];
+  },
+});
+
+const named = location.hash.slice(1);
+const state = { view: ['master', 'release'].includes(named) ? named : 'all', weekOpen: false, weekSort: [5, 'desc'], closedWl: new Set(), open: new Set(), seenCats: new Set(), yMode: 'clip', cat: null, months: 6, from: null, to: null, hidden: new Set(), zoom: new Map(), expanded: new Set() };
+let BRANCHES = ['master'];
+const colorOf = (b) => { const i = BRANCHES.indexOf(b); return i >= 0 && i < dash.colors.length ? dash.colors[i] : 'var(--cds-chart-muted)'; };
+const branchOrder = (a, b) => d3.descending(...[a, b].map(v => v.split('.').reduce((n, p) => n * 1000 + Number(p), 0)));
+const ARGUS_ISSUE = 'https://argus.scylladb.com/issues/';
+const parseIssues = (v) => { try { return v ? JSON.parse(v) : []; } catch { return []; } };
+const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = text; return a; };
+// One issue: its key opens the Argus issue page (every run linked to it), with the Jira ticket beside it.
+const issueLinks = (i) => { const s = document.createElement('span'); s.className = 'pt-links'; s.append(link(ARGUS_ISSUE + encodeURIComponent(i.key), i.key), link(i.url, 'Jira')); return s; };
+// The run's own links: its Jenkins build and its Argus page.
+const runLinks = (r) => { const s = document.createElement('span'); s.className = 'pt-links'; if (r.job_url) s.append(link(r.job_url, `Jenkins #${r.build}`)); s.append(link(r.argus_url, 'Argus run')); return s; };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+document.getElementById('pt-views').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-view]');
+  if (!t) return;
+  state.view = t.dataset.view;
+  state.zoom.clear();
+  dash.setLink(t.id);
+  draw();
+});
+document.getElementById('pt-yaxis').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-y]');
+  if (!t) return;
+  state.yMode = t.dataset.y;
+  draw();
+});
+document.getElementById('pt-week').addEventListener('toggle', (e) => { state.weekOpen = e.target.open; });
+document.getElementById('pt-cats').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-cat]');
+  if (!t) return;
+  state.cat = t.dataset.cat;
+  draw();
+});
+document.getElementById('pt-ranges').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-months]');
+  if (!t) return;
+  state.months = Number(t.dataset.months);
+  state.from = state.to = null;
+  state.zoom.clear();
+  draw();
+});
+for (const id of ['pt-from', 'pt-to']) {
+  document.getElementById(id).addEventListener('change', () => {
+    const to = document.getElementById('pt-to').valueAsDate;
+    state.from = document.getElementById('pt-from').valueAsDate;
+    state.to = to && d3.utcDay.offset(to, 1);
+    state.months = null;
+    state.zoom.clear();
+    draw();
+  });
+}
+
+// Sortable runs table: every run in the selected range, newest first by default, last 7 days highlighted.
+const WEEK_COLS = [
+  ['Category', r => r.category], ['Test', r => r.test], ['Workload', r => r.workloads], ['Branch', r => r.branch],
+  ['Scylla version', r => r.scylla_version], ['Date', r => r._d], ['Status', r => r.run_status],
+  ['Flagged cells', r => r.bad], ['Issues', r => r.issues.length], ['Run', null],
+];
+function drawWeek(rows, fetched, start, stop) {
+  const box = document.getElementById('pt-week');
+  box.replaceChildren();
+  box.open = state.weekOpen;
+  const since = d3.utcDay.offset(fetched, -7);
+  const [col, dir] = state.weekSort;
+  const runs = [...d3.group(rows.filter(r => r._d >= start && r._d <= stop), r => r.run_id).values()]
+    .map(g => ({ ...g[0], workloads: [...new Set(g.map(r => r.workload).filter(Boolean))].join(', ') || '-', bad: g.filter(r => r.cell_status === 'ERROR' || r.cell_status === 'FAIL').length }))
+    .sort((a, b) => (dir === 'asc' ? d3.ascending : d3.descending)(WEEK_COLS[col][1](a), WEEK_COLS[col][1](b)) || d3.descending(a._d, b._d));
+  const recent = runs.filter(r => r._d >= since);
+  const counts = d3.rollup(recent, v => v.length, r => r.run_status);
+  const sum = el('summary');
+  sum.append(el('h2', null, `Runs: ${fmtDay(start)} to ${fmtDay(stop)}`),
+    el('span', 'pt-note', `${runs.length} runs · this week (${fmtDay(since)} to ${fmtDay(fetched)}): ${recent.length ? [...counts].map(([s, n]) => `${n} ${s}`).join(' · ') : 'none'}`));
+  box.append(sum);
+  if (!runs.length) return;
+  const t = el('table');
+  const head = el('tr');
+  WEEK_COLS.forEach(([name, key], i) => {
+    const th = el('th');
+    if (!key) { th.textContent = name; head.append(th); return; }
+    const b = el('button', 'pt-sort', `${name}${i === col ? (dir === 'asc' ? ' ▲' : ' ▼') : ''}`);
+    th.setAttribute('aria-sort', i === col ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    b.addEventListener('click', () => { state.weekSort = [i, i === col && dir === 'desc' ? 'asc' : 'desc']; draw(); });
+    th.append(b);
+    head.append(th);
+  });
+  t.append(head);
+  for (const r of runs) {
+    const tr = el('tr');
+    const isNew = r._d >= since;
+    tr.classList.toggle('pt-recent', isNew);
+    const date = el('td', null, fmtDay(r._d));
+    if (isNew) date.append(el('span', 'pt-new', 'this week'));
+    tr.append(el('td', null, r.category), el('td', null, r.test), el('td', null, r.workloads), el('td', null, r.branch),
+      el('td', 'v', `${r.scylla_version}${r.build_type === 'master' && r.scylla_sha ? ` (${r.scylla_sha})` : ''}`), date);
+    const st = el('td');
+    const s = el('span', 'pt-st', r.run_status);
+    s.style.setProperty('--st', STATUS[r.run_status] || 'var(--cds-chart-muted)');
+    st.append(s);
+    const iss = el('td');
+    if (r.issues.length) for (const i of r.issues) iss.append(issueLinks(i));
+    else iss.textContent = '-';
+    const run = el('td');
+    run.append(runLinks(r));
+    tr.append(st, el('td', null, r.workloads === '-' ? 'no results' : r.bad ? String(r.bad) : '-'), iss, run);
+    t.append(tr);
+  }
+  const wrap = el('div', 'pt-scroll');
+  wrap.append(t);
+  box.append(wrap);
+}
+
+function drawLegend(rows) {
+  const box = document.getElementById('pt-legend');
+  box.replaceChildren();
+  for (const b of BRANCHES.filter(b => rows.some(r => r.branch === b))) {
+    const btn = el('button', 'pt-chip');
+    btn.setAttribute('aria-pressed', String(!state.hidden.has(b)));
+    const sw = el('span', 'pt-sw');
+    sw.style.background = colorOf(b);
+    btn.append(sw, document.createTextNode(b));
+    btn.addEventListener('click', () => { state.hidden.has(b) ? state.hidden.delete(b) : state.hidden.add(b); draw(); });
+    box.append(btn);
+  }
+  const key = el('span', 'pt-errkey');
+  key.append(el('span', 'pt-errdot'), document.createTextNode('Argus flagged ERROR or FAIL'));
+  box.append(key);
+}
+
+// `size` draws at a fixed size instead of the card's, for the copied image.
+function drawChart(box, rows, metric, key, size) {
+  box.replaceChildren();
+  const f = fmtOf(metric);
+  const wide = !!size || state.expanded.has(key);
+  const W = size ? size.W : Math.max(240, box.clientWidth), H = size ? size.H : wide ? Math.max(320, window.innerHeight - (document.querySelector('.pt-bar')?.offsetHeight || 0) - 130) : 200;
+  box.style.minHeight = `${H}px`;
+  const pts = rows.filter(r => !state.hidden.has(r.branch));
+  const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
+  if (!pts.length) {
+    svg.append('text').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').attr('fill', 'var(--color-fg-muted)')
+      .style('font-size', 'var(--cds-font-size-caption)').text('No runs in this range for the selected branches');
+    return;
+  }
+  // Fit the time axis to this series' own runs, so sparse tests are not squeezed into the full range.
+  const [t0, t1] = d3.extent(rows, r => +r._d);
+  const pad = Math.max((t1 - t0) * 0.03, 864e5);
+  const domain = state.zoom.get(key) || [new Date(t0 - pad), new Date(t1 + pad)];
+  const inView = pts.filter(r => r._d >= domain[0] && r._d <= domain[1]);
+  const yPts = inView.length ? inView : pts;
+  const vals = yPts.map(r => r.value).sort(d3.ascending);
+  let [y0, y1] = [vals[0], vals[vals.length - 1]];
+  // Clip mode fits the axis to the typical values (3x IQR fences), so one huge P99 does not flatten the rest.
+  if (state.yMode === 'clip' && vals.length >= 8) {
+    const q1 = d3.quantileSorted(vals, 0.25), q3 = d3.quantileSorted(vals, 0.75);
+    const k = 3 * ((q3 - q1) || Math.abs(q3) * 0.05);
+    y0 = Math.max(y0, q1 - k);
+    y1 = Math.min(y1, q3 + k);
+  }
+  const yPad = y0 === y1 ? Math.abs(y0) * 0.01 || 1 : 0;
+  const ticks = wide ? 6 : 4;
+  const log = state.yMode === 'log' && y0 > 0;
+  const y = log ? d3.scaleLog([y0 / 1.05, y1 * 1.05], [H - 24, 8]).nice() : d3.scaleLinear([y0 - yPad, y1 + yPad], [H - 24, 8]).nice(ticks);
+  const [d0, d1] = y.domain();
+  const off = (r) => r.value < d0 ? -1 : r.value > d1 ? 1 : 0;
+  const yv = (r) => y(Math.min(d1, Math.max(d0, r.value)));
+  const tickVals = log ? y.ticks(ticks).filter((_, i, a) => i % Math.ceil(a.length / ticks) === 0) : y.ticks(ticks);
+  const yAxis = svg.append('g').call(d3.axisLeft(y).tickValues(tickVals).tickFormat(f.tick).tickSize(0)).attr('font-size', null).attr('font-family', null);
+  let left = 0;
+  yAxis.selectAll('text').each(function () { left = Math.max(left, this.getComputedTextLength()); });
+  const m = { l: Math.ceil(left) + 10, r: 8 };
+  const x = d3.scaleUtc(domain, [m.l, W - m.r]);
+  yAxis.attr('transform', `translate(${m.l},0)`).call(g => g.select('.domain').remove());
+  yAxis.selectAll('.tick line').attr('x2', W - m.l - m.r).attr('stroke', 'var(--cds-chart-grid)');
+  yAxis.selectAll('.tick text').attr('x', -6);
+  const days = (domain[1] - domain[0]) / 864e5;
+  svg.append('g').attr('transform', `translate(0,${H - 24})`)
+    .call(d3.axisBottom(x).ticks(Math.min(wide ? 10 : 6, Math.floor(W / 70))).tickFormat(days > 75 ? fmtAxis : fmtShort).tickSizeOuter(0))
+    .attr('font-size', null).attr('font-family', null);
+
+  const clipId = `clip-${key.replace(/[^A-Za-z0-9_-]/g, '_')}${size ? '-copy' : ''}`;
+  svg.append('clipPath').attr('id', clipId).append('rect').attr('x', m.l - 6).attr('y', 0).attr('width', W - m.l - m.r + 12).attr('height', H - 18);
+  const plot = svg.append('g').attr('clip-path', `url(#${clipId})`);
+  const byBranch = d3.group(pts, r => r.branch);
+  const line = d3.line().x(r => x(r._d)).y(yv);
+  const bad = (r) => r.cell_status === 'ERROR' || r.cell_status === 'FAIL';
+  for (const b of BRANCHES) {
+    const s = byBranch.get(b);
+    if (!s) continue;
+    const c = colorOf(b);
+    plot.append('path').datum(s).attr('d', line).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 2).attr('stroke-linejoin', 'round');
+    plot.append('g').selectAll('path').data(s).join('path')
+      .attr('transform', r => `translate(${x(r._d)},${yv(r)})${off(r) < 0 ? ' rotate(180)' : ''}`)
+      .attr('d', r => d3.symbol(off(r) ? d3.symbolTriangle : d3.symbolCircle, bad(r) || off(r) ? 64 : 30)())
+      .attr('fill', r => bad(r) || off(r) ? 'var(--color-panel)' : c)
+      .attr('stroke', r => bad(r) ? 'var(--cds-chart-status-critical)' : off(r) ? c : 'var(--color-panel)')
+      .attr('stroke-width', r => bad(r) || off(r) ? 2 : 1.5);
+  }
+
+  const hov = inView.length ? inView : pts;
+  const delaunay = d3.Delaunay.from(hov, r => x(r._d), yv);
+  const nearest = (ev) => { const [px, py] = d3.pointer(ev, svg.node()); return hov[delaunay.find(px, py)]; };
+  const hl = svg.append('circle').attr('r', 6).attr('fill', 'none').attr('stroke-width', 2).style('display', 'none').style('pointer-events', 'none');
+  const tip = d3.select(box).append('div').attr('class', 'pt-tip').style('display', 'none');
+  const hide = () => { hl.style('display', 'none'); tip.style('display', 'none'); };
+  // Drag across the plot to zoom into that time range; a plain click opens the nearest run in Argus.
+  const brush = d3.brushX().extent([[m.l, 0], [W - m.r, H - 24]])
+    .on('start', hide)
+    .on('end', (ev) => {
+      if (!ev.sourceEvent) return;
+      if (ev.selection) {
+        const [a, b] = ev.selection.map(v => x.invert(v));
+        if (b - a > 36e5) state.zoom.set(key, [a, b]);
+        drawChart(box, rows, metric, key);
+        box.dispatchEvent(new CustomEvent('pt-zoom', { bubbles: true }));
+        return;
+      }
+      const r = nearest(ev.sourceEvent);
+      if (!r.issues.length) { link(r.argus_url, '').click(); return; }
+      // Linked issues: pin a popup whose links can be clicked, since the hover tip ignores the pointer.
+      box.querySelector('.pt-pin')?.remove();
+      const pin = el('div', 'pt-tip pt-pin');
+      const close = el('button', 'pt-btn pt-close', 'Close');
+      close.addEventListener('click', () => pin.remove());
+      pin.append(close, el('b', 'v', `Scylla ${r.scylla_version} · ${fmtDay(r._d)} · ${r.run_status}`), el('div', 'd', `${r.issues.length} linked issue${r.issues.length === 1 ? '' : 's'}`));
+      for (const i of r.issues) { const row = el('div'); row.append(issueLinks(i), el('span', 'd', i.title)); pin.append(row); }
+      pin.append(runLinks(r));
+      box.append(pin);
+      const scale = box.clientWidth / W, cx = x(r._d) * scale;
+      pin.style.left = `${Math.min(Math.max(0, cx - pin.offsetWidth / 2), box.clientWidth - pin.offsetWidth)}px`;
+      pin.style.top = `${Math.max(0, yv(r) * scale + 12)}px`;
+      hide();
+    });
+  const bg = svg.append('g').attr('class', 'pt-brush').call(brush);
+  bg.select('.selection').attr('fill', 'var(--color-fg)').attr('fill-opacity', 0.08).attr('stroke', 'var(--cds-chart-axis)');
+  bg.select('.overlay').attr('cursor', 'crosshair')
+    .on('pointermove.tip', (ev) => {
+      if (ev.buttons) return;
+      const r = nearest(ev);
+      const cx = x(r._d), cy = yv(r);
+      hl.style('display', null).attr('cx', cx).attr('cy', cy).attr('stroke', colorOf(r.branch));
+      tip.style('display', null).selectAll('*').remove();
+      const head = tip.append('div').attr('class', 'row');
+      head.append('span').attr('class', 'pt-sw').style('background', colorOf(r.branch));
+      head.append('b').attr('class', 'v').text(`Scylla ${r.scylla_version}${r.build_type === 'master' && r.scylla_sha ? ` (${r.scylla_sha})` : ''}`);
+      tip.append('div').attr('class', 'big').text(`${metric} = ${f.fmt(r.value)}`);
+      tip.append('div').attr('class', 'd').text(`branch ${r.branch} · ${fmtDay(r._d)} · build #${r.build} · ${r.run_status}`);
+      if (off(r)) tip.append('div').attr('class', 'd').text('Off the clipped axis - switch to Full range or Log scale to see it');
+      if (bad(r)) tip.append('div').attr('class', 'st').text(`Argus flagged this value as ${r.cell_status}`);
+      for (const i of r.issues) tip.append('div').attr('class', 'iss').text(`${i.key}: ${i.title}`);
+      if (r.issues.length) tip.append('div').attr('class', 'd').text('Click for the linked issues and the job');
+      const scale = box.clientWidth / W, tw = tip.node().offsetWidth;
+      tip.style('left', `${Math.min(Math.max(0, cx * scale - tw / 2), box.clientWidth - tw)}px`).style('top', `${Math.max(0, cy * scale - 84)}px`);
+    })
+    .on('pointerleave.tip', hide);
+}
+
+// Render a chart's SVG to PNG: theme colors and fonts are inlined from computed styles, the brush layer
+// is dropped, and a caption naming the chart is drawn on top.
+// Icon paths for the small card buttons (24x24, stroked).
+// The one expanded chart's collapse function, so expanding another closes it first.
+let collapseExpanded = null;
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && collapseExpanded) collapseExpanded(); });
+
+const ICONS = {
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  collapse: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
+  done: '<path d="M20 6 9 17l-5-5"/>',
+  fail: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+const setIcon = (btn, name, label) => {
+  btn.replaceChildren();
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('aria-hidden', 'true');
+  s.innerHTML = ICONS[name];
+  btn.append(s);
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+};
+const COPY_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'opacity', 'display', 'font-size', 'font-family', 'font-weight'];
+function chartPng(svgEl, caption, bg, fg) {
+  const { width: W, height: H } = svgEl.viewBox.baseVal;
+  const top = 28, scale = 2;
+  const clone = svgEl.cloneNode(true);
+  const src = svgEl.querySelectorAll('*'), dst = clone.querySelectorAll('*');
+  src.forEach((n, i) => { const cs = getComputedStyle(n); dst[i].setAttribute('style', COPY_PROPS.map(k => `${k}:${cs.getPropertyValue(k)}`).join(';')); });
+  clone.querySelectorAll('.pt-brush').forEach(n => n.remove());
+  const NS = 'http://www.w3.org/2000/svg';
+  const out = document.createElementNS(NS, 'svg');
+  out.setAttribute('xmlns', NS);
+  out.setAttribute('width', W * scale);
+  out.setAttribute('height', (H + top) * scale);
+  out.setAttribute('viewBox', `0 0 ${W} ${H + top}`);
+  const rect = document.createElementNS(NS, 'rect');
+  Object.entries({ width: W, height: H + top, fill: bg }).forEach(([k, v]) => rect.setAttribute(k, v));
+  const text = document.createElementNS(NS, 'text');
+  Object.entries({ x: 8, y: 18, fill: fg, 'font-size': 13, 'font-family': getComputedStyle(svgEl).fontFamily, 'font-weight': 600 }).forEach(([k, v]) => text.setAttribute(k, v));
+  text.textContent = caption;
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', `translate(0,${top})`);
+  g.append(...clone.childNodes);
+  out.append(rect, text, g);
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(out)], { type: 'image/svg+xml' }));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = W * scale; canvas.height = (H + top) * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('empty image')), 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('render failed')); };
+    img.src = url;
+  });
+}
+
+function card(grid, rows, title, metric, key, pending, help) {
+  const c = el('div', 'pt-card');
+  c.classList.toggle('pt-wide', state.expanded.has(key));
+  const top = el('div', 'pt-card-top');
+  const tools = el('div', 'pt-tools');
+  const reset = el('button', 'pt-btn', 'Reset zoom');
+  reset.hidden = !state.zoom.has(key);
+  const grow = el('button', 'pt-btn pt-icon');
+  const growIcon = () => state.expanded.has(key) ? setIcon(grow, 'collapse', 'Collapse (Esc)') : setIcon(grow, 'expand', 'Expand to full screen');
+  growIcon();
+  const copy = el('button', 'pt-btn pt-icon');
+  const copyIcon = () => setIcon(copy, 'copy', 'Copy chart image to the clipboard');
+  copyIcon();
+  tools.append(reset, copy, grow);
+  const h3 = el('h3', null, title);
+  h3.dataset.hint = help;
+  top.append(h3, tools);
+  const plot = el('div', 'pt-plot');
+  c.append(top, plot);
+  grid.append(c);
+  const redraw = () => {
+    reset.hidden = !state.zoom.has(key);
+    growIcon();
+    c.classList.toggle('pt-wide', state.expanded.has(key));
+    drawChart(plot, rows, metric, key);
+  };
+  plot.addEventListener('pt-zoom', () => { reset.hidden = !state.zoom.has(key); });
+  reset.addEventListener('click', () => { state.zoom.delete(key); redraw(); });
+  // Collapsing shrinks the page, so scroll back to the chart instead of leaving the reader elsewhere.
+  const collapse = () => { state.expanded.delete(key); collapseExpanded = null; redraw(); c.scrollIntoView({ block: 'nearest' }); };
+  if (state.expanded.has(key)) collapseExpanded = collapse;
+  const toggle = () => {
+    if (state.expanded.has(key)) { collapse(); return; }
+    if (collapseExpanded) collapseExpanded();
+    state.expanded.clear();
+    state.expanded.add(key);
+    collapseExpanded = collapse;
+    redraw();
+    // Bring it into view just below the pinned control bar.
+    c.style.scrollMarginTop = `${(document.querySelector('.pt-bar')?.offsetHeight || 0) + 12}px`;
+    c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+  grow.addEventListener('click', toggle);
+  copy.addEventListener('click', () => {
+    if (!window.ClipboardItem || !navigator.clipboard?.write) { setIcon(copy, 'fail', 'Copying images is not supported here'); return; }
+    const [, test, workload] = key.split('|');
+    const [from, to] = [document.getElementById('pt-from').value, document.getElementById('pt-to').value];
+    const cs = getComputedStyle(c);
+    // The PNG is passed as a promise so the write stays inside this click, which the clipboard requires.
+    // Redraw off-screen at a large size so the copied image is readable, with the same zoom and filters.
+    const off = el('div', 'pt-plot');
+    off.style.cssText = 'position: fixed; left: -10000px; top: 0; width: 1100px';
+    c.append(off);
+    drawChart(off, rows, metric, key, { W: 1100, H: 550 });
+    const png = chartPng(off.querySelector('svg'), `${test} · ${workload} · ${title}  (${from} to ${to})`, cs.backgroundColor, cs.color);
+    off.remove();
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+      .then(() => setIcon(copy, 'done', 'Copied'))
+      .catch(() => setIcon(copy, 'fail', 'Copy blocked by the browser'))
+      .finally(() => setTimeout(copyIcon, 2000));
+  });
+  pending.push(() => drawChart(plot, rows, metric, key));
+}
+
+function draw() {
+  const d = dash.data('runs');
+  const sum = dash.data('summary');
+  for (const s of document.querySelectorAll('[data-source="summary"]')) {
+    s.classList.toggle('dash-skeleton', sum.status === 'loading');
+    const v = sum.status === 'ok' && sum.data[0] ? sum.data[0][s.dataset.field] : '';
+    s.textContent = !v && v !== 0 ? '—' : s.dataset.field === 'runs' ? String(v) : s.dataset.field === 'fetched_at' ? fmtStamp(new Date(v)) : fmtDay(new Date(v));
+  }
+  // Age is computed against the viewer's clock, so stale data turns red without a refresh.
+  const fetched = sum.status === 'ok' && sum.data[0] && sum.data[0].fetched_at ? new Date(sum.data[0].fetched_at) : null;
+  const ageDays = fetched ? Math.floor((Date.now() - fetched) / 864e5) : null;
+  document.getElementById('pt-fetched').classList.toggle('pt-stale', ageDays !== null && ageDays > 7);
+  document.getElementById('pt-age').textContent = ageDays === null ? '' : ageDays === 0 ? '(today)'
+    : `(${ageDays} day${ageDays === 1 ? '' : 's'} ago${ageDays > 7 ? ', older than a week - refresh it with the perf-weekly-status-report skill' : ''})`;
+  for (const t of document.querySelectorAll('[data-view]')) t.setAttribute('aria-pressed', String(t.dataset.view === state.view));
+  const body = document.getElementById('pt-body');
+  if (d.status !== 'ok') {
+    body.replaceChildren(el('div', d.status === 'loading' ? 'dash-skeleton pt-plot' : 'pt-fail', d.status === 'loading' ? '' : 'Failed to load'));
+    return;
+  }
+  const all = d.data.map(r => ({ ...r, _d: new Date(r.date), value: num(r.value), issues: parseIssues(r.issues) })).filter(r => state.view === 'all' || r.build_type === state.view);
+  BRANCHES = ['master', ...[...new Set(d.data.map(r => r.branch))].filter(b => b && b !== 'master').sort(branchOrder)];
+
+  const series = all.filter(r => r.metric && Number.isFinite(r.value));
+  // Registry order: i8g Tablets first, and the throughput-steps tests on top of each category.
+  const rank = (r) => r.test_order === '' || r.test_order == null ? 999 : Number(r.test_order);
+  const testRank = d3.rollup(series, v => d3.min(v, rank), r => r.test);
+  const cats = [...d3.rollup(series, v => d3.min(v, rank), r => r.category)].sort((a, b) => a[1] - b[1]).map(([c]) => c);
+  if (!cats.includes(state.cat)) state.cat = cats[0];
+  const catBox = document.getElementById('pt-cats');
+  catBox.replaceChildren(...cats.map(c => { const b = el('button', 'pt-tab', c); b.dataset.cat = c; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(c === state.cat)); return b; }));
+
+  const end = d3.max(series, r => r._d) || new Date();
+  const first = d3.min(series, r => r._d) || end;
+  const start = state.months ? d3.utcMonth.offset(end, -state.months) : state.from || first;
+  const stop = state.months ? end : state.to || end;
+  const fromEl = document.getElementById('pt-from'), toEl = document.getElementById('pt-to');
+  fromEl.min = toEl.min = iso(first);
+  fromEl.max = toEl.max = iso(end);
+  fromEl.value = iso(start);
+  toEl.value = iso(state.months ? end : d3.utcDay.offset(stop, state.to ? -1 : 0));
+  for (const b of document.querySelectorAll('#pt-yaxis [data-y]')) b.setAttribute('aria-pressed', String(b.dataset.y === state.yMode));
+  for (const b of document.querySelectorAll('#pt-ranges [data-months]')) b.setAttribute('aria-pressed', String(Number(b.dataset.months) === state.months));
+
+  drawWeek(all, fetched || end, start, stop);
+  const rows = series.filter(r => r.category === state.cat && r._d >= start && r._d <= stop);
+  drawLegend(rows);
+  body.replaceChildren();
+  const pending = [];
+  // A Duration that barely moves over all the data (under 2%) is a fixed-length step, not a measured operation.
+  const fixedSteps = new Set([...d3.group(series.filter(r => r.metric === 'Duration'), r => `${r.test}|${r.workload}|${r.step}`)]
+    .filter(([, v]) => { const [lo, hi] = d3.extent(v, r => r.value); return hi - lo < 0.02 * d3.mean(v, r => r.value); }).map(([k]) => k));
+  const tests = [...d3.group(rows, r => r.test)].sort((a, b) => testRank.get(a[0]) - testRank.get(b[0]));
+  // Each test is a collapsible group; the first one of a category starts open, the rest closed.
+  if (!state.seenCats.has(state.cat) && tests.length) { state.seenCats.add(state.cat); state.open.add(tests[0][0]); }
+  for (const [test, byTest] of tests) {
+    const det = el('details', 'pt-test');
+    det.open = state.open.has(test);
+    const sum = el('summary');
+    const h = el('h2', null, test);
+    // Hover text from the newest run's Argus data: test method, cluster, configs and Jenkins job.
+    h.dataset.hint = (d3.greatest(byTest.filter(r => r.test_info), r => r._d) || {}).test_info || test;
+    const wls = d3.group(byTest, r => r.workload);
+    h.append(el('span', null, [...wls.keys()].join(', ')));
+    sum.append(h);
+    det.append(sum);
+    body.append(det);
+    // Charts in a closed group are drawn when it opens, so they measure their real width.
+    // Each workload is collapsible too (open by default); a chart is drawn only when its test and workload are open.
+    const workloads = [];
+    for (const [workload, byWl] of wls) {
+      const wkey = `${test}|${workload}`;
+      const drawers = [];
+      const wl = el('details', 'pt-wl');
+      wl.open = !state.closedWl.has(wkey);
+      const grid = el('div', 'pt-grid');
+      const wlh = el('h3', null, workload);
+      const steps = [...new Set(byWl.map(r => r.step))];
+      wlh.dataset.hint = `${workload} workload of ${test}\n${steps.length} step${steps.length === 1 ? '' : 's'}: ${steps.join(', ')}`;
+      const wsum = el('summary');
+      wsum.append(wlh);
+      wl.append(wsum, grid);
+      det.append(wl);
+      workloads.push({ wl, drawers });
+      wl.addEventListener('toggle', () => {
+        wl.open ? state.closedWl.delete(wkey) : state.closedWl.add(wkey);
+        if (wl.open && det.open) drawers.forEach(f => f());
+      });
+      for (const [step, byStep] of d3.group(byWl, r => r.step)) {
+        const metrics = [...d3.group(byStep, r => r.metric)].sort((a, b) => METRIC_ORDER(a[0]) - METRIC_ORDER(b[0]));
+        for (const [metric, s] of metrics) {
+          if (metric === 'Duration' && fixedSteps.has(`${test}|${workload}|${step}`)) continue;
+          const desc = (d3.greatest(s, r => r._d) || {}).table_desc;
+          const help = [`${workload} · ${step} · ${metric}`, desc, METRIC_HELP(metric)].filter(Boolean).join('\n');
+          card(grid, s.sort((a, b) => a._d - b._d), `${step} · ${metric === 'Duration' ? 'Duration (min)' : metric}`, metric, `${state.view}|${test}|${workload}|${step}|${metric}`, drawers, help);
+        }
+      }
+    }
+    const openDrawers = () => workloads.filter(w => w.wl.open).flatMap(w => w.drawers);
+    if (det.open) pending.push(...openDrawers());
+    det.addEventListener('toggle', () => {
+      det.open ? state.open.add(test) : state.open.delete(test);
+      if (det.open) openDrawers().forEach(f => f());
+    });
+  }
+  if (!tests.length) body.append(el('p', 'pt-note', 'No results in this range for the selected build type.'));
+  pending.forEach(f => f());
+}
+
+// One shared hover popup for every element with a data-hint: shows at once, wraps long text and sits
+// next to the cursor. It is positioned inside the page root, not `fixed`: the dashboard scrolls an
+// inner container, so fixed coordinates would not follow the screen.
+const root = document.querySelector('.pt');
+const hint = el('div', 'pt-hint');
+hint.hidden = true;
+root.append(hint);
+const placeHint = (x, y) => {
+  const box = root.getBoundingClientRect();
+  const w = hint.offsetWidth, h = hint.offsetHeight;
+  const left = Math.max(0, Math.min(x + 12, box.right - w - 4) - box.left);
+  const below = y + 18 + h <= window.innerHeight;
+  hint.style.left = `${left}px`;
+  hint.style.top = `${(below ? y + 18 : Math.max(4, y - h - 10)) - box.top}px`;
+};
+const showHint = (e) => {
+  const t = e.target.closest('[data-hint]');
+  if (!t) { hint.hidden = true; return; }
+  if (hint.textContent !== t.dataset.hint) hint.textContent = t.dataset.hint;
+  hint.hidden = false;
+  // Keyboard focus has no cursor: anchor to the element's bottom-left corner instead.
+  const r = t.getBoundingClientRect();
+  e.clientX != null ? placeHint(e.clientX, e.clientY) : placeHint(r.left, r.bottom - 12);
+};
+root.addEventListener('pointermove', showHint);
+root.addEventListener('focusin', showHint);
+root.addEventListener('pointerleave', () => { hint.hidden = true; });
+root.addEventListener('focusout', () => { hint.hidden = true; });
+window.addEventListener('scroll', () => { hint.hidden = true; }, { passive: true, capture: true });
+
+dash.onData(draw);
+</script>

@@ -256,6 +256,15 @@ class TestHealthChecker:
         assert isinstance(err, str)
         assert err
 
+    def test_check_schema_agreement_default_budget_backs_off(self):
+        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=100)
+
+        with unittest.mock.patch("time.sleep") as mocked_sleep:
+            err = check_schema_agreement_in_gossip_and_peers(problem_node)
+
+        assert [call.args[0] for call in mocked_sleep.call_args_list] == [1, 2, 4, 8] + [15] * 7
+        assert err
+
     def test_check_group0_tokenring_consistency_with_none_values(self):
         """Test that check_group0_tokenring_consistency handles None values gracefully"""
         # Create a mock node with raft
@@ -421,6 +430,36 @@ def test_check_group0_tokenring_consistency_member_missing_from_token_ring_repor
         f"present in token ring False. Inconsistency between group0: {group0_members} "
         f"and tokenring: {tokenring_members}"
     )
+
+
+def test_check_group0_tokenring_consistency_failed_group0_read_warns(raft_node):
+    """A failed group0 read (empty members) with a populated token ring is reported, not passed as consistent."""
+    raft = RaftFeature(raft_node)
+    tokenring_members = [
+        TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+        TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
+    ]
+
+    with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
+        events = list(raft.check_group0_tokenring_consistency([], tokenring_members))
+
+    assert len(events) == 1
+    assert events[0].severity == Severity.WARNING
+    assert events[0].error == (
+        "Node node-1 could not read group0 members while the token ring has 2 member(s); "
+        "group0/token-ring consistency was not checked"
+    )
+    search.assert_not_called()
+    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_not_called()
+
+
+def test_check_group0_tokenring_consistency_empty_group0_and_token_ring_no_event(raft_node):
+    """With both lists empty there is nothing to compare, so no event (unchanged behaviour)."""
+    with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
+        events = list(RaftFeature(raft_node).check_group0_tokenring_consistency([], []))
+
+    assert events == []
+    search.assert_not_called()
 
 
 def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cluster(

@@ -10,6 +10,7 @@ from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.minicloud.preflight import (
     check_scylla_memory_budget,
     container_mem_in_use_gib,
+    db_guest_count,
     host_available_memory_gib,
     scylla_reserve_memory,
 )
@@ -103,12 +104,36 @@ def test_sum_node_counts(value, expected):
 
 
 def test_check_host_memory_fails_when_guests_exceed_available(tmp_path):
-    # 6 db + 1 loader + 1 monitor = 8 guests x 4GiB + 2GiB headroom = 34GiB needed, 16GiB available
+    # 6 db + 1 loader + 1 monitor = 8 guests x 4GiB + (2GiB + 8 x 1GiB) headroom = 42GiB needed, 16GiB available
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
     with _meminfo_path_patch(16 * 1024 * 1024):
-        with pytest.raises(MinicloudError, match="8 guest.*34.0GiB needed.*16.0GiB"):
+        with pytest.raises(MinicloudError, match="8 guest.*42.0GiB needed.*16.0GiB"):
             manager._check_host_memory(params)
+
+
+@pytest.mark.parametrize(("db_memory", "fits"), [("5GiB", False), ("4GiB", True)])
+def test_check_host_memory_reserves_overhead_per_guest(tmp_path, db_memory, fits):
+    """The 6-node rolling upgrade on minipc5: 42.1GiB budget, 6 db + 2GiB loader + 2GiB monitor.
+
+    With a flat 2GiB headroom the 5GiB run passed the gate (36GiB needed) and the host OOM
+    killer then killed a guest; the real overhead was about 1GiB per guest.
+    """
+    config = MinicloudConfig(
+        state_dir=str(tmp_path),
+        lightweight=True,
+        lightweight_memory=db_memory,
+        lightweight_memory_loader="2GiB",
+        lightweight_memory_monitor="2GiB",
+    )
+    manager = MinicloudManager(config=config)
+    params = {"n_db_nodes": 6, "n_loaders": 1, "n_monitor_nodes": 1}
+    with _meminfo_path_patch(int(42.1 * 1024 * 1024)):
+        if fits:  # 6 x 4 + 2 + 2 + 10 = 38GiB
+            manager._check_host_memory(params)
+        else:  # 6 x 5 + 2 + 2 + 10 = 44GiB
+            with pytest.raises(MinicloudError, match=r"8 guest.*44\.0GiB needed"):
+                manager._check_host_memory(params)
 
 
 def test_check_host_memory_kill_switch(tmp_path):
@@ -140,7 +165,7 @@ def test_check_host_memory_sizes_each_role(tmp_path):
     with _meminfo_path_patch(19 * 1024 * 1024):
         with pytest.raises(
             MinicloudError,
-            match=r"6 guest.*3 db x 4\.0GiB \+ 2 loader x 2\.0GiB \+ 1 monitor x 2\.0GiB.*20\.0GiB needed",
+            match=r"6 guest.*3 db x 4\.0GiB \+ 2 loader x 2\.0GiB \+ 1 monitor x 2\.0GiB.*26\.0GiB needed",
         ):
             manager._check_host_memory(params)
 
@@ -153,7 +178,7 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
     actually provisions the oracle cluster, so all six pools are real guests here.
     """
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    # 1 + 1 + 1 + 1 + 1 + 1 = 6 guests x 4GiB + 2GiB headroom = 26GiB needed, 16GiB available
+    # 1 + 1 + 1 + 1 + 1 + 1 = 6 guests x 4GiB + 8GiB headroom = 32GiB needed, 16GiB available
     params = {
         "db_type": "mixed_scylla",
         "n_db_nodes": 1,
@@ -164,7 +189,7 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
         "n_vector_store_nodes": 1,
     }
     with _meminfo_path_patch(16 * 1024 * 1024):
-        with pytest.raises(MinicloudError, match="6 guest.*26.0GiB needed"):
+        with pytest.raises(MinicloudError, match="6 guest.*32.0GiB needed"):
             manager._check_host_memory(params)
 
 
@@ -178,8 +203,8 @@ def test_check_host_memory_counts_the_oracle_pool_for_both_mixed_db_types(tmp_pa
     other goes unbudgeted.
     """
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    # 3 db + 1 loader + 1 monitor + 1 oracle = 6 guests x 4GiB + 2GiB = 26GiB, over the 24GiB
-    # the same shape without an oracle node fits into.
+    # 3 db + 1 loader + 1 monitor + 1 oracle = 6 guests x 4GiB + 8GiB = 32GiB, over the 30GiB
+    # the same shape without an oracle node (5 x 4GiB + 7GiB = 27GiB) fits into.
     params = {
         "db_type": db_type,
         "n_db_nodes": 3,
@@ -187,7 +212,7 @@ def test_check_host_memory_counts_the_oracle_pool_for_both_mixed_db_types(tmp_pa
         "n_monitor_nodes": 1,
         "n_test_oracle_db_nodes": 1,
     }
-    with _meminfo_path_patch(24 * 1024 * 1024):
+    with _meminfo_path_patch(30 * 1024 * 1024):
         with pytest.raises(MinicloudError, match="6 guest"):
             manager._check_host_memory(params)
 
@@ -202,10 +227,10 @@ def test_check_host_memory_ignores_the_oracle_pool_without_a_mixed_db_type(tmp_p
     manager = MinicloudManager(
         config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True, lightweight_memory="10GiB")
     )
-    # 6 db + 2 loaders + 1 monitor = 9 guests x 10GiB + 2GiB headroom = 92GiB, under the 100GiB budget.
-    # Counting the phantom oracle node makes it 102GiB and the run never starts.
+    # 6 db + 2 loaders + 1 monitor = 9 guests x 10GiB + 11GiB headroom = 101GiB, under the 105GiB budget.
+    # Counting the phantom oracle node makes it 112GiB and the run never starts.
     params = {"n_db_nodes": 6, "n_loaders": 2, "n_monitor_nodes": 1, "n_test_oracle_db_nodes": 1}
-    with _meminfo_path_patch(100 * 1024 * 1024):
+    with _meminfo_path_patch(105 * 1024 * 1024):
         manager._check_host_memory(params)  # must not raise
 
 
@@ -216,10 +241,10 @@ def test_check_host_memory_counts_the_grown_cluster_not_the_initial_one(tmp_path
     moment it adds the node nobody budgeted for.
     """
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    # starts at 3 db, grows to 6; + 1 loader + 1 monitor = 8 guests x 4GiB + 2GiB = 34GiB needed
+    # starts at 3 db, grows to 6; + 1 loader + 1 monitor = 8 guests x 4GiB + 10GiB = 42GiB needed
     params = {"n_db_nodes": 3, "cluster_target_size": 6, "n_loaders": 1, "n_monitor_nodes": 1}
-    with _meminfo_path_patch(24 * 1024 * 1024):  # enough for the initial 5, not for the peak 8
-        with pytest.raises(MinicloudError, match="8 guest.*34.0GiB needed"):
+    with _meminfo_path_patch(30 * 1024 * 1024):  # enough for the initial 5 (27GiB), not for the peak 8
+        with pytest.raises(MinicloudError, match="8 guest.*42.0GiB needed"):
             manager._check_host_memory(params)
 
 
@@ -228,7 +253,7 @@ def test_check_host_memory_ignores_a_target_below_the_initial_size(tmp_path):
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": 6, "cluster_target_size": 3, "n_loaders": 0, "n_monitor_nodes": 0}
     with _meminfo_path_patch(16 * 1024 * 1024):
-        with pytest.raises(MinicloudError, match="6 guest.*26.0GiB needed"):
+        with pytest.raises(MinicloudError, match="6 guest.*32.0GiB needed"):
             manager._check_host_memory(params)
 
 
@@ -242,13 +267,18 @@ def test_check_host_memory_measures_against_container_cap(tmp_path):
     manager = MinicloudManager(config=config)
     params = {"n_db_nodes": 3, "n_loaders": 0, "n_monitor_nodes": 0}
     with _meminfo_path_patch(64 * 1024 * 1024):
-        with pytest.raises(MinicloudError, match="3 guest.*12.0GiB needed.*8.0GiB.*container_memory cap"):
+        with pytest.raises(
+            MinicloudError, match="3 guest.*QEMU overhead.*15.0GiB needed.*8.0GiB.*container_memory cap"
+        ):
             manager._check_host_memory(params)
 
 
 def test_check_host_memory_container_cap_that_fits_passes(tmp_path):
-    """No host headroom is subtracted from the cap — dockerd and SCT live outside the cgroup."""
-    config = MinicloudConfig(state_dir=str(tmp_path), lightweight=True, container_memory="12GiB")
+    """Only the per-guest QEMU cost counts against the cap; dockerd and SCT live outside the cgroup.
+
+    3 guests x 4GiB + 3 x 1GiB QEMU overhead = 15GiB, exactly the cap.
+    """
+    config = MinicloudConfig(state_dir=str(tmp_path), lightweight=True, container_memory="15GiB")
     manager = MinicloudManager(config=config)
     params = {"n_db_nodes": 3, "n_loaders": 0, "n_monitor_nodes": 0}
     with _meminfo_path_patch(1 * 1024 * 1024):  # host looks starved; the cap is what counts
@@ -258,9 +288,9 @@ def test_check_host_memory_container_cap_that_fits_passes(tmp_path):
 def test_check_host_memory_adds_mem_in_use_by_running_guests(tmp_path):
     """In CI the guests are already running when run-test re-runs the gate, so their memory in use is added back."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    # 20 db + 2 loaders + 1 monitor = 23 guests x 4GiB + 2GiB headroom = 94GiB needed
+    # 20 db + 2 loaders + 1 monitor = 23 guests x 4GiB + 25GiB headroom = 117GiB needed
     params = {"n_db_nodes": 20, "n_loaders": 2, "n_monitor_nodes": 1}
-    with _meminfo_path_patch(int(91.2 * 1024 * 1024)):
+    with _meminfo_path_patch(int(93.2 * 1024 * 1024)):
         with patch("sdcm.utils.minicloud.preflight.container_mem_in_use_gib", return_value=24.0):
             manager._check_host_memory(params)
 
@@ -433,3 +463,14 @@ def test_check_host_memory_fails_on_macos_when_guests_exceed_available(tmp_path)
 def test_host_available_memory_is_none_without_a_source():
     with _no_meminfo_path_patch(), patch("sdcm.utils.minicloud.preflight.sys.platform", "freebsd"):
         assert host_available_memory_gib() is None
+
+
+def test_db_guest_count_counts_the_peak_db_guests():
+    assert db_guest_count({"n_db_nodes": [3, 3]}) == 6
+    assert db_guest_count({"n_db_nodes": 3, "cluster_target_size": 5}) == 5
+
+
+def test_db_guest_count_counts_an_oracle_cluster_only_when_one_is_provisioned():
+    oracle = {"n_db_nodes": 3, "n_test_oracle_db_nodes": 1}
+    assert db_guest_count({**oracle, "db_type": "mixed_scylla"}) == 4
+    assert db_guest_count({**oracle, "db_type": "scylla"}) == 3

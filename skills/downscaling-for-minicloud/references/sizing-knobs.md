@@ -33,13 +33,14 @@ how much RAM it needs.
 Every db guest (zero-token, oracle and vector-store included) costs `minicloud_lightweight_memory`;
 a loader costs `minicloud_lightweight_memory_loader` and a monitor
 `minicloud_lightweight_memory_monitor`, 2GiB each by default. What a host can carry next to one
-loader and one monitor, with ~2GiB headroom:
+loader and one monitor, with the gate's headroom of 2GiB + 1GiB per guest (each QEMU process
+costs more than its guest RAM):
 
 | Host free RAM | db guests at 4GiB | db guests at 3GiB | Realistic shape |
 |---|---|---|---|
-| 16 GiB | 2 | 3 | 3 db at 3GiB + 1 loader + 1 monitor, or 3 db at 4GiB + 1 loader and no monitor |
-| 32 GiB | 6 | 8 | 3 db + 1 loader + 1 monitor (the default shape, 16GiB) |
-| 64 GiB | 14 | 19 | 6 db + 2 loaders + 1 monitor, or a 3 to 6 grow test |
+| 16 GiB | 1 | 2 | too small for a 3-node cluster: 3 db at 3GiB + 1 loader + 1 monitor needs 20GiB |
+| 32 GiB | 4 | 6 | 3 db + 1 loader + 1 monitor (the default shape, 23GiB with headroom) |
+| 64 GiB | 11 | 14 | 6 db + 2 loaders + 1 monitor (41GiB), or a 3 to 6 grow test |
 
 Two adjustments the gate makes:
 
@@ -48,12 +49,13 @@ Two adjustments the gate makes:
   accounted for.
 - **`minicloud_container_memory`, when set, replaces host free memory as the budget** — the
   cgroup OOM killer enforces the cap, so measuring the host would pass a test the cap kills.
+  The 1 GiB per guest for QEMU still counts against the cap; the 2 GiB base headroom does not.
 
 `minicloud_skip_memory_check: true` disables the gate for a host you know can take it. The
 price is the exit-137 failure mode above if you were wrong.
 
-**The ~2 GiB headroom covers steady state, not a first run.** Measured on a 5-guest run whose
-formula said 22 GiB: the container peaked at **25.6 GiB**, with the `minicloud` process alone
+**The headroom covers steady state, not a first run.** Measured on a 5-guest run whose formula
+said 22 GiB (with the flat 2 GiB headroom the gate used then): the container peaked at **25.6 GiB**, with the `minicloud` process alone
 holding ~8 GiB RSS while it converted an uncached image. Each SCT run also starts its own
 `*-vector` log-shipper container. A first run against a version needs real slack above the
 formula; later runs against the cached image do not. (Steady state during the stress phase was
@@ -243,7 +245,10 @@ and a second place to update when the emulator grows the missing feature:
 Lists replace rather than merge, so `scylla_d_overrides_files` set in a shrink overlay or the
 test-case is lost to the one in `configurations/minicloud.yaml`. A run that needs its own
 `scylla.d` files sets the list in a layer after `configurations/minicloud.yaml` and also lists
-`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`.
+`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`. On minicloud SCT treats any
+listed `io_properties.yaml` as the figure of the whole host and deploys each db guest its share of
+it, less `minicloud_io_properties_margin`, so a custom file there must hold the host's numbers.
+
 ---
 
 ## CI Only — Irrelevant to a Local Run

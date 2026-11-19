@@ -13,38 +13,33 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List
 
 from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.network.models import NetworkSecurityGroup
+from azure.mgmt.network.models import NetworkSecurityGroup, SecurityRule
 
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
 
 
-def rules_to_payload(rules: Iterable) -> List[Dict[str, Union[str, int]]]:
-    """Convert iterable rules to format accepted by provisioner"""
-    template = {
-        "name": "",
-        "protocol": "TCP",
-        "source_port_range": "*",
-        "destination_port_range": "",
-        "source_address_prefix": "*",
-        "destination_address_prefix": "*",
-        "access": "Allow",
-        "priority": 300,
-        "direction": "Inbound",
-    }
+def inbound_tcp_rule(name: str, port: int | str, priority: int = 300) -> SecurityRule:
+    return SecurityRule(
+        name=name,
+        protocol="TCP",
+        source_port_range="*",
+        destination_port_range=str(port),
+        source_address_prefix="*",
+        destination_address_prefix="*",
+        access="Allow",
+        priority=priority,
+        direction="Inbound",
+    )
 
-    open_ports_rules = []
-    for idx, port in enumerate(rules):
-        templ = template.copy()
-        templ["name"] = port.name
-        templ["destination_port_range"] = str(port.value)
-        templ["priority"] = templ["priority"] + idx
-        open_ports_rules.append(templ)
-    return open_ports_rules
+
+def rules_to_payload(rules: Iterable) -> List[SecurityRule]:
+    """Convert iterable rules to format accepted by provisioner"""
+    return [inbound_tcp_rule(port.name, port.value, 300 + idx) for idx, port in enumerate(rules)]
 
 
 @dataclass
@@ -75,10 +70,7 @@ class NetworkSecurityGroupProvider:
         self._azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             network_security_group_name=name,
-            parameters={
-                "location": self._region,
-                "security_rules": open_ports_rules,
-            },
+            parameters=NetworkSecurityGroup(location=self._region, security_rules=open_ports_rules),
         ).wait()
         network_sec_group = self._azure_service.network.network_security_groups.get(self._resource_group_name, name)
         LOGGER.info(

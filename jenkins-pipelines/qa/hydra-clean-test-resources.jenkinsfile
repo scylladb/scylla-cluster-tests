@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v6-CI"
+            label "aws-sct-builders-eu-west-1-v7-CI"
         }
     }
     environment {
@@ -29,6 +29,7 @@ pipeline {
     }
     options {
         timestamps()
+        timeout(time: 1, unit: 'HOURS')
         buildDiscarder(logRotator(numToKeepStr: '50'))
     }
     stages {

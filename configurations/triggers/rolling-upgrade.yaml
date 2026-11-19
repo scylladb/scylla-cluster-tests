@@ -31,8 +31,11 @@ jenkinsfiles:
 #
 # Jenkins agent label (the `jenkins_label` job param) pins a build to specific Jenkins
 # machines:
-#   minicloud-kvm-builders-rolling-upgrades - the KVM lab machines minipc1-4, reserved for
-#                                             the minicloud rolling upgrades (SCT-1093)
+#   minicloud-kvm-builders-rolling-upgrades - the KVM lab machines minipc3-5, reserved for
+#                                             the minicloud rolling upgrades (SCT-1093);
+#                                             minipc3-4 have 60GiB of RAM, minipc5 44GiB.
+#                                             minipc1-2 are out until their SSDs are replaced
+#                                             (QATOOLS-661)
 #
 # Minicloud on master (SCT-1093)
 # ------------------------------
@@ -48,12 +51,16 @@ jenkinsfiles:
 #       local_agent: "true" - no sct-runner, the test runs on the Jenkins agent itself
 #       jenkins_label       - minicloud-kvm-builders-rolling-upgrades (above)
 #       test_config         - the real-cloud job's test_config plus configurations/minicloud.yaml,
-#                             so master keeps full-size coverage (no shrinking overlays)
-#       minicloud_lightweight_vcpus/memory - 2 / 6GiB per db guest. At the default 1 vCPU / 4GiB
-#                             the 6 db guests saturate and the run fails; 2 / 5GiB for every
-#                             guest passed in ~4.5h. The loader and monitor now take their 2GiB
-#                             defaults (minicloud_lightweight_memory_loader/_monitor), and the
-#                             db guests get the memory that frees
+#                             so master keeps full-size coverage (no shrinking overlays), plus one
+#                             configurations/minicloud/*-write-rate-cap.yaml overlay: the row counts stay,
+#                             the write rate is capped to what the shared host SSD takes (QATOOLS-661)
+#       minicloud_lightweight_vcpus/memory - 2 vCPUs per db guest. At the default 1 vCPU the 6
+#                             db guests saturate and the run fails. Memory: 6GiB per db guest for
+#                             the 3-node jobs, 4GiB for the 6-node ami and gce-image jobs, which
+#                             have to fit the 44GiB minipc5 too (at 5GiB a guest was OOM-killed
+#                             there; 2 vCPUs / 4GiB passed from 2026.1 and 2026.3). The loader and
+#                             monitor take their 2GiB defaults (minicloud_lightweight_memory_loader/
+#                             _monitor)
 #       extra_environment_variables - SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2: the loader keeps
 #                             2 vCPUs for the full-size stress commands (vCPUs cost no host
 #                             memory); the monitor takes the 1 vCPU default
@@ -337,7 +344,9 @@ jobs:
   # ===========================================================================
   #
   # Master-only twins of seven entries above (which exclude master). The distro and stock
-  # image still come from each job's jenkinsfile; test_config is the real-cloud one plus configurations/minicloud.yaml.
+  # image still come from each job's jenkinsfile; test_config is the real-cloud one plus configurations/minicloud.yaml
+  # and a write-rate-cap overlay right after the file whose stress commands it caps. Drop the caps once the
+  # minipc hosts have enterprise SSDs (QATOOLS-661).
 
   - job_name: "rolling-upgrade/rolling-upgrade-rocky10-test"
     backend: "gce"
@@ -354,7 +363,7 @@ jobs:
       minicloud_lightweight_vcpus: "2"
       minicloud_lightweight_memory: "6GiB"
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/minicloud/rolling-upgrade-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-debian13-test"
     backend: "gce"
@@ -371,7 +380,7 @@ jobs:
       minicloud_lightweight_vcpus: "2"
       minicloud_lightweight_memory: "6GiB"
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/minicloud/rolling-upgrade-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2404-test"
     backend: "gce"
@@ -388,7 +397,7 @@ jobs:
       minicloud_lightweight_vcpus: "2"
       minicloud_lightweight_memory: "6GiB"
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/minicloud/rolling-upgrade-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2604-test"
     backend: "gce"
@@ -405,7 +414,7 @@ jobs:
       minicloud_lightweight_vcpus: "2"
       minicloud_lightweight_memory: "6GiB"
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/minicloud/rolling-upgrade-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-ami-test"
     backend: "aws"
@@ -421,9 +430,9 @@ jobs:
       local_agent: "true"
       jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
       minicloud_lightweight_vcpus: "2"
-      minicloud_lightweight_memory: "6GiB"
+      minicloud_lightweight_memory: "4GiB"  # 6 db guests have to fit the 44GiB minipc5
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/minicloud/rolling-upgrade-6-nodes-write-rate-cap.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-gce-image-test"
     backend: "gce"
@@ -439,9 +448,9 @@ jobs:
       local_agent: "true"
       jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
       minicloud_lightweight_vcpus: "2"
-      minicloud_lightweight_memory: "6GiB"
+      minicloud_lightweight_memory: "4GiB"  # 6 db guests have to fit the 44GiB minipc5
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/minicloud/rolling-upgrade-6-nodes-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
 
   - job_name: "rolling-upgrade/rolling-upgrade-alternator-test"
     backend: "gce"
@@ -458,4 +467,4 @@ jobs:
       minicloud_lightweight_vcpus: "2"
       minicloud_lightweight_memory: "6GiB"
       extra_environment_variables: "SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER=2"
-      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-alternator.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-alternator.yaml", "configurations/minicloud/rolling-upgrade-alternator-write-rate-cap.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'

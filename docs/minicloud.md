@@ -56,9 +56,11 @@ tens of MiB/s to several GiB/s between nodes, and Scylla throttles a slow node f
 SCT therefore adds `--no-io-setup` to `scylla_setup` on every minicloud guest (`force_run_iotune`
 cannot do this: it only controls SCT own extra iotune call). The overlay ships
 `configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml` instead, through
-`scylla_d_overrides_files`. The values are GCP limits for one local SSD, well above what a
-lightweight guest uses. Image-based runs get the same files. Nonroot installs and extra data
-volumes still run iotune.
+`scylla_d_overrides_files`. `io_properties.yaml` holds one measured figure for the whole host,
+because the guests share the host drive: at node setup SCT gives each db guest
+`(1 - minicloud_io_properties_margin) / <db guests of the run>` of it, and treats any other
+`io_properties.yaml` in the list the same way. Image-based runs get the same files. Nonroot
+installs and extra data volumes still run iotune.
 
 To ship your own `scylla.d` files, set `scylla_d_overrides_files` in a layer after
 `configurations/minicloud.yaml` and include the two minicloud files: a later layer replaces the
@@ -87,6 +89,9 @@ Params (defaults in `defaults/test_default.yaml`, reference in
 - `minicloud_scylla_overcommitted_cpu` (default `true`) - scylla-server runs with
   `--idle-poll-time-us 0 --poll-aio 0` on every db guest, see
   [Reactor polling on shared host CPUs](#reactor-polling-on-shared-host-cpus).
+- `minicloud_io_properties_margin` (default `0.05`) - fraction of the `io_properties.yaml` figures
+  kept for the loader, the monitor and the host; the rest is split between the db guests. Must be
+  at least 0 and below 1, or the configuration fails to load.
 
 S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test sstables) are configured via
 `minicloud_s3_passthrough_buckets`; this is why minicloud runs still need the
@@ -119,7 +124,7 @@ The whole test must fit in the host's free RAM:
   db guests x minicloud_lightweight_memory
 + n_loaders x minicloud_lightweight_memory_loader
 + n_monitor_nodes x minicloud_lightweight_memory_monitor
-+ ~2 GiB host headroom
++ 2 GiB + 1 GiB per guest host headroom
 ```
 
 where db guests are `n_db_nodes` plus the zero-token, vector-store and (for the mixed db types)
@@ -572,7 +577,9 @@ per-build choices; set them in the jenkinsfile, or per run via `extra_environmen
 
 Setting `minicloud_container_memory` also moves the preflight guest-memory gate onto that cap
 instead of the host's free memory - the cgroup OOM killer enforces the cap, so measuring the host
-would pass a test the cap then kills.
+would pass a test the cap then kills. The guests' QEMU processes run inside the cap, so the gate
+adds their 1 GiB per guest to it; the 2 GiB base headroom stays out, since dockerd and SCT run
+outside the container.
 
 ### Guest memory locking
 
