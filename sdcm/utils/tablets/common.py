@@ -62,7 +62,11 @@ def wait_no_active_repair_tasks(nodes: list, timeout: int = AUTO_REPAIR_DRAIN_TI
         for node in nodes:
             try:
                 if active_tasks := TaskManagerClient(node).get_active_repair_tasks():
-                    LOGGER.debug("Node %s still runs %d repair tasks", node.name, len(active_tasks))
+                    LOGGER.debug(
+                        "Node %s still lists repair tasks: %s",
+                        node.name,
+                        ", ".join(f"{task.get('type')} {task.get('task_id')}" for task in active_tasks),
+                    )
                     return False
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("Could not list repair tasks on node %s, skipping it: %s", node.name, exc)
