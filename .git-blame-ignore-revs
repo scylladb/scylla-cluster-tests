@@ -8,3 +8,6 @@ e298929269e4a73a270ad453820c1325c2b04b07
 
 # PR #16668: Apply ruff pydocstyle auto-fixes
 33eca1c7ce435503362fa9492519662a2f804c0f # style(docstrings): apply ruff pydocstyle auto-fixes
+
+# PR #16827: Upgrade to ruff 0.17.3
+54fa7d3ee2bdd216aa9ac7209125656caa7ef165 # style: format python code blocks in markdown with ruff 0.17

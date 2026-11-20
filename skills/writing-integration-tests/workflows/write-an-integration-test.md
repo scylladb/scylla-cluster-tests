@@ -65,8 +65,7 @@ A 4-phase process for creating a new integration test in the SCT repository.
    ```python
    @pytest.mark.integration
    @pytest.mark.xdist_group("my-test-group")
-   def test_step_1(docker_scylla):
-       ...
+   def test_step_1(docker_scylla): ...
    ```
 
 4. **Create cleanup fixtures for any resources you create:**
@@ -100,8 +99,7 @@ A 4-phase process for creating a new integration test in the SCT repository.
 1. **Add `@pytest.mark.integration` to every test** (or use module-level `pytestmark`):
    ```python
    @pytest.mark.integration
-   def test_stress_tool(docker_scylla, params):
-       ...
+   def test_stress_tool(docker_scylla, params): ...
    ```
 
 2. **Follow the Arrange-Act-Assert pattern:**
@@ -110,7 +108,9 @@ A 4-phase process for creating a new integration test in the SCT repository.
    def test_cql_insert(docker_scylla):
        # Arrange
        session = docker_scylla.cql_connection()
-       session.execute("CREATE KEYSPACE IF NOT EXISTS test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
+       session.execute(
+           "CREATE KEYSPACE IF NOT EXISTS test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}"
+       )
 
        # Act
        session.execute("INSERT INTO test.data (id, value) VALUES (1, 'hello')")
@@ -136,13 +136,15 @@ A 4-phase process for creating a new integration test in the SCT repository.
 4. **Use parametrize with `pytest.param(id=...)` for testing multiple configurations:**
    ```python
    @pytest.mark.integration
-   @pytest.mark.parametrize("consistency", [
-       pytest.param("ONE", id="consistency-one"),
-       pytest.param("QUORUM", id="consistency-quorum"),
-       pytest.param("ALL", id="consistency-all"),
-   ])
-   def test_read_consistency(docker_scylla, consistency):
-       ...
+   @pytest.mark.parametrize(
+       "consistency",
+       [
+           pytest.param("ONE", id="consistency-one"),
+           pytest.param("QUORUM", id="consistency-quorum"),
+           pytest.param("ALL", id="consistency-all"),
+       ],
+   )
+   def test_read_consistency(docker_scylla, consistency): ...
    ```
 
 **Exit:** All test functions written with proper markers, timeouts, and assertions.
