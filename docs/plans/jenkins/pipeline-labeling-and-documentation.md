@@ -150,6 +150,7 @@ The `nemesis` values in the taxonomy are auto-populated by a pre-commit hook tha
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
+
 class TestMetadata(BaseModel):
     """Structured metadata for test-case documentation and labeling.
 
@@ -161,11 +162,24 @@ class TestMetadata(BaseModel):
         default=None,
         description="Human-readable description of what this test validates (2-4 sentences).",
     )
-    test_type: Literal[
-        "longevity", "performance", "upgrade", "artifacts", "manager",
-        "functional", "scale", "jepsen", "gemini", "features",
-        "platform-migration", "vector-search", "cdc",
-    ] | None = Field(
+    test_type: (
+        Literal[
+            "longevity",
+            "performance",
+            "upgrade",
+            "artifacts",
+            "manager",
+            "functional",
+            "scale",
+            "jepsen",
+            "gemini",
+            "features",
+            "platform-migration",
+            "vector-search",
+            "cdc",
+        ]
+        | None
+    ) = Field(
         default=None,
         description="Primary test category.",
     )
@@ -194,10 +208,21 @@ class TestMetadata(BaseModel):
         default_factory=list,
         description="Stress/load tools used: cassandra-stress, scylla-bench, ycsb, latte, gemini, etc.",
     )
-    workload: Literal[
-        "write", "read", "mixed", "counter", "lwt", "cdc",
-        "mv", "si", "alternator", "user-profile",
-    ] | None = Field(
+    workload: (
+        Literal[
+            "write",
+            "read",
+            "mixed",
+            "counter",
+            "lwt",
+            "cdc",
+            "mv",
+            "si",
+            "alternator",
+            "user-profile",
+        ]
+        | None
+    ) = Field(
         default=None,
         description="Primary workload type.",
     )
@@ -213,10 +238,19 @@ class TestMetadata(BaseModel):
         ),
     )
 
+
 VALID_BACKENDS = {
-    "aws", "gce", "azure", "docker", "k8s-eks", "k8s-gke",
-    "k8s-local-kind", "baremetal", "xcloud",
+    "aws",
+    "gce",
+    "azure",
+    "docker",
+    "k8s-eks",
+    "k8s-gke",
+    "k8s-local-kind",
+    "baremetal",
+    "xcloud",
 }
+
 
 class TestMetadata(BaseModel):
     # ... fields above ...
@@ -239,8 +273,7 @@ class TestMetadata(BaseModel):
 from sdcm.test_metadata import TestMetadata
 
 test_metadata: TestMetadata | None = SctField(
-    description="Structured metadata for test documentation and labeling. "
-                "Validated by pydantic model. Flows to Argus.",
+    description="Structured metadata for test documentation and labeling. Validated by pydantic model. Flows to Argus.",
 )
 ```
 
@@ -424,15 +457,18 @@ test_metadata: null
 from dataclasses import dataclass
 from pathlib import Path
 
+
 @dataclass
 class LintResult:
     file_path: str
-    errors: list[str]      # Missing required fields, invalid values
-    warnings: list[str]    # Suggestions (e.g., nemesis mismatch)
+    errors: list[str]  # Missing required fields, invalid values
+    warnings: list[str]  # Suggestions (e.g., nemesis mismatch)
+
 
 def lint_test_metadata(config_path: Path, taxonomy_path: Path) -> LintResult:
     """Validate test_metadata in a test-case YAML against taxonomy and config content."""
     ...
+
 
 def cross_reference_config(config_path: Path) -> LintResult:
     """Check that metadata labels match the actual test configuration.
@@ -457,8 +493,7 @@ def cross_reference_config(config_path: Path) -> LintResult:
 @click.option("--test-case-dir", default="test-cases", help="Root directory of test cases")
 @click.option("--fix", is_flag=True, help="Auto-fix trivially correctable issues")
 @click.option("--missing-only", is_flag=True, help="Only report test cases missing test_metadata")
-def lint_test_docs(test_case_dir, fix, missing_only):
-    ...
+def lint_test_docs(test_case_dir, fix, missing_only): ...
 ```
 
 3. **Validation rules**:

@@ -108,17 +108,20 @@ The staircase loop, `run_gradual_increase_load` in
 
 ```python
 for throttle_step_dict, num_threads, current_throttle_step in zip(
-        workload.throttle_steps, workload.num_threads, sequential_steps):
+    workload.throttle_steps, workload.num_threads, sequential_steps
+):
     self.prepare_schema(workload=workload)
     step_params = dict(throttle_step_dict)
     step_params.setdefault("threads", num_threads)
-    step_params["throttle"] = self.current_throttle(throttle_step_dict, num_loaders, stress_num,
-                                                    workload.cs_cmd_tmpl[0])
+    step_params["throttle"] = self.current_throttle(
+        throttle_step_dict, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
+    )
     run_step = latency_calculator_decorator(
-        legend=f"Gradual test step {current_throttle_step} op/s",
-        cycle_name=current_throttle_step)(self.run_step)
-    results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, step_params=step_params,
-                          step_duration=workload.step_duration)
+        legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+    )(self.run_step)
+    results, _ = run_step(
+        stress_cmds=workload.cs_cmd_tmpl, step_params=step_params, step_duration=workload.step_duration
+    )
 ```
 
 ### Throttle syntax is per-tool

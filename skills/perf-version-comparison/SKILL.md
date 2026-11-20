@@ -91,10 +91,10 @@ from sdcm.keystore import KeyStore
 import requests
 
 creds = KeyStore().get_argus_rest_credentials_per_provider()
-headers = {'Authorization': f'token {creds["token"]}', 'Accept': 'application/json', 'Content-Type': 'application/json'}
-headers.update(creds.get('extra_headers', {}))
-url = f'{creds["baseUrl"]}/api/v1/client/testrun/scylla-cluster-tests/{run_id}/get'
-data = requests.get(url, headers=headers, timeout=30).json()['response']
+headers = {"Authorization": f"token {creds['token']}", "Accept": "application/json", "Content-Type": "application/json"}
+headers.update(creds.get("extra_headers", {}))
+url = f"{creds['baseUrl']}/api/v1/client/testrun/scylla-cluster-tests/{run_id}/get"
+data = requests.get(url, headers=headers, timeout=30).json()["response"]
 ```
 
 Fields used by the report:

@@ -198,10 +198,10 @@ export SCT_REGION_NAME=${current_region}
   ```python
   @dataclass
   class PipelineConfig:
-      file_path: str               # path to the .jenkinsfile
-      pipeline_function: str       # e.g. "longevityPipeline", "managerPipeline"
-      test_config: list[str]       # list of YAML config file paths (parsed from all formats)
-      params: dict[str, str]       # ALL named parameters from the pipeline function call
+      file_path: str  # path to the .jenkinsfile
+      pipeline_function: str  # e.g. "longevityPipeline", "managerPipeline"
+      test_config: list[str]  # list of YAML config file paths (parsed from all formats)
+      params: dict[str, str]  # ALL named parameters from the pipeline function call
   ```
   The parser extracts **every** named parameter from the pipeline call into `params` — no pre-defined field list, no filtering. This mirrors how `runSctTest.groovy` iterates over `params.*` and exports each one. Convenience accessors like `config.backend` can be properties that read from `params["backend"]`, but the underlying storage is the raw dict.
 - Parser function: `parse_jenkinsfile(path: Path) -> PipelineConfig | None`

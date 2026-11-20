@@ -181,8 +181,8 @@ Concrete mitigation — use a `PrivateAttr` guard:
 class SCTConfiguration(BaseModel):
     _config_loaded: bool = PrivateAttr(default=False)
 
-    @model_validator(mode='after')
-    def _validate_authenticator_params(self) -> 'SCTConfiguration':
+    @model_validator(mode="after")
+    def _validate_authenticator_params(self) -> "SCTConfiguration":
         if not self._config_loaded:  # skip during bulk loading
             return self
         # ... validation logic
@@ -223,13 +223,14 @@ config = SCTConfiguration.model_construct(stress_duration=30, cluster_backend="a
 class SCTConfiguration(BaseModel):
     _cross_field_validation_enabled: ClassVar[bool] = True
 
-    @model_validator(mode='after')
-    def _validate_k8s_tls_sni(self) -> 'SCTConfiguration':
+    @model_validator(mode="after")
+    def _validate_k8s_tls_sni(self) -> "SCTConfiguration":
         if not SCTConfiguration._cross_field_validation_enabled:
             return self
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
         return self
+
 
 # Shared pytest fixture in unit_tests/conftest.py:
 @pytest.fixture
@@ -323,15 +324,15 @@ class SCTConfiguration(BaseModel):
         Call this explicitly when cloud image resolution is needed.
         Not called during unit tests or utility usage.
         """
-        self._resolve_ami_names()             # step 5
-        self._resolve_scylla_images()         # step 6 (Docker/AMI/GCE/Azure/OCI/xcloud)
-        self._resolve_target_images()         # target image auto-discovery
-        self._resolve_oracle_images()         # step 6.1
-        self._resolve_vector_store_images()   # step 6.2
-        self._resolve_upgrade_repos()         # step 7
-        self._resolve_repo_symlinks()         # step 8
-        self._resolve_version_from_images()   # was get_version_based_on_conf()
-        self._reserve_resources()             # SCTCapacityReservation + SCTDedicatedHosts
+        self._resolve_ami_names()  # step 5
+        self._resolve_scylla_images()  # step 6 (Docker/AMI/GCE/Azure/OCI/xcloud)
+        self._resolve_target_images()  # target image auto-discovery
+        self._resolve_oracle_images()  # step 6.1
+        self._resolve_vector_store_images()  # step 6.2
+        self._resolve_upgrade_repos()  # step 7
+        self._resolve_repo_symlinks()  # step 8
+        self._resolve_version_from_images()  # was get_version_based_on_conf()
+        self._reserve_resources()  # SCTCapacityReservation + SCTDedicatedHosts
 ```
 
 Update the orchestrator to call `resolve_images()` explicitly:
@@ -339,7 +340,7 @@ Update the orchestrator to call `resolve_images()` explicitly:
 ```python
 def init_and_verify_sct_config() -> SCTConfiguration:
     sct_config = SCTConfiguration()
-    sct_config.resolve_images()     # <-- consolidates image resolution + version detection
+    sct_config.resolve_images()  # <-- consolidates image resolution + version detection
     sct_config.log_config()
     sct_config.verify_configuration()
     sct_config.verify_configuration_urls_validity()
