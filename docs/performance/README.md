@@ -5,8 +5,7 @@ and the procedures for changing it.
 
 > **Scope note.** This folder documents *what SCT does today*. For where performance testing
 > is *going* — statistical baselines, metrics expansion, efficiency scoring — see the strategy
-> document at [../performance-testing-strategy.md](../performance-testing-strategy.md), which
-> arrives with [PR #14297](https://github.com/scylladb/scylla-cluster-tests/pull/14297).
+> document at [../performance-testing-strategy.md](../performance-testing-strategy.md).
 > If it is later moved into this folder, update these links in one pass.
 
 ## Where do I start?
