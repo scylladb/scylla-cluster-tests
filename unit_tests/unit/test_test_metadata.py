@@ -143,7 +143,15 @@ def test_invalid_team_ownership():
 
 
 @pytest.mark.parametrize(
-    "team", ["core-test-infra", "core-qa", "storage-qa", "cloud-qa", "qa-tools", "scylladb/alternator", "scylladb/mgmt"]
+    "team",
+    [
+        "scylladb/testing-infrastructure",
+        "scylladb/core-qa",
+        "scylladb/storage-qa",
+        "scylladb/rnd-cloud-qa",
+        "scylladb/alternator",
+        "scylladb/mgmt",
+    ],
 )
 def test_all_valid_team_ownership(team):
     m = TestMetadata(team_ownership=team)

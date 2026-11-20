@@ -41,7 +41,7 @@ It flows to Argus at test runtime.
 | `stress_tools` | list | no | tool names from stress commands |
 | `workload` | Literal | no | write/read/mixed/scan/counter |
 | `features` | list | no | tls-ssl, multi-dc, cdc, etc. |
-| `team_ownership` | Literal | no | QA team, or GitHub team (`scylladb/<team>`), responsible for maintaining this test |
+| `team_ownership` | Literal | no | GitHub team (`scylladb/<team>`) responsible for maintaining this test |
 
 Note: `nemesis_labels` appears in older examples but is not currently a validated
 `TestMetadata` field (no taxonomy/pydantic support) — omit it from new
@@ -69,7 +69,7 @@ test_metadata:
     - cassandra-stress
   workload: write
   features: []
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 ```
 
 ## Cross-Reference Rules

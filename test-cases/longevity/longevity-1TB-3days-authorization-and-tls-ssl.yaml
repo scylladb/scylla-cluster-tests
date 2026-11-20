@@ -17,7 +17,7 @@ test_metadata:
   features:
     - tls-ssl
     - authorization
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 5020
 prepare_write_cmd: ["cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",

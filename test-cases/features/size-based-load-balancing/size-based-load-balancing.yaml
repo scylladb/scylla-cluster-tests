@@ -14,7 +14,7 @@ test_metadata:
   workload: write
   features:
     - tablets
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 # Size-based load balancing test.
 # This test ensures storage utilization within each rack stays within the allowed threshold.

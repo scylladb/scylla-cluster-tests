@@ -18,7 +18,7 @@ test_metadata:
     - multi-dc
     - rack-aware
     - zero-token-nodes
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 test_duration: 800
 

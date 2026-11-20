@@ -15,7 +15,7 @@ test_metadata:
     - encryption-at-rest
     - tls-ssl
     - authorization
-  team_ownership: storage-qa
+  team_ownership: scylladb/storage-qa
 
 test_duration: 1940
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..100000000"]

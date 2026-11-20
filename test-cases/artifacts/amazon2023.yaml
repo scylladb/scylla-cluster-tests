@@ -12,7 +12,7 @@ test_metadata:
   stress_tools: []
   nemesis_labels:
     - NoOpMonkey
-  team_ownership: core-test-infra
+  team_ownership: scylladb/testing-infrastructure
 
 ami_db_scylla_user: 'ec2-user'
 ami_id_db_scylla: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
