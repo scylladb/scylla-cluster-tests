@@ -57,12 +57,12 @@ intermediate level between contributor and maintainer.
 Maintainership is earned through sustained contributions, demonstrated review
 quality, and broad knowledge of the area, and is granted by nomination and
 approval of the existing maintainers. Maintainers gain merge access, release
-authority, CI/CD configuration access, and a CODEOWNERS listing.
+authority, and CI/CD configuration access.
 
 **Nomination process (suggested, to be agreed upon by the team):**
 1. An existing maintainer nominates the candidate with a summary of contributions
 2. Other maintainers in the area review the nomination (minimum 2 approvals, no vetoes)
-3. Upon approval, access is granted and the candidate is added to CODEOWNERS and team lists
+3. Upon approval, access is granted and the candidate is added to team lists
 
 <!-- TODO: document the nomination process in more detail (where it happens, template, examples) -->
 
@@ -95,38 +95,16 @@ final call.
 - "Silence is not consent" — explicitly confirm agreement for high-impact decisions
 - Reversible decisions can move faster; irreversible ones (public APIs, data formats) need more scrutiny
 
-### 1.4 OWNERS / CODEOWNERS Files
+### 1.4 Code Ownership
 
-Code ownership determines who is automatically requested for reviews and who has
-authority over specific areas of the codebase. The current ownership map is at
-[`.github/CODEOWNERS`](../.github/CODEOWNERS).
+Request reviews manually: pick the maintainers who know the touched code, from
+the git history of the files, and add them as reviewers on the PR.
+Ownership follows expertise: the people who wrote and maintain an area review
+its PRs and decide its technical direction, within the project's overall
+architecture.
 
-**How ownership is assigned:**
-- CODEOWNERS entries map file patterns to GitHub teams or individuals
-- Ownership follows expertise — the people who wrote and maintain the code own it
-
-**What ownership means:**
-- Owners are automatically added as reviewers on PRs touching their files
-- At least one owner must approve before the PR can be merged
-- Owners are responsible for triaging issues in their area
-- Owners decide the technical direction for their area, within the project's overall architecture
-
-**Example entries** (see [`.github/CODEOWNERS`](../.github/CODEOWNERS) for the
-authoritative list — patterns can be as broad as a directory or as narrow as a
-single file):
-- `/sdcm/cluster_aws.py`, `/sdcm/provision/aws` — AWS backend
-- `/defaults` — default configuration values
-- `/sdcm/nemesis/registry` — nemesis orchestration
-
-Not every area has a CODEOWNERS entry. Some responsibilities are held by
-convention rather than by file pattern — Jenkins CI for PRs
-([`Jenkinsfile`](../Jenkinsfile), see section 4.1) is one example: changes there
-affect everyone, so they warrant a reviewer familiar with the pipeline even
-though no owner is auto-requested.
-
-**Updating ownership:** When a contributor consistently reviews and maintains an area
-but is not listed as owner, a maintainer should propose adding them. When an owner
-becomes inactive (see Succession Planning), they should be removed.
+Jenkins CI for PRs ([`Jenkinsfile`](../Jenkinsfile), see section 4.1) warrants
+a reviewer familiar with the pipeline: changes there affect everyone.
 
 ### 1.5 Succession Planning
 
@@ -135,17 +113,16 @@ these transitions gracefully to avoid stalled reviews, abandoned areas, and bus-
 risks.
 
 **Stepping down:**
-- When a maintainer steps down or becomes inactive, merge access and CODEOWNERS
-  entries are removed
+- When a maintainer steps down or becomes inactive, merge access is removed
 
 **Planned transitions:**
 - Knowledge transfer includes: undocumented context, ongoing work, known technical debt
 - A transition period with overlapping access is recommended
 
 **Bus-factor mitigation:**
-- Every area should have at least 2 owners in CODEOWNERS
-- Critical areas (CI/CD, configuration, core cluster code) should have 3+ owners
-- Regularly review CODEOWNERS for single-owner areas and prioritize finding co-owners
+- Every area should have at least 2 maintainers who know it
+- Critical areas (CI/CD, configuration, core cluster code) should have 3+ maintainers
+- Regularly review single-maintainer areas and prioritize finding co-maintainers
 
 ### 1.6 Conflict Resolution
 
