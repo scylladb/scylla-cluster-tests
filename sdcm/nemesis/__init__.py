@@ -2915,7 +2915,9 @@ class NemesisRunner:
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0,
         )
-        full_operations_timeout = nodetool_decommission_timeout + 3600
+        # The coordinator keeps draining the node after a reboot or a nodetool timeout. Tablet drains
+        # were seen to finish up to 2h43m after nodetool gave up, so wait up to 3 hours more.
+        full_operations_timeout = nodetool_decommission_timeout + 10800
         with contextlib.ExitStack() as stack:
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
                 terminate_pattern.timeout
@@ -2925,7 +2927,9 @@ class NemesisRunner:
                 suppress_expected_unavailability_errors(),
                 self.node_allocator.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node,
                 FailedDecommissionOperationMonitoring(
-                    target_node=self.target_node, verification_node=verification_node, timeout=full_operations_timeout
+                    target_node=self.target_node,
+                    verification_node=verification_node,
+                    timeout=full_operations_timeout,
                 ),
                 self.action_log_scope(f"Reboot {self.target_node.name} node during decommission streaming"),
             ):
