@@ -1,0 +1,20 @@
+# SCT-900 POC (jenkins-pipelines/performance_staging/lab-nodes-hold-poc.jenkinsfile, run_sct):
+# layered after test-cases/PR-provision-test.yaml and configurations/baremetal/loader-monitor-shared-host.yaml
+# (SCT-1215 collect branch). The DB node is the lab host the POC job holds; the loader and monitor share the
+# runner agent. All of them sit on one lab network, so nothing needs tunnels or public addresses.
+# The POC job writes the hosts config and sets SCT_S3_BAREMETAL_CONFIG to it.
+ip_ssh_connections: private
+intra_node_comm_public: false
+
+# Lab hosts have no Scylla image to boot: install a released version
+use_preinstalled_scylla: false
+scylla_repo: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.3.repo'
+scylla_linux_distro: 'centos'
+# spider4's only disk holds the OS: /var/lib/scylla stays on the root XFS filesystem
+scylla_setup_no_raid: true
+# Leave the host most of its 32 CPUs and 124 GB
+append_scylla_args: '--smp 8 --memory 32G --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+# A feasibility run, not a reported result
+enable_argus: false
+user_prefix: 'lab-hold-poc'
