@@ -12,6 +12,7 @@ AbortDecommissionMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -29,6 +30,7 @@ AbortRepairMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -46,6 +48,7 @@ AddDropColumnMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -63,6 +66,7 @@ AddRemoveDcNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -80,6 +84,7 @@ AddRemoveMvNemesis:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -97,6 +102,7 @@ AddRemoveRackNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -114,6 +120,7 @@ BlockNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -131,6 +138,7 @@ BootstrapStreamingErrorNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -148,6 +156,7 @@ CDCStressorMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -165,6 +174,7 @@ ClusterRollingRestart:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -182,6 +192,7 @@ ClusterRollingRestartRandomOrder:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -199,6 +210,7 @@ CorruptThenRebuildMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -216,6 +228,7 @@ CorruptThenRepairMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -233,6 +246,7 @@ CorruptThenScrubMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -250,6 +264,7 @@ CreateIndexNemesis:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -267,6 +282,7 @@ DecommissionMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -284,6 +300,7 @@ DecommissionSeedNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -301,6 +318,7 @@ DecommissionStreamingErrMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -318,6 +336,7 @@ DeleteByPartitionsMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -335,6 +354,7 @@ DeleteByRowsRangeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -352,6 +372,7 @@ DeleteOverlappingRowRangesMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -369,6 +390,7 @@ DisableBinaryGossipExecuteMajorCompaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -386,6 +408,7 @@ DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -403,6 +426,7 @@ DrainKubernetesNodeThenReplaceScyllaNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -420,6 +444,7 @@ DrainerMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -437,6 +462,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -454,6 +480,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -471,6 +498,7 @@ EndOfQuotaNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -488,6 +516,7 @@ EnospcAllNodesMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -505,6 +534,7 @@ EnospcMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -522,6 +552,7 @@ GrowShrinkClusterNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -539,6 +570,7 @@ GrowShrinkZeroTokenNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: true
@@ -556,6 +588,7 @@ HardRebootNodeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -573,6 +606,7 @@ IsolateNodeWithIptableRuleNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -590,6 +624,7 @@ IsolateNodeWithProcessSignalNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -607,6 +642,7 @@ KillMVBuildingCoordinator:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -624,6 +660,7 @@ LoadAndStreamMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -641,6 +678,7 @@ MajorCompactionMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -658,6 +696,7 @@ MemoryStressMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -675,6 +714,7 @@ MgmtBackup:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -692,6 +732,7 @@ MgmtBackupSpecificKeyspaces:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -709,6 +750,7 @@ MgmtCorruptThenRepair:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -726,6 +768,7 @@ MgmtRepair:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -743,6 +786,7 @@ MgmtRestore:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -760,6 +804,7 @@ ModifyTableBloomFilterFpChanceMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -777,6 +822,7 @@ ModifyTableCachingMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -794,6 +840,7 @@ ModifyTableCommentMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -811,6 +858,7 @@ ModifyTableCompactionMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -828,6 +876,7 @@ ModifyTableCompressionMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -845,6 +894,7 @@ ModifyTableCrcCheckChanceMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -862,6 +912,7 @@ ModifyTableDclocalReadRepairChanceMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -879,6 +930,7 @@ ModifyTableDefaultTimeToLiveMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -896,6 +948,7 @@ ModifyTableGcGraceTimeMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -913,6 +966,7 @@ ModifyTableMaxIndexIntervalMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -930,6 +984,7 @@ ModifyTableMemtableFlushPeriodInMsMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -947,6 +1002,7 @@ ModifyTableMinIndexIntervalMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -964,6 +1020,7 @@ ModifyTableReadRepairChanceMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -981,6 +1038,7 @@ ModifyTableSpeculativeRetryMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -998,6 +1056,7 @@ ModifyTableTwcsWindowSizeMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1015,6 +1074,7 @@ MultipleHardRebootNodeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1032,6 +1092,7 @@ NemesisSequence:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1049,6 +1110,7 @@ NoCorruptRepairMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1066,6 +1128,7 @@ NodeRestartWithResharding:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -1083,6 +1146,7 @@ NodeTerminateAndReplace:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: true
@@ -1100,6 +1164,7 @@ NodeToolCleanupMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1117,6 +1182,7 @@ OperatorNodeReplace:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1134,6 +1200,7 @@ OperatorNodetoolFlushAndReshard:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1151,6 +1218,7 @@ PauseLdapNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1168,6 +1236,7 @@ RandomInterruptionNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1185,6 +1254,7 @@ RebuildStreamingErrMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1202,6 +1272,7 @@ RefreshBigMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1219,6 +1290,7 @@ RefreshMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1236,6 +1308,7 @@ RejectInterNodeNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1253,6 +1326,7 @@ RejectNodeExporterNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1270,6 +1344,7 @@ RejectThriftNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1287,6 +1362,7 @@ RemoveServiceLevelMonkey:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1304,6 +1380,7 @@ RepairStreamingErrMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1321,6 +1398,7 @@ RestartThenRepairNodeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1338,6 +1416,7 @@ RollingRestartConfigChangeInternodeCompression:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1355,6 +1434,7 @@ ScyllaKillMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1372,6 +1452,7 @@ SerialRestartOfElectedTopologyCoordinatorNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -1389,6 +1470,7 @@ SlaDecreaseSharesDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1406,6 +1488,7 @@ SlaIncreaseSharesByAttachAnotherSlDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1423,6 +1506,7 @@ SlaIncreaseSharesDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1440,6 +1524,7 @@ SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1457,6 +1542,7 @@ SlaReplaceUsingDetachDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1474,6 +1560,7 @@ SlaReplaceUsingDropDuringLoad:
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1491,6 +1578,7 @@ SnapshotOperations:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1508,6 +1596,7 @@ SoftRebootNodeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1525,6 +1614,7 @@ SplitMergeTabletsWithAlter:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1542,6 +1632,7 @@ SslHotReloadingNemesis:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1559,6 +1650,7 @@ StartStopCleanupCompaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1576,6 +1668,7 @@ StartStopMajorCompaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1593,6 +1686,7 @@ StartStopScrubCompaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1610,6 +1704,7 @@ StartStopValidationCompaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1627,6 +1722,7 @@ StopStartInterfacesNetworkMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1644,6 +1740,7 @@ StopStartMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1661,6 +1758,7 @@ StopWaitStartMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: true
@@ -1678,6 +1776,7 @@ SwitchBetweenPasswordAuthAndSaslauthdAuth:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1695,6 +1794,7 @@ TerminateAndRemoveNodeMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
+  supports_logstor: true
   topology_changes: true
   xcloud: false
   zero_node_changes: false
@@ -1712,6 +1812,7 @@ TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1729,6 +1830,7 @@ TerminateKubernetesHostThenReplaceScyllaNode:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1746,6 +1848,7 @@ ToggleAuditNemesisSyslog:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1763,6 +1866,7 @@ ToggleAuditRulesNemesisSyslog:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1780,6 +1884,7 @@ ToggleCDCMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1797,6 +1902,7 @@ ToggleGcModeMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1814,6 +1920,7 @@ ToggleLdapConfiguration:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: false
   zero_node_changes: false
@@ -1831,6 +1938,7 @@ ToggleTableIcsMonkey:
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: false
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1848,6 +1956,7 @@ TopPartitions:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1865,6 +1974,7 @@ TruncateLargeParititionMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1882,6 +1992,7 @@ TruncateMonkey:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false
@@ -1899,6 +2010,7 @@ ValidateHintedHandoffShortDowntime:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  supports_logstor: true
   topology_changes: false
   xcloud: true
   zero_node_changes: false

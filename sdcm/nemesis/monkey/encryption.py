@@ -207,6 +207,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(EnableDisable
 
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+    supports_logstor = False  # logstor has no encryption at rest yet (SCYLLADB-2394)
 
     def disrupt(self):
         """Toggle table encryption using the KMS key provider with key rotation enabled."""
@@ -221,6 +222,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(EnableDisa
 
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+    supports_logstor = False  # logstor has no encryption at rest yet (SCYLLADB-2394)
 
     def disrupt(self):
         """Toggle table encryption using the KMS key provider with key rotation disabled."""
