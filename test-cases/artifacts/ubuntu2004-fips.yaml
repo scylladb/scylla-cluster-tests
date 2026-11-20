@@ -27,6 +27,7 @@ sizing_db:
   arch: x86_64
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
+spot_termination_retry: ["spot", "on_demand"]
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
