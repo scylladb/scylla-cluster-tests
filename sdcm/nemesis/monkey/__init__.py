@@ -677,33 +677,6 @@ class StartStopValidationCompaction(NemesisBaseClass):
         self.runner.disrupt_start_stop_validation_compaction()
 
 
-class ToggleAuditNemesisSyslog(NemesisBaseClass):
-    """Enable audit logging to syslog for all categories, verify it, narrow the categories and verify DDL logs."""
-
-    disruptive = True
-    schema_changes = True
-    config_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        """Toggle syslog auditing."""
-        self.runner.disrupt_toggle_audit_syslog()
-
-
-class ToggleAuditRulesNemesisSyslog(NemesisBaseClass):
-    """Enable audit logging to syslog via audit_rules, verify it, narrow the categories and verify DDL logs."""
-
-    disruptive = True
-    schema_changes = True
-    config_changes = True
-    free_tier_set = True
-    additional_configs = ["configurations/toggle-audit-rules-nemesis.yaml"]
-
-    def disrupt(self):
-        """Toggle syslog audit rules."""
-        self.runner.disrupt_toggle_audit_rules_syslog()
-
-
 @target_data_nodes
 class BootstrapStreamingErrorNemesis(NemesisBaseClass):
     """Add a node, abort its bootstrap mid-streaming, clean group0, re-bootstrap it and decommission it."""
