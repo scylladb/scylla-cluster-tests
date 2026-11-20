@@ -18,6 +18,9 @@ _MODULE = "sdcm.nemesis.monkey.add_remove_dc"
 
 pytestmark = pytest.mark.usefixtures("events")
 
+VNODES_DESCRIBE = "CREATE KEYSPACE ks WITH replication = {...} AND tablets = {'enabled': false};"
+TABLETS_DESCRIBE = "CREATE KEYSPACE ks WITH replication = {...} AND tablets = {'enabled': true};"
+
 
 def _keyspace_row(name, replication):
     """Build a system_schema.keyspaces row for replication discovery tests."""
@@ -122,6 +125,7 @@ def runner(base_runner):
     base_runner._nemesis_stress_failure_handler = MagicMock()
 
     base_runner.target_node.raft = MagicMock(is_consistent_topology_changes_enabled=True)
+    base_runner.target_node.run_cqlsh.return_value.stdout = VNODES_DESCRIBE
 
     base_runner.tester.db_cluster = MagicMock()
     base_runner.tester.db_cluster.get_nodetool_status.side_effect = lambda: dict(status_by_dc)
@@ -532,3 +536,48 @@ def test_system_keyspaces_excludes_auth_when_topology_changes_enabled(runner):
     monkey = AddRemoveDcNemesis(runner)
 
     assert "system_auth" not in monkey.system_keyspaces
+
+
+def test_temporary_new_dc_replication_factors_leaves_auto_rf_keyspaces_to_coordinator(runner):
+    """Auto RF keyspaces are not altered into the new DC, and get RF=0 there after user keyspaces rollback.
+
+    audit is extended into the new DC only after the created keyspaces discovery, and still gets RF=0.
+    """
+    monkey = AddRemoveDcNemesis(runner)
+    runner.status_by_dc["dc1_nemesis_dc"] = object()
+    runner.target_node.run_cqlsh.return_value.stdout = TABLETS_DESCRIBE
+    events = []
+    setter = FakeReplicationStrategySetter("new-dc-rf", events)
+    traces_row, audit_row = (
+        _nts_row(ks, **{monkey.initial_dc_name: 1, "dc1_nemesis_dc": 1}) for ks in ("system_traces", "audit")
+    )
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    # created keyspaces discovery, then auto RF keyspaces lookup after the user keyspaces rollback
+    session.execute.side_effect = [
+        MagicMock(current_rows=[traces_row]),
+        MagicMock(current_rows=[traces_row, audit_row]),
+    ]
+
+    def fake_get(node, keyspace):
+        if keyspace in ("system_traces", "audit"):
+            return NetworkTopologyReplicationStrategy(
+                **{monkey.initial_dc_name: ["rack1"], "dc1_nemesis_dc": ["rack1"]}
+            )
+        return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
+
+    def fake_apply(strategy, node, keyspace):
+        events.append((keyspace, str(strategy)))
+
+    with (
+        patch(f"{_MODULE}.temporary_replication_strategy_setter", return_value=setter),
+        patch(f"{_MODULE}.ReplicationStrategy.get", side_effect=fake_get),
+        patch.object(NetworkTopologyReplicationStrategy, "apply", autospec=True, side_effect=fake_apply),
+    ):
+        with monkey.temporary_new_dc_replication_factors():
+            pass
+
+    assert [next(iter(entry)) for entry in setter.calls] == ["system_distributed", monkey.new_ks_name]
+    assert list(setter.preserved) == ["system_distributed", monkey.new_ks_name]
+    rollback = "{'class': 'NetworkTopologyStrategy', 'dc1': ['rack1'], 'dc1_nemesis_dc': 0}"
+    # auto RF keyspaces are rolled back last, after the user keyspaces left the new DC
+    assert events == ["new-dc-rf:rollback", ("system_traces", rollback), ("audit", rollback)]
