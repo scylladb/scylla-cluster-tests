@@ -80,6 +80,6 @@ Rules:
   GitHub releases timed out. Re-run the build.
   ```
 - **Suggested reviewers**: one line with at most three people who know the
-  touched code, from `CODEOWNERS` and the git history of the files, each
+  touched code, from the git history of the files, each
   with a short reason. Leave out the author and the people already
   requested. Do not request them.

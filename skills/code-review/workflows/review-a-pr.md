@@ -100,7 +100,7 @@ confirm it. In CI, never run code from the pull request: trace it in the code in
 5. **Spec compliance**: When the PR carries a flow directory, the change matches its documents (SKILL.md Check 11)
 6. **Scope**: The main change is in its own commit. Unrelated reformatting and pieces outside the plan are findings
 7. **Size**: Ask what could be deleted and still work: a reinvented helper, an abstraction with one user, test scaffolding larger than the code it tests
-8. **Ownership and merge order**: The change belongs to the team that owns the code (`CODEOWNERS`). When it depends on another PR, the description says "merge only after #N". A real bug outside the scope is a 📌 follow-up that asks for a Jira link, not a request to fix it in this PR
+8. **Ownership and merge order**: The change belongs to the team that owns the code (git history of the files). When it depends on another PR, the description says "merge only after #N". A real bug outside the scope is a 📌 follow-up that asks for a Jira link, not a request to fix it in this PR
 
 **Exit criteria**: Review is complete. All findings documented with specific file/line references.
 
