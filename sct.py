@@ -153,7 +153,7 @@ lazy from sdcm.utils.minicloud.log_collection import (
     collect_minicloud_logs,
     collect_native_minicloud_log,
 )
-lazy from sdcm.utils.minicloud.manager import MinicloudManager
+lazy from sdcm.utils.minicloud.manager import MinicloudManager, resolve_minicloud_sizing
 lazy from sdcm.utils.minicloud.tls import ca_bundle_for
 lazy from sdcm.utils.net import get_sct_runner_ip
 lazy from sdcm.utils.oci_builder import OciBuilder
@@ -380,6 +380,7 @@ def start_minicloud(backend, config):
     # this command only needs the params values, and a config the full validation would
     # reject still deserves a container that matches it.
     params = SCTConfiguration()
+    resolve_minicloud_sizing(params)
     cfg = MinicloudConfig.from_env(params=params)
     manager = MinicloudManager(cfg)
     manager.keep_alive = True

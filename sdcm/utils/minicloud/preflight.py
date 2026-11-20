@@ -1,5 +1,6 @@
 """Pre-start checks: KVM/docker presence, host and guest memory arithmetic, AWS credentials."""
 
+import dataclasses
 import logging
 import re
 import subprocess
@@ -50,6 +51,70 @@ def db_guest_count(params) -> int:
     if params.get("db_type") in ORACLE_GUEST_DB_TYPES:
         guests += sum_node_counts(params.get("n_test_oracle_db_nodes"))
     return max(guests, 1)
+
+
+def _as_list(value) -> list:
+    """Return a StringOrList param value as a list."""
+    if not value:
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _nemesis_thread_can_grow(runner: str, selector: str) -> bool:
+    """Whether one nemesis thread may add nodes: every nemesis that adds nodes is disruptive."""
+    if runner == "NoOpMonkey":
+        return False
+    if runner != "SisyphusMonkey":
+        return True
+    from sdcm.nemesis import NemesisBaseClass, NemesisFlags  # noqa: PLC0415 - circular import avoidance
+    from sdcm.nemesis.registry import NemesisRegistry  # noqa: PLC0415 - circular import avoidance
+
+    phrase = f"({selector}) and disruptive" if selector.strip() else "disruptive"
+    try:
+        return bool(NemesisRegistry(NemesisBaseClass, flag_class=NemesisFlags).filter_subclasses(phrase))
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def nemesis_growth_guests(params) -> int:
+    """Return the most db guests the nemesis threads can add.
+
+    Each nemesis thread that can run a disruptive nemesis adds `nemesis_add_node_cnt` guests.
+    Selectors are matched to threads the same way as in the tester.
+    """
+    add_count = params.get("nemesis_add_node_cnt") or 0
+    if not add_count:
+        return 0
+    selectors = _as_list(params.get("nemesis_selector"))
+    growing = 0
+    for index, runner in enumerate(_as_list(params.get("nemesis_class_name"))):
+        if len(selectors) == 1:
+            selector = selectors[0]
+        else:
+            selector = selectors[index] if index < len(selectors) else ""
+        growing += _nemesis_thread_can_grow(runner.strip(), selector)
+    return add_count * growing
+
+
+def counted_guests(params) -> tuple[int, list[str]]:
+    """Return the peak guest count of the run and the params it came from.
+
+    Count every node pool, or a test with extra guests (oracle, zero-token, vector store)
+    passes the gate and then OOM-kills the container.
+    """
+    counted_params: list[str] = list(GUEST_NODE_COUNT_PARAMS)
+    if params.get("db_type") in ORACLE_GUEST_DB_TYPES:
+        counted_params.append("n_test_oracle_db_nodes")
+    guests = sum(sum_node_counts(params.get(name)) for name in counted_params)
+    # n_db_nodes is only the starting size. A test that grows to cluster_target_size must fit at
+    # its peak, or it dies when it adds the extra node.
+    if target_size := sum_node_counts(params.get("cluster_target_size")):
+        guests += max(0, target_size - sum_node_counts(params.get("n_db_nodes")))
+    if growth := nemesis_growth_guests(params):
+        guests += growth
+        counted_params.append("nemesis_add_node_cnt")
+
+    return guests, counted_params
 
 
 def parse_memory_gib(value: str, param_name: str = "") -> float:
@@ -126,18 +191,29 @@ def scylla_reserve_memory(params) -> str | None:
     return value
 
 
+def _scylla_os_reserve_gib(guest_gib: float, vcpus: int) -> float:
+    """Memory Scylla keeps for the guest OS by default, from what the guest kernel leaves it."""
+    visible_gib = guest_gib - GUEST_KERNEL_RESERVE_GIB
+    return (
+        max(SCYLLA_DEFAULT_RESERVE_FLOOR_GIB, SCYLLA_DEFAULT_RESERVE_FRACTION * visible_gib)
+        + SCYLLA_DEFAULT_RESERVE_PER_SHARD_GIB * vcpus
+    )
+
+
+def memory_per_shard_gib(guest_gib: float, vcpus: int) -> float:
+    """Memory each Scylla shard gets in a db guest of ``guest_gib`` with ``vcpus`` shards."""
+    return (guest_gib - GUEST_KERNEL_RESERVE_GIB - _scylla_os_reserve_gib(guest_gib, vcpus)) / vcpus
+
+
 def _check_memory_per_shard(params) -> None:
     """Fail when Scylla's default OS reservation leaves a shard under 1 GiB: production mode refuses to start."""
     if params.get("minicloud_lightweight") is False or (params.get("minicloud_scylla_reserve_memory") or "").strip():
         return
     guest = params.get("minicloud_lightweight_memory") or MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
-    visible_gib = parse_memory_gib(guest, "minicloud_lightweight_memory") - GUEST_KERNEL_RESERVE_GIB
+    guest_gib = parse_memory_gib(guest, "minicloud_lightweight_memory")
     vcpus = int(params.get("minicloud_lightweight_vcpus") or MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT)
-    reserve_gib = (
-        max(SCYLLA_DEFAULT_RESERVE_FLOOR_GIB, SCYLLA_DEFAULT_RESERVE_FRACTION * visible_gib)
-        + SCYLLA_DEFAULT_RESERVE_PER_SHARD_GIB * vcpus
-    )
-    per_shard_gib = (visible_gib - reserve_gib) / vcpus
+    reserve_gib = _scylla_os_reserve_gib(guest_gib, vcpus)
+    per_shard_gib = memory_per_shard_gib(guest_gib, vcpus)
     if per_shard_gib < SCYLLA_MIN_MEMORY_PER_SHARD_GIB:
         floor_gib = GUEST_KERNEL_RESERVE_GIB + reserve_gib + SCYLLA_MIN_MEMORY_PER_SHARD_GIB * vcpus
         raise MinicloudError(
@@ -250,6 +326,55 @@ def host_available_memory_gib() -> float | None:
     return None
 
 
+def host_total_memory_gib() -> float | None:
+    """MemTotal of a Linux host in GiB, else None."""
+    meminfo = Path("/proc/meminfo")
+    if not meminfo.exists():
+        return None
+    for line in meminfo.read_text().splitlines():
+        if line.startswith("MemTotal:"):
+            return int(line.split()[1]) / 1024 / 1024
+    return None
+
+
+@dataclasses.dataclass(frozen=True)
+class MemoryBudget:
+    """Memory the guests of a run have to fit into, and the headroom the gate adds to the guests own size."""
+
+    gib: float
+    source: str
+    headroom_gib: float
+
+
+def host_memory_budget(config: MinicloudConfig, guests: int) -> MemoryBudget | None:
+    """Return the budget the memory gate measures ``guests`` guests against, or None when the host reports none."""
+    if config.container_memory:
+        # only the per-guest headroom counts: QEMU runs inside the cap, dockerd and SCT run outside it.
+        return MemoryBudget(
+            gib=parse_memory_gib(config.container_memory, "minicloud_container_memory"),
+            source=f"the minicloud_container_memory cap ({config.container_memory})",
+            headroom_gib=HOST_HEADROOM_PER_GUEST_GIB * guests,
+        )
+    available_gib = host_available_memory_gib()
+    if available_gib is None:
+        return None
+
+    mem_in_use_gib = container_mem_in_use_gib(config.container_name)
+    source = "available host memory"
+    if mem_in_use_gib:
+        source += (
+            f" ({available_gib:.1f}GiB MemAvailable + {mem_in_use_gib:.1f}GiB already held by the "
+            f"running '{config.container_name}' container)"
+        )
+    # the base headroom is for dockerd, hydra, SCT and the page cache, the per-guest one for QEMU:
+    # 8 guests take ~9GiB of host memory on top of their own.
+    return MemoryBudget(
+        gib=available_gib + mem_in_use_gib,
+        source=source,
+        headroom_gib=HOST_HEADROOM_BASE_GIB + HOST_HEADROOM_PER_GUEST_GIB * guests,
+    )
+
+
 def check_host_memory(config: MinicloudConfig, params) -> None:
     """Fail before start when the test's guests cannot fit into this host's free memory.
 
@@ -283,64 +408,32 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         return
     if not config.lightweight:
         return  # non-lightweight sizing follows the requested instance types; out of scope here
-    # every pool that becomes a guest has to be counted, or a test with an oracle cluster,
-    # zero-token nodes or a vector store passes the gate and still OOM-kills the container.
-    counted_params = list(GUEST_NODE_COUNT_PARAMS)
-    if params.get("db_type") in ORACLE_GUEST_DB_TYPES:
-        counted_params.append("n_test_oracle_db_nodes")
-    guests = sum(sum_node_counts(params.get(name)) for name in counted_params)
-    # n_db_nodes is only where the cluster *starts*. A test that grows it - the scale tests set
-    # cluster_target_size, and longevity_test grows to it - peaks higher, and the peak is what has
-    # to fit: a gate that sizes the initial cluster only would pass and then let the run die at the
-    # exact moment it adds the node nobody budgeted for. Same idiom as
-    # provision/aws/capacity_reservation.py, which sizes its reservation off the target too.
-    if target_size := sum_node_counts(params.get("cluster_target_size")):
-        guests += max(0, target_size - sum_node_counts(params.get("n_db_nodes")))
+    guests, counted_params = counted_guests(params)
     if not guests:
         return
     needed_gib, breakdown = _guest_memory_gib(config, params, guests)
-    if config.container_memory:
-        # dockerd and SCT live outside the cgroup, so the base headroom does not count against the
-        # cap. The guests' QEMU processes run inside it, so their per-guest cost does.
-        qemu_overhead_gib = HOST_HEADROOM_PER_GUEST_GIB * guests
-        needed_gib += qemu_overhead_gib
-        budget_gib = parse_memory_gib(config.container_memory, "minicloud_container_memory")
-        budget_source = f"the minicloud_container_memory cap ({config.container_memory})"
-        headroom_note = f" + {qemu_overhead_gib:.0f}GiB QEMU overhead ({HOST_HEADROOM_PER_GUEST_GIB:.0f}GiB per guest)"
-    else:
-        available_gib = host_available_memory_gib()
-        if available_gib is None:  # the host does not report its free memory: nothing to size against
-            return
+    budget = host_memory_budget(config, guests)
+    if budget is None:
+        return
 
-        mem_in_use_gib = container_mem_in_use_gib(config.container_name)
-        budget_gib = available_gib + mem_in_use_gib
-        # dockerd, hydra, SCT itself and the page cache need to live too, and every guest costs
-        # more than its RAM: its QEMU process, the emulator's per-guest state. Measured on a
-        # 44GiB minipc5: 8 guests of 34GiB total left the host at 43.1GiB used plus 1.3GiB in
-        # swap, about 9GiB over the guests; a flat 2GiB passed that run, and the host OOM
-        # killer then killed a guest.
-        host_headroom_gib = HOST_HEADROOM_BASE_GIB + HOST_HEADROOM_PER_GUEST_GIB * guests
-        needed_gib += host_headroom_gib
-        budget_source = "available host memory"
-        if mem_in_use_gib:
-            budget_source += (
-                f" ({available_gib:.1f}GiB MemAvailable + {mem_in_use_gib:.1f}GiB already held by the "
-                f"running '{config.container_name}' container)"
-            )
-            LOGGER.info(
-                "host-memory gate: %.1fGiB MemAvailable + %.1fGiB already held by the running '%s' "
-                "container = %.1fGiB budget for %d guest(s) needing %.1fGiB",
-                available_gib,
-                mem_in_use_gib,
-                config.container_name,
-                budget_gib,
-                guests,
-                needed_gib,
-            )
+    needed_gib += budget.headroom_gib
+    budget_gib, budget_source = budget.gib, budget.source
+    if config.container_memory:
         headroom_note = (
-            f" + {host_headroom_gib:.0f}GiB host headroom ({HOST_HEADROOM_BASE_GIB:.0f}GiB + "
+            f" + {budget.headroom_gib:.0f}GiB QEMU overhead ({HOST_HEADROOM_PER_GUEST_GIB:.0f}GiB per guest)"
+        )
+    else:
+        headroom_note = (
+            f" + {budget.headroom_gib:.0f}GiB host headroom ({HOST_HEADROOM_BASE_GIB:.0f}GiB + "
             f"{HOST_HEADROOM_PER_GUEST_GIB:.0f}GiB per guest)"
         )
+    LOGGER.info(
+        "host-memory gate: %.1fGiB budget from %s for %d guest(s) needing %.1fGiB",
+        budget_gib,
+        budget_source,
+        guests,
+        needed_gib,
+    )
     if budget_gib < needed_gib:
         raise MinicloudError(
             f"not enough memory for this test: {guests} guest(s): {breakdown}{headroom_note} = "
