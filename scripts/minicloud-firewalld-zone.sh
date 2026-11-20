@@ -15,9 +15,11 @@
 # This runs on every start because the assignment is runtime-only, and
 # `firewall-cmd --reload` clears runtime interface-zone bindings.
 #
-# State and zone checks run unprivileged first, then retry with `sudo -n` when needed.
-# On Fedora jenkins agents, polkit can block unprivileged reads. Hosts without passwordless
-# sudo can still pass if a boot-time unit already set the zone. Only zone writes need root.
+# State and zone checks run unprivileged first, then retry with sudo when needed.
+# On Fedora jenkins agents, polkit can block unprivileged reads. Only zone writes need root.
+# Run from a terminal, sudo may prompt for a password; without one (CI, piped runs) it is
+# `sudo -n`, so hosts without passwordless sudo still pass only if a boot-time unit already
+# set the zone.
 #
 # Exit behavior:
 # - 0: no firewalld, firewalld stopped, no TUN yet, or already trusted
@@ -27,19 +29,23 @@ set -uo pipefail
 TUN=minicloud0
 ZONE=trusted
 
+# prompt for a password only when someone is at a terminal to type it
+SUDO=(sudo -n)
+[[ -t 0 ]] && SUDO=(sudo)
+
 no_op() {
     echo "$1"
     exit 0
 }
 
-# run a read-only firewall-cmd query, retrying with sudo -n when polkit denies the caller
+# run a read-only firewall-cmd query, retrying with sudo when polkit denies the caller
 fw_read() {
     local out rc
     out="$(firewall-cmd "$@" 2>&1)"
     rc=$?
 
     if [[ ${rc} -ne 0 && "${out}" != *"not running"* ]]; then
-        out="$(sudo -n firewall-cmd "$@" 2>&1)"
+        out="$("${SUDO[@]}" firewall-cmd "$@" 2>&1)"
         rc=$?
     fi
 
@@ -56,7 +62,7 @@ if ! state="$(fw_read --state)"; then
         no_op "firewalld is not running - no zone assignment needed for ${TUN}"
     fi
     echo "ERROR: firewalld is installed but its state could not be queried, unprivileged or" \
-         "via passwordless sudo (${state})" >&2
+         "via sudo (${state})" >&2
     exit 1
 fi
 
@@ -68,12 +74,12 @@ if [[ "$(fw_read --get-zone-of-interface="${TUN}")" == "${ZONE}" ]]; then
     no_op "${TUN} is already in firewalld's ${ZONE} zone"
 fi
 
-# the write needs root: -n fails fast if passwordless sudo is unavailable
-if ! output="$(sudo -n firewall-cmd --zone="${ZONE}" --change-interface="${TUN}" 2>&1)"; then
+# the write needs root; without a terminal, -n fails fast if passwordless sudo is unavailable
+if ! output="$("${SUDO[@]}" firewall-cmd --zone="${ZONE}" --change-interface="${TUN}" 2>&1)"; then
     echo "ERROR: could not move ${TUN} into firewalld's ${ZONE} zone (${output}) - the change" \
-         "needs passwordless sudo, unless a boot-time unit pre-assigns the zone; without it" \
-         "guests boot and get DHCP but never fetch their SSH key, failing every login with" \
-         "AuthenticationError" >&2
+         "needs root: run from a terminal to get a sudo prompt, configure passwordless sudo," \
+         "or pre-assign the zone with a boot-time unit; without it guests boot and get DHCP" \
+         "but never fetch their SSH key, failing every login with AuthenticationError" >&2
     exit 1
 fi
 
