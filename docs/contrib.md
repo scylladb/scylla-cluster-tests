@@ -52,6 +52,113 @@ Once you have changes in the requirements.in or in Hydra Dockerfile
 The `staging_trigger.py` tool (backed by the `utils/staging_trigger/` package) lets you
 trigger, browse, and generate Jenkins staging jobs from the command line.
 
+#### Jenkins credentials
+
+The tool calls Jenkins as you, with your own API token, so each build shows who started it.
+It tries your credentials from these sources, in order:
+
+1. `JENKINS_USERNAME` and `JENKINS_API_TOKEN` environment variables
+2. the 1Password item titled `Jenkins API token` (`op` CLI), the recommended store
+3. the OS keyring item with attribute `service=jenkins.scylladb.com` (`secret-tool`)
+
+It checks each one against Jenkins. When Jenkins rejects one (a revoked token, a wrong user ID),
+it says so and tries the next, so you can keep the token in both 1Password and the keyring.
+It stops with an error when none works. Each run prints what it used, for example:
+
+```text
+Jenkins: jdoe from 1Password was rejected, trying the next source (... [401] ...)
+Jenkins: calling https://jenkins.scylladb.com as jdoe@scylladb.com, token from OS keyring
+```
+
+When the 1Password app is locked or closed, the run prints `Jenkins: op failed: ...` and goes on
+with the keyring.
+
+##### Create a token
+
+1. Log in to https://jenkins.scylladb.com and open https://jenkins.scylladb.com/me/security
+   (your name, top right, then **Security**).
+2. Your Jenkins user ID is in the page URL, `/user/<user id>/security`, for example
+   `jdoe@scylladb.com`. Use the full ID: a short name fails with 401.
+3. Under **API Token**, click **Add new Token**, name it after the machine (`staging-trigger-laptop`),
+   and click **Generate**. Jenkins shows the token once. Copy it now.
+
+Store the token in 1Password, in your OS keyring, or in both. Never put it in a file in the repo
+or in your shell history.
+
+##### Store it in 1Password
+
+1. Install the 1Password CLI, `op`, version 2 or later:
+   - macOS: `brew install 1password-cli`
+   - Linux: add the 1Password apt or dnf repository and install the `1password-cli` package, as
+     described in https://developer.1password.com/docs/cli/get-started/. On Ubuntu that ends with
+     `sudo apt update && sudo apt install 1password-cli`.
+
+   Check it with `op --version`.
+2. Start the 1Password desktop app, sign in, and turn on
+   **Settings > Developer > Integrate with 1Password CLI**. `op` then uses the app's login, and
+   the app asks you to approve access the first time.
+3. Create an **API Credential** item titled `Jenkins API token`, with your Jenkins user ID in
+   **username** and the token in **credential**. In the app, use **+ New Item > API Credential**.
+   From the shell, the token goes to `op` on stdin, so it stays out of history and process lists:
+
+   ```bash
+   read -rs JENKINS_TOKEN   # paste the token, press Enter; nothing is shown
+   printf '{"title": "Jenkins API token", "category": "API_CREDENTIAL", "fields": [
+     {"id": "username", "type": "STRING", "label": "username", "value": "%s"},
+     {"id": "credential", "type": "CONCEALED", "label": "credential", "value": "%s"}]}' \
+     "<jenkins user id>" "$JENKINS_TOKEN" | op item create --vault <vault> > /dev/null
+   unset JENKINS_TOKEN
+   ```
+
+   `op vault list` shows your vault names (`Private`, `Employee`).
+4. Check it. This prints only the user ID:
+
+   ```bash
+   op item get "Jenkins API token" --fields label=username
+   ```
+
+##### Store it in the OS keyring
+
+On Linux, with `secret-tool` from `libsecret-tools`. It prompts for the token:
+
+```bash
+secret-tool store --label="Jenkins API token" service jenkins.scylladb.com user <jenkins user id>
+```
+
+##### Use it
+
+Keep the 1Password app unlocked; the first `op` call may ask you to approve access. Then run the
+tool as usual:
+
+```bash
+python staging_trigger.py trigger -b my-branch longevity-100gb-4h-test
+```
+
+To use other credentials for one run, set `JENKINS_USERNAME` and `JENKINS_API_TOKEN`.
+`JENKINS_USERNAME` alone overrides only the user ID. `JENKINS_URL` overrides the default
+`https://jenkins.scylladb.com`.
+
+To use only one source, set `JENKINS_CREDENTIALS_SOURCE` to `env`, `keyring` or `1password`.
+This is handy to check that a store works:
+
+```bash
+JENKINS_CREDENTIALS_SOURCE=1password python staging_trigger.py trigger -n
+```
+
+If a source is rejected, check the user ID in its `... was rejected` line first: it must be the
+full Jenkins user ID. Check a token by hand with the command below. `curl` reads the login from stdin,
+so the token stays off its command line:
+
+```bash
+printf 'user = "%s:%s"\n' "<jenkins user id>" "$(op read 'op://<vault>/Jenkins API token/credential')" \
+    | curl -s -K - https://jenkins.scylladb.com/whoAmI/api/json
+```
+
+It should show your user with `"authenticated":true`.
+
+Use one token per machine, so you can revoke one without the others. Revoke a token on the
+Jenkins Security page when you stop using the machine or think it leaked.
+
 #### Quick start
 
 ```bash
