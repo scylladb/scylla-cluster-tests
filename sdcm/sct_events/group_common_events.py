@@ -513,7 +513,7 @@ def ignore_raft_topology_cmd_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
-                regex=r".*raft_topology - raft_topology_cmd stream_ranges failed with: streaming::stream_exception \(Stream failed\)",
+                regex=r".*raft_topology - raft_topology_cmd stream_ranges failed with: streaming::stream_exception(?: \(|: )Stream failed",
                 extra_time_to_expiration=30,
             )
         )
@@ -521,7 +521,7 @@ def ignore_raft_topology_cmd_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
-                regex=r".*raft_topology\s+-\s+raft_topology_cmd stream_ranges failed with:\s+seastar::gate_closed_exception \(gate closed\).*",
+                regex=r".*raft_topology\s+-\s+raft_topology_cmd stream_ranges failed with:\s+seastar::gate_closed_exception(?: \(|: )gate closed.*",
                 extra_time_to_expiration=30,
             )
         )
@@ -574,7 +574,7 @@ def ignore_take_snapshot_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
-                regex=r".*api - take_snapshot failed: std::runtime_error \(Keyspace.*snapshot.*already exists",
+                regex=r".*api - take_snapshot failed: std::runtime_error(?: \(|: )Keyspace.*snapshot.*already exists",
                 extra_time_to_expiration=60,
             )
         )
@@ -626,7 +626,7 @@ def ignore_raft_applier_gate_closed_errors():
             r".*raft\s+-\s+\[[0-9a-f-]+\]\s+"
             r"applier fiber stopped because of the error:\s*"
             r".*?raft::state_machine_error"
-            r".*?seastar::gate_closed_exception\s+\(gate closed\).*"
+            r".*?seastar::gate_closed_exception(?:\s+\(|:\s*)gate closed.*"
         ),
         extra_time_to_expiration=30,
     ):

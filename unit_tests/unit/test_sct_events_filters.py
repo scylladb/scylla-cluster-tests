@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import contextlib
 import pickle
 import re
 import unittest.mock
@@ -24,6 +25,9 @@ from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverity
 from sdcm.sct_events.group_common_events import (
     ignore_aborted_snapshot_upload_storage_io_errors,
     ignore_drop_table_during_repair_errors,
+    ignore_raft_applier_gate_closed_errors,
+    ignore_raft_topology_cmd_failing,
+    ignore_take_snapshot_failing,
     oversized_allocation_filter,
 )
 
@@ -257,6 +261,104 @@ def test_ignore_aborted_snapshot_upload_storage_io_errors(aborted_snapshot_uploa
     assert len(aborted_snapshot_upload_filters) == 2
     for events_filter in aborted_snapshot_upload_filters:
         events_filter.eval_filter(event)
+
+    assert (event.severity == Severity.WARNING) is expected
+
+
+@contextlib.contextmanager
+def open_filters(filters_context):
+    published = []
+    with (
+        unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append),
+        filters_context(),
+    ):
+        yield list(published)
+    for events_filter in published:
+        events_filter.dont_publish()
+
+
+def apply_filters(filters_context, event):
+    with open_filters(filters_context) as filters:
+        assert filters
+        for events_filter in filters:
+            events_filter.eval_filter(event)
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        pytest.param("streaming::stream_exception (Stream failed)", True, id="stream-exception-old-format"),
+        pytest.param("streaming::stream_exception: Stream failed", True, id="stream-exception-new-format"),
+        pytest.param("seastar::gate_closed_exception (gate closed)", True, id="gate-closed-old-format"),
+        pytest.param("seastar::gate_closed_exception: gate closed", True, id="gate-closed-new-format"),
+        pytest.param("std::runtime_error: Stream failed", False, id="other-exception"),
+    ],
+)
+def test_ignore_raft_topology_cmd_stream_ranges_failing(error, expected):
+    event = DatabaseLogEvent.stream_exception().add_info(
+        node="node-13",
+        line_number=1,
+        line="2026-11-04T15:38:25.019 node-13  !ERR | scylla[6919]  [shard 0: gms] raft_topology - "
+        f"raft_topology_cmd stream_ranges failed with: {error}",
+    )
+
+    apply_filters(ignore_raft_topology_cmd_failing, event)
+
+    assert (event.severity == Severity.WARNING) is expected
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        pytest.param("std::runtime_error (Keyspace ks1: snapshot snap1 already exists.)", True, id="old-format"),
+        pytest.param("std::runtime_error: Keyspace ks1: snapshot snap1 already exists.", True, id="new-format"),
+        pytest.param("std::runtime_error: Keyspace ks1 does not exist", False, id="other-error"),
+    ],
+)
+def test_ignore_take_snapshot_failing(error, expected):
+    event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+        node="node-1",
+        line_number=1,
+        line=f"2026-11-04T15:38:25.019 node-1  !ERR | scylla[6919]  [shard 0:main] api - take_snapshot failed: {error}",
+    )
+
+    apply_filters(ignore_take_snapshot_failing, event)
+
+    assert (event.severity == Severity.WARNING) is expected
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        pytest.param(
+            "std::_Nested_exception<raft::state_machine_error> (State machine error at raft/server.cc:1230): "
+            "seastar::gate_closed_exception (gate closed)",
+            True,
+            id="old-format",
+        ),
+        pytest.param(
+            "std::_Nested_exception<raft::state_machine_error>: State machine error at raft/server.cc:1230: "
+            "seastar::gate_closed_exception: gate closed",
+            True,
+            id="new-format",
+        ),
+        pytest.param(
+            "std::_Nested_exception<raft::state_machine_error>: State machine error at raft/server.cc:1230: "
+            "seastar::abort_requested_exception: abort requested",
+            False,
+            id="other-error",
+        ),
+    ],
+)
+def test_ignore_raft_applier_gate_closed_errors(error, expected):
+    event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+        node="node-13",
+        line_number=1,
+        line="2026-11-04T15:38:25.019 node-13  !ERR | scylla[6919]  [shard 0:strm] raft - "
+        f"[5a7f2f0e-1b2c-11ef-9f3e-1d8a2b3c4d5e] applier fiber stopped because of the error: {error}",
+    )
+
+    apply_filters(ignore_raft_applier_gate_closed_errors, event)
 
     assert (event.severity == Severity.WARNING) is expected
 
