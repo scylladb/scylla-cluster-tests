@@ -1,0 +1,5 @@
+# One-off for test_mixed_gradual_increase_load on i8g.8xlarge: run only the unthrottled step,
+# with half the threads. At 3,800 threads per loader (15,200 in flight) Scylla shed reads and
+# the test aborted; ~1.75M ops/s x ~4 ms needs ~7k in flight, so 1,900 per loader saturates
+# without overloading. Use with cassandra_stress_gradual_load_steps_i8g_8xlarge.yaml.
+perf_gradual_throttle_steps: {"mixed": [{"rate": "unthrottled", "threads": 1900}]}
