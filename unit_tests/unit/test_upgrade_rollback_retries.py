@@ -77,7 +77,7 @@ def test_rollback_node_yum_downgrade_passes_retry_and_timeout():
 
     UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
 
-    assert mock.call(r"sudo yum downgrade scylla\* -y", retry=3, timeout=600) in fake_node.remoter.run.call_args_list
+    assert mock.call(r"yum downgrade scylla\* -y -C", retry=3, timeout=600) in fake_node.remoter.sudo.call_args_list
 
 
 @pytest.mark.parametrize(
