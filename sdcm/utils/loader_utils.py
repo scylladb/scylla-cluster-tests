@@ -205,7 +205,8 @@ class LoaderUtilsMixin:
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
         stress_multiplier = self.params.get("stress_multiplier")
         if stress_multiplier > 1:
-            stress_cmds *= stress_multiplier
+            # Not in place: the list is the one that the configuration holds, and it is read again for the next round.
+            stress_cmds = stress_cmds * stress_multiplier
 
         for stress_cmd in stress_cmds:
             rendered_cmd = self.render_stress_cmd(stress_cmd)
