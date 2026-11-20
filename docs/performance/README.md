@@ -19,6 +19,7 @@ and the procedures for changing it.
 | See what runs at which cadence, and where a new test fits | [pipelines-and-scheduling.md](pipelines-and-scheduling.md) |
 | Migrate tests to a new instance type | [runbook-new-instance-type.md](runbook-new-instance-type.md) |
 | Add or switch a stress tool | [runbook-new-stress-tool.md](runbook-new-stress-tool.md) |
+| Avoid common latte / cassandra-stress pitfalls, and read their results correctly | [stress-tool-tips.md](stress-tool-tips.md) |
 | Add a brand-new performance test | [runbook-new-perf-test.md](runbook-new-perf-test.md) |
 | Re-derive throughput steps and latency thresholds | [runbook-recalibrate-steps.md](runbook-recalibrate-steps.md) |
 | Investigate a latency spike in a finished run | [../performance-tests.md](../performance-tests.md) (`hydra hdr-investigate`) |

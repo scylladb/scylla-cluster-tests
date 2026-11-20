@@ -33,6 +33,9 @@ Constraints worth knowing before you commit:
 - **latte** uses Rune scripts, which are entirely incompatible with the c-s YAML profile
   library. Smaller ecosystem, fewer third-party scripts.
 
+For tuning and result-reading lessons once a tool is running, see
+[stress-tool-tips.md](stress-tool-tips.md).
+
 ---
 
 ## Part A: Adding a brand-new tool
