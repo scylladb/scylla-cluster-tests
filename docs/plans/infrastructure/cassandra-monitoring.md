@@ -85,11 +85,13 @@ switch later if performance matters.
 1. In `configure_scylla_monitoring()` (cluster.py:6900), detect Cassandra clusters and add scrape config:
    ```python
    cassandra_targets = [f"{n.ip_address}:8080" for n in cassandra_nodes]
-   scrape_configs.append(dict(
-       job_name="cassandra_exporter",
-       honor_labels=True,
-       static_configs=[dict(targets=cassandra_targets)],
-   ))
+   scrape_configs.append(
+       dict(
+           job_name="cassandra_exporter",
+           honor_labels=True,
+           static_configs=[dict(targets=cassandra_targets)],
+       )
+   )
    ```
 2. Add `cassandra_exporter_servers.yml` target file generation in `reconfigure_scylla_monitoring()`
 3. Handle mixed clusters (Scylla + Cassandra oracle) — both exporters active

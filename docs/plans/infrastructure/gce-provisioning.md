@@ -134,6 +134,7 @@ This document outlines the plan to implement a modern provisioning system for Go
 2. **`sdcm/provision/__init__.py`** - Register GCE provisioner
    ```python
    from sdcm.provision.gce.provisioner import GceProvisioner
+
    provisioner_factory.register_provisioner(backend="gce", provisioner_class=GceProvisioner)
    ```
 
@@ -161,18 +162,15 @@ This document outlines the plan to implement a modern provisioning system for Go
    # Test that provisioner can be imported
    from sdcm.provision.gce.provisioner import GceProvisioner
    from sdcm.provision import provisioner_factory
+
    # Verify factory registration
-   assert 'gce' in provisioner_factory._classes
+   assert "gce" in provisioner_factory._classes
    ```
 
 2. **Provisioner Instantiation**:
    ```python
    # Test creating provisioner instance
-   provisioner = GceProvisioner(
-       test_id="test-123",
-       region="us-east1",
-       availability_zone="b"
-   )
+   provisioner = GceProvisioner(test_id="test-123", region="us-east1", availability_zone="b")
    # Verify attributes are set correctly
    assert provisioner.region == "us-east1"
    assert provisioner.availability_zone == "us-east1-b"
@@ -257,17 +255,13 @@ This document outlines the plan to implement a modern provisioning system for Go
    from sdcm.provision.gce.provisioner import GceProvisioner
    from sdcm.cluster_gce import ScyllaGCECluster
 
-   provisioner = GceProvisioner(
-       test_id="test-123",
-       region="us-east1",
-       availability_zone="b"
-   )
+   provisioner = GceProvisioner(test_id="test-123", region="us-east1", availability_zone="b")
 
    cluster = ScyllaGCECluster(
        gce_image="scylla-image",
        # ... other params ...
        provisioners=[provisioner],
-       n_nodes=1
+       n_nodes=1,
    )
    nodes = cluster.add_nodes(1)
    assert len(nodes) == 1
@@ -415,7 +409,7 @@ This document outlines the plan to implement a modern provisioning system for Go
        type="n2-standard-2",
        user_name="ubuntu",
        ssh_key=ssh_key,
-       tags={"TestId": "test-net", "NodeType": "scylla-db"}
+       tags={"TestId": "test-net", "NodeType": "scylla-db"},
    )
    instance = provisioner.get_or_create_instance(instance_def, PricingModel.ON_DEMAND)
 
