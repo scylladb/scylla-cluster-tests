@@ -86,10 +86,12 @@ BACKEND_TIMEOUTS: dict[str, Mapping[LogPosition, int]] = {
     "azure": {LogPosition.BEGIN: 1800, LogPosition.END: 7200},
 }
 
+DECOMMISSION_WITH_REPAIR_LOG_MESSAGE = "repair - decommission_with_repair"
+
 ABORT_DECOMMISSION_LOG_PATTERNS: Iterable[MessagePosition] = [
     MessagePosition("api - decommission", LogPosition.BEGIN),
     MessagePosition("raft_topology - decommission: waiting for completion", LogPosition.BEGIN),
-    MessagePosition("repair - decommission_with_repair", LogPosition.END),
+    MessagePosition(DECOMMISSION_WITH_REPAIR_LOG_MESSAGE, LogPosition.END),
     MessagePosition("raft_topology - request decommission for", LogPosition.BEGIN),
     MessagePosition("storage_service - Started batchlog replay for decommission", LogPosition.END),
     MessagePosition("raft_topology - start streaming", LogPosition.BEGIN),
@@ -163,8 +165,24 @@ class RaftFeatureOperations(ABC):
             module is never touched here.
         """
         log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
+        relevant_patterns = [
+            pattern for pattern in log_patterns if pattern.log_message != DECOMMISSION_WITH_REPAIR_LOG_MESSAGE
+        ]
+        if len(relevant_patterns) != len(log_patterns) and not self._is_decommission_with_repair_enabled():
+            log_patterns = relevant_patterns
         log_pattern = random_generator.choice(log_patterns)
         return self.get_message_waiting_timeout(log_pattern)
+
+    def _is_decommission_with_repair_enabled(self) -> bool:
+        """Scylla logs DECOMMISSION_WITH_REPAIR_LOG_MESSAGE only when repair-based node ops cover decommission.
+
+        An unknown value counts as enabled, so the pattern stays in the pick.
+        """
+        rbno_enabled = self._node.get_scylla_config_param("enable_repair_based_node_ops", verbose=False)
+        if rbno_enabled is not None and rbno_enabled.strip() == "false":
+            return False
+        allowed_ops = self._node.get_scylla_config_param("allowed_repair_based_node_ops", verbose=False)
+        return allowed_ops is None or "decommission" in allowed_ops
 
     def get_all_messages_timeouts(self, operation: TopologyOperations):
         log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
