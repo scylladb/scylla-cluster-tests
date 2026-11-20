@@ -1,0 +1,90 @@
+test_metadata:
+  description: >-
+    Vnode-to-tablet migration of keyspace mv_migration (data_dir/vnode_to_tablet_migration_mv_si.yaml)
+    with materialized views and secondary indexes on a 6-node cluster in 3 simulated racks, RF=3,
+    with SisyphusMonkey nemesis. The base table has a view keyed by the base partition key and a
+    local index (both co-located with the base after migration), and a view keyed by another column
+    and a global index (both with tablets of their own); all use ICS and tombstone_gc 'repair'.
+    Prepare writes partitions 1..10M; during the migration a cassandra-stress user profile inserts
+    partitions 10M+1..20M and reads the base, views and indexes over 1..10M.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mv
+  features:
+    - tablets
+  team_ownership: storage-qa
+
+test_duration: 600
+
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+simulated_racks: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-vnode-to-tablet-migration-mv-si'
+
+server_encrypt: true
+client_encrypt: true
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+nemesis_during_prepare: false
+
+# CREATE INDEX cannot set tombstone_gc or compaction, so the backing views are altered.
+pre_create_keyspace:
+  - "CREATE KEYSPACE IF NOT EXISTS mv_migration WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': false}"
+  - "CREATE TABLE IF NOT EXISTS mv_migration.base (pk bigint, ck bigint, c1 bigint, c2 bigint, c3 bigint, c4 bigint, v blob, PRIMARY KEY (pk, ck)) WITH compaction = {'class': 'IncrementalCompactionStrategy'} AND tombstone_gc = {'mode': 'repair'}"
+  - "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_migration.base_by_pk_c1 AS SELECT pk, ck, c1 FROM mv_migration.base WHERE pk IS NOT NULL AND ck IS NOT NULL AND c1 IS NOT NULL PRIMARY KEY (pk, c1, ck) WITH compaction = {'class': 'IncrementalCompactionStrategy'} AND tombstone_gc = {'mode': 'repair'}"
+  - "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_migration.base_by_c2 AS SELECT pk, ck, c2 FROM mv_migration.base WHERE pk IS NOT NULL AND ck IS NOT NULL AND c2 IS NOT NULL PRIMARY KEY (c2, pk, ck) WITH compaction = {'class': 'IncrementalCompactionStrategy'} AND tombstone_gc = {'mode': 'repair'}"
+  - "CREATE INDEX IF NOT EXISTS base_c3_global ON mv_migration.base (c3)"
+  - "CREATE INDEX IF NOT EXISTS base_c4_local ON mv_migration.base ((pk), c4)"
+  - "ALTER MATERIALIZED VIEW mv_migration.base_c3_global_index WITH compaction = {'class': 'IncrementalCompactionStrategy'} AND tombstone_gc = {'mode': 'repair'}"
+  - "ALTER MATERIALIZED VIEW mv_migration.base_c4_local_index WITH compaction = {'class': 'IncrementalCompactionStrategy'} AND tombstone_gc = {'mode': 'repair'}"
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress user profile=/tmp/vnode_to_tablet_migration_mv_si.yaml n=5000000 no-warmup
+    ops'(insert=1)' cl=QUORUM
+    -mode cql3 native
+    -rate threads=40
+    -pop seq=1..5000000
+    -log interval=5
+  - >-
+    cassandra-stress user profile=/tmp/vnode_to_tablet_migration_mv_si.yaml n=5000000 no-warmup
+    ops'(insert=1)' cl=QUORUM
+    -mode cql3 native
+    -rate threads=40
+    -pop seq=5000001..10000000
+    -log interval=5
+
+# The insert stream writes new partitions; the read stream reads the prepared ones.
+stress_cmd:
+  - >-
+    cassandra-stress user profile=/tmp/vnode_to_tablet_migration_mv_si.yaml duration=240m no-warmup
+    ops'(insert=1)' cl=QUORUM
+    -mode cql3 native
+    -rate threads=20 throttle=2000/s
+    -pop seq=10000001..20000000
+    -log interval=5
+  - >-
+    cassandra-stress user profile=/tmp/vnode_to_tablet_migration_mv_si.yaml duration=240m no-warmup
+    ops'(read=1,mv_colocated_read=1,mv_read=1,si_global_read=1,si_local_read=1)' cl=QUORUM
+    -mode cql3 native
+    -rate threads=20 throttle=2000/s
+    -pop seq=1..10000000
+    -log interval=5
+
+use_hdrhistogram: true
