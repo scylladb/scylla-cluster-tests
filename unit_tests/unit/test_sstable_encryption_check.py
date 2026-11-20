@@ -87,6 +87,27 @@ def test_read_error_on_existing_sstable_fails_check(make_sstable_utils):
         utils.check_that_sstables_are_encrypted(sstables=[ENCRYPTED_SSTABLE, FAILED_SSTABLE])
 
 
+@pytest.mark.parametrize(
+    "sstables_count, max_sstables, expected_checked",
+    [
+        pytest.param(30, 5, 5, id="sample-of-many"),
+        pytest.param(3, 5, 3, id="fewer-than-cap"),
+        pytest.param(30, None, 30, id="no-cap"),
+    ],
+)
+def test_max_sstables_limits_checked_sstables(make_sstable_utils, sstables_count, max_sstables, expected_checked):
+    """The KMS rotation check reads a sample, so a pass stays short on a table with hundreds of sstables."""
+    sstables = [f"{TABLE_DIR}/mt-3h4l_{index:04}_5lwio2r3i5kiqk479z-big-Data.db" for index in range(sstables_count)]
+    utils = make_sstable_utils(dict.fromkeys(sstables, ENCRYPTED_STDERR), existing=set(sstables))
+
+    utils.check_that_sstables_are_encrypted(sstables=sstables, max_sstables=max_sstables)
+
+    checked = [call.args[0].split()[-1] for call in utils.db_node.remoter.sudo.call_args_list]
+    assert len(checked) == expected_checked
+    assert len(set(checked)) == expected_checked
+    assert set(checked) <= set(sstables)
+
+
 def test_no_sstables_left_raises_not_found(make_sstable_utils):
     utils = make_sstable_utils(
         {ENCRYPTED_SSTABLE: DELETED_STDERR, FAILED_SSTABLE: MISORDERED_STDERR}, existing={FAILED_SSTABLE}
