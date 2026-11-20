@@ -116,6 +116,8 @@ After Phase 2, `SCTConfiguration()` would not need any of these image-resolution
 
 ### Phase 1: Extract Validation from `__init__` into Pydantic Validators
 
+> **Superseded by [config/validation-on-mixins](config/validation-on-mixins/spec.md).** Do not implement this phase.
+
 **Objective**: Move all inline validation blocks (steps 11–21 in `__init__`) into proper Pydantic `@model_validator` and `@field_validator` methods, making them declarative and independently testable. **Only pure data validators** (no network/cloud API calls) become Pydantic validators.
 
 **Constraint — no network calls in validators**: All 11 validation blocks (steps 11–21) have been audited and confirmed to be pure data checks — none make network calls. Any future validation that requires network access must **not** be added as a `@field_validator` or `@model_validator`; it should live in a separate explicit stage (e.g., `resolve_images()` or `verify_configuration()`).
