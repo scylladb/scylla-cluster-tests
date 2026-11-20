@@ -18,7 +18,8 @@ test_metadata:
   features: []
   team_ownership: storage-qa
 
-test_duration: 800
+# prepare ~50 + stress 720 + other teardown ~30 + scrub validator up to 160 (timeout + 10 min of waits)
+test_duration: 960
 
 stress_template_context:
   fill_percent: 30
@@ -64,3 +65,5 @@ seeds_num: 3
 teardown_validators:
   scrub:
     enabled: true
+    # full scrub: ~30 min on a 330 GB node, ~2h on a 700 GB removenode/decommission drain target
+    timeout: 9000

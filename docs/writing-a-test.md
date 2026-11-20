@@ -87,6 +87,13 @@ user_prefix: my-feature
 Every test-case also carries a `test_metadata:` block (type, tier, backends, stress tools) used by
 the pipeline catalog; `hydra lint-test-docs` checks it.
 
+`test_duration` must also cover the teardown validators (`teardown_validators`). They run
+before the test timer stops, so a validator that is still running at the end of
+`test_duration` raises a `TestTimeoutEvent`. The `scrub` validator reads every sstable, so its
+time grows with the disk usage of the fullest node: a node that received the data of a removed
+node can take hours. When a test-case fills the disks, raise `teardown_validators.scrub.timeout`
+and `test_duration` together.
+
 All options, with their `SCT_*` environment-variable names, are in the
 [configuration options reference](configuration_options.md).
 

@@ -149,7 +149,7 @@ Failure/post test behavior, i.e. what to do with the vector store cloud instance
 
 ## **teardown_validators** / SCT_TEARDOWN_VALIDATORS
 
-Validators to use during teardown phase
+Validators to use during teardown phase. They run within [`test_duration`](general-and-provisioning.md#test_duration). The `scrub` time grows with the disk usage of the fullest node; raise `scrub.timeout` and [`test_duration`](general-and-provisioning.md#test_duration) together.
 
 **default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}, 'nvme': {'enabled': False}}
 
