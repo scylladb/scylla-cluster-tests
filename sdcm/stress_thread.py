@@ -319,6 +319,15 @@ class CassandraStressThread(DockerBasedStressThread):
         return stress_cmd
 
     @staticmethod
+    def _docker_memory_opts(mem_total_kib: int, percent: int) -> str:
+        """Build the docker options that limit the memory of the container to `percent` of the loader memory.
+
+        `--memory-swap` is equal to `--memory`, so the container cannot use swap above the limit.
+        """
+        limit_kib = mem_total_kib * percent // 100
+        return f" --memory={limit_kib}k --memory-swap={limit_kib}k"
+
+    @staticmethod
     def _safepoint_jvm_opts(container_log_file: str) -> str:
         """Build the unified logging options that make the c-s JVM log every safepoint.
 
@@ -392,6 +401,15 @@ class CassandraStressThread(DockerBasedStressThread):
                 LOGGER.info("cassandra-stress safepoint log on %s: %s", loader.name, remote_safepoint_log_full_path)
 
             cpu_options = ""
+            memory_options = ""
+            if memory_limit_percent := self.params.get("cs_docker_memory_limit_percent"):
+                mem_total_kib = int(
+                    loader.remoter.run(
+                        "awk '/^MemTotal:/ { print $2 }' /proc/meminfo", ignore_status=False, verbose=False
+                    ).stdout.strip()
+                )
+                memory_options = self._docker_memory_opts(mem_total_kib, memory_limit_percent)
+                LOGGER.info("Limiting cassandra-stress container memory on %s:%s", loader.name, memory_options)
             if jvm_opts_value:
                 jvm_opts = f" -e JVM_OPTS='{jvm_opts_value}'"
                 LOGGER.info("Passing JVM_OPTS to cassandra-stress container: %s", jvm_opts_value)
@@ -399,7 +417,7 @@ class CassandraStressThread(DockerBasedStressThread):
                 loader,
                 self.docker_image_name,
                 command_line="-c 'tail -f /dev/null'",
-                extra_docker_opts=f"{cpu_options} "
+                extra_docker_opts=f"{cpu_options}{memory_options} "
                 "--network=host "
                 "--security-opt seccomp=unconfined "
                 f"--label shell_marker={self.shell_marker}"
