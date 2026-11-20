@@ -1,0 +1,3 @@
+# Per-run state written by the simulation scripts: instance ids, resolved AMI,
+# SCT test ids and the host-state snapshots used for the drift comparison.
+.state/
