@@ -187,3 +187,54 @@ def test_batch_status_raises_on_unusable_dump(node, sstable_utils, stdout, expec
 
     with pytest.raises(expected_exception):
         sstable_utils._get_sstables_tombstone_status([SSTABLE])
+
+
+# ---------------------------------------------------------------------------
+# get_sstables
+# ---------------------------------------------------------------------------
+
+TABLE_DIR = "/var/lib/scylla/data/keyspace1/standard1-abcd"
+
+
+def test_get_sstables_skips_sstables_without_toc(node, sstable_utils):
+    """Verify an incomplete sstable, with no TOC.txt, is left out.
+
+    A Scylla stopped in the middle of writing or deleting an sstable leaves it without TOC.txt,
+    and the "scylla sstable" tool fails on it (SCT-1045).
+    """
+    node.remoter.sudo.return_value = result(
+        stdout="\n".join(
+            [
+                f"{TABLE_DIR}/me-1-big-Data.db",
+                f"{TABLE_DIR}/me-1-big-TOC.txt",
+                f"{TABLE_DIR}/me-2-big-Data.db",
+                f"{TABLE_DIR}/me-3-big-TOC.txt",
+                f"{TABLE_DIR}/me-3-big-Data.db",
+            ]
+        )
+    )
+
+    assert sstable_utils.get_sstables() == [f"{TABLE_DIR}/me-1-big-Data.db", f"{TABLE_DIR}/me-3-big-Data.db"]
+    node.remoter.sudo.assert_called_once_with(
+        "find /var/lib/scylla/data/keyspace1/standard1-*/ -maxdepth 1 -type f"
+        r" \( -name '*-big-Data.db' -o -name '*-big-TOC.txt' \)",
+        verbose=False,
+        ignore_status=True,
+    )
+
+
+def test_get_sstables_filters_by_time_only_data_files(node, sstable_utils):
+    """Verify the time filter applies to the Data.db files, so an old TOC.txt still counts."""
+    node.remoter.sudo.return_value = result(stdout=f"{TABLE_DIR}/me-1-big-Data.db\n{TABLE_DIR}/me-1-big-TOC.txt")
+
+    assert sstable_utils.get_sstables(from_minutes_ago=30) == [f"{TABLE_DIR}/me-1-big-Data.db"]
+    assert r"\( -name '*-big-Data.db' -cmin -30 -o -name '*-big-TOC.txt' \)" in node.remoter.sudo.call_args.args[0]
+
+
+def test_get_sstables_returns_nothing_on_find_error(node, sstable_utils):
+    """Verify a failed find, e.g. for a table without a data directory, returns no sstables."""
+    node.remoter.sudo.return_value = result(
+        ok=False, stdout="", stderr="find: '/var/lib/scylla/data/keyspace1/standard1-*/': No such file or directory"
+    )
+
+    assert sstable_utils.get_sstables() == []
