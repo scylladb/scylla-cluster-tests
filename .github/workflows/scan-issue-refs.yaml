@@ -1,0 +1,46 @@
+name: Scan issue references
+# Referenced-only issue cache, part 1 of 2 (QAINFRA-104 / SCT-1172).
+#
+# Scans SCT's active branches for the issues test code references (SkipPerIssues, the
+# backtrace map, ...) and publishes them as issues/refs/scylla-cluster-tests.json.
+# dtest publishes issues/refs/scylla-dtest.json the same way, from its own repo.
+# cache-referenced-issues.yaml reads the union of these manifests.
+#
+# Weekly is enough: markers change about once a week across SCT and dtest. A ref that
+# isn't scanned yet falls back to a live API lookup in the readers.
+#
+# Local testing: see the docstring of utils/issues_cache/__init__.py.
+permissions: {}
+on:
+  schedule:
+    - cron: '30 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    # run only on main repository, won't work on forks
+    if: github.repository == 'scylladb/scylla-cluster-tests'
+    permissions:
+      contents: read
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+      BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GRANT_FULL: full=id=${{ secrets.CLOUDIUS_SYSTEMS_CANONICAL_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every branch is scanned
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.15'
+
+      - name: Scan SCT branches and publish the ref manifest
+        run: |
+          python -m utils.issues_cache scan --repo-dir . --out manifest.json
+          aws s3 cp manifest.json "s3://$BUCKET/issues/refs/scylla-cluster-tests.json" --grants "$GRANT_FULL"
