@@ -23,6 +23,7 @@ import math
 import re
 from dataclasses import dataclass, replace
 
+from sdcm.utils.cloud_catalog import interruption
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo, RoleConfig
 
 LOG = logging.getLogger(__name__)
@@ -465,6 +466,10 @@ def _apply_implicit_constraints_fallback(parsed: list[Constraint], role: str) ->
         parsed.append(Constraint("local_disk_count", "eq", 0))
 
 
+#: Sorts after every real interruption bucket (0-4).
+_UNKNOWN_BUCKET = 5
+
+
 def _build_sort_key(
     sort_order: list[str] | None,
     family_rank: dict[str, int],
@@ -491,6 +496,7 @@ def select_instance(
     constraints: dict,
     arch: str | None = None,
     region: str | None = None,
+    spot_region: str | None = None,
 ) -> InstanceTypeInfo:
     """Select the best cloud instance matching the given constraints.
 
@@ -508,7 +514,8 @@ def select_instance(
     5. Filter all cloud instances by the full constraint set.
     6. Narrow to preferred-family candidates when available.
     7. Sort: preferred family order → price ascending → vcpus ascending.
-    8. Return the first (best) match.
+    8. For AWS spot, swap the best match for the least-interrupted candidate of the same vcpus.
+    9. Return the best match.
 
     Args:
         catalog: Instance catalog to search.
@@ -518,6 +525,10 @@ def select_instance(
         arch: Optional architecture override ("x86_64", "arm64", or aliases).
             When provided, overrides any "arch" key in *constraints* and the
             catalog default.
+        region: Region for prices.
+        spot_region: For an AWS spot run, rank the best match's same-size siblings by their
+            interruption bucket in this region (AWS Spot Instance Advisor data). The size never
+            changes, and prices are unaffected.
 
     Returns:
         The best-matching InstanceTypeInfo.
@@ -573,14 +584,20 @@ def select_instance(
         if preferred_candidates:
             candidates = preferred_candidates
 
-    candidates.sort(
-        key=_build_sort_key(
-            sort_order=sizing.sort_order if sizing else None,
-            family_rank=family_rank,
-            num_preferred=len(preferred_families),
-            region=region,
-        )
+    sort_key = _build_sort_key(
+        sort_order=sizing.sort_order if sizing else None,
+        family_rank=family_rank,
+        num_preferred=len(preferred_families),
+        region=region,
     )
-    best = candidates[0]
+    best = min(candidates, key=sort_key)
+    # Only AWS has interruption data. Spot keeps the normal pick's size (candidates already share one arch),
+    # and only swaps it for a less-interrupted sibling.
+    spot_buckets = interruption.aws_spot_buckets().get(spot_region, {}) if spot_region and cloud == "aws" else {}
+    if spot_buckets:
+        best = min(
+            (inst for inst in candidates if inst.vcpus == best.vcpus),
+            key=lambda inst: (spot_buckets.get(inst.instance_type, _UNKNOWN_BUCKET), sort_key(inst)),
+        )
     mem_per_vcpu = sizing.flex_defaults.get("mem_per_vcpu", 4.0) if sizing else 4.0
     return _resolve_flex_instance(best, parsed, mem_per_vcpu=mem_per_vcpu)
