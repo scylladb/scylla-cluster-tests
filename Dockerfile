@@ -35,7 +35,7 @@ RUN apt-get install -y --no-install-recommends \
     patchelf
 ADD uv.lock  .
 ADD pyproject.toml .
-COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /uvx /bin/
 RUN uv sync --frozen
 
 # ssh2-python has no cp315 wheels, so uv builds it from source, against the system libcrypto that the ssl module uses too.
