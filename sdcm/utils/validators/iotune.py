@@ -9,6 +9,26 @@ from sdcm.sct_events.system import TestFrameworkEvent
 
 LOGGER = logging.getLogger(__name__)
 
+# Deviation is the absolute percent difference between the installed io_properties.yaml value and the
+# measured value: |installed - measured| / installed * 100.
+#
+# An installed value above the measured value lets the I/O scheduler send more I/O than the disk can serve.
+# An installed value below the measured value keeps Scylla from using the full disk performance.
+# Argus fails the run when the deviation is at or above the limit of the backend. The limits come from the Argus
+# "Disk Performance" tables of release image artifacts runs, 2025-07 to 2026-10 (SCT-1274). The "healthy max"
+# columns do not include the instance types with a known preset defect.
+#
+#   backend  limit  healthy max,              healthy max,             smallest defect
+#                   installed above           installed below
+#   aws      25%    25% (i4i.4xlarge),        24% (i4g)                31% above (i4i.8xlarge),
+#                   38% on some i3en hosts                             117% below (is4gen.2xlarge)
+#   gce      20%    15.4%                     18.9% (n2-highmem-128)   25% above (fixed values on small types),
+#                                                                      52% below (2025.1)
+#   oci      30%    23.5%                     18.4%                    none seen
+#   azure    35%    35% (Lsv3), 12% (v4)      32% (Lsv3), 11% (v4)     98% above (Lsv3 low-IOPS hosts),
+#                                                                      360% below (2026.1 L8aos_v4)
+IO_DEVIATION_LIMIT_PCT = {"aws": 25, "gce": 20, "oci": 30, "azure": 35}
+
 
 class IOTuneDiskParams(TypedDict):
     mountpoint: str
@@ -26,18 +46,21 @@ class IOTuneException(Exception):
     pass
 
 
+def io_deviation_pct(installed: int, measured: int) -> float:
+    return abs(installed - measured) / installed * 100
+
+
 class IOTuneValidator:
-    def __init__(self, node: BaseNode):
+    def __init__(self, node: BaseNode, backend: str):
         self.node = node
         self.node_io_properties: IOProperties = {}
         self.preset_io_properties: IOProperties = {}
         self.results = {
             "mountpoint": None,
-            "deviation": {},
+            "limit_pct": IO_DEVIATION_LIMIT_PCT[backend],
             "deviation_pct": {},
             "active": {},
             "preset": {},
-            "limits": {},
         }
 
     def validate(self):
@@ -66,14 +89,6 @@ class IOTuneValidator:
 
         return self.node_io_properties
 
-    @staticmethod
-    def _bottom_limit(metric_val, threshold=0.15):
-        """
-        Determine disk metric deviation threshold and
-        use that as fixed limit
-        """
-        return metric_val * threshold
-
     def _prepare_results_table(self):
         preset_disk = next(iter(self.preset_io_properties.get("disks", [])), None)
         tested_disk = deepcopy(next(iter(self.node_io_properties.get("disks", []))))
@@ -91,13 +106,9 @@ class IOTuneValidator:
 
         self.results["mountpoint"] = tested_mountpoint
         for key, value in tested_disk.items():
-            preset_val = preset_disk.get(key)
-            deviation_val = abs(preset_val - value)
-            self.results["deviation"][key] = deviation_val
-            self.results["deviation_pct"][key] = (deviation_val / preset_val) * 100
+            self.results["deviation_pct"][key] = io_deviation_pct(preset_disk[key], value)
             self.results["active"][key] = value
-            self.results["preset"][key] = preset_disk.get(key)
-            self.results["limits"][key] = self._bottom_limit(preset_disk[key])
+            self.results["preset"][key] = preset_disk[key]
 
     def _format_results_to_console(self):
         LOGGER.info("Disk performance values validation - testing %s", self.results["mountpoint"])
