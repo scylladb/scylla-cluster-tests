@@ -1,0 +1,86 @@
+test_metadata:
+  description: >-
+    Automatic Repair MS2 scopes under a basic 4-hour longevity: auto repair is enabled at CLUSTER scope
+    with a 15-minute period and turned off at KEYSPACE scope for ks_manual and at TABLE scope for
+    ks_mixed.manual_t, while ks_auto.t and ks_mixed.auto_t follow the cluster value. latte keeps
+    inserting, deleting 20% of the keys and validating reads on all four tables under SisyphusMonkey.
+    At the end, the test checks that the scopes are still stored and, from the "Finished tablet repair
+    ... request_type=auto_repair" DB log lines, that auto repair ran on the two enabled tables and
+    never on the two disabled ones.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+    - auto-repair
+  team_ownership: scylladb/storage-qa
+
+test_duration: 330
+
+n_db_nodes: 6
+n_loaders: 1
+sizing_db:
+  vcpu: 2
+  memory: '>=16'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 5
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-auto-repair-scopes-4h'
+
+# The narrowest scope that stores a value wins:
+#   ks_auto.t          follows the cluster value: auto repair every 15 minutes
+#   ks_manual.t        keyspace scope false: no auto repair
+#   ks_mixed.auto_t    follows the cluster value: auto repair every 15 minutes
+#   ks_mixed.manual_t  table scope false: no auto repair
+cluster_level_config:
+  auto_repair_enabled: true
+  auto_repair_threshold_in_seconds: 900
+
+pre_create_keyspace:
+  - "CREATE KEYSPACE ks_auto WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}"
+  - "CREATE KEYSPACE ks_manual WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND auto_repair_enabled = false"
+  - "CREATE KEYSPACE ks_mixed WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}"
+  - "CREATE TABLE ks_auto.t (pk bigint, ck bigint, PRIMARY KEY (pk, ck))"
+  - "CREATE TABLE ks_manual.t (pk bigint, ck bigint, PRIMARY KEY (pk, ck))"
+  - "CREATE TABLE ks_mixed.auto_t (pk bigint, ck bigint, PRIMARY KEY (pk, ck))"
+  - "CREATE TABLE ks_mixed.manual_t (pk bigint, ck bigint, PRIMARY KEY (pk, ck)) WITH auto_repair_enabled = false"
+
+stress_template_context:
+  # 2M keys per table: keys 1600001-1999999 (20%) are deleted, the rest inserted, and reads validate both
+  keys: "-P row_count=2000000 -P delete_start_index=1600001 -P delete_end_index=2000000 --threads=2 --concurrency=64"
+  main: "--consistency=QUORUM --duration=240m --rate=2000 --retry-number=10 --retry-interval=500ms,5s --request-timeout=30s --validation-strategy=retry"
+
+prepare_write_cmd:
+  - >-
+    latte run --tag prepare-ks-auto-t -f insert_or_delete --consistency=QUORUM -d 2000000 {{ keys }}
+    -P keyspace=\"ks_auto\" -P table=\"t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag prepare-ks-manual-t -f insert_or_delete --consistency=QUORUM -d 2000000 {{ keys }}
+    -P keyspace=\"ks_manual\" -P table=\"t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag prepare-ks-mixed-auto-t -f insert_or_delete --consistency=QUORUM -d 2000000 {{ keys }}
+    -P keyspace=\"ks_mixed\" -P table=\"auto_t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag prepare-ks-mixed-manual-t -f insert_or_delete --consistency=QUORUM -d 2000000 {{ keys }}
+    -P keyspace=\"ks_mixed\" -P table=\"manual_t\" data_dir/latte/validation.rn
+
+stress_cmd:
+  - >-
+    latte run --tag ks-auto-t -f insert_or_delete:1 -f get:1 {{ main }} {{ keys }}
+    -P keyspace=\"ks_auto\" -P table=\"t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag ks-manual-t -f insert_or_delete:1 -f get:1 {{ main }} {{ keys }}
+    -P keyspace=\"ks_manual\" -P table=\"t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag ks-mixed-auto-t -f insert_or_delete:1 -f get:1 {{ main }} {{ keys }}
+    -P keyspace=\"ks_mixed\" -P table=\"auto_t\" data_dir/latte/validation.rn
+  - >-
+    latte run --tag ks-mixed-manual-t -f insert_or_delete:1 -f get:1 {{ main }} {{ keys }}
+    -P keyspace=\"ks_mixed\" -P table=\"manual_t\" data_dir/latte/validation.rn
