@@ -14,6 +14,7 @@
 import json
 import os
 import re
+import tempfile
 import time
 from abc import abstractmethod
 from contextlib import contextmanager
@@ -24,12 +25,19 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Dict, List, Optional
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.system import CoreDumpEvent
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.decorators import timeout
+from sdcm.utils.gce_utils import COREDUMP_BUCKET, sign_coredump_upload_url
 from sdcm.utils.version_utils import get_systemd_version
+
+# shared with customers, 14 days retention; used only by runs without SCT credentials
+PUBLIC_COREDUMP_BUCKET = "upload.scylladb.com"
 
 
 @dataclass
@@ -206,14 +214,37 @@ class CoredumpThreadBase(Thread):
         coredump = core_info.corefile
         coredump = self._pack_coredump(coredump)
         coredump_id = os.path.basename(coredump)[:-3]
-        upload_url = f"upload.scylladb.com/{coredump_id}/{os.path.basename(coredump)}"
-        self.log.info("Uploading coredump %s to %s", coredump, upload_url)
-        self.node.remoter.run(
-            "sudo curl --request PUT --fail --show-error --upload-file '%s' 'https://%s'" % (coredump, upload_url)
+        blob_name = f"{coredump_id}/{os.path.basename(coredump)}"
+        try:
+            put_url = sign_coredump_upload_url(blob_name)
+            object_path = f"{COREDUMP_BUCKET}/{blob_name}"
+        except (BotoCoreError, ClientError) as exc:
+            # runs that can't read the SCT KeyStore (local or bring-your-own credentials, or a KeyStore error) can't
+            # sign, so they fall back to the public upload bucket, which takes anonymous uploads but keeps them 14 days
+            self.log.warning("Can't sign a coredump upload URL (%s), uploading to %s", exc, PUBLIC_COREDUMP_BUCKET)
+            object_path = f"{PUBLIC_COREDUMP_BUCKET}/{blob_name}"
+            put_url = f"https://{object_path}"
+        self.log.info("Uploading coredump %s to gs://%s", coredump, object_path)
+        # the signed URL is a write credential, so it goes to curl in a config file: a command line ends up in
+        # log lines and exceptions (SSH timeouts, docker exec errors), even with verbose=False
+        curl_config = f"/tmp/{os.path.basename(coredump)}.curl"
+        with tempfile.NamedTemporaryFile("w", suffix=".curl") as local_config:
+            local_config.write(f'url = "{put_url}"\n')
+            local_config.flush()
+            self.node.remoter.send_files(src=local_config.name, dst=curl_config)
+        # the URL comes from --config; a large core gets up to an hour, and each try re-sends the whole file.
+        # A retried PUT overwrites the same object, so retrying on every error is safe
+        curl = curl_with_retry(
+            "",
+            retry=3,
+            max_time=3600,
+            fail_early=True,
+            extra_flags=f"--show-error --request PUT --upload-file '{coredump}' --config {curl_config}",
         )
-        download_url = "https://storage.cloud.google.com/%s" % upload_url
+        self.node.remoter.run(f"sudo {curl.strip()}; rc=$?; rm -f {curl_config}; exit $rc")
+        download_url = f"https://storage.cloud.google.com/{object_path}"
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = f"gsutil cp gs://{upload_url} ."
+        download_instructions = f"gsutil cp gs://{object_path} ."
 
         coredump = Path(coredump)
         if coredump.suffix == ".zst":
