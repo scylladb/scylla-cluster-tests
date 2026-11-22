@@ -107,7 +107,9 @@ results. `null` is explicit and documents intent — an omitted key is not the s
 
 ## Step 5 — Jenkinsfile
 
-`jenkins-pipelines/performance/branch-perf-v17/scylla-{enterprise,master}/perf-regression/<name>.jenkinsfile`.
+`jenkins-pipelines/performance/branch-perf-v18/scylla-{enterprise,master}/perf-regression/<name>.jenkinsfile`.
+The master PR needs the `backport/perf-v18` label, so the job file reaches the branch it runs
+from (see [pipelines-and-scheduling.md](pipelines-and-scheduling.md#5-perf-branches-and-the-job-creator)).
 
 Use `performance_staging/` first if the test is still experimental.
 

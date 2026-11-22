@@ -319,7 +319,7 @@ the check to catch it. The label must match one of:
 |-------|---------|--------------|
 | `backport/none` | This change does not need backporting | n/a |
 | `backport/X.Y` | Backport to a release line (e.g., `backport/2026.1`) | `branch-X.Y` |
-| `backport/perf-vX` | Backport to a performance baseline (e.g., `backport/perf-v17`) | `branch-perf-vX` |
+| `backport/perf-vX` | Backport to a performance baseline (e.g., `backport/perf-v18`) | `branch-perf-vX` |
 | `backport/manager-X.Y` | Backport to the Manager release line (e.g., `backport/manager-3.11`) | `manager-X.Y` |
 | `backport-all-live` | Backport to every live release and perf branch; CI expands it into one label per live branch, then removes it | `branch-X.Y`, `branch-perf-vX` (not `manager-X.Y` or `branch-2024.1`) |
 
