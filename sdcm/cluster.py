@@ -7100,7 +7100,6 @@ class BaseScyllaCluster:
                     content,
                 )
             remote_path = f"/etc/scylla.d/{config_file.name}"
-            node.remoter.sudo(f"sh -c 'test -e {remote_path} || install -m 0644 /dev/null {remote_path}'")
             with remote_file(remoter=node.remoter, remote_path=remote_path, sudo=True) as fobj:
                 fobj.truncate(0)  # first clear the file
                 fobj.write(content)
