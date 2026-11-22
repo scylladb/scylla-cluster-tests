@@ -87,17 +87,19 @@ class InProcessServerMicrobenchmarkTest(MicrobenchmarkTest):
       in. It describes the data disk while --workdir is on /tmp, which is fine: seastar registers
       a placeholder queue for devid 0 and routes any unconfigured device to it.
 
-    The command line matches what the tools' developers run, so results stay comparable with
-    theirs. Changing RESOURCE_OPTIONS or DURATION invalidates the Argus baseline, which is why
-    they are constants here rather than config options.
+    The command line is not the one in the tools' own usage examples (--smp 1 --cpus 0
+    --developer-mode 1): it runs two shards and no developer mode, so scylla passes the startup
+    checks of a production node. Changing RESOURCE_OPTIONS, DURATION or SCYLLA_CONFIG invalidates
+    the Argus baseline, which is why they are constants here rather than config options.
 
-    A subclass sets BENCHMARK (the scylla subcommand), BENCHMARK_NAME (the suffix of its Argus
-    tables) and WORKDIR, and extends SCYLLA_CONFIG with what its tool needs on top.
+    A subclass sets BENCHMARK (the scylla subcommand) and BENCHMARK_NAME (the part of its Argus
+    table names after "<workload> - "), and extends SCYLLA_CONFIG with what its tool needs on top.
+    The two have no default, so a subclass that misses one fails before the test stops
+    scylla-server or sends anything to Argus. The work directory is /tmp/scylla-<BENCHMARK>-workdir.
     """
 
-    BENCHMARK = ""
-    BENCHMARK_NAME = ""
-    WORKDIR = ""
+    BENCHMARK: str
+    BENCHMARK_NAME: str
     IO_PROPERTIES_FILE = "/etc/scylla.d/io_properties.yaml"
     # -m must cover 1 GiB per shard plus the 50 MiB per shard scylla takes out of it for wasm
     # UDFs, or it refuses to start: 2G over 2 shards left 974 MiB/shard and died. 3G leaves
@@ -125,10 +127,12 @@ endpoint_snitch: SimpleSnitch
         scylla_bin = node.add_install_prefix("/usr/bin/scylla")
         io_properties_file = node.add_install_prefix(self.IO_PROPERTIES_FILE)
         result_file = f"{self.BENCHMARK}-result.json"
-        conf_file = f"{self.WORKDIR}/conf/scylla.yaml"
+        workdir = f"/tmp/scylla-{self.BENCHMARK}-workdir"
+        conf_file = f"{workdir}/conf/scylla.yaml"
+        benchmark_name = self.BENCHMARK_NAME
 
-        node.remoter.run(f"rm -rf {self.WORKDIR}")
-        node.remoter.run(f"mkdir -p {self.WORKDIR}/conf")
+        node.remoter.run(f"rm -rf {workdir}")
+        node.remoter.run(f"mkdir -p {workdir}/conf")
         node.remoter.run(f"cat > {conf_file} <<'SCYLLA_CONFIG'\n{self.SCYLLA_CONFIG}SCYLLA_CONFIG")
 
         # The stop only has to free the ports, so a failing `systemctl stop` (the service is
@@ -138,14 +142,15 @@ endpoint_snitch: SimpleSnitch
         # node's scylla-server running.
         try:
             node.stop_scylla_server(ignore_status=True)
-            results = node.remoter.run(
+            # A non-zero exit of the tool raises here, so the result is sent only after a run
+            # that succeeded.
+            node.remoter.run(
                 f"{scylla_bin} {self.BENCHMARK} --json-result {result_file}"
-                f" --workdir {self.WORKDIR} --options-file {conf_file}"
+                f" --workdir {workdir} --options-file {conf_file}"
                 f" --io-properties-file {io_properties_file}"
                 f" {self.RESOURCE_OPTIONS} --workload {workload} --duration {self.DURATION}"
             )
-            if results.ok:
-                self.submit_results(node, result_file, benchmark_name=self.BENCHMARK_NAME)
+            self.submit_results(node, result_file, benchmark_name=benchmark_name)
         finally:
             node.start_scylla_server()
 
@@ -158,7 +163,6 @@ class PerfCqlRawTest(InProcessServerMicrobenchmarkTest):
 
     BENCHMARK = "perf-cql-raw"
     BENCHMARK_NAME = "Perf CQL Raw"
-    WORKDIR = "/tmp/scylla-perf-cql-raw-workdir"
 
     def test_read(self):
         self.run_workload("read")
@@ -171,30 +175,36 @@ class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
     """
     Run the `scylla perf-alternator` microbenchmark, which sends DynamoDB API requests over HTTP to
     the Alternator server of the in-process scylla, against a table with all the DynamoDB types.
+    The tool writes the --json-result file only from 2026.2. configurations/triggers/ selects the
+    releases that run it.
 
-    The tool exists on every supported release, but writes the --json-result file only from
-    2026.2. The trigger matrix runs it from 2026.4 on, as only new releases are worth tracking.
+    The config on top of the base one:
 
-    Alternator is off unless the config sets its port: without alternator_port the tool waits for
-    the port and then fails. The write isolation is `forbid`, as the tool's author runs the read
-    and write workloads; `only_rmw_uses_lwt` is only meaningful for the write_rmw workload.
+    * alternator_port turns Alternator on. Without it the tool waits for the port and then fails.
+    * alternator_address binds Alternator to 127.0.0.1 instead of the default 0.0.0.0. The tool
+      sends its requests to api_address, which is 127.0.0.1 too.
+    * alternator_write_isolation is mandatory: scylla does not start with Alternator on and no
+      write isolation. The read and write workloads send no conditional writes, so `forbid` and
+      `only_rmw_uses_lwt` run the same code for them.
+    * tablets_mode_for_new_keyspaces makes the Alternator table use tablets, as on a production
+      node. scylla's own default is `unset`, which gives Alternator a vnodes table.
 
-    Only a tool that checks the HTTP status of each reply (scylladb/scylladb@36eadf9e40, in master
-    since 2026-10, not in 2026.2 - 2026.4) treats an error reply as a failed request. That stops
-    the tool with no result file (its --continue-after-error defaults to false), so the test fails
-    with nothing sent to Argus. An older tool counts an error reply as a successful, fast
-    operation, and nothing here catches it: on those releases a sudden drop in instructions_per_op
-    is the sign that the run measured error replies.
+    From scylladb/scylladb@36eadf9e40 (2027.1) the tool checks the HTTP status of each reply. An
+    error reply then stops the tool with no result file (--continue-after-error defaults to false),
+    so the test fails and sends nothing to Argus. An older tool, such as the one of 2026.4, counts
+    an error reply as a fast, successful operation, and nothing here catches it: a sudden drop in
+    instructions_per_op is the sign.
     """
 
     BENCHMARK = "perf-alternator"
     BENCHMARK_NAME = "Perf Alternator"
-    WORKDIR = "/tmp/scylla-perf-alternator-workdir"
     SCYLLA_CONFIG = (
         InProcessServerMicrobenchmarkTest.SCYLLA_CONFIG
         + """\
 alternator_port: 8000
+alternator_address: 127.0.0.1
 alternator_write_isolation: forbid
+tablets_mode_for_new_keyspaces: enabled
 """
     )
 
