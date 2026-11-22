@@ -321,6 +321,12 @@ the check to catch it. The label must match one of:
 | `backport/X.Y` | Backport to a release line (e.g., `backport/2026.1`) | `branch-X.Y` |
 | `backport/perf-vX` | Backport to a performance baseline (e.g., `backport/perf-v17`) | `branch-perf-vX` |
 | `backport/manager-X.Y` | Backport to the Manager release line (e.g., `backport/manager-3.11`) | `manager-X.Y` |
+| `backport-all-live` | Backport to every live release and perf branch; CI expands it into one label per live branch, then removes it | `branch-X.Y`, `branch-perf-vX` (not `manager-X.Y` or `branch-2024.1`) |
+
+A branch is live while its plain `backport/<version>` label exists (not only
+`backport/<version>-done`). Changes every branch shares, like
+`scylladb/github-automation` updates, use `backport-all-live`; Renovate adds it
+for you. After the expansion you can remove the label of a single branch.
 
 Multiple backport labels can be applied to a single PR when a fix needs to land
 on several branches. By default the backports are created in parallel, one PR per
@@ -420,7 +426,7 @@ with the PR workflow and reduced Jenkins dependency.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| [`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml) | Non-draft PR open/label/sync on `master` | Checks that the PR has a `backport/*` label |
+| [`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml) | Non-draft PR open/label/sync on `master` | Expands `backport-all-live`, then checks that the PR has a `backport/*` label |
 | [`call_backport_with_jira`](../.github/workflows/call_backport_with_jira.yaml) | Push to a stable branch; `backport/*` label added | Creates backport PRs and Jira sub-tasks via the shared reusable workflow |
 | [`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml) | Push to `master`/`branch-*`/`manager-*`; `backport/*` label added | Legacy in-repo auto-backport — superseded by `call_backport_with_jira` (see section 3.3) |
 | [`auto_assign`](../.github/workflows/auto_assign.yaml) | PR/issue opened | Auto-assigns the author to their PR/issue |

@@ -147,6 +147,15 @@
       ]
     },
     {
+      "description": "Shared by every branch: pr-require-backport-label.yaml expands backport-all-live into all live backport labels",
+      "matchPackageNames": [
+        "scylladb/github-automation"
+      ],
+      "addLabels": [
+        "backport-all-live"
+      ]
+    },
+    {
       "groupName": null,
       "matchManagers": [
         "helm-values"

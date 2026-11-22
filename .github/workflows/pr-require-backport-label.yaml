@@ -18,6 +18,39 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      # backport-all-live expands into every live release branch: one whose
+      # plain backport/<version> or backport/perf-v<N> label exists; manager
+      # branches and 2024.1 (it doesn't use github-automation) are left out
+      # (see docs/contribution-handbook.md). Renovate
+      # adds it to scylladb/github-automation updates, which every branch shares, see
+      # renovate.json. It is removed once expanded, so single releases can
+      # then be unlabeled. The token can edit labels only on PRs from branches
+      # of this repo (like Renovate's), and only before the merge; otherwise
+      # add the labels by hand.
+      - name: Expand backport-all-live into all live backport labels
+        if: contains(github.event.pull_request.labels.*.name, 'backport-all-live')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+        run: |
+          if [ "$HEAD_REPO" != "$GH_REPO" ]; then
+            echo "::error::backport-all-live works only on PRs from branches of $GH_REPO; on a fork PR add the backport/<version> labels by hand"
+            exit 1
+          fi
+          # Label events made with github.token start no workflows, so labels
+          # added after the merge would never start backport-on-label.
+          if [ "$PR_STATE" = "closed" ]; then
+            echo "::error::backport-all-live must be added before the merge; on a merged PR add the backport/<version> labels by hand"
+            exit 1
+          fi
+          labels=$(gh label list --limit 500 --json name \
+            --jq '[.[].name | select(test("^backport/([0-9]{4}\\.[0-9]+|perf-v[0-9]+)$") and . != "backport/2024.1")] | join(",")')
+          [ -n "$labels" ] || { echo "::error::no live backport labels found"; exit 1; }
+          echo "Adding: $labels"
+          gh pr edit "$PR" --add-label "$labels" --remove-label backport-all-live,backport/none
       - uses: mheap/github-action-required-labels@23e10fde7e062233401931a0eece796cd9bf3177 # v5.6.0
         with:
           mode: minimum
