@@ -47,7 +47,7 @@ class IOTuneValidator:
 
     def _read_io_properties(self, io_props_path="/etc/scylla.d/io_properties.yaml") -> IOProperties:
         with remote_file(self.node.remoter, io_props_path, sudo=True) as f:
-            return yaml.safe_load(f)
+            return yaml.safe_load(f) or {}
 
     def _run_io_tune(self, temp_props_path="/tmp/io_properties.yaml") -> IOProperties:
         self.node.remoter.sudo(f"iotune  --evaluation-directory /var/lib/scylla --properties-file {temp_props_path}")
