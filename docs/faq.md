@@ -153,6 +153,26 @@ hydra upload --test-id <uuid> path/to/file
 In case you don't want to report to Argus / Argus is missing the test run for this id you can use `--no-use-argus` to skip that part.
 
 
+## Where are Scylla coredumps from a test run, and how do I download them?
+
+SCT uploads every coredump from the DB and loader nodes to `gs://scylla-sct-coredumps`. The
+`CoreDumpEvent` in the run (and in Argus) has the download link and the exact commands, for example:
+```bash
+gcloud auth login   # once, with your @scylladb.com account
+gsutil cp gs://scylla-sct-coredumps/<core-id>/<core-file>.zst .
+unzstd <core-file>.zst
+```
+Anyone with a ScyllaDB Google account can read the bucket, from `gsutil` or by opening the
+`https://storage.cloud.google.com/...` link in a browser. Coredumps are kept for 90 days; they move to a
+cheaper storage class after 14 days, which adds a small fee per download.
+
+Runs without SCT credentials (local runs, or your own cloud credentials) can't sign the upload, and send
+coredumps to `gs://upload.scylladb.com` instead, which keeps them only 14 days.
+
+The bucket and its retention are set up by `hydra prepare-global-resources`; its `--coredump-*` options
+set the region and the retention (`configure_coredump_bucket` in `sdcm/utils/gce_utils.py`).
+
+
 ## How to open a coredump from sct test run (python) ?
 
 first download the file to the SCT folder, and execute the following command:
