@@ -51,6 +51,9 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
 # so a large spot request can still be fulfilled when the preferred pool is exhausted, which is common at
 # this scale. Local disk size and CPU generation differ between them.
 aws_fleet_db_use_alternatives: true
+# Every DB node, initial or added while the cluster grows, launches through EC2 Fleet with the alternatives
+# above, spot or nothing. The scale-cluster Jenkins jobs pass the same `provision_type: 'spot_fleet'`.
+instance_provision: spot_fleet
 instance_provision_fallback_on_demand: false
 # Scale tests provision very large clusters (100+ nodes) and want the region fixed and
 # controlled rather than silently relocated. AZ-level fallback within the configured region
