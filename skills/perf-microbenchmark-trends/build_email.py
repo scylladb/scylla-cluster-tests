@@ -15,6 +15,7 @@ numbers in the email and on the page always agree:
 - Across releases: per benchmark, metric and chart, the latest run of each release line from the
   oldest release to master, and its change against the previous release that has a value.
 No averages: they hid write-only changes and cql-raw swings in both directions.
+Benchmarks with no runs in the CSV are left out of both tables and the intro.
 """
 
 import argparse
@@ -24,7 +25,7 @@ import os
 
 from PIL import Image, ImageDraw
 
-BENCHMARKS = ["perf-simple-query", "perf-cql-raw"]
+BENCHMARKS = ["perf-simple-query", "perf-cql-raw", "perf-alternator"]
 METRICS = ["instructions_per_op", "cpu_cycles_per_op", "allocs_per_op"]
 CHARTS = ["read arm64", "read x86_64", "write arm64", "write x86_64"]
 LADDER = ["2025.1", "2026.1", "2026.2", "2026.3", "2026.4", "master"]
@@ -49,6 +50,11 @@ def runs_of(rows: list, bench: str, chart: str, release: str, metric: str) -> li
 def pct(new: float, old: float) -> float:
     """Percentage change, rounded to one decimal like the dashboard."""
     return round((new / old - 1) * 100, 1)
+
+
+def runs_label(count: int) -> str:
+    """'1 run' or 'N runs'."""
+    return f"{count} run" if count == 1 else f"{count} runs"
 
 
 def fmt_value(metric: str, value: float) -> str:
@@ -140,7 +146,7 @@ def master_trend_table(rows: list, bench: str, sparks: list, spark_dir: str) -> 
                 f'<td style="padding:0 8px 0 0;vertical-align:middle;">'
                 f'<img src="cid:{cid}" width="64" height="20" alt="{alt}" style="display:block;"></td>'
                 f'<td style="padding:0;vertical-align:middle;line-height:1.2;">{change}<br>'
-                f'<span style="color:#6c757d;font-size:11px;">{len(values)} runs</span></td>'
+                f'<span style="color:#6c757d;font-size:11px;">{runs_label(len(values))}</span></td>'
                 "</tr></table></td>"
             )
         lines.append(f'<tr style="background-color:{METRIC_TINT[metric]};">{cells}</tr>')
@@ -201,13 +207,14 @@ def main() -> None:
     starts = sorted(r["run_start"] for r in rows)
     m_first, m_last, m_runs = master_window(rows)
     benches = [b for b in BENCHMARKS if any(r["benchmark"] == b for r in rows)]
+    bench_list = " and ".join([", ".join(benches[:-1]), benches[-1]]) if len(benches) > 1 else benches[0]
     sub = 'style="font-weight:bold;margin:12px 0 4px;"'
     trend = "\n".join(f"<p {sub}>{b}</p>\n{master_trend_table(rows, b, sparks, args.spark_dir)}" for b in benches)
     ladder = "\n".join(f"<p {sub}>{b}</p>\n{ladder_table(rows, b)}" for b in benches)
     h3 = 'style="font-size:15px;font-weight:bold;margin:18px 0 2px;"'
     html = f"""<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;max-width:900px;">
 <p>Hi all,</p>
-<p>The Microbenchmark Trends dashboard tracks the weekly microbenchmarks (perf-simple-query and perf-cql-raw; read and write; arm64 and x86_64), with Argus-style timeline charts of <b>instructions_per_op</b>, <b>cpu_cycles_per_op</b> and <b>allocs_per_op</b> per release line:<br>
+<p>The Microbenchmark Trends dashboard tracks the weekly microbenchmarks ({bench_list}; read and write; arm64 and x86_64), with Argus-style timeline charts of <b>instructions_per_op</b>, <b>cpu_cycles_per_op</b> and <b>allocs_per_op</b> per release line:<br>
 <a href="{args.dashboard_url}" style="color:#007bff;">Microbenchmark Trends</a></p>
 <p style="margin:0 0 6px;">Runs from {starts[0][:10]} to {starts[-1][:10]}. Lower is better; changes of 1% or more are green (lower) or red (higher).</p>
 <p {h3}>Master trend</p>

@@ -27,7 +27,14 @@ TESTS = [
     ("cql-raw-weekly-microbenchmark_arm64-write", "68b9d59b-bf4e-4aa1-abea-032e0fd7fa8d"),
     ("cql-raw-weekly-microbenchmark_x86_64", "e62a078f-924b-4662-a77b-bd9daa6e2241"),
     ("cql-raw-weekly-microbenchmark_x86_64-write", "006ddbcc-b344-4bb5-ac1b-374588305aa4"),
+    ("alternator-weekly-microbenchmark_arm64", "8e5555c2-031a-4d97-8470-3ccb45ec7d6d"),
+    ("alternator-weekly-microbenchmark_arm64-write", "4381b28e-d072-4a95-a109-c641eb5b069f"),
+    ("alternator-weekly-microbenchmark_x86_64", "156ce642-ae0d-4ab1-ad3f-22cbb5037e7d"),
+    ("alternator-weekly-microbenchmark_x86_64-write", "6d7aa7ad-a9c7-46c5-8da8-061e21c121ed"),
 ]
+
+# test name prefix -> benchmark label used in the CSV, the page and the email
+BENCHMARK_OF = {"simple-query": "perf-simple-query", "cql-raw": "perf-cql-raw", "alternator": "perf-alternator"}
 
 # metric name in the Argus table -> (CSV value column, CSV status column)
 METRICS = {
@@ -104,7 +111,7 @@ def collect_run(job: tuple) -> dict | None:
     details = argus("run", "details", "--run-id", run["id"])
     details = details.get("run", details)
     scylla_version = details.get("scylla_version") or ""
-    benchmark = "perf-simple-query" if name.startswith("simple") else "perf-cql-raw"
+    benchmark = BENCHMARK_OF[name.split("-weekly-")[0]]
     workload = "write" if name.endswith("-write") else "read"
     arch = "arm64" if "arm64" in name else "x86_64"
     row = {

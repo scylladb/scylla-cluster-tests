@@ -2,11 +2,11 @@
 name: perf-microbenchmark-trends
 description: >-
   Builds and refreshes the Microbenchmark Trends dashboard: Argus timeline charts of
-  instructions_per_op, cpu_cycles_per_op and allocs_per_op for the weekly perf-simple-query and perf-cql-raw
-  microbenchmarks (read/write, arm64/x86_64) per Scylla release line, with a master trend over
+  instructions_per_op, cpu_cycles_per_op and allocs_per_op for the weekly perf-simple-query, perf-cql-raw
+  and perf-alternator microbenchmarks (read/write, arm64/x86_64) per Scylla release line, with a master trend over
   every master run and an across-releases comparison, and a draft email. Use when asked for a
   microbenchmark report, microbenchmark trends or graphs, instructions, CPU cycles or
-  allocations per op over time, comparing simple-query against cql-raw, or refreshing or emailing that
+  allocations per op over time, comparing simple-query, cql-raw and alternator, or refreshing or emailing that
   dashboard. Not for the throughput/latency weekly status email, which covers the
   predefined-throughput-steps, nemesis, rolling-upgrade and elasticity tests.
 ---
@@ -29,19 +29,22 @@ perf-simple-query stays within 0.5%, which is what decides whether a change is r
 `~dev` scylla_version to `master` (it spans 2026.4.0~dev and 2027.1.0~dev builds); rc builds belong
 to their release line.
 
-### Keep simple-query and cql-raw Side by Side, Per Metric
+### Keep the Benchmarks Side by Side, Per Metric
 
-**Layout per metric: a heading, the release legend, then a perf-simple-query row and a
-perf-cql-raw row of four small charts (read/write x arm64/x86_64).**
+**Layout per metric: a heading, the release legend, then a perf-simple-query row, a perf-cql-raw
+row and a perf-alternator row of four small charts each (read/write x arm64/x86_64).**
 
-The user asked for this comparison explicitly: the same workload through the two front ends shows
-whether a change is in the storage path or the CQL layer. Keep all four charts of a row on one line
+The user asked for this comparison explicitly: the same workload through the different front ends
+shows whether a change is in the storage path, the CQL layer or the Alternator (DynamoDB API) layer.
+perf-alternator costs 3-5x more instructions and allocations per op than perf-simple-query, so each
+benchmark keeps its own charts and Y axis. Keep all four charts of a row on one line
 at desktop width, and repeat the legend under every metric title so a reader never scrolls to find
 the colors. Add a metric by adding a section, never by mixing metrics in one chart.
 
 ### Summarize the Master Trend and the Release Ladder
 
-**The summary has two parts, each with one table per benchmark (perf-simple-query, perf-cql-raw):
+**The summary has two parts, each with one table per benchmark (perf-simple-query, perf-cql-raw,
+perf-alternator):
 "Master trend" and "Across releases".**
 
 The audience (R&D management) asked for two things: a trend needs more than two data points, and
@@ -58,7 +61,7 @@ three months: master runs less often than releases, and two months gave only 3-4
 - **Across releases:** per metric and chart, the latest run of each release line in order
   2025.1, 2026.1, 2026.2, 2026.3, 2026.4, master, each with its change against the previous
   release that has a value. A release line missing from a benchmark shows a dash (2026.1 runs only
-  perf-simple-query).
+  perf-simple-query; perf-alternator started on 2026-11-22 and has master runs only).
 
 Changes of 1% or more are bold green (lower) or red (higher); lower is better for all three
 metrics. Gray borders on every cell, soft colors.
@@ -121,16 +124,23 @@ draft labeled `SENT` was already sent by the user: never edit or delete it.
 | Collector | `python3 skills/perf-microbenchmark-trends/collect_microbench.py --since YYYY-MM-DD --out FILE` |
 | Email body | `python3 skills/perf-microbenchmark-trends/build_email.py --csv FILE --dashboard-url URL --out email.html --spark-dir DIR` (needs Pillow), then fill `NOTES-GO-HERE` and `SIGNATURE` |
 | Email | Subject `Microbenchmark trends, MM/DD/YYYY`; To: the regular perf weekly status report list; draft only |
-| Argus tests | 8 jobs, ids in `TESTS` in the collector |
+| Argus tests | 12 jobs (3 benchmarks x read/write x arm64/x86_64), ids in `TESTS` in the collector |
 | Metric cells | first row of the single result table: `instructions_per_op`, `cpu_cycles_per_op`, `allocs_per_op` (also available: `tasks_per_op`, `logallocs_per_op`, `median tps`) |
 | Full version | `version.date.revision` from `scylla-server-target`, falling back to `scylla-server` when the target lacks a date |
 | Window | last three months unless the user names one |
+
+### Adding a Benchmark
+
+1. Add its four Argus test ids to `TESTS` in the collector and its name prefix to `BENCHMARK_OF`.
+2. In the page: add its name to `MB_BENCHMARKS`, and copy one `.mb-group` of each summary table and
+   each metric section, changing `data-benchmark` and `data-chart`. Add it to `BENCHMARKS` in
+   `build_email.py`. A benchmark with no runs yet is left out of the email.
 
 ### Adding a Metric
 
 1. Add it to `METRICS` in the collector (value column + status column) and re-collect.
 2. In the page: copy one metric `<section>` (heading, legend, two `.mb-group` rows) and set
-   `data-metric` on its eight charts; add the metric to the loops in the `master_trend` and
+   `data-metric` on its twelve charts; add the metric to the loops in the `master_trend` and
    `ladder` calcs and to `METRICS` in `build_email.py`; add its status column to the
    `stField` and `unit` maps in the `chart` drawing. A metric without an Argus validation rule
    has status `UNSET`; only `ERROR`/`FAIL` draw the red ring, so it shows no false alarms.
@@ -150,6 +160,6 @@ draft labeled `SENT` was already sent by the user: never edit or delete it.
 - [ ] CSV collected for the requested window; dropped-run count reported
 - [ ] Dataset `ipo` points at the new blob, with `updated.at` set
 - [ ] Page `check` is `passed` (or the user is told it is unverified)
-- [ ] Each metric section shows simple-query and cql-raw rows with its own legend
+- [ ] Each metric section shows simple-query, cql-raw and alternator rows with its own legend
 - [ ] Summary has a master trend (sparkline, first-to-last change, run count per chart) and an across-releases table per benchmark, no averages
 - [ ] Email body generated by `build_email.py` from the same CSV; notes filled; one current draft, stale ones named; user reminded to share the artifact

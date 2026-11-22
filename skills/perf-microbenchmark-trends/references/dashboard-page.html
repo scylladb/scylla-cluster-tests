@@ -105,6 +105,15 @@
           </table>
         </div>
       </div>
+      <div class="mb-group mb-mname" id="trend-alt">
+        <h4>perf-alternator</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>read arm64</th><th>read x86_64</th><th>write arm64</th><th>write x86_64</th></tr></thead>
+            <tbody data-draw="trend-rows" data-benchmark="perf-alternator" data-source="master_trend"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
     <div class="mb-sub2" id="release-ladder">
       <h3>Across releases</h3>
@@ -124,6 +133,15 @@
           <table class="mb-table mb-sumtable">
             <thead><tr><th>Metric</th><th>Chart</th><th>2025.1</th><th>2026.1</th><th>2026.2</th><th>2026.3</th><th>2026.4</th><th>master</th></tr></thead>
             <tbody data-draw="ladder-rows" data-benchmark="perf-cql-raw" data-source="ladder"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="mb-group mb-mname" id="ladder-alt">
+        <h4>perf-alternator</h4>
+        <div class="mb-tablewrap">
+          <table class="mb-table mb-sumtable">
+            <thead><tr><th>Metric</th><th>Chart</th><th>2025.1</th><th>2026.1</th><th>2026.2</th><th>2026.3</th><th>2026.4</th><th>master</th></tr></thead>
+            <tbody data-draw="ladder-rows" data-benchmark="perf-alternator" data-source="ladder"></tbody>
           </table>
         </div>
       </div>
@@ -155,6 +173,15 @@
       <div class="mb-card" id="ipo-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
       </div>
     </div>
+    <div class="mb-group" id="ipo-alt">
+      <h3>perf-alternator</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="ipo-alt-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-alternator read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-alt-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-alternator read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-alt-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-alternator write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="ipo-alt-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="instructions_per_op" data-chart="perf-alternator write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
   </section>
 
   <section class="mb-metric mb-m" id="cycles">
@@ -180,6 +207,15 @@
       <div class="mb-card" id="cycles-cr-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw read x86_64" data-source="ipo"></div></div>
       <div class="mb-card" id="cycles-cr-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw write arm64" data-source="ipo"></div></div>
       <div class="mb-card" id="cycles-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
+    <div class="mb-group" id="cycles-alt">
+      <h3>perf-alternator</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="cycles-alt-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-alternator read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-alt-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-alternator read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-alt-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-alternator write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="cycles-alt-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="cpu_cycles_per_op" data-chart="perf-alternator write x86_64" data-source="ipo"></div></div>
       </div>
     </div>
   </section>
@@ -209,12 +245,21 @@
       <div class="mb-card" id="allocs-cr-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-cql-raw write x86_64" data-source="ipo"></div></div>
       </div>
     </div>
+    <div class="mb-group" id="allocs-alt">
+      <h3>perf-alternator</h3>
+      <div class="mb-grid">
+      <div class="mb-card" id="allocs-alt-read-arm64"><h4>read, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-alternator read arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-alt-read-x86"><h4>read, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-alternator read x86_64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-alt-write-arm64"><h4>write, arm64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-alternator write arm64" data-source="ipo"></div></div>
+      <div class="mb-card" id="allocs-alt-write-x86"><h4>write, x86_64</h4><div class="mb-chart" data-draw="chart" data-metric="allocs_per_op" data-chart="perf-alternator write x86_64" data-source="ipo"></div></div>
+      </div>
+    </div>
   </section>
 
   <details class="mb-notes" id="notes">
     <summary>About this data</summary>
-    <p>Each point is one run of the weekly microbenchmark job in the scylla-enterprise/perf-regression folder, taken from Argus result tables (Perf Simple Query and Perf CQL Raw, first row). A red ring means Argus marked that metric ERROR for the run. Runs that produced no result table are left out. Colors group runs by release line: master covers 2026.4.0~dev and 2027.1.0~dev, and 2026.4 covers the rc builds. Point at a run to see its full Scylla version; click it to open the run in Argus.</p>
-    <p>The data is a copy taken from Argus on 2026-11-18, covering the last three months. New runs appear only after the file is updated.</p>
+    <p>Each point is one run of the weekly microbenchmark job in the scylla-enterprise/perf-regression folder, taken from Argus result tables (Perf Simple Query, Perf CQL Raw and Perf Alternator, first row). The perf-alternator jobs started on 2026-11-22, so they have master runs only. A red ring means Argus marked that metric ERROR for the run. Runs that produced no result table are left out. Colors group runs by release line: master covers 2026.4.0~dev and 2027.1.0~dev, and 2026.4 covers the rc builds. Point at a run to see its full Scylla version; click it to open the run in Argus.</p>
+    <p>The data is a copy taken from Argus on 2026-11-22, covering the last three months. New runs appear only after the file is updated.</p>
   </details>
 </div>
 
@@ -238,6 +283,7 @@
 
 
 
+const MB_BENCHMARKS = ['perf-simple-query', 'perf-cql-raw', 'perf-alternator'];
 const MB_CHARTS = ['read arm64', 'read x86_64', 'write arm64', 'write x86_64'];
 const MB_METRICS = ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op'];
 
@@ -258,7 +304,7 @@ dash.calc('master_trend', {
   inputs: ['ipo'],
   fn: (ipo) => {
     const out = [];
-    for (const benchmark of ['perf-simple-query', 'perf-cql-raw']) {
+    for (const benchmark of MB_BENCHMARKS) {
       for (const metric of ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op']) {
         for (const chart of ['read arm64', 'read x86_64', 'write arm64', 'write x86_64']) {
           const rs = ipo.filter((r) => r.chart === benchmark + ' ' + chart && r.release === 'master' && r[metric] !== '' && r[metric] != null)
@@ -287,7 +333,7 @@ dash.calc('ladder', {
     const LADDER = ['2025.1', '2026.1', '2026.2', '2026.3', '2026.4', 'master'];
     const key = (rel) => (rel === 'master' ? 'master' : 'r' + rel.replace('.', '_'));
     const out = [];
-    for (const benchmark of ['perf-simple-query', 'perf-cql-raw']) {
+    for (const benchmark of MB_BENCHMARKS) {
       for (const metric of ['instructions_per_op', 'cpu_cycles_per_op', 'allocs_per_op']) {
         for (const chart of ['read arm64', 'read x86_64', 'write arm64', 'write x86_64']) {
           const row = { benchmark, metric, chart };
@@ -369,7 +415,7 @@ dash.draw('trend-rows', (el) => {
         n.dataset.where = 'benchmark=' + bench + '&metric=' + metric + '&chart=' + chart;
         n.textContent = mbSign(r.pct); txt.append(n);
       }
-      const runs = document.createElement('span'); runs.className = 'ver'; runs.textContent = r.runs + ' runs';
+      const runs = document.createElement('span'); runs.className = 'ver'; runs.textContent = r.runs + (r.runs === 1 ? ' run' : ' runs');
       txt.append(runs);
       box.append(txt);
       td.append(box); tr.append(td);

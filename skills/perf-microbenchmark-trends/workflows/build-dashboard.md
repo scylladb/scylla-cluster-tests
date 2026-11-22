@@ -14,7 +14,7 @@ because each phase consumes the previous phase's output.
    python3 skills/perf-microbenchmark-trends/collect_microbench.py --since 2026-08-18 --out <scratch>/microbench.csv
    ```
    It takes 4-6 minutes (about 160 runs, two Argus calls each, 8 in parallel).
-3. Sanity-check the output: one row per run with a result table, 8 distinct `chart` values,
+3. Sanity-check the output: one row per run with a result table, 12 distinct `chart` values,
    and the release lines you expect (`master`, the current rc line, the maintained releases).
 
 **Exit:** the CSV exists and the printed line reads `N runs listed, M with results`. Tell the user
@@ -74,7 +74,8 @@ attached; delete it only if they ask.
    It applies the rules of the dashboard's `master_trend` and `ladder` calcs, so email and page agree to the decimal. Gmail strips
    SVG, so the master-trend sparklines are PNGs in `--spark-dir`, referenced as `cid:att0..attN` in
    the order of `attachments.json`. Attach them inline (`inline: true`, `image/png`) in that order.
-   Gmail drafts accept at most 10 attachments by file reference, so pass the 24 small PNGs as base64
+   Gmail drafts accept at most 10 attachments by file reference, so pass the small PNGs (12 per
+   benchmark, 36 in all) as base64
    content instead; and `update_draft` cannot add files, so a changed body means a new draft (then
    delete the superseded one).
 2. Fill the two placeholders in the generated file:
@@ -84,7 +85,8 @@ attached; delete it only if they ask.
      - what each release cut against the previous one, and where master is above the last release;
      - perf-cql-raw run-to-run noise (instructions +-12-17%, cycles up to ~50%), so its single
        moves need a repeat before they count;
-     - releases that run only some benchmarks (2026.1 runs only perf-simple-query).
+     - releases that run only some benchmarks (2026.1 runs only perf-simple-query;
+       perf-alternator has master runs only, since 2026-11-22).
    - `SIGNATURE`: the user's first name.
 3. Recipients: the regular perf weekly status report list (same To: as the master/release status
    emails). Subject: `Microbenchmark trends, MM/DD/YYYY`.
