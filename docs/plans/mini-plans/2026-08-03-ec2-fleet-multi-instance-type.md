@@ -70,23 +70,33 @@ RequestSpotFleet caller.
   `InstanceParamsBase | List[InstanceParamsBase]`, so no interface change needed there) — when a
   list is given, build one `Overrides` entry per `InstanceType` in the EC2 Fleet request instead
   of a single-type launch spec.
-- Add a dedicated AWS config param `aws_instance_type_db_alternatives` (a `StringOrList`, i.e. an
-  actual list of interchangeable DB instance types) consumed **only** by the EC2 Fleet provisioning
-  path. `instance_type_db` / `instance_type_loader` stay single-literal and unchanged everywhere else.
+- Add a dedicated, AWS-only flag `aws_fleet_db_use_alternatives`. When it is set, the alternatives
+  are derived from `sizing_db`, and consumed **only** by the EC2 Fleet provisioning path.
+  `instance_type_db` / `instance_type_loader` stay single-literal and unchanged everywhere else.
   **Decision:** rejected overloading `instance_type_db` with CSV — maintainer feedback (@fruch) and
   the open heterogeneous-cluster proposal (PR #13427) reserve a future CSV/`cluster_topology`
   meaning of "deploy different types per rack" for `instance_type_db`, which would collide with a
   "spot alternatives" meaning. A separate param keeps the two concepts unambiguous and avoids
   auditing every plain-string consumer of `instance_type_db` (AMI/arch lookup, sizing validation,
   AZ selection).
-- Validate the alternatives at config time: each must be available in the region and match
-  `instance_type_db`'s CPU architecture (the DB AMI is selected for it), vCPU count and memory,
-  using the offline instance catalog (`data/instance_catalog`) and falling back to the AWS arch
-  lookup for uncatalogued types. Local disk size and CPU generation may differ, so a fleet can
-  produce a heterogeneous cluster - acceptable for scale tests, and documented on the option.
-- Wire the parsed alternatives list down through `sdcm/sct_provision/aws/cluster.py`
-  (`_instance_types = [instance_type_db] + split_instance_types(aws_instance_type_db_alternatives)`,
-  deduped) into the list-based `provision()` call. Only DBCluster defines an alternatives param;
+- **Derive the alternatives from `sizing_db` rather than listing them.** An earlier revision took
+  a hand-written `aws_instance_type_db_alternatives` list and validated it against the catalog; it
+  had to be kept in step with sizing by hand, and broke as soon as sizing's spot ranking started
+  picking another primary. Instead, `rank_instances()` exposes the full ordered candidate list that
+  `select_instance()` takes its pick from, and `_resolve_fleet_db_alternatives()` - run right after
+  the final (re-)ranking of the sized types - keeps every candidate with the primary's vCPU count and
+  memory (the constraints already pin the architecture), also outside the role's preferred families,
+  ranked after them. They land in the internal `aws_fleet_db_alternative_types` list. Interchangeable
+  by construction, so nothing is validated; tests narrow them through `sizing_db` constraints (e.g.
+  `disk`). Local disk size and CPU generation may differ, so a fleet can produce a heterogeneous
+  cluster - acceptable for scale tests, and documented on the option. An explicit
+  `instance_type_db` has nothing to derive from: a warning is logged and EC2 Fleet uses that type.
+- Just before each fleet request, drop the alternatives AWS doesn't offer in the target AZ
+  (`DescribeInstanceTypeOfferings`), keeping the preferred type; a failed lookup keeps them all.
+  This also covers a region or AZ fallback that moved the request after configuration.
+- Wire the alternatives list down through `sdcm/sct_provision/aws/cluster.py`
+  (`_instance_types = [instance_type_db] + aws_fleet_db_alternative_types`, deduped) into the
+  list-based `provision()` call. Only DBCluster defines an alternatives param;
   all other clusters (loader, monitor, oracle, zero-token) provision a single instance type.
 - When EC2 Fleet is used:
   - `instance_provision: spot_fleet` - always, at any count, on both paths, so every DB node
@@ -120,12 +130,11 @@ RequestSpotFleet caller.
 - `sdcm/provision/aws/constants.py` -- add EC2 Fleet constants (`EC2_FLEET_MAX_TARGET_CAPACITY`,
   `EC2_FLEET_LAUNCH_TEMPLATE_PREFIX`, `EC2_FLEET_TYPE_INSTANT`, `EC2_FLEET_ALLOCATION_STRATEGY`,
   `EC2_FLEET_RETRYABLE_ERROR_CODES`, `EC2_FLEET_MAX_ATTEMPTS`, `EC2_FLEET_RETRY_BACKOFF`)
-- `sdcm/sct_config/mixins/aws.py` -- add the dedicated `aws_instance_type_db_alternatives` field
-  (fleet-only, AWS-only, `StringOrList`) to `AwsConfigMixin`
-- `sdcm/sct_config/config.py` -- in `_instance_type_validation()`, validate every listed type is
-  available in the target region and interchangeable with `instance_type_db`
-  (`_validate_aws_instance_type_db_alternatives()`); `instance_type_db`/`instance_type_loader` stay
-  single-literal
+- `sdcm/utils/cloud_catalog/instance_matcher.py` -- `rank_instances()`, the ordered candidate list
+  `select_instance()` takes its pick from
+- `sdcm/sct_config/mixins/aws.py` -- add the `aws_fleet_db_use_alternatives` flag to `AwsConfigMixin`
+- `sdcm/sct_config/config.py` -- `_resolve_fleet_db_alternatives()` fills the internal
+  `aws_fleet_db_alternative_types` list; `instance_type_db`/`instance_type_loader` stay single-literal
 - `sdcm/sct_provision/aws/cluster.py` -- `_instance_types` builds `[instance_type_db] +
   alternatives` (deduped) via `_INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME`; only the fleet path uses
   entries beyond the first
@@ -137,14 +146,14 @@ RequestSpotFleet caller.
 - `jenkins-pipelines/oss/{scale,raft}/scale-*-cluster-test.jenkinsfile` -- `provision_type: 'spot_fleet'`
 - `sdcm/utils/resources_cleanup.py` -- `name_prefix` filter for `clean_launch_templates_aws()` and
   an `aws`-backend step deleting leaked `sct-fleet-*` launch templates
-- `test-cases/scale/scale-cluster.yaml` -- `aws_instance_type_db_alternatives: ['i7i.large',
-  'i7ie.large', 'i4i.large', 'i3en.large']`: every AWS type matching the test's `sizing_db`. Sizing
-  picks one of them as `instance_type_db` (for spot runs, the least interrupted in the region - so the
-  pick can change), and the fleet is offered the rest
+- `test-cases/scale/scale-cluster.yaml` -- `aws_fleet_db_use_alternatives: true`: the fleet is
+  offered whichever of `i7i`, `i7ie`, `i4i` and `i3en` `.large` (every AWS type matching the test's
+  `sizing_db`) sizing didn't pick as `instance_type_db`
 - `unit_tests/unit/test_aws_spot_provisioning.py`, `unit_tests/unit/test_aws_ec2_fleet_provisioner.py`
   -- the `create_fleet` request shape, error classification and retries, rollback, tagging, and
   `split_instance_types()` (replacing the Spot Fleet polling tests)
-- `unit_tests/unit/config/test_aws_instance_type_db_alternatives.py` -- alternatives validation
+- `unit_tests/unit/config/test_aws_fleet_db_alternatives.py`, `unit_tests/unit/test_spot_interruption_sizing.py`
+  -- deriving the alternatives from `sizing_db`, and `rank_instances()`
 - `unit_tests/unit/test_clean_cloud_resources_func.py` -- the scoped launch template cleanup step
 - `unit_tests/unit/provisioner/test_provision_plan_builder.py`, `unit_tests/unit/test_legacy_spot_fleet.py`
   -- spot_fleet plan steps, and spot_fleet `add_nodes`

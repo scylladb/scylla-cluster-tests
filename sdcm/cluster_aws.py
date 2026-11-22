@@ -37,7 +37,6 @@ from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.aws.utils import (
     configure_set_preserve_hostname_script,
     count_instance_types_by_id,
-    split_instance_types,
 )
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
@@ -270,7 +269,7 @@ class AWSCluster(cluster.BaseCluster):
         """
         if self.node_type != "scylla-db" or spot_params["instance_type"] != self.params.get("instance_type_db"):
             return []
-        return split_instance_types(self.params.get("aws_instance_type_db_alternatives"))
+        return list(self.params.get("aws_fleet_db_alternative_types") or [])
 
     def _fleet_instance_type_counts(self, instances, dc_idx, instance_type=None) -> list[tuple[str, int]]:
         """(instance type, count) for each type an EC2 Fleet launch actually used.

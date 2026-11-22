@@ -23,7 +23,7 @@ from sdcm.provision.aws.constants import (
     EC2_FLEET_MAX_TARGET_CAPACITY,
     EC2_FLEET_RETRY_BACKOFF,
 )
-from sdcm.provision.aws.instance_parameters import AWSInstanceParams
+from sdcm.provision.aws.instance_parameters import AWSInstanceParams, AWSPlacementInfo
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provisioner import ProvisionParameters
 
@@ -97,6 +97,28 @@ def test_fleet_request_offers_every_configured_instance_type(
     # launch template is cleaned up.
     fleet_mocks["delete_fleet"].assert_not_called()
     fleet_mocks["delete_template"].assert_called_once_with(region_name="us-east-1", template_id="lt-1234")
+
+
+def test_fleet_is_offered_only_the_types_aws_offers_in_the_az(provision_parameters, fleet_mocks):
+    fleet_mocks["create_fleet"].return_value = ("fleet-1", ["i-1", "i-2"], [])
+    instance_parameters = [
+        make_instance_parameters(instance_type).model_copy(
+            update={"Placement": AWSPlacementInfo(AvailabilityZone="us-east-1a")}
+        )
+        for instance_type in ("i7i.large", "i7ie.large", "i4i.large")
+    ]
+    with patch(
+        "sdcm.provision.aws.utils.filter_instance_types_offered", return_value=["i7i.large", "i4i.large"]
+    ) as offered:
+        AWSInstanceProvisioner()._execute_ec2_fleet_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=instance_parameters,
+            count=2,
+            tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+        )
+
+    offered.assert_called_once_with("us-east-1", "us-east-1a", ["i7i.large", "i7ie.large", "i4i.large"])
+    assert fleet_mocks["create_fleet"].call_args.kwargs["instance_types"] == ["i7i.large", "i4i.large"]
 
 
 def test_launch_template_and_fleet_are_tagged_for_cleanup(provision_parameters, fleet_mocks):

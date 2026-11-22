@@ -41,7 +41,6 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
@@ -80,7 +79,12 @@ from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
-from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.cloud_catalog.instance_matcher import (
+    ARCH_ALIASES,
+    NoMatchingInstanceError,
+    rank_instances,
+    select_instance,
+)
 from sdcm.utils.common import (
     ami_built_by_scylla,
     convert_name_to_ami_if_needed,
@@ -490,6 +494,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
     log: ClassVar = logging.getLogger("sdcm.sct_config")
 
     multi_region_params: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
+    # filled from sizing_db when aws_fleet_db_use_alternatives is set - see _resolve_fleet_db_alternatives
+    aws_fleet_db_alternative_types: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
     regions_data: Annotated[dict[str, dict[str, str]], IgnoredType] = Field(default={}, exclude=True)
 
     # computed values, user can't fill those from configuration,
@@ -1004,6 +1010,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # 10.5) derive instance_provision from test duration when it was not chosen explicitly
         self._apply_duration_based_provision_policy()
         self._rerank_sizing_for_final_provision()
+        self._resolve_fleet_db_alternatives()
 
         # 11) validate that supported instance_provision selected
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
@@ -1685,6 +1692,46 @@ class SCTConfiguration(*CONFIG_GROUPS):
     def _spot_sizing_region(cloud: str, provision: str | None, region: str | None) -> str | None:
         """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None."""
         return region if provision in ("spot", "spot_fleet") and cloud == "aws" else None
+
+    def _resolve_fleet_db_alternatives(self) -> None:
+        """Fill `aws_fleet_db_alternative_types` from `sizing_db`, when `aws_fleet_db_use_alternatives` is set.
+
+        The alternatives are every catalog type matching the constraints that sized `instance_type_db` - also
+        outside the role's preferred families, ranked after them - with the same vCPU count and memory as
+        `instance_type_db` (the constraints already pin the architecture). They are offered to EC2 Fleet at a
+        lower priority than `instance_type_db`; local disk size and CPU generation may differ. Runs after
+        `_rerank_sizing_for_final_provision`, so it ranks with the same spot data that picked `instance_type_db`.
+        """
+        self["aws_fleet_db_alternative_types"] = []
+        if not self.get("aws_fleet_db_use_alternatives") or self.get("cluster_backend") != "aws":
+            return
+        primary = self.get("instance_type_db")
+        sized = next(
+            (entry for entry in getattr(self, "_sized_constraints", []) if entry[0] == "instance_type_db"), None
+        )
+        if not sized:
+            self.log.warning(
+                "aws_fleet_db_use_alternatives is set, but instance_type_db (%s) was set explicitly rather than "
+                "sized from sizing_db, so there are no alternatives to offer: EC2 Fleet uses %s only",
+                primary,
+                primary,
+            )
+            return
+        _, role, cloud, constraints, sizing_region, _ = sized
+        # the same spot ranking `_rerank_sizing_for_final_provision` used for the final instance_type_db
+        spot_region = self._spot_sizing_region(cloud, self.get("instance_provision"), sizing_region)
+        catalog = InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
+        size = catalog.get_instance(cloud, primary)
+        ranked = rank_instances(
+            catalog, role, cloud, constraints, spot_region=spot_region, preferred_families_only=False
+        )
+        alternatives = [
+            inst.instance_type
+            for inst in ranked
+            if size and inst.instance_type != primary and (inst.vcpus, inst.memory_gb) == (size.vcpus, size.memory_gb)
+        ]
+        self["aws_fleet_db_alternative_types"] = alternatives
+        self.log.info("EC2 Fleet alternatives to instance_type_db %s, from sizing_db: %s", primary, alternatives)
 
     def _rerank_sizing_for_final_provision(self) -> None:
         """Re-rank the sized instance types once the duration policy has settled `instance_provision`.
@@ -2501,60 +2548,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 f"{field_name} missing from config for {backend}"
             )
 
-    def _validate_aws_instance_type_db_alternatives(self):
-        """Check that every EC2 Fleet alternative can stand in for `instance_type_db`.
-
-        The DB AMI is selected for `instance_type_db`'s CPU architecture, so an alternative of another
-        architecture could not boot it; a different vCPU count or memory size would silently yield a
-        cluster with uneven shard counts and cache sizes. Local disk size and CPU generation may
-        differ. Specs come from the offline instance catalog; a type missing from it still has its
-        architecture checked against AWS, but its vCPU/memory can't be verified.
-        """
-        alternatives = split_instance_types(self.get("aws_instance_type_db_alternatives"))
-        primary = self.get("instance_type_db")
-        if not alternatives or not primary:
-            return
-        catalog = InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
-        region = self.region_names[0]
-
-        def arch_of(instance_type: str, info) -> str:
-            return info.arch if info else get_arch_from_instance_type(instance_type, region_name=region)
-
-        primary_info = catalog.get_instance("aws", primary)
-        primary_arch = arch_of(primary, primary_info)
-        for alternative in alternatives:
-            alternative_info = catalog.get_instance("aws", alternative)
-            alternative_arch = arch_of(alternative, alternative_info)
-            assert alternative_arch == primary_arch, (
-                f"aws_instance_type_db_alternatives: '{alternative}' is {alternative_arch}, but instance_type_db "
-                f"'{primary}' is {primary_arch} and the DB AMI is selected for {primary_arch}"
-            )
-            if not (primary_info and alternative_info):
-                self.log.warning(
-                    "Can't verify that aws_instance_type_db_alternatives entry '%s' has the same vCPUs and memory "
-                    "as instance_type_db '%s': not in the instance catalog",
-                    alternative,
-                    primary,
-                )
-                continue
-            same_vcpus = alternative_info.vcpus == primary_info.vcpus
-            same_memory = alternative_info.memory_gb == primary_info.memory_gb
-            assert same_vcpus and same_memory, (
-                f"aws_instance_type_db_alternatives: '{alternative}' has {alternative_info.vcpus} vCPUs and "
-                f"{alternative_info.memory_gb}GB memory, but instance_type_db '{primary}' has {primary_info.vcpus} "
-                f"vCPUs and {primary_info.memory_gb}GB; alternatives must be interchangeable with it"
-            )
-
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region.
-        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
-        # so every listed type must also be available in the target region.
+        # Validate main instance types (db, loader, monitor) are available in the target region
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
-                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",
@@ -2562,21 +2562,12 @@ class SCTConfiguration(*CONFIG_GROUPS):
             if self.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
                 instance_type_params.append("instance_type_db_oracle")
             for param_name in instance_type_params:
-                if not (value := self.get(param_name)):
-                    continue
-                # Only the alternatives option is a list. Every other option is a single type and is checked
-                # verbatim, so a comma-separated value fails here instead of reaching AMI lookup or RunInstances.
-                if param_name == "aws_instance_type_db_alternatives":
-                    instance_types = split_instance_types(value)
-                else:
-                    instance_types = [value]
-                for region in self.region_names:
-                    for instance_type in instance_types:
+                if instance_type := self.get(param_name):
+                    for region in self.region_names:
                         assert aws_check_instance_type_supported(instance_type, region), (
                             f"Instance type '{instance_type}' (param: {param_name}) "
                             f"is not supported in region '{region}'"
                         )
-            self._validate_aws_instance_type_db_alternatives()
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):

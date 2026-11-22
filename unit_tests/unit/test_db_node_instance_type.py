@@ -34,7 +34,7 @@ def db_node_instance_type(launched_type, is_zero_token_node=False, backend="aws"
 
 
 def test_aws_reports_the_type_ec2_actually_launched():
-    """EC2 Fleet may launch one of `aws_instance_type_db_alternatives` instead of instance_type_db."""
+    """EC2 Fleet may launch one of the `aws_fleet_db_use_alternatives` alternatives instead of instance_type_db."""
     assert db_node_instance_type("i3en.large") == "i3en.large"
 
 

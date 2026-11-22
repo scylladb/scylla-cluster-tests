@@ -57,7 +57,7 @@ def is_spot_capacity_scoring_enabled(params, backend: str) -> bool:
         return False
     if backend == "aws" and params.get("instance_provision") == INSTANCE_PROVISION_SPOT_FLEET:
         # The AWS score describes a request for `instance_type_db` alone, while an EC2 Fleet run offers the
-        # `aws_instance_type_db_alternatives` too - and AWS documents that scoring fewer than three types always
+        # `aws_fleet_db_use_alternatives` alternatives too - and AWS documents that scoring fewer than three types always
         # comes back low. A score for a request SCT doesn't make must not pick or veto AZs and regions.
         return False
     return params.get("instance_provision") != INSTANCE_PROVISION_ON_DEMAND

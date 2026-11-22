@@ -172,6 +172,17 @@ Deprecated alias of [`fallback_to_next_availability_zone`](general-and-provision
 **type:** bool
 
 
+<a id="aws_fleet_db_use_alternatives"></a>
+
+## **aws_fleet_db_use_alternatives** / SCT_AWS_FLEET_DB_USE_ALTERNATIVES
+
+Offer EC2 Fleet spot provisioning interchangeable alternatives to [`instance_type_db`](general-and-provisioning.md#instance_type_db), so a large spot request can still be fulfilled when the preferred pool is exhausted. The alternatives are every catalog type matching [`sizing_db`](general-and-provisioning.md#sizing_db) with the same vCPU count and memory as [`instance_type_db`](general-and-provisioning.md#instance_type_db) - including families outside the sizing preference list, ranked after it - so local disk size and CPU generation may differ, and a fleet can produce a heterogeneous cluster; add constraints to [`sizing_db`](general-and-provisioning.md#sizing_db) (e.g. `disk`) to narrow them. [`instance_type_db`](general-and-provisioning.md#instance_type_db) stays the preferred type: EC2 Fleet prefers it (best effort), and every other code path uses it alone. Needs [`instance_type_db`](general-and-provisioning.md#instance_type_db) sized from [`sizing_db`](general-and-provisioning.md#sizing_db) - with an explicit [`instance_type_db`](general-and-provisioning.md#instance_type_db), EC2 Fleet uses that type only. EC2 Fleet is used for every DB spot request with `instance_provision: spot_fleet` - including nodes added mid-test - and, with `spot`, only for the upfront provisioning of more than 10 nodes per AZ. Alternatives AWS doesn't offer in the target AZ are skipped at launch. AWS only.
+
+**default:** False
+
+**type:** bool
+
+
 <a id="aws_instance_profile_name_db"></a>
 
 ## **aws_instance_profile_name_db** / SCT_AWS_INSTANCE_PROFILE_NAME_DB
@@ -195,17 +206,6 @@ This is the name of the instance profile to set on all loader instances
 **default:** N/A
 
 **type:** str (appendable)
-
-
-<a id="aws_instance_type_db_alternatives"></a>
-
-## **aws_instance_type_db_alternatives** / SCT_AWS_INSTANCE_TYPE_DB_ALTERNATIVES
-
-List of additional, interchangeable AWS DB instance types (e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet spot provisioning as lower-priority alternatives to [`instance_type_db`](general-and-provisioning.md#instance_type_db), so a large spot request can still be fulfilled when the primary pool is exhausted. EC2 Fleet is used for every DB spot request with `instance_provision: spot_fleet` - including nodes added mid-test - and, with `spot`, only for the upfront provisioning of more than 10 nodes per AZ. [`instance_type_db`](general-and-provisioning.md#instance_type_db) stays the primary type: EC2 Fleet prefers it (best effort), and every other code path (AMI/arch lookup, AZ selection, non-fleet provisioning) uses it alone. Every entry must be available in the region and have the same CPU architecture (the AMI is architecture-specific), vCPU count and memory as [`instance_type_db`](general-and-provisioning.md#instance_type_db), which is validated. Local disk size and CPU generation may differ, so a fleet can produce a heterogeneous cluster. AWS only.
-
-**default:** []
-
-**type:** str | list[str] → list[str] (appendable)
 
 
 <a id="extra_network_interface"></a>

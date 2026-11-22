@@ -489,6 +489,119 @@ def _build_sort_key(
     return lambda inst: tuple(g(inst) for g in active)
 
 
+def _prepare_constraints(
+    catalog: InstanceCatalog, role: str, cloud: str, constraints: dict, arch: str | None
+) -> list[Constraint]:
+    """Parse *constraints* and add the implicit ones: the effective architecture and the role's local storage."""
+    parsed = parse_constraints(constraints)
+
+    sizing = catalog.sizing_config
+    role_cfg = sizing.roles.get(role) if sizing else None
+
+    parsed_arch_constraint = next((c for c in parsed if c.field == "arch"), None)
+
+    if arch is not None:
+        effective_arch = ARCH_ALIASES.get(arch.strip().lower(), arch)
+    elif parsed_arch_constraint is not None:
+        effective_arch = parsed_arch_constraint.value
+    else:
+        cloud_default_arch = catalog.cloud_defaults.get(cloud, {}).get("arch", "x86_64")
+        if role_cfg and role_cfg.arch_source == "cloud_default":
+            effective_arch = cloud_default_arch
+        elif role_cfg and role_cfg.arch:
+            effective_arch = role_cfg.arch
+        elif not role_cfg and role in {"db", "db_oracle", "zero_token"}:
+            effective_arch = cloud_default_arch
+        else:
+            effective_arch = "x86_64"
+
+    if parsed_arch_constraint is None:
+        parsed.append(Constraint("arch", "eq", effective_arch))
+    elif arch is not None:
+        parsed = [c for c in parsed if c.field != "arch"]
+        parsed.append(Constraint("arch", "eq", effective_arch))
+
+    if role_cfg:
+        _apply_implicit_constraints(parsed, role_cfg)
+    else:
+        _apply_implicit_constraints_fallback(parsed, role)
+    return parsed
+
+
+def _rank_candidates(
+    catalog: InstanceCatalog,
+    role: str,
+    cloud: str,
+    constraints: dict,
+    arch: str | None,
+    region: str | None,
+    spot_region: str | None,
+    preferred_families_only: bool,
+) -> tuple[list[InstanceTypeInfo], list[Constraint]]:
+    """Return the candidates matching *constraints*, best first, and the parsed constraints they matched."""
+    parsed = _prepare_constraints(catalog, role, cloud, constraints, arch)
+    sizing = catalog.sizing_config
+
+    preferred_families: list[str] = catalog.preferred_families.get(role, {}).get(cloud, [])
+    family_rank: dict[str, int] = {fam: idx for idx, fam in enumerate(preferred_families)}
+
+    cloud_instances = catalog.get_instances(cloud)
+
+    candidates = [inst for inst in cloud_instances if all(_matches_constraint(inst, c) for c in parsed)]
+
+    if not candidates:
+        raise NoMatchingInstanceError(parsed, len(cloud_instances))
+
+    if preferred_families and preferred_families_only:
+        preferred_candidates = [inst for inst in candidates if inst.family in family_rank]
+        if preferred_candidates:
+            candidates = preferred_candidates
+
+    sort_key = _build_sort_key(
+        sort_order=sizing.sort_order if sizing else None,
+        family_rank=family_rank,
+        num_preferred=len(preferred_families),
+        region=region,
+    )
+    # A stable sort, so equal keys keep catalog order - the same tie-break `min()` gives the single pick.
+    ranked = sorted(candidates, key=sort_key)
+    # Only AWS has interruption data. Spot keeps the normal pick's size (candidates already share one arch), and
+    # moves the least-interrupted of its same-size siblings first.
+    spot_buckets = interruption.aws_spot_buckets().get(spot_region, {}) if spot_region and cloud == "aws" else {}
+    if spot_buckets:
+        size = ranked[0].vcpus
+        siblings = sorted(
+            (inst for inst in ranked if inst.vcpus == size),
+            key=lambda inst: (spot_buckets.get(inst.instance_type, _UNKNOWN_BUCKET), sort_key(inst)),
+        )
+        ranked = siblings + [inst for inst in ranked if inst.vcpus != size]
+    return ranked, parsed
+
+
+def rank_instances(
+    catalog: InstanceCatalog,
+    role: str,
+    cloud: str,
+    constraints: dict,
+    arch: str | None = None,
+    region: str | None = None,
+    spot_region: str | None = None,
+    preferred_families_only: bool = True,
+) -> list[InstanceTypeInfo]:
+    """Return every cloud instance matching the given constraints, best first.
+
+    Uses the same filtering and ordering as `select_instance()`, whose pick is the first entry when
+    *preferred_families_only* is set. With it unset, instances outside the role's preferred families are kept
+    too, ranked after the preferred ones - e.g. to offer an older generation as a fallback.
+
+    Raises:
+        NoMatchingInstanceError: If no instance satisfies all constraints.
+    """
+    return _rank_candidates(
+        catalog, role, cloud, constraints, arch, region, spot_region, preferred_families_only=preferred_families_only
+    )[0]
+
+
 def select_instance(
     catalog: InstanceCatalog,
     role: str,
@@ -536,68 +649,9 @@ def select_instance(
     Raises:
         NoMatchingInstanceError: If no instance satisfies all constraints.
     """
-    parsed = parse_constraints(constraints)
-
-    sizing = catalog.sizing_config
-    role_cfg = sizing.roles.get(role) if sizing else None
-
-    parsed_arch_constraint = next((c for c in parsed if c.field == "arch"), None)
-
-    if arch is not None:
-        effective_arch = ARCH_ALIASES.get(arch.strip().lower(), arch)
-    elif parsed_arch_constraint is not None:
-        effective_arch = parsed_arch_constraint.value
-    else:
-        cloud_default_arch = catalog.cloud_defaults.get(cloud, {}).get("arch", "x86_64")
-        if role_cfg and role_cfg.arch_source == "cloud_default":
-            effective_arch = cloud_default_arch
-        elif role_cfg and role_cfg.arch:
-            effective_arch = role_cfg.arch
-        elif not role_cfg and role in {"db", "db_oracle", "zero_token"}:
-            effective_arch = cloud_default_arch
-        else:
-            effective_arch = "x86_64"
-
-    if parsed_arch_constraint is None:
-        parsed.append(Constraint("arch", "eq", effective_arch))
-    elif arch is not None:
-        parsed = [c for c in parsed if c.field != "arch"]
-        parsed.append(Constraint("arch", "eq", effective_arch))
-
-    if role_cfg:
-        _apply_implicit_constraints(parsed, role_cfg)
-    else:
-        _apply_implicit_constraints_fallback(parsed, role)
-
-    preferred_families: list[str] = catalog.preferred_families.get(role, {}).get(cloud, [])
-    family_rank: dict[str, int] = {fam: idx for idx, fam in enumerate(preferred_families)}
-
-    cloud_instances = catalog.get_instances(cloud)
-
-    candidates = [inst for inst in cloud_instances if all(_matches_constraint(inst, c) for c in parsed)]
-
-    if not candidates:
-        raise NoMatchingInstanceError(parsed, len(cloud_instances))
-
-    if preferred_families:
-        preferred_candidates = [inst for inst in candidates if inst.family in family_rank]
-        if preferred_candidates:
-            candidates = preferred_candidates
-
-    sort_key = _build_sort_key(
-        sort_order=sizing.sort_order if sizing else None,
-        family_rank=family_rank,
-        num_preferred=len(preferred_families),
-        region=region,
+    ranked, parsed = _rank_candidates(
+        catalog, role, cloud, constraints, arch, region, spot_region, preferred_families_only=True
     )
-    best = min(candidates, key=sort_key)
-    # Only AWS has interruption data. Spot keeps the normal pick's size (candidates already share one arch),
-    # and only swaps it for a less-interrupted sibling.
-    spot_buckets = interruption.aws_spot_buckets().get(spot_region, {}) if spot_region and cloud == "aws" else {}
-    if spot_buckets:
-        best = min(
-            (inst for inst in candidates if inst.vcpus == best.vcpus),
-            key=lambda inst: (spot_buckets.get(inst.instance_type, _UNKNOWN_BUCKET), sort_key(inst)),
-        )
+    sizing = catalog.sizing_config
     mem_per_vcpu = sizing.flex_defaults.get("mem_per_vcpu", 4.0) if sizing else 4.0
-    return _resolve_flex_instance(best, parsed, mem_per_vcpu=mem_per_vcpu)
+    return _resolve_flex_instance(ranked[0], parsed, mem_per_vcpu=mem_per_vcpu)

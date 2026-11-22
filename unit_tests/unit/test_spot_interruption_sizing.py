@@ -11,7 +11,7 @@ import requests
 
 from sdcm.utils.cloud_catalog import interruption
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
-from sdcm.utils.cloud_catalog.instance_matcher import select_instance
+from sdcm.utils.cloud_catalog.instance_matcher import rank_instances, select_instance
 
 _REAL_AWS_SPOT_BUCKETS = interruption.aws_spot_buckets  # before the autouse stub replaces it
 
@@ -128,3 +128,32 @@ def test_aws_spot_buckets_is_empty_when_the_advisor_schema_changes(advisor, info
     }
 
     assert interruption.aws_spot_buckets() == {}
+
+
+@pytest.mark.parametrize("spot_region", [None, "us-east-1", "eu-west-1"])
+def test_ranking_starts_with_the_single_pick(catalog, spot_region):
+    """`rank_instances` is the full order `select_instance` takes its pick from."""
+    ranked = rank_instances(catalog, "db", "aws", {"vcpu": ">=4"}, spot_region=spot_region)
+
+    assert (
+        ranked[0].instance_type
+        == select_instance(catalog, "db", "aws", {"vcpu": ">=4"}, spot_region=spot_region).instance_type
+    )
+    assert len(ranked) == len(catalog.instances)
+
+
+def test_spot_ranking_orders_same_size_siblings_by_interruption(catalog):
+    ranked = rank_instances(catalog, "db", "aws", {"vcpu": 4}, spot_region="us-east-1")
+
+    # i8ge.xlarge is bucket 0, i8g.xlarge bucket 4 - the reverse of the on-demand order
+    assert [inst.instance_type for inst in ranked] == ["i8ge.xlarge", "i8g.xlarge"]
+
+
+def test_non_preferred_families_rank_last_and_only_on_request(catalog):
+    catalog.instances.append(_inst("im4gn.xlarge", "im4gn", 4, 0.30))  # cheapest, but not a preferred family
+
+    preferred = rank_instances(catalog, "db", "aws", {"vcpu": 4})
+    everything = rank_instances(catalog, "db", "aws", {"vcpu": 4}, preferred_families_only=False)
+
+    assert [inst.instance_type for inst in preferred] == ["i8g.xlarge", "i8ge.xlarge"]
+    assert [inst.instance_type for inst in everything] == ["i8g.xlarge", "i8ge.xlarge", "im4gn.xlarge"]

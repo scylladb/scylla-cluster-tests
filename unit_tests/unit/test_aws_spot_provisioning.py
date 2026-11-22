@@ -31,6 +31,7 @@ from sdcm.provision.aws.utils import (
     create_ec2_fleet_instance_request,
     create_launch_template,
     delete_ec2_fleet,
+    filter_instance_types_offered,
     get_provisioned_spot_instance_ids,
     is_ec2_fleet_retryable,
     split_instance_types,
@@ -190,7 +191,7 @@ class TestGetProvisionedSpotInstanceIds:
         pytest.param("i7i.large,,i4i.large", ["i7i.large", "i4i.large"], id="empty_entries_ignored"),
         pytest.param("", [], id="empty_value"),
         pytest.param(None, [], id="none_value"),
-        # aws_instance_type_db_alternatives is a StringOrList, so an actual list is the common input
+        # aws_fleet_db_alternative_types is a list, so an actual list is the common input
         pytest.param(["i7i.large", "i4i.large"], ["i7i.large", "i4i.large"], id="list_input"),
         pytest.param(["i7i.large", "i7i.large"], ["i7i.large"], id="list_duplicates_removed"),
         pytest.param([" i7i.large ", "i4i.large"], ["i7i.large", "i4i.large"], id="list_whitespace_stripped"),
@@ -452,3 +453,58 @@ def test_count_instance_types_by_id_never_raises(mock_ec2_client):
     mock_ec2_client.__getitem__.return_value.get_paginator.side_effect = Exception("throttled")
 
     assert count_instance_types_by_id("us-east-1", ["i-1"]) == {}
+
+
+def _offerings(mock_ec2_client, *offered):
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.get_paginator.return_value.paginate.return_value = [
+        {"InstanceTypeOfferings": [{"InstanceType": instance_type} for instance_type in offered]}
+    ]
+    return mock_client
+
+
+def test_alternatives_not_offered_in_the_az_are_dropped(mock_ec2_client):
+    client = _offerings(mock_ec2_client, "i7i.large", "i4i.large")
+
+    kept = filter_instance_types_offered("eu-west-1", "eu-west-1a", ["i7i.large", "i7ie.large", "i4i.large"])
+
+    assert kept == ["i7i.large", "i4i.large"]
+    client.get_paginator.return_value.paginate.assert_called_once_with(
+        LocationType="availability-zone",
+        Filters=[
+            {"Name": "location", "Values": ["eu-west-1a"]},
+            {"Name": "instance-type", "Values": ["i7i.large", "i7ie.large", "i4i.large"]},
+        ],
+    )
+
+
+def test_the_preferred_type_is_never_dropped(mock_ec2_client):
+    """Configuration already validated instance_type_db; the offering check only prunes alternatives."""
+    _offerings(mock_ec2_client, "i4i.large")
+
+    assert filter_instance_types_offered("eu-west-1", "eu-west-1a", ["i7i.large", "i4i.large"]) == [
+        "i7i.large",
+        "i4i.large",
+    ]
+
+
+@pytest.mark.parametrize(
+    "availability_zone, instance_types",
+    [
+        pytest.param("eu-west-1a", ["i7i.large"], id="single_type"),
+        pytest.param(None, ["i7i.large", "i4i.large"], id="no_az"),
+    ],
+)
+def test_offering_check_is_skipped_when_there_is_nothing_to_prune(mock_ec2_client, availability_zone, instance_types):
+    assert filter_instance_types_offered("eu-west-1", availability_zone, instance_types) == instance_types
+    mock_ec2_client.__getitem__.assert_not_called()
+
+
+def test_a_failed_offering_lookup_keeps_every_type(mock_ec2_client):
+    mock_ec2_client.__getitem__.return_value.get_paginator.side_effect = Exception("throttled")
+
+    assert filter_instance_types_offered("eu-west-1", "eu-west-1a", ["i7i.large", "i4i.large"]) == [
+        "i7i.large",
+        "i4i.large",
+    ]

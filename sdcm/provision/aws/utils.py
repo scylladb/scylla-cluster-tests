@@ -111,7 +111,7 @@ ec2_resources = Ec2ServiceResourcesDict()
 def split_instance_types(instance_type: Union[str, List[str], None]) -> List[str]:
     """Parse an `instance_type_*` config value into an ordered list of interchangeable types.
 
-    Accepts either an actual list (e.g. `aws_instance_type_db_alternatives`, a ``StringOrList``
+    Accepts either an actual list (e.g. `aws_fleet_db_alternative_types`, the resolved alternatives
     param) or a single/comma-separated string. The first entry is the preferred type; the rest
     exist so EC2 Fleet can fall back to another instance pool when spot capacity for the preferred
     type runs out. Order is preserved and duplicates removed.
@@ -469,6 +469,37 @@ def terminate_instances_by_id(region_name: str, instance_ids: List[str]) -> None
         LOGGER.warning("Failed to terminate leftover instances %s in region %s: %s", instance_ids, region_name, exc)
 
 
+def filter_instance_types_offered(
+    region_name: str, availability_zone: Optional[str], instance_types: List[str]
+) -> List[str]:
+    """Drop the alternatives AWS doesn't offer in `availability_zone`; the preferred (first) type always stays.
+
+    Alternatives can be derived rather than hand-picked, and a region or AZ fallback can move the request after
+    configuration was validated, so each EC2 Fleet request checks its own AZ. A failed lookup keeps every type:
+    an override AWS can't place only adds an entry to the fleet's errors, it never fails the request.
+    """
+    if len(instance_types) < 2 or not availability_zone:
+        return list(instance_types)
+    offered = set()
+    try:
+        paginator = ec2_clients[region_name].get_paginator("describe_instance_type_offerings")
+        for page in paginator.paginate(
+            LocationType="availability-zone",
+            Filters=[
+                {"Name": "location", "Values": [availability_zone]},
+                {"Name": "instance-type", "Values": list(instance_types)},
+            ],
+        ):
+            offered.update(offering["InstanceType"] for offering in page.get("InstanceTypeOfferings", []))
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Could not check which of %s %s offers: %s", instance_types, availability_zone, exc)
+        return list(instance_types)
+    kept = [instance_types[0]] + [instance_type for instance_type in instance_types[1:] if instance_type in offered]
+    if dropped := [instance_type for instance_type in instance_types if instance_type not in kept]:
+        LOGGER.info("Not offering %s to EC2 Fleet: AWS doesn't offer them in %s", dropped, availability_zone)
+    return kept
+
+
 def provision_ec2_fleet(
     region_name: str,
     instance_parameters: dict,
@@ -506,6 +537,9 @@ def provision_ec2_fleet(
             f"EC2 Fleet can launch at most {EC2_FLEET_MAX_TARGET_CAPACITY} instances all-or-nothing in one request, "
             f"{count} were requested in {region_name}; spread the nodes over more availability zones"
         )
+    instance_types = filter_instance_types_offered(
+        region_name, (instance_parameters.get("Placement") or {}).get("AvailabilityZone"), instance_types
+    )
     template_id = create_launch_template(
         region_name=region_name,
         template_name=f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}{uuid.uuid4()}",

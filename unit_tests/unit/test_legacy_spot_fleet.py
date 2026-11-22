@@ -48,7 +48,7 @@ def cluster():
     cluster.params = {
         "availability_zone": "a",
         "instance_type_db": "i7i.large",
-        "aws_instance_type_db_alternatives": ALTERNATIVES,
+        "aws_fleet_db_alternative_types": ALTERNATIVES,
         # spot_fleet must ignore this
         "instance_provision_fallback_on_demand": True,
     }
@@ -115,7 +115,7 @@ def test_spot_fleet_add_nodes_reports_each_launched_instance_type(cluster, ec2_w
 
 
 def test_spot_fleet_add_nodes_without_alternatives_needs_no_type_lookup(cluster, ec2_wrapper):
-    cluster.params["aws_instance_type_db_alternatives"] = []
+    cluster.params["aws_fleet_db_alternative_types"] = []
     with (
         patch("sdcm.cluster_aws.count_instance_types_by_id") as lookup,
         patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,
