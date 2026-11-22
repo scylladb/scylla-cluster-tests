@@ -22,47 +22,78 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from microbenchmarking_test import PerfAlternatorTest, PerfCqlRawTest
+from microbenchmarking_test import InProcessServerMicrobenchmarkTest, PerfAlternatorTest, PerfCqlRawTest
 
 PerfAlternatorTest.__test__ = False
 PerfCqlRawTest.__test__ = False
 
-# The perf-cql-raw command line before the in-process server base class was extracted. Its Argus
-# history depends on it, so it must not change.
-PERF_CQL_RAW_WRITE_COMMAND = (
-    "/usr/bin/scylla perf-cql-raw --json-result perf-cql-raw-result.json"
-    " --workdir /tmp/scylla-perf-cql-raw-workdir"
-    " --options-file /tmp/scylla-perf-cql-raw-workdir/conf/scylla.yaml"
-    " --io-properties-file /etc/scylla.d/io_properties.yaml"
-    " --smp 2 --cpus 0,1 -m 3G --workload write --duration 60"
-)
+BASE_CONFIG = {
+    "seed_provider": [
+        {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "127.0.0.1"}]}
+    ],
+    "listen_address": "localhost",
+    "rpc_address": "localhost",
+    "api_address": "127.0.0.1",
+    "endpoint_snitch": "SimpleSnitch",
+}
 
-PERF_ALTERNATOR_READ_COMMAND = (
-    "/usr/bin/scylla perf-alternator --json-result perf-alternator-result.json"
-    " --workdir /tmp/scylla-perf-alternator-workdir"
-    " --options-file /tmp/scylla-perf-alternator-workdir/conf/scylla.yaml"
-    " --io-properties-file /etc/scylla.d/io_properties.yaml"
-    " --smp 2 --cpus 0,1 -m 3G --workload read --duration 60"
-)
+# The perf-cql-raw config and command lines are pinned: its Argus history depends on them, so they
+# must not change.
+PERF_CQL_RAW_CONFIG = BASE_CONFIG
+
+PERF_ALTERNATOR_CONFIG = BASE_CONFIG | {
+    "alternator_port": 8000,
+    "alternator_address": "127.0.0.1",
+    "alternator_write_isolation": "forbid",
+    "tablets_mode_for_new_keyspaces": "enabled",
+}
 
 
-def make_test(test_class, benchmark_ok=True, benchmark_error=None):
-    """A test instance with a fake DB node, without running ClusterTester's setup."""
+def expected_command(benchmark: str, workload: str) -> str:
+    workdir = f"/tmp/scylla-{benchmark}-workdir"
+    return (
+        f"/usr/bin/scylla {benchmark} --json-result {benchmark}-result.json"
+        f" --workdir {workdir}"
+        f" --options-file {workdir}/conf/scylla.yaml"
+        " --io-properties-file /etc/scylla.d/io_properties.yaml"
+        f" --smp 2 --cpus 0,1 -m 3G --workload {workload} --duration 60"
+    )
+
+
+BENCHMARKS = [
+    pytest.param(PerfCqlRawTest, "perf-cql-raw", "Perf CQL Raw", PERF_CQL_RAW_CONFIG, id="perf-cql-raw"),
+    pytest.param(
+        PerfAlternatorTest, "perf-alternator", "Perf Alternator", PERF_ALTERNATOR_CONFIG, id="perf-alternator"
+    ),
+]
+
+
+def make_test(test_class, fail_at=None):
+    """A test instance with a fake DB node, without running ClusterTester's setup.
+
+    `fail_at` makes one step raise: "stop", "tool" or "submit". The returned list records the steps.
+    """
+    steps = []
     node = MagicMock()
     node.add_install_prefix.side_effect = lambda path: path
 
-    def run(cmd, *args, **kwargs):  # noqa: ARG001
+    def step(name):
+        steps.append(name)
+        if fail_at == name:
+            raise RuntimeError(f"fail at {name}")
+
+    def run(cmd, *_args, **_kwargs):
         if cmd.startswith("/usr/bin/scylla "):
-            if benchmark_error:
-                raise benchmark_error
-            return MagicMock(ok=benchmark_ok)
+            step("tool")
         return MagicMock(ok=True)
 
     node.remoter.run.side_effect = run
+    node.stop_scylla_server.side_effect = lambda **_kwargs: step("stop")
+    node.start_scylla_server.side_effect = lambda: step("start")
     test = test_class.__new__(test_class)
     test.db_cluster = MagicMock(nodes=[node])
-    test.submit_results = MagicMock()
-    return test, node
+    test.submit_results = MagicMock(side_effect=lambda *_args, **_kwargs: step("submit"))
+    return test, node, steps
 
 
 def benchmark_commands(node):
@@ -76,63 +107,50 @@ def written_config(node) -> dict:
     return yaml.safe_load(body)
 
 
-def test_perf_cql_raw_command_is_unchanged():
-    test, node = make_test(PerfCqlRawTest)
+@pytest.mark.parametrize("workload", ["read", "write"])
+@pytest.mark.parametrize("test_class,benchmark,benchmark_name,config", BENCHMARKS)
+def test_command_config_and_result(test_class, benchmark, benchmark_name, config, workload):
+    """The whole config is pinned: a new key, such as a storage directory, must be a deliberate change."""
+    test, node, _ = make_test(test_class)
 
-    test.test_write()
+    getattr(test, f"test_{workload}")()
 
-    assert benchmark_commands(node) == [PERF_CQL_RAW_WRITE_COMMAND]
-    test.submit_results.assert_called_once_with(node, "perf-cql-raw-result.json", benchmark_name="Perf CQL Raw")
-
-
-def test_perf_cql_raw_config_has_no_alternator():
-    test, node = make_test(PerfCqlRawTest)
-
-    test.test_read()
-
-    config = written_config(node)
-    assert "alternator_port" not in config
-    assert config["api_address"] == "127.0.0.1"
-
-
-def test_perf_alternator_command_and_result():
-    test, node = make_test(PerfAlternatorTest)
-
-    test.test_read()
-
-    assert benchmark_commands(node) == [PERF_ALTERNATOR_READ_COMMAND]
-    test.submit_results.assert_called_once_with(node, "perf-alternator-result.json", benchmark_name="Perf Alternator")
-
-
-def test_perf_alternator_config_turns_alternator_on():
-    test, node = make_test(PerfAlternatorTest)
-
-    test.test_write()
-
-    config = written_config(node)
-    assert config["alternator_port"] == 8000
-    assert config["alternator_write_isolation"] == "forbid"
-    # No storage directory may be set, or --workdir would not move it off the live server's data.
-    assert not {key for key in config if key.endswith("_directory") or key == "data_file_directories"}
+    assert benchmark_commands(node) == [expected_command(benchmark, workload)]
+    assert written_config(node) == config
+    test.submit_results.assert_called_once_with(node, f"{benchmark}-result.json", benchmark_name=benchmark_name)
 
 
 @pytest.mark.parametrize("test_class", [PerfCqlRawTest, PerfAlternatorTest])
-def test_scylla_server_restarts_when_the_benchmark_fails(test_class):
-    test, node = make_test(test_class, benchmark_error=RuntimeError("perf tool crashed"))
+@pytest.mark.parametrize(
+    "fail_at,expected_steps",
+    [
+        (None, ["stop", "tool", "submit", "start"]),
+        ("stop", ["stop", "start"]),
+        ("tool", ["stop", "tool", "start"]),
+        ("submit", ["stop", "tool", "submit", "start"]),
+    ],
+)
+def test_scylla_server_is_down_for_the_run_and_starts_again(test_class, fail_at, expected_steps):
+    test, node, steps = make_test(test_class, fail_at=fail_at)
 
-    with pytest.raises(RuntimeError, match="perf tool crashed"):
+    if fail_at:
+        with pytest.raises(RuntimeError, match=f"fail at {fail_at}"):
+            test.test_read()
+    else:
         test.test_read()
 
+    assert steps == expected_steps
     node.stop_scylla_server.assert_called_once_with(ignore_status=True)
-    node.start_scylla_server.assert_called_once_with()
-    test.submit_results.assert_not_called()
 
 
-@pytest.mark.parametrize("test_class", [PerfCqlRawTest, PerfAlternatorTest])
-def test_no_result_is_sent_when_the_benchmark_is_not_ok(test_class):
-    test, node = make_test(test_class, benchmark_ok=False)
+@pytest.mark.parametrize("attributes", [{"BENCHMARK": "perf-x"}, {"BENCHMARK_NAME": "Perf X"}], ids=str)
+def test_a_subclass_that_misses_an_attribute_fails_before_the_stop(attributes):
+    """BENCHMARK and BENCHMARK_NAME have no default, so a subclass that misses one never stops scylla-server."""
+    test_class = type("PerfXTest", (InProcessServerMicrobenchmarkTest,), {"__test__": False, **attributes})
+    test, node, steps = make_test(test_class)
 
-    test.test_write()
+    with pytest.raises(AttributeError):
+        test.run_workload("read")
 
-    test.submit_results.assert_not_called()
-    node.start_scylla_server.assert_called_once_with()
+    assert steps == []
+    node.remoter.run.assert_not_called()

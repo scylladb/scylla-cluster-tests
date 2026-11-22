@@ -1,4 +1,4 @@
-# Weekly perf-alternator microbenchmark
+# perf-alternator microbenchmark
 
 **Jira:** SCT-1382
 
@@ -8,19 +8,19 @@ Scylla has a microbenchmark for Alternator, `scylla perf-alternator`. It
 measures the cost of one Alternator request: allocations, tasks, instructions,
 and CPU cycles per operation. SCT does not run it.
 
-SCT runs the same kind of benchmark for CQL every week: perf-simple-query and
-perf-cql-raw report their results to Argus, and Argus flags a change in the
-per-operation cost. Alternator has no such tracking. A change in Scylla that
+SCT runs the same kind of benchmark for CQL on each release and on PGO
+builds of master: perf-simple-query and perf-cql-raw report their results to
+Argus, and Argus flags a change in the per-operation cost. Alternator has no such tracking. A change in Scylla that
 makes each Alternator request more expensive goes unnoticed until a bigger
 Alternator test or a user finds it.
 
 ## Who it affects
 
-- The performance team, which watches the weekly microbenchmark results in
-  Argus and reports them each week.
+- The performance team, which watches the microbenchmark results in Argus and
+  reports them each week.
 - Alternator developers, who get no per-request cost history for a release.
-- The `perf-regression` trigger, which runs the weekly microbenchmarks for
-  each Scylla release and for master.
+- The `perf-regression` trigger, which runs the microbenchmarks for each
+  Scylla release and for master.
 
 ## Evidence
 
@@ -60,14 +60,16 @@ perf counters (`perf_event_paranoid=4`).
 
 ## Definition of done
 
-- Each week, the `perf-regression` trigger runs the Alternator microbenchmark
-  for master and for each release from 2026.2, for the read and the write
+- The Alternator microbenchmark runs for each release from 2026.4, and on the
+  PGO builds of master, as perf-simple-query does, for the read and the write
   workloads, on x86_64 and on arm64.
 - Each run puts one Argus result per workload, with the same per-operation
   metrics as the other microbenchmarks. The instructions and the cycles per
   operation are not 0.
-- A release older than 2026.2 does not trigger the benchmark. Its
-  `perf-alternator` tool cannot write a result file.
+- A release older than 2026.4 does not trigger the benchmark. Before 2026.2
+  its `perf-alternator` tool cannot write a result file, and only the numbers
+  of new releases are worth tracking.
+- The benchmark table uses tablets, as on a production node.
 - A PGO build triggers the benchmark too, as it triggers perf-cql-raw.
 - After the run, the Scylla server of the DB node runs again, also when the
   benchmark fails.
@@ -79,6 +81,6 @@ perf counters (`perf_event_paranoid=4`).
 - Thresholds that fail a run. The first runs set the baseline.
 - The `scan`, `write_gsi`, `write_rmw`, and batch workloads.
 - The weekly perf report and the version comparison report. Both list each
-  job by its Argus test ID, which exists only after the first weekly run.
+  job by its Argus test ID, which exists only after the first run.
 - The "promote to quick tests" item of SCT-1382. Its meaning is not clear,
   and it waits for the answer of the reporter.

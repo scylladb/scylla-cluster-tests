@@ -1,8 +1,8 @@
-# Weekly perf-alternator microbenchmark
+# perf-alternator microbenchmark
 
 **Jira:** SCT-1382
 
-**Status:** draft
+**Status:** built
 
 ## Overview
 
@@ -11,9 +11,10 @@ node, for the read and the write workloads, and sends its JSON result to
 Argus as `<workload> - Perf Alternator`. The tool boots a full Scylla server
 in its own process, as perf-cql-raw does. The test uses the same run flow as
 perf-cql-raw: its own server config and work directory, the node's Scylla
-server stopped for the run and started again after it. Four weekly jobs
-(x86_64 and arm64, read and write) join the `perf-regression` trigger from
-2026.2, and the PGO offline-installer trigger.
+server stopped for the run and started again after it. Four jobs (x86_64
+and arm64, read and write) join the `perf-regression` trigger, for each
+release from 2026.4, and the PGO offline-installer trigger, for master. As
+for perf-simple-query, no cron runs them.
 
 ## Constraints
 
@@ -21,6 +22,9 @@ server stopped for the run and started again after it. Four weekly jobs
   `perf-alternator`, but no `--json-result` option.
 - The tool needs Alternator turned on in its server config. Without the
   Alternator port, it waits for the port and then fails.
+- Scylla does not start with Alternator on and no write isolation.
+- The table uses tablets, as on a production node. Scylla's own default for
+  new keyspaces is `unset`, which gives Alternator a vnodes table.
 - The resources and the duration stay fixed. A change to them breaks the
   Argus history.
 - perf-cql-raw keeps its command line, its config, and its Argus results.
@@ -51,13 +55,14 @@ sequenceDiagram
 | perf-cql-raw test | Moves onto the base, with no change to its behavior |
 | perf-alternator test | Adds the Alternator settings to the server config. Has a read and a write test |
 | Test cases | One for each architecture. They use the perf-cql-raw instance types, c8i.xlarge and c8g.xlarge |
-| Weekly jobs | Four jobs in the `scylla-enterprise/perf-regression` folder |
-| `perf-regression` trigger | Runs the four jobs from 2026.2 |
+| Jobs | Four jobs in the `scylla-enterprise/perf-regression` folder |
+| `perf-regression` trigger | Runs the four jobs for each release from 2026.4. They have no label, so no cron runs them |
 | PGO offline-installer trigger | Runs the four jobs on a PGO build of master |
 
 | Condition | Behavior |
 |---|---|
-| A request fails | The tool stops the run with no result file. The test fails and sends no result |
+| A request fails, on a tool that checks the HTTP status (master from scylladb/scylladb@36eadf9e40) | The tool stops the run with no result file. The test fails and sends no result |
+| A request fails, on an older tool | The tool counts the error reply as a successful operation. Only a drop in `instructions_per_op` shows it |
 | The tool exits with an error | The test fails, and scylla-server starts again |
 | scylla-server is already stopped before the run | The test continues. The ports are free |
 | Scylla adds a stat to the result file | The test skips the stat with a warning, as for the other microbenchmarks |
@@ -77,7 +82,7 @@ scylla perf-alternator --workload {read|write} --duration 60 --json-result <file
 ```
 
 The server config. It is the perf-cql-raw config, plus the Alternator
-settings:
+settings and the tablets mode:
 
 ```yaml
 seed_provider:
@@ -89,7 +94,9 @@ rpc_address: localhost
 api_address: 127.0.0.1
 endpoint_snitch: SimpleSnitch
 alternator_port: 8000
+alternator_address: 127.0.0.1
 alternator_write_isolation: forbid
+tablets_mode_for_new_keyspaces: enabled
 ```
 
 The result file, from the 2026.3.4 read run:
@@ -140,7 +147,7 @@ The trigger entries:
 - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-alternator-weekly-microbenchmark_x86_64"
   backend: "aws"
   # arch: "aarch64" on the arm64 and arm64-write jobs
-  exclude_versions: ["2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
+  exclude_versions: ["2026.3", "2026.2", "2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
   labels: []
   params: {region: "us-east-1", microbenchmark: "true", requested_by_user: "juliayakovlev"}
 ```
@@ -178,14 +185,17 @@ class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
 | The tool needs more memory per shard than perf-cql-raw | 3G over 2 shards passes the 1 GiB per shard check. The staging run on both architectures confirms it |
 | The refactor changes the perf-cql-raw results | The perf-cql-raw command line and config stay the same. A staging run compares its Argus columns |
 | One failed request stops the run with no result | Accepted. A failed Alternator request on a local node is a bug to report |
+| A tool without the HTTP status check measures error replies as fast operations | Not caught in SCT. A drop in `instructions_per_op` is the sign |
 
 ## Deferred work
 
-- Real threshold values, after three or four weekly runs.
+- Real threshold values, after three or four runs.
 - The `write_rmw` workload, with `alternator_write_isolation: only_rmw_uses_lwt`,
-  and the `write_gsi` workload. Each one adds two weekly jobs.
-- The four jobs in the weekly perf report, after their first weekly run.
+  and the `write_gsi` workload. Each one adds two jobs.
+- The four jobs in the weekly perf report, after their first run.
 - The version comparison report for perf-alternator and perf-cql-raw.
+- The "promote to quick tests" item of SCT-1382. Its meaning is not clear, and
+  it waits for the answer of the reporter.
 
 ## Decisions
 
@@ -197,6 +207,15 @@ class PerfAlternatorTest(InProcessServerMicrobenchmarkTest):
   server setup. (spec)
 - The PGO trigger runs the jobs, as it runs perf-cql-raw. (review)
 - The weekly perf report and the version comparison report wait for the
-  first weekly run. They list each job by its Argus test ID, which exists
+  first run. They list each job by its Argus test ID, which exists
   only after that run. (review)
-- The meaning of "promote to quick tests" in SCT-1382. (open)
+- The release trigger runs the jobs from 2026.4, not 2026.2. Only the numbers
+  of new releases are worth tracking. (review)
+- The jobs run on releases and on the PGO builds of master, as
+  perf-simple-query, and not on a weekly cron. (review, fruch)
+- `tablets_mode_for_new_keyspaces: enabled` is in the perf-alternator config
+  only. The production nodes use tablets, and no perf-alternator baseline
+  exists yet. The perf-cql-raw config does not change, to keep its Argus
+  history. (review)
+- Alternator listens on 127.0.0.1 only. The tool sends its requests to
+  `api_address`, which is 127.0.0.1. (review)
