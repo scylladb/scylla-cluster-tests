@@ -49,7 +49,7 @@
       "status": "in_progress",
       "created": "2026-01-11",
       "phases_total": 8,
-      "phases_done": 2
+      "phases_done": 4
     },
     {
       "id": "health-check-sampling",
