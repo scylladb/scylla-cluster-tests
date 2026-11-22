@@ -9,8 +9,10 @@
 # against a baseline that does not exist yet. An explicit null produces a ValidationRule with no
 # limit, so results are recorded in Argus without being validated.
 #
-# To set real values: let the weekly jobs collect a few runs, take the stable numbers from the
-# Argus graphs for this test, and replace each null with a fixed_limit slightly above them.
+# To set real values: let the jobs collect a few runs, take the stable numbers from the
+# Argus graphs for this test, and replace the null of instructions_per_op and allocs_per_op with a
+# fixed_limit slightly above them. sdcm/argus_results.py makes a validation rule only for those
+# two metrics, so a limit on cpu_cycles_per_op has no effect.
 latency_decorator_error_thresholds:
   write:
       allocs_per_op:
