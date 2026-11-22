@@ -531,9 +531,9 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         :param is_local: Whether the paths should be interpreted as local or
             remote paths.
         """
-        # non-trailing slash paths should just work
+        # non-trailing slash paths need no globs; a local one goes through the local shell, so quote it
         if not pth or pth[-1] != "/":
-            return [pth]
+            return [quote(pth) if is_local and pth else pth]
 
         # make a function to test if a pattern matches any files
         if is_local:
