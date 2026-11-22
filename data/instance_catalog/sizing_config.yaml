@@ -126,18 +126,20 @@ clouds:
       db:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
-        - n2d
+        # n2 ahead of n2d: GCE artifact jobs resolved to n2d-standard-2 after the sizing migration and were
+        # preempted within minutes of boot (SCT-707). GCE publishes no per-type interruption data.
         - n2
+        - n2d
       db_oracle:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
-        - n2d
         - n2
+        - n2d
       zero_token:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
-        - n2d
         - n2
+        - n2d
       loader:
         - n4a-highcpu
         - n4a-standard
