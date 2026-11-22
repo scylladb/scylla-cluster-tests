@@ -22,9 +22,15 @@ The escaping in particular is load-bearing -- a matrix YAML is allowed to carry 
 backslashes in parameter values, and an unescaped one would silently change the script's meaning.
 """
 
+from pathlib import Path
+
 import pytest
 
+from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.groovy import _build_trigger_groovy, _escape_groovy_string
+from sdcm.utils.trigger_matrix.parameters import build_job_parameters
+
+TRIGGERS_DIR = Path(__file__).parents[3] / "configurations" / "triggers"
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +56,11 @@ def _no_upstream_env(monkeypatch):
         # order matters: escaping quotes first would double-escape the backslashes it introduces
         ("\\", "\\\\"),
         ("'", "\\'"),
+        # a single-quoted Groovy literal cannot span lines
+        ("A=1\nB=2", r"A=1\nB=2"),
+        ("A=1\r\nB=2", r"A=1\r\nB=2"),
+        # a backslash followed by an n is not a line break, and stays a backslash
+        (r"A=1\nB=2", r"A=1\\nB=2"),
     ],
 )
 def test_escape_groovy_string(raw, expected):
@@ -214,3 +225,18 @@ def test_braces_are_balanced(return_queue_url, params):
     script = _build_trigger_groovy("job", params, return_queue_url=return_queue_url)
     assert script.count("{") == script.count("}"), "unbalanced braces — check f-string escaping"
     assert "{{" not in script and "}}" not in script, "doubled braces leaked into the output"
+
+
+@pytest.mark.parametrize("matrix_file", sorted(TRIGGERS_DIR.glob("*.yaml")), ids=lambda path: path.name)
+def test_every_parameter_literal_stays_on_one_line(matrix_file):
+    """No parameter of a real trigger matrix may break the script across lines.
+
+    A raw line break inside a single-quoted literal fails the whole Script Console call with
+    "expecting ''', found '\\n'", and the job is not triggered.
+    """
+    config = load_matrix_config(matrix_file)
+    for job in config.jobs:
+        params = build_job_parameters(job, config.defaults, "master", {"unified_package": "https://x/pkg.tar.gz"})
+        script = _build_trigger_groovy(job.job_name, params)
+        [params_line] = [line for line in script.splitlines() if "def params = [" in line]
+        assert params_line.rstrip().endswith("]"), f"{job.job_name}: a parameter breaks the script across lines"
