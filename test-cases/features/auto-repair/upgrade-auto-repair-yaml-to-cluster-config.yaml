@@ -1,0 +1,58 @@
+test_metadata:
+  description: >-
+    Automatic Repair MS2 migration from scylla.yaml to CQL cluster config. The base release runs auto repair
+    from the deprecated scylla.yaml options, every node is upgraded, the same values are set with ALTER
+    CLUSTER, and the yaml options are removed from every node with a rolling restart. The test waits one
+    repair period on the base release, after the upgrade and after the yaml options are removed, under a
+    small latte load that inserts, deletes and validates reads; no other cluster operations. At the end the
+    test checks that the settings are stored in cluster config, and that auto repair ran after the restart
+    without the yaml options.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+    - auto-repair
+  team_ownership: scylladb/storage-qa
+
+test_duration: 120
+
+n_db_nodes: 3
+n_loaders: 1
+sizing_db:
+  vcpu: 2
+  memory: '>=16'
+
+user_prefix: 'upgrade-auto-repair-yaml-migration'
+
+enable_truncate_checks_on_node_upgrade: false
+
+# Auto repair of the base release, from the deprecated scylla.yaml options. The test sets the same values with
+# ALTER CLUSTER after the upgrade, and waits one repair period for auto repair before and after the migration
+append_scylla_yaml:
+  auto_repair_enabled_default: true
+  auto_repair_threshold_default_in_seconds: 300
+
+pre_create_keyspace:
+  - "CREATE KEYSPACE ks_auto WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}"
+  - "CREATE TABLE ks_auto.t (pk bigint, ck bigint, PRIMARY KEY (pk, ck))"
+
+latte_schema_parameters:
+  keyspace: 'ks_auto'
+  table: 't'
+
+stress_before_upgrade: >-
+  latte run --tag prepare-ks-auto-t -f insert_or_delete --consistency=QUORUM -d 200000
+  -P row_count=200000 -P delete_start_index=160001 -P delete_end_index=200000 --threads=2 --concurrency=32
+  data_dir/latte/validation.rn
+
+stress_during_entire_upgrade: >-
+  latte run --tag ks-auto-t -f insert_or_delete:1 -f get:1 --consistency=QUORUM --duration=30m --rate=500
+  --retry-number=10 --retry-interval=500ms,5s --request-timeout=30s --validation-strategy=retry
+  -P row_count=200000 -P delete_start_index=160001 -P delete_end_index=200000 --threads=2 --concurrency=32
+  data_dir/latte/validation.rn

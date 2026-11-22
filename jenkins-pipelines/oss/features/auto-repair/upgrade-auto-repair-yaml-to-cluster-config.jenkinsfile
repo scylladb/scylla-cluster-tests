@@ -1,0 +1,16 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// base_versions is the last release that sets auto repair only in scylla.yaml. It is a job parameter, and so is
+// new_scylla_repo: a release with CQL cluster configuration, e.g.
+// https://downloads.scylladb.com/deb/debian/scylla-2026.4.list
+rollingUpgradePipeline(
+    backend: 'aws',
+    base_versions: '2026.3',
+    linux_distro: 'ubuntu-noble',
+    use_preinstalled_scylla: true,
+    test_name: 'upgrade_test.UpgradeTest.test_auto_repair_yaml_to_cluster_config_migration',
+    test_config: 'test-cases/features/auto-repair/upgrade-auto-repair-yaml-to-cluster-config.yaml',
+)
