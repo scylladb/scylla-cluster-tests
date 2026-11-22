@@ -157,13 +157,14 @@ visible to anyone else about to bump.
 uv run sct.py configure-jenkins-builders -c aws
 uv run sct.py configure-jenkins-builders -c gce
 uv run sct.py configure-jenkins-builders -c oci
+uv run sct.py configure-jenkins-builders -c azure
 ```
 
 The GCE command loops over every project in `SUPPORTED_PROJECTS` by itself, so each project needs its
 image from Phase 3 first.
 
-1. Azure has no builders (`configure-jenkins-builders -c azure` raises): Azure jobs run on AWS
-   builders in `us-east-1`.
+1. The Azure step builds the runner image if `eastus` lacks it, and creates its network and
+   Jenkins credentials when they are missing.
 2. Don't skip OCI. It is the easiest cloud to forget: no Jenkins node carries an OCI label until a
    job asks for one, so nothing looks missing until OCI jobs hang (see
    [troubleshooting.md](../references/troubleshooting.md)).

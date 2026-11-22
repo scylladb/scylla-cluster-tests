@@ -60,7 +60,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'gce-us-central1': "${gcp_project}-builders-us-central1-template-v13",
                           'gce': "${gcp_project}-builders-us-east1-template-v13",
                           'aws': 'aws-sct-builders-eu-west-1-v8-asg',
-                          'azure-eastus': 'aws-sct-builders-us-east-1-v8-asg',
+                          'azure-eastus': 'azure-sct-builders-eastus-v1',
                           'aws-fips': 'aws-sct-builders-us-east-1-v8-fibs-CI-FIPS',
                           'oci': 'oci-sct-builders-us-phoenix-1-v6',
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v6',

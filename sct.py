@@ -94,6 +94,7 @@ lazy from sdcm.utils.aws_okta import try_auth_with_okta
 lazy from sdcm.utils.aws_peering import AwsVpcPeering
 lazy from sdcm.utils.aws_region import AwsRegion
 lazy from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
+lazy from sdcm.utils.azure_builder import AzureBuilder
 lazy from sdcm.utils.azure_region import AzureRegion
 lazy from sdcm.utils.builder_access import get_builder_ssh_sources
 lazy from sdcm.utils.ci_tools import get_job_name, get_job_url
@@ -3414,7 +3415,7 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
 def configure_jenkins_builders(cloud_provider, regions):
     add_file_logger()
     logging.basicConfig(level=logging.INFO)
-    if cloud_provider in ("aws", "gce", "oci"):
+    if cloud_provider in ("aws", "gce", "oci", "azure"):
         get_builder_ssh_sources()
 
     match cloud_provider:
@@ -3429,7 +3430,7 @@ def configure_jenkins_builders(cloud_provider, regions):
         case "oci":
             OciBuilder.configure_in_all_region(regions=regions)
         case "azure":
-            raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
+            AzureBuilder.configure_in_all_region(regions=list(regions))
 
 
 @cli.command(

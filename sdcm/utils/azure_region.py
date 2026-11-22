@@ -30,12 +30,14 @@ from azure.mgmt.network.models import (
     NetworkSecurityGroup,
     PublicIPAddress,
     PublicIPAddressSku,
+    SecurityRule,
     Subnet,
     VirtualNetwork,
 )
 
 from sdcm.provision.azure.network_security_group_provider import inbound_tcp_rule
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.builder_access import BUILDER_SSH_PORT, flatten_sources
 
 if TYPE_CHECKING:
     from typing import Any, Optional
@@ -93,6 +95,10 @@ class AzureRegion:
     NETWORK_INTERFACE_NAME_SUFFIX = "nic"
     IP_CONFIGURATION_NAME_SUFFIX = "ip-config"
 
+    BUILDER_SUBNET_NAME = "builders"
+    BUILDER_SUBNET_PREFIX = "10.0.1.0/24"
+    BUILDER_NSG_NAME = "SCT-builder-nsg"
+
     def __init__(self, region_name: str, azure_service: AzureService | None = None) -> None:
         self.region_name = region_name
         self._azure_service = azure_service
@@ -141,12 +147,19 @@ class AzureRegion:
 
     def create_sct_resource_group(self, tags: Optional[dict] = None) -> None:
         LOGGER.info("Going to create SCT resource group...")
-        if self.azure_service.resource.resource_groups.check_existence(
-            resource_group_name=self.sct_resource_group_name,
-        ):
+        resource_groups = self.azure_service.resource.resource_groups
+        if resource_groups.check_existence(resource_group_name=self.sct_resource_group_name):
             LOGGER.info(
                 "Resource group `%s' already exists in region `%s'", self.sct_resource_group_name, self.region_name
             )
+            group = resource_groups.get(self.sct_resource_group_name)
+            current = group.tags or {}
+            if tags and not tags.items() <= current.items():
+                LOGGER.info("Adding tags %s to resource group `%s'", tags, self.sct_resource_group_name)
+                resource_groups.create_or_update(
+                    resource_group_name=self.sct_resource_group_name,
+                    parameters={"location": group.location, "tags": current | tags},
+                )
             return
         self.azure_service.resource.resource_groups.create_or_update(
             resource_group_name=self.sct_resource_group_name,
@@ -243,6 +256,46 @@ class AzureRegion:
                 address_prefix="10.0.0.0/24",
                 network_security_group=NetworkSecurityGroup(id=self.sct_network_security_group.id),
                 default_outbound_access=True,  # newer network API versions make a new subnet private by default
+            ),
+        ).wait()
+
+    def ensure_builder_network(self, sources: dict[str, list[str]]) -> None:
+        """Create or update the Jenkins builder NSG and subnet.
+
+        The NSG allows TCP 22 only from `sources` (see builder_access.py), on top of the Azure default
+        rules (VNet traffic allowed, other internet inbound denied). Each run writes the full rule list,
+        so stale rules go away.
+        """
+        rules = [
+            SecurityRule(
+                name=f"SSH-{role}-{index}",
+                description=role,
+                protocol="TCP",
+                source_port_range="*",
+                destination_port_range=str(BUILDER_SSH_PORT),
+                source_address_prefix=cidr,
+                destination_address_prefix="*",
+                access="Allow",
+                priority=300 + index,
+                direction="Inbound",
+            )
+            for index, (cidr, role) in enumerate(flatten_sources(sources))
+        ]
+        LOGGER.info("Updating builder NSG `%s' with %d SSH sources", self.BUILDER_NSG_NAME, len(rules))
+        nsg = self.azure_service.network.network_security_groups.begin_create_or_update(
+            resource_group_name=self.sct_resource_group_name,
+            network_security_group_name=self.BUILDER_NSG_NAME,
+            parameters=NetworkSecurityGroup(location=self.location, security_rules=rules),
+        ).result()
+        LOGGER.info("Updating builder subnet `%s' (%s)", self.BUILDER_SUBNET_NAME, self.BUILDER_SUBNET_PREFIX)
+        self.azure_service.network.subnets.begin_create_or_update(
+            resource_group_name=self.sct_resource_group_name,
+            virtual_network_name=self.sct_virtual_network_name,
+            subnet_name=self.BUILDER_SUBNET_NAME,
+            subnet_parameters=Subnet(
+                address_prefix=self.BUILDER_SUBNET_PREFIX,
+                network_security_group=NetworkSecurityGroup(id=nsg.id),
+                default_outbound_access=True,
             ),
         ).wait()
 
