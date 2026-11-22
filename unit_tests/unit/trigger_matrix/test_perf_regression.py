@@ -221,47 +221,42 @@ def test_2024_and_2025_releases_keep_microbenchmarks_only(production_perf_config
         )
 
 
+MICROBENCHMARK_VARIANTS = ("x86_64", "x86_64-write", "arm64", "arm64-write")
+
+
+def microbenchmark_jobs(tool: str) -> set[str]:
+    return {f"scylla-enterprise-{tool}-weekly-microbenchmark_{variant}" for variant in MICROBENCHMARK_VARIANTS}
+
+
+@pytest.fixture()
+def production_pgo_config():
+    return load_matrix_config(PERF_YAML.parent / "pgo-offline-installer.yaml")
+
+
 @pytest.mark.parametrize(
-    "scylla_version,resolved_version",
+    "scylla_version,resolved_version,cql_raw,alternator",
     [
-        *RETIRED_VERSIONS,
-        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", id="2026.1"),
-        pytest.param("2025.1.16", "2025.1.16", id="2025.1.16-promote-release"),
+        *(pytest.param(*version.values, False, False, id=version.id) for version in RETIRED_VERSIONS),
+        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", False, False, id="2026.1"),
+        pytest.param("2025.1.16", "2025.1.16", False, False, id="2025.1.16-promote-release"),
+        pytest.param("2026.2:latest", "2026.2.1-0.20261025.abc", True, False, id="2026.2"),
+        pytest.param("2026.2.12", "2026.2.12", True, False, id="2026.2.12-promote-release"),
+        pytest.param("2026.3:latest", "2026.3.1-0.20261025.abc", True, False, id="2026.3"),
+        pytest.param("2026.3.4", "2026.3.4", True, False, id="2026.3.4-promote-release"),
+        pytest.param("2026.4:latest", "2026.4.1-0.20261025.abc", True, True, id="2026.4"),
+        pytest.param("2026.4.0-rc2", "2026.4.0-rc2", True, True, id="2026.4.0-rc2-promote-release"),
+        pytest.param("2026.4.2", "2026.4.2", True, True, id="2026.4.2-promote-release"),
+        pytest.param("2027.1.0-rc2", "2027.1.0-rc2", True, True, id="next-release"),
+        pytest.param("master:latest", "2027.1.0~dev-0.20261025.abc", True, True, id="master-manual-run"),
     ],
 )
-def test_in_process_server_microbenchmarks_not_selected_before_2026_2(
-    production_perf_config, scylla_version, resolved_version
+def test_releases_that_select_the_in_process_server_microbenchmarks(
+    production_perf_config, scylla_version, resolved_version, cql_raw, alternator
 ):
-    """`scylla perf-cql-raw` does not exist before 2026.2, and `scylla perf-alternator` cannot write
-    its result file before 2026.2, so a release trigger for 2026.1 or any 2024.x/2025.x minor must
-    select neither of them.
-    """
-    selected = [
-        job.job_name.rsplit("/", 1)[-1]
-        for job in filter_jobs(
-            production_perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version
-        )
-    ]
-    in_process = [name for name in selected if "perf-cql-raw" in name or "perf-alternator" in name]
-    assert not in_process, f"{scylla_version} selects {in_process}"
-
-
-PERF_ALTERNATOR_JOBS = {
-    f"scylla-enterprise-perf-alternator-weekly-microbenchmark_{variant}"
-    for variant in ("x86_64", "x86_64-write", "arm64", "arm64-write")
-}
-
-
-@pytest.mark.parametrize(
-    "scylla_version,resolved_version",
-    [
-        pytest.param("2026.2:latest", "2026.2.1-0.20261025.abc", id="2026.2"),
-        pytest.param("2026.3:latest", "2026.3.1-0.20261025.abc", id="2026.3"),
-    ],
-)
-def test_perf_alternator_not_selected_before_2026_4(production_perf_config, scylla_version, resolved_version):
-    """perf-alternator starts from 2026.4, as only new releases are worth tracking, while
-    perf-cql-raw keeps running on 2026.2 and 2026.3.
+    """`scylla perf-cql-raw` does not exist before 2026.2, and perf-alternator runs from 2026.4, as
+    only the numbers of new releases are worth tracking. promote-release sends a full version and no
+    labels selector. No production firing sends master with no labels selector: the master case is
+    a manual run.
     """
     selected = {
         job.job_name.rsplit("/", 1)[-1]
@@ -269,40 +264,43 @@ def test_perf_alternator_not_selected_before_2026_4(production_perf_config, scyl
             production_perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version
         )
     }
-    assert not {name for name in selected if "perf-alternator" in name}
-    assert any("perf-cql-raw" in name for name in selected)
+    for tool, expected in (("perf-cql-raw", cql_raw), ("perf-alternator", alternator)):
+        jobs = microbenchmark_jobs(tool)
+        assert selected & jobs == (jobs if expected else set()), tool
 
 
 @pytest.mark.parametrize(
-    "scylla_version,resolved_version",
+    "config_fixture,fields_that_differ",
     [
-        pytest.param("2026.4:latest", "2026.4.1-0.20261025.abc", id="2026.4"),
-        pytest.param("master:latest", "2027.1.0~dev-0.20261025.abc", id="master"),
+        pytest.param("production_perf_config", {"job_name", "exclude_versions"}, id="perf-regression"),
+        pytest.param("production_pgo_config", {"job_name"}, id="pgo"),
     ],
 )
-def test_perf_alternator_microbenchmarks_selected_from_2026_4(production_perf_config, scylla_version, resolved_version):
-    """From 2026.4 the release trigger runs all four perf-alternator jobs, the arm64 ones on aarch64."""
-    selected = {
-        job.job_name.rsplit("/", 1)[-1]: job
-        for job in filter_jobs(
-            production_perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version
-        )
-    }
-    assert PERF_ALTERNATOR_JOBS <= selected.keys()
-    for name in PERF_ALTERNATOR_JOBS:
-        assert (selected[name].arch == "aarch64") == ("arm64" in name), name
+@pytest.mark.parametrize("variant", MICROBENCHMARK_VARIANTS)
+def test_perf_alternator_entry_equals_the_cql_raw_entry(request, config_fixture, fields_that_differ, variant):
+    """The two tools need the same arch, labels, wait mode and params (region, the AMI of the right
+    arch, unified_package), so an entry of one is a copy of the entry of the other.
+    """
+    jobs = {job.job_name.rsplit("/", 1)[-1]: job for job in request.getfixturevalue(config_fixture).jobs}
+    alternator, cql_raw = (
+        jobs[f"scylla-enterprise-{tool}-weekly-microbenchmark_{variant}"].model_dump(exclude=fields_that_differ)
+        for tool in ("perf-alternator", "perf-cql-raw")
+    )
+    assert alternator == cql_raw
+    assert (alternator["arch"] == "aarch64") == variant.startswith("arm64")
 
 
 @pytest.mark.parametrize("labels_selector,arch_suffix", [("pgo-x86", "x86_64"), ("pgo-arm", "arm64")])
-def test_pgo_trigger_selects_perf_alternator(labels_selector, arch_suffix):
+def test_pgo_trigger_selects_perf_alternator(production_pgo_config, labels_selector, arch_suffix):
     """A PGO build runs the perf-alternator microbenchmarks of its architecture, as it runs cql-raw."""
-    config = load_matrix_config(PERF_YAML.parent / "pgo-offline-installer.yaml")
     selected = {
         job.job_name.rsplit("/", 1)[-1]
-        for job in filter_jobs(config.jobs, scylla_version="master", labels_selector=labels_selector)
+        for job in filter_jobs(production_pgo_config.jobs, scylla_version="master", labels_selector=labels_selector)
     }
     alternator = {name for name in selected if "perf-alternator" in name}
-    assert alternator == {name for name in PERF_ALTERNATOR_JOBS if name.endswith((arch_suffix, f"{arch_suffix}-write"))}
+    assert alternator == {
+        name for name in microbenchmark_jobs("perf-alternator") if name.endswith((arch_suffix, f"{arch_suffix}-write"))
+    }
 
 
 def test_master_keeps_the_vnodes_jobs(production_perf_config):

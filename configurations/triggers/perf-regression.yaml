@@ -247,7 +247,9 @@ jobs:
       requested_by_user: "juliayakovlev"
 
   # `scylla perf-alternator` writes its --json-result file only from 2026.2, but these jobs start
-  # from 2026.4: only the numbers of new releases are worth tracking.
+  # from 2026.4: only the numbers of new releases are worth tracking. As perf-simple-query, they
+  # have no label, so no cron runs them: they run on release promotions, and on master through
+  # the PGO offline-installer trigger.
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-alternator-weekly-microbenchmark_x86_64"
     backend: "aws"
     exclude_versions: ["2026.3", "2026.2", "2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
