@@ -731,7 +731,8 @@ def test_no_file_derived_paths_in_the_sct_config_package():
 
 @pytest.mark.parametrize(
     "provision, expected_spot_region",
-    [("spot", "eu-west-2"), ("on_demand", None)],
+    # spot_fleet: EC2 Fleet chooses among the alternatives by available capacity itself
+    [("spot", "eu-west-2"), ("on_demand", None), ("spot_fleet", None)],
 )
 def test_spot_runs_rank_by_interruption_in_the_first_region(monkeypatch, provision, expected_spot_region):
     """SCT-707: only a spot run asks the matcher to rank by interruption, and it uses the first region."""

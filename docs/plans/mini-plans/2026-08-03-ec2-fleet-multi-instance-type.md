@@ -102,7 +102,9 @@ RequestSpotFleet caller.
   - `instance_provision: spot_fleet` - always, at any count, on both paths, so every DB node
     (initial or added mid-test) gets the alternatives. spot_fleet means spot or nothing: it never
     falls back to on-demand, whatever `instance_provision_fallback_on_demand` says (AZ/region
-    fallback still applies). The scale-cluster Jenkins jobs set `provision_type: 'spot_fleet'`.
+    fallback still applies). Sizing doesn't rank spot_fleet runs by Spot Advisor interruption data:
+    EC2 Fleet chooses among the alternatives by available capacity itself. The scale-cluster Jenkins
+    jobs set `provision_type: 'spot_fleet'`.
   - `instance_provision: spot` - only on the upfront path for more than `SPOT_CNT_LIMIT` (10)
     nodes per AZ, as before; smaller requests and in-test `add_nodes` use plain spot requests with
     `instance_type_db` alone.

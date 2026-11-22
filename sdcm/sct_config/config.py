@@ -1690,8 +1690,12 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     @staticmethod
     def _spot_sizing_region(cloud: str, provision: str | None, region: str | None) -> str | None:
-        """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None."""
-        return region if provision in ("spot", "spot_fleet") and cloud == "aws" else None
+        """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None.
+
+        Not for `spot_fleet`: EC2 Fleet chooses among the alternatives by available capacity itself
+        (`capacity-optimized-prioritized`), so the sizing keeps its normal order there.
+        """
+        return region if provision == "spot" and cloud == "aws" else None
 
     def _resolve_fleet_db_alternatives(self) -> None:
         """Fill `aws_fleet_db_alternative_types` from `sizing_db`, when `aws_fleet_db_use_alternatives` is set.
