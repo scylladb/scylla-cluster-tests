@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import datetime
 import os
 import re
 import json
@@ -37,6 +38,10 @@ from sdcm.provision.provisioner import VmArch
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
 
 LOGGER = logging.getLogger(__name__)
+# QA-owned bucket in gcp-sct-project-1 for Scylla coredumps (SCT-1655); `hydra prepare-global-resources`
+# creates it and sets its retention
+COREDUMP_BUCKET = "scylla-sct-coredumps"
+COREDUMP_BUCKET_PROJECT = "gcp-sct-project-1"  # fixed, so runs with any SCT_GCE_PROJECT sign as the same account
 
 
 def vmarch_to_gcp(arch: VmArch) -> str:
@@ -147,6 +152,65 @@ def get_gce_storage_client() -> tuple[storage.Client, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
     return storage.Client(credentials=credentials), info
+
+
+def _coredump_storage_client() -> tuple[storage.Client, dict]:
+    # always the real GCS: GCE_ENDPOINT_URL (minicloud) points at a Compute emulator, and a signed URL built on it
+    # sends the node's upload there
+    info = KeyStore().get_json(f"{COREDUMP_BUCKET_PROJECT}.json")
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return storage.Client(project=info["project_id"], credentials=credentials), info
+
+
+def sign_coredump_upload_url(blob_name: str, expiration: datetime.timedelta = datetime.timedelta(hours=1)) -> str:
+    """Sign a V4 PUT URL for `blob_name` in COREDUMP_BUCKET, so a node without GCP credentials can upload with curl.
+
+    GCS checks the signature when the request starts, so `expiration` only has to cover the wait
+    before the upload begins, not the upload itself.
+    """
+    storage_client, _ = _coredump_storage_client()
+    blob = storage_client.bucket(COREDUMP_BUCKET).blob(blob_name)
+    return blob.generate_signed_url(version="v4", method="PUT", expiration=expiration)
+
+
+def configure_coredump_bucket(region: str, coldline_after_days: int, retention_days: int) -> None:
+    """Create or update the bucket that Scylla coredumps are uploaded to (SCT-1655).
+
+    New coredumps land in Standard, move to Coldline (the cheapest class for files kept a few months)
+    after `coldline_after_days`, and are deleted after `retention_days`. `region` applies only on creation.
+    Every ScyllaDB employee can read the coredumps, and the SCT service account, which signs the
+    upload URLs, can write them. Safe to re-run: every setting is replaced, not appended.
+    """
+    storage_client, info = _coredump_storage_client()
+    try:
+        bucket = storage_client.create_bucket(COREDUMP_BUCKET, location=region)
+        LOGGER.info("Created bucket gs://%s in %s", COREDUMP_BUCKET, region)
+    except google.api_core.exceptions.Conflict:
+        bucket = storage_client.get_bucket(COREDUMP_BUCKET)
+        if bucket.location.lower() != region.lower():
+            LOGGER.warning(
+                "gs://%s exists in %s; a bucket can't move, so --region is ignored", bucket.name, bucket.location
+            )
+    bucket.iam_configuration.uniform_bucket_level_access_enabled = True
+    bucket.iam_configuration.public_access_prevention = "enforced"
+    bucket.storage_class = "STANDARD"
+    bucket.clear_lifecycle_rules()
+    bucket.add_lifecycle_set_storage_class_rule("COLDLINE", age=coldline_after_days, matches_storage_class=["STANDARD"])
+    bucket.add_lifecycle_delete_rule(age=retention_days)
+    bucket.patch()
+
+    policy = bucket.get_iam_policy(requested_policy_version=3)
+    # GCP stores domain:scylladb.com as the Workspace primary domain (domain:cloudius-systems.com), so the
+    # check below misses it on re-runs; GCP merges the repeated grant, so the policy doesn't grow
+    wanted = {
+        "roles/storage.objectViewer": "domain:scylladb.com",
+        "roles/storage.objectCreator": f"serviceAccount:{info['client_email']}",
+    }
+    for role, member in wanted.items():
+        if not any(b["role"] == role and member in b["members"] for b in policy.bindings):
+            policy.bindings.append({"role": role, "members": {member}})
+    bucket.set_iam_policy(policy)
+    LOGGER.info("gs://%s: delete after %s days, readers and writer set", COREDUMP_BUCKET, retention_days)
 
 
 def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
