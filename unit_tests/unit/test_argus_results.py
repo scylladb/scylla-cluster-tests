@@ -12,9 +12,11 @@
 # Copyright (c) 2024 ScyllaDB
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, call
 
 import pytest
+import yaml
 
 from argus.client.generic_result import Cell, Status
 from sdcm.argus_results import (
@@ -179,3 +181,35 @@ def test_send_microbenchmark_result_to_argus_release_stats():
     assert {cell["column"]: cell["value"] for cell in submitted["results"]} == RELEASE_MICROBENCHMARK_STATS
     assert {column["name"] for column in submitted["meta"]["columns_meta"]} == set(RELEASE_MICROBENCHMARK_STATS)
     assert submitted["meta"]["validation_rules"]["instructions_per_op"]["fixed_limit"] == 40000.0
+
+
+# The microbenchmarks that have no baseline of their own yet, so all their thresholds are null.
+NULL_THRESHOLD_BENCHMARKS = {"perf_cql_raw": "Perf CQL Raw", "perf_alternator": "Perf Alternator"}
+NULL_THRESHOLD_FILES = [
+    path
+    for tool in NULL_THRESHOLD_BENCHMARKS
+    for path in sorted((Path(__file__).parents[2] / "configurations" / "performance" / tool).glob("*.yaml"))
+]
+
+
+@pytest.mark.parametrize("threshold_file", NULL_THRESHOLD_FILES, ids=lambda path: path.name)
+@pytest.mark.parametrize("workload", ["read", "write"])
+def test_null_microbenchmark_thresholds_record_without_validating(threshold_file, workload):
+    """A metric with `fixed_limit: null` gets a rule with no limit, so Argus records the result and
+    validates nothing. A missing metric would fall back to best_pct=5 instead.
+    """
+    error_thresholds = yaml.safe_load(threshold_file.read_text())["latency_decorator_error_thresholds"]
+    argus_mock = MagicMock()
+    result = {"stats": RELEASE_MICROBENCHMARK_STATS, "test_properties": {"type": workload}, "parameters": {}}
+
+    benchmark_name = NULL_THRESHOLD_BENCHMARKS[threshold_file.parent.name]
+
+    send_microbenchmark_result_to_argus(
+        argus_client=argus_mock, result=result, error_thresholds=error_thresholds, benchmark_name=benchmark_name
+    )
+
+    table = argus_mock.submit_results.call_args.args[0]
+    assert table.name == f"{workload} - {benchmark_name}"
+    rules = table.as_dict()["meta"]["validation_rules"]
+    no_limit = {"best_pct": None, "best_abs": None, "fixed_limit": None}
+    assert rules == {"instructions_per_op": no_limit, "allocs_per_op": no_limit}

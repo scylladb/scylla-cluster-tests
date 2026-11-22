@@ -79,6 +79,6 @@ validation failure into an ERROR event. See
 
 - [../performance-tests.md](../performance-tests.md) — `hydra hdr-investigate` utility
 - [../perf-tests-region-scheduling.md](../perf-tests-region-scheduling.md) — region non-overlap assignment
-- [../microbenchmarking.md](../microbenchmarking.md) — the two microbenchmark approaches
+- [../microbenchmarking.md](../microbenchmarking.md) — the microbenchmarks SCT runs and where their pipelines are
 - [../plans/i8g-performance-jobs-migration.md](../plans/i8g-performance-jobs-migration.md) — the worked example behind [runbook-new-instance-type.md](runbook-new-instance-type.md)
 - [../plans/latte-concurrency-gradual-throughput.md](../plans/latte-concurrency-gradual-throughput.md) — the worked example behind [runbook-new-stress-tool.md](runbook-new-stress-tool.md)
