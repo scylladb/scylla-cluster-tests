@@ -14,7 +14,7 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=30
                     ]
 
 n_loaders: 1
-# Check the cassandra-stress container memory limit on each backend. Limit each container to 25% of the loader memory.
+# Check the cassandra-stress container memory limit on each backend. configurations/limit-cs-memory.yaml explains the limit.
 cs_docker_memory_limit_percent: 25
 instance_type_db: 'i4i.large'
 # testing the force iotune feature
