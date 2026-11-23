@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -394,7 +395,7 @@ def test_20_user_data_format_version_azure(monkeypatch):
 def _make_xcloud_api_mock():
     """Return a MagicMock that satisfies _validate_cloud_backend_parameters checks."""
     mock_api = MagicMock()
-    mock_api.get_scylla_versions.return_value = {"scyllaVersions": [{"version": "2025.1.0"}]}
+    mock_api.get_scylla_versions.return_value = {"scyllaVersions": [{"version": "2026.3.6"}]}
     mock_api.get_regions.return_value = {"regions": [{"externalId": "eu-west-1"}, {"externalId": "us-east1"}]}
     mock_api.get_region_id_by_name.return_value = "region-id-1"
     mock_api.get_instance_types.return_value = {"instances": [{"externalId": "i4i.large"}]}
@@ -414,7 +415,7 @@ def test_xcloud_replication_factor_valid(monkeypatch):
     monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
     monkeypatch.setenv("SCT_N_DB_NODES", "[3, 3]")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.3.6")
     monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "2")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
@@ -442,7 +443,7 @@ def test_xcloud_replication_factor_exceeds_min_dc(monkeypatch):
     monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
     monkeypatch.setenv("SCT_N_DB_NODES", "[3, 3]")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.3.6")
     monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "4")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
@@ -456,4 +457,36 @@ def test_xcloud_replication_factor_exceeds_min_dc(monkeypatch):
     ):
         conf = sct_config.SCTConfiguration()
         with pytest.raises(ValueError, match="xcloud_replication_factor .* cannot be greater than n_db_nodes"):
+            conf.verify_configuration()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "scylla_version, expected",
+    [
+        pytest.param("2026.4.0-rc1", nullcontext(), id="upcoming-rc"),
+        pytest.param(
+            "2026.4.0", pytest.raises(ValueError, match="is not supported by cloud backend"), id="unlisted-release"
+        ),
+    ],
+)
+def test_xcloud_scylla_version_validation(monkeypatch, scylla_version, expected):
+    """An RC newer than the latest listed version passes the validation, a release missing from the list does not."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
+
+    with (
+        patch("sdcm.sct_config.config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.config.KeyStore"),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+    ):
+        conf = sct_config.SCTConfiguration()
+        with expected:
             conf.verify_configuration()
