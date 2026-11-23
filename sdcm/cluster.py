@@ -275,6 +275,16 @@ BACKTRACE_SERVICE_COOLDOWN_SEC: int = 15 * MINUTE_IN_SEC
 # the wait is already over, so what it delays is the caller's own failure handling.
 DB_UP_DIAGNOSTICS_BUDGET: int = 90
 
+# How long and how often `configure_remote_logging()` checks that vector.service is active.
+# A unit that crashes right after start is `active` for a moment, so the check repeats after the settle time.
+VECTOR_ACTIVE_TIMEOUT: int = 30
+VECTOR_ACTIVE_CHECK_STEP: int = 5
+VECTOR_SETTLE_TIME: int = 5
+# Timeouts for the remote commands of that check, so a hung command cannot block the node setup.
+# A restart waits up to 90s for vector to stop (TimeoutStopSec), so it gets a longer timeout.
+VECTOR_COMMAND_TIMEOUT: int = 30
+VECTOR_RESTART_TIMEOUT: int = 180
+
 # Dumps of the live netfilter rules, in the order they are collected. iptables-save covers the
 # nft backend the iptables wrappers use as well, `nft list ruleset` only adds the rules written
 # natively, which the wrappers do not show.
@@ -4360,6 +4370,82 @@ class BaseNode(AutoSshContainerMixin):
             #       take the rules of a running network nemesis with it
         ).to_string()
         self.remoter.sudo(shell_script_cmd(script, quote="'"))
+        if self.parent_cluster.params.get("logs_transport") == "vector":
+            self._ensure_vector_is_active()
+
+    def _vector_is_active(self) -> bool:
+        result = self.remoter.run(
+            "systemctl is-active vector.service", timeout=VECTOR_COMMAND_TIMEOUT, ignore_status=True, verbose=False
+        )
+        return result.stdout.strip() == "active"
+
+    def _vector_stays_active(self) -> bool:
+        if not self._vector_is_active():
+            return False
+
+        time.sleep(VECTOR_SETTLE_TIME)
+        return self._vector_is_active()
+
+    def _wait_for_vector_to_stay_active(self, text: str) -> bool:
+        return bool(
+            wait.wait_for(
+                func=self._vector_stays_active,
+                step=VECTOR_ACTIVE_CHECK_STEP,
+                timeout=VECTOR_ACTIVE_TIMEOUT,
+                throw_exc=False,
+                text=text,
+            )
+        )
+
+    def _vector_diagnostics(self) -> str:
+        outputs = []
+        for cmd in (
+            "systemctl status vector.service --no-pager --full",
+            "journalctl -u vector.service --no-pager -n 50",
+        ):
+            try:
+                output = self.remoter.sudo(
+                    cmd, timeout=VECTOR_COMMAND_TIMEOUT, ignore_status=True, verbose=False
+                ).stdout
+            except Exception as exc:  # noqa: BLE001
+                # the diagnostics only explain the failure, they must not replace it
+                output = f"failed to read: {exc!r}"
+            outputs.append(f"$ {cmd}\n{output}")
+        return "\n".join(outputs)
+
+    def _ensure_vector_is_active(self) -> None:
+        """Restart vector.service once if it is not active. Fail the node setup if it is still not active.
+
+        The logging scripts ignore a failed vector restart, so without this check a node joins the cluster with no logs.
+        """
+        if self._wait_for_vector_to_stay_active(text=f"Waiting for vector.service to stay active on {self.name}"):
+            return
+        self.log.warning(
+            "could not confirm that vector.service is active on node %s, restarting it once:\n%s",
+            self.name,
+            self._vector_diagnostics(),
+        )
+        try:
+            self.remoter.sudo(
+                "systemctl reset-failed vector.service", timeout=VECTOR_COMMAND_TIMEOUT, ignore_status=True
+            )
+            self.remoter.sudo("systemctl restart vector.service", timeout=VECTOR_RESTART_TIMEOUT, ignore_status=True)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to restart vector.service on node %s: %r", self.name, exc)
+
+        if self._wait_for_vector_to_stay_active(
+            text=f"Waiting for vector.service to stay active on {self.name} after its restart"
+        ):
+            return
+
+        raise NodeSetupFailed(
+            node=self,
+            error_msg=(
+                f"could not confirm that vector.service is active on node {self.name} after remote logging was "
+                "configured:\n"
+                f"{self._vector_diagnostics()}"
+            ),
+        )
 
     @property
     def scylla_packages_installed(self) -> List[str]:
