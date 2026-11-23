@@ -50,7 +50,7 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=30
                     ]
 
 n_loaders: 1
-# cassandra-stress can run on the gemini loader. Limit each cassandra-stress container to 25% of the loader memory.
+# cassandra-stress runs next to gemini on one loader. configurations/limit-cs-memory.yaml explains the limit.
 cs_docker_memory_limit_percent: 25
 alternator_use_dns_routing: false
 sizing_db:
