@@ -8,6 +8,7 @@
 #   read           1,427,167 ops/s -> 1,370K -> 60% = 822K -> fixed=205500/s per loader, 620 threads
 #   write            645,402 ops/s ->   619K -> 60% = 371K -> fixed=92750/s per loader, 400 threads
 #   mixed            895,886 ops/s ->   860K -> 60% = 516K -> fixed=129000/s per loader, 1900 threads
+#   read_disk_only   577,124 ops/s ->   554K -> 60% = 332K -> fixed=83000/s per loader, 620 threads
 #
 # Each list has one command per loader (round_robin), as in the steps test.
 # Differences from the steps test, needed by the nemesis test:
@@ -44,6 +45,14 @@ stress_cmd_m: [
   "cassandra-stress mixed  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=1900 fixed=129000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
   "cassandra-stress mixed  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=1900 fixed=129000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
   "cassandra-stress mixed  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=1900 fixed=129000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
+# Reads keys from the whole dataset, so the reads go to disk
+stress_cmd_read_disk: [
+  "cassandra-stress read  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=620 fixed=83000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..162500001",
+  "cassandra-stress read  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=620 fixed=83000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=162500002..325000002",
+  "cassandra-stress read  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=620 fixed=83000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=325000003..487500003",
+  "cassandra-stress read  cl=QUORUM duration=800m -mode connectionsPerHost=8 cql3 native -rate 'threads=620 fixed=83000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=487500004..650000004"
 ]
 
 # Same as configurations/disable_speculative_retry.yaml in the steps job, limited to the table this test

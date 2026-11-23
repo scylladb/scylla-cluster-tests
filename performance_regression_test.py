@@ -700,6 +700,14 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_m"), nemesis=True, sub_type="mixed")
 
+    def test_latency_read_disk_only_with_nemesis(self):
+        """Read keys from the whole dataset, so the reads go to disk, while the nemesis runs."""
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.wait_no_compactions_running(n=160)
+        self.run_fstrim_on_all_db_nodes()
+        self.run_workload(stress_cmd=self.params.get("stress_cmd_read_disk"), nemesis=True, sub_type="read_disk_only")
+
     # MV Tests
     def test_mv_write(self):
         """
