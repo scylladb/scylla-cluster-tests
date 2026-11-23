@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import requests
-from botocore.exceptions import ClientError
 from invoke.exceptions import Failure as InvokeFailure
 from invoke.exceptions import UnexpectedExit
 from requests.adapters import HTTPAdapter
@@ -77,6 +76,7 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.gce_utils import gce_private_addresses, gce_public_addresses
 from sdcm.utils.grafana_api import GRAFANA_ANNOTATIONS_API_PATH, GRAFANA_SEARCH_API_PATH
 from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.oob_runner import ProvisionerCommandRunner, oob_runner_for
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.xcloud.api_client import ScyllaCloudAPIClient
@@ -146,11 +146,11 @@ class CollectingNode:
         return isinstance(self._instance, dict) and self._instance.get("InstanceId") is not None
 
     @cached_property
-    def aws_ssm_runner(self) -> Optional[SSMCommandRunner]:
+    def oob_runner(self) -> SSMCommandRunner | ProvisionerCommandRunner | None:
         if self.is_aws:
             region = self._instance.get("Placement").get("AvailabilityZone")[:-1]
             return SSMCommandRunner(region_name=region, instance_id=self._instance.get("InstanceId"))
-        return None
+        return oob_runner_for(self._instance)
 
     @retrying(
         n=30,
@@ -849,17 +849,17 @@ class LogCollector:
 
             except (Libssh2_Failure, InvokeFailure) as details:
                 LOGGER.error("Error during creating remote directory %s", details)
-        elif not ssh_connected and (ssm_runner := node.aws_ssm_runner):
+        elif not ssh_connected and (oob_runner := node.oob_runner):
             try:
-                ssm_result = ssm_runner.run(f"mkdir -p {remote_dir}", ignore_status=True)
-                ok = ssm_result.ok
+                oob_result = oob_runner.run(f"mkdir -p {remote_dir}", ignore_status=True)
+                ok = oob_result.ok
                 if not ok:
-                    LOGGER.error("SSM command failed for instance %s: mkdir", ssm_runner.instance_id)
+                    LOGGER.error("Out-of-band command failed for instance %s: mkdir", oob_runner.instance_id)
 
             # Not only ClientError: botocore raises e.g. EndpointConnectionError, and an error here
             # would stop the whole node collection, before the local files like console_output.log
             except Exception as e:  # noqa: BLE001
-                LOGGER.error("Failed to run SSM command: %r", e)
+                LOGGER.error("Failed to run out-of-band command: %r", e)
                 remote_dir = self.node_remote_dir
         else:
             remote_dir = self.node_remote_dir
@@ -883,28 +883,31 @@ class LogCollector:
             except Libssh2_Failure, InvokeFailure:
                 ssh_connected = False
 
-        # Check if node is AWS-based
-        if not ssh_connected and (ssm_runner := node.aws_ssm_runner):
-            LOGGER.info("Collecting Node %s via SSM: %s", node.name, log_filename)
+        # SSH is down: AWS SSM, or the Run Command of Azure and OCI
+        if not ssh_connected and (oob_runner := node.oob_runner):
+            LOGGER.info("Collecting Node %s out-of-band: %s", node.name, log_filename)
             Path(log_filename).parent.mkdir(parents=True, exist_ok=True)
 
-            # Use SSM to run the command and save it to a local file
+            # Run the command through the cloud API and save it to a local file
             is_file_remote = False
 
             try:
                 collect_log_command = f"{cmd}"
-                ssm_result = ssm_runner.run_command_and_save_output(
+                oob_result = oob_runner.run_command_and_save_output(
                     command=collect_log_command,
                     local_output_file=log_filename,
                     comment=f"Collect log {log_filename}",
                     ignore_status=True,
                 )
-                ok = ssm_result.ok
-                if not ssm_result.ok:
-                    LOGGER.error("SSM command failed for instance %s: %s ", ssm_runner.instance_id, collect_log_command)
+                ok = oob_result.ok
+                if not oob_result.ok:
+                    LOGGER.error(
+                        "Out-of-band command failed for instance %s: %s ", oob_runner.instance_id, collect_log_command
+                    )
                     return None, is_file_remote
-            except (ClientError, ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
-                LOGGER.error("Failed to run SSM command: %s", e)
+            # any cloud SDK error: it must not stop the collection of the node's local files
+            except Exception as e:  # noqa: BLE001
+                LOGGER.error("Failed to run out-of-band command: %r", e)
                 return None, is_file_remote
         return log_filename if ok else None, is_file_remote
 

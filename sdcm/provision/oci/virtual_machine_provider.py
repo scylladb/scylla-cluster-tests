@@ -13,17 +13,29 @@
 
 import base64
 import logging
+import shlex
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 import oci
+from invoke import Result
+from oci.compute_instance_agent.models import (
+    CreateInstanceAgentCommandDetails,
+    InstanceAgentCommandContent,
+    InstanceAgentCommandExecution,
+    InstanceAgentCommandOutputViaTextDetails,
+    InstanceAgentCommandSourceViaTextDetails,
+    InstanceAgentCommandTarget,
+)
 from oci.core.models import (
     AttachVnicDetails,
     CreateVnicDetails,
     CreateVolumeDetails,
     Instance,
+    InstanceAgentPluginConfigDetails,
     LaunchAttachParavirtualizedVolumeDetails,
+    LaunchInstanceAgentConfigDetails,
     LaunchInstanceDetails,
     LaunchInstanceShapeConfigDetails,
     PreemptibleInstanceConfigDetails,
@@ -54,6 +66,15 @@ AZ_FALLBACK_ROUND_DELAY = 30
 def _is_retryable_launch_error(error: Optional[BaseException]) -> bool:
     """Errors which the SDK retries: 429 and 5xx, 'Out of host capacity' is a 500."""
     return isinstance(error, oci.exceptions.ServiceError) and (error.status == 429 or error.status >= 500)
+
+
+RUN_COMMAND_PLUGIN = "Compute Instance Run Command"
+RUN_COMMAND_FINAL_STATES = (
+    InstanceAgentCommandExecution.LIFECYCLE_STATE_SUCCEEDED,
+    InstanceAgentCommandExecution.LIFECYCLE_STATE_FAILED,
+    InstanceAgentCommandExecution.LIFECYCLE_STATE_TIMED_OUT,
+    InstanceAgentCommandExecution.LIFECYCLE_STATE_CANCELED,
+)
 
 
 @dataclass
@@ -377,6 +398,12 @@ class VirtualMachineProvider:
             ),
             "metadata": metadata,
             "defined_tags": {TAG_NAMESPACE: self._get_tags(definition)},
+            # the log collector's channel to a node whose SSH is down (`run_command()`)
+            "agent_config": LaunchInstanceAgentConfigDetails(
+                plugins_config=[
+                    InstanceAgentPluginConfigDetails(name=RUN_COMMAND_PLUGIN, desired_state="ENABLED"),
+                ]
+            ),
         }
         if pricing_model == PricingModel.SPOT:
             launch_details["preemptible_instance_config"] = PreemptibleInstanceConfigDetails(
@@ -512,6 +539,40 @@ class VirtualMachineProvider:
 
         if instance.display_name in self._raw_cache:
             del self._raw_cache[instance.display_name]
+
+    def run_command(self, name_or_id: str, command: str, timeout: int = 300) -> Result:
+        """Run a shell command through the Instance Agent Run Command plugin, without SSH.
+
+        The agent runs commands as `ocarun`, which user-data lets sudo (`OciRunCommandSudoUserDataObject`).
+        It needs an IAM policy letting the instance use `instance-agent-command-execution-family`.
+        """
+        instance = self._resolve_instance(name_or_id)
+        if not instance:
+            raise ProvisionError(f"Instance {name_or_id} not found to run a command on.")
+        agent_client = self._oci_service.get_compute_instance_agent_client(self._region)
+        command_id = agent_client.create_instance_agent_command(
+            CreateInstanceAgentCommandDetails(
+                compartment_id=self._compartment_id,
+                execution_time_out_in_seconds=timeout,
+                display_name="sct-oob",
+                target=InstanceAgentCommandTarget(instance_id=instance.id),
+                content=InstanceAgentCommandContent(
+                    source=InstanceAgentCommandSourceViaTextDetails(text=f"sudo -n bash -c {shlex.quote(command)}"),
+                    output=InstanceAgentCommandOutputViaTextDetails(),
+                ),
+            )
+        ).data.id
+        execution = oci.wait_until(
+            agent_client,
+            agent_client.get_instance_agent_command_execution(command_id, instance.id),
+            evaluate_response=lambda response: response.data.lifecycle_state in RUN_COMMAND_FINAL_STATES,
+            max_wait_seconds=timeout + 60,
+            max_interval_seconds=5,
+        ).data
+        if execution.lifecycle_state != InstanceAgentCommandExecution.LIFECYCLE_STATE_SUCCEEDED:
+            return Result(stdout="", stderr=f"Run Command {execution.lifecycle_state}", exited=255, command=command)
+        output = execution.content
+        return Result(stdout=output.text or "", stderr=output.message or "", exited=output.exit_code, command=command)
 
     def _resolve_instance(self, name_or_id: str) -> Optional[Instance]:
         if name_or_id.startswith("ocid1.instance"):

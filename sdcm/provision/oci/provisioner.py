@@ -38,6 +38,10 @@ LOGGER = logging.getLogger(__name__)
 class OciProvisioner(Provisioner):
     """Provides API for VM provisioning in Oracle Cloud Infrastructure (OCI), tuned for Scylla QA."""
 
+    # Instance Agent Run Command returns up to 1 MB of text output per call
+    oob_chunk_size = 500_000
+    oob_max_chunks = 20
+
     def __init__(
         self,
         test_id: str,
@@ -213,4 +217,5 @@ class OciProvisioner(Provisioner):
         return self._vm_provider.get_vnic_ipv6_addresses(vnic_id)
 
     def run_command(self, name: str, command: str) -> Result:
-        raise NotImplementedError()
+        """Runs command on instance through the Instance Agent, without SSH."""
+        return self._vm_provider.run_command(name, command)

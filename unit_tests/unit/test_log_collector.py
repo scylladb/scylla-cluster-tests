@@ -651,7 +651,7 @@ def _aws_node_with_ssh_down():
 
 
 def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
-    """SCT-1439: the in-test AWSNode had no aws_ssm_runner, so the SSM fallback raised AttributeError."""
+    """SCT-1439: the in-test AWSNode had no SSM runner, so the SSM fallback raised AttributeError."""
     node = _aws_node_with_ssh_down()
     log_file = str(tmp_path / "node" / "system.log")
 
@@ -664,7 +664,7 @@ def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
 
 
 def test_collect_log_remotely_without_ssh_or_ssm_collects_nothing(tmp_path):
-    node = SimpleNamespace(remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
+    node = SimpleNamespace(remoter=Mock(is_up=Mock(return_value=False)), oob_runner=None)
 
     assert LogCollector.collect_log_remotely(node, "journalctl", str(tmp_path / "system.log")) == (None, True)
 
@@ -693,7 +693,7 @@ def test_collect_node_logs_copies_the_local_files_of_a_node_once(tmp_path):
     node_logdir = tmp_path / "longevity-loader-set-88976c04" / node_name
     node_logdir.mkdir(parents=True)
     (node_logdir / "console_output.log").write_text("[   10.42] cloud-init[408]: ...")
-    node = SimpleNamespace(name=node_name, remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
+    node = SimpleNamespace(name=node_name, remoter=Mock(is_up=Mock(return_value=False)), oob_runner=None)
     collector = LoaderLogCollector([node], test_id="88976c04", storage_dir=str(tmp_path / "collected_logs"), params={})
 
     with patch.object(LoaderLogCollector, "archive_to_tarfile", return_value=None):
@@ -710,7 +710,7 @@ def test_collect_node_logs_keeps_the_local_files_when_the_remote_dir_fails(tmp_p
     node_logdir.mkdir(parents=True)
     (node_logdir / "console_output.log").write_text("[   10.42] cloud-init[408]: ...")
     ssm_runner = Mock(run=Mock(side_effect=EndpointConnectionError(endpoint_url="https://ssm.eu-west-1.amazonaws.com")))
-    node = SimpleNamespace(name=node_name, remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=ssm_runner)
+    node = SimpleNamespace(name=node_name, remoter=Mock(is_up=Mock(return_value=False)), oob_runner=ssm_runner)
     collector = LoaderLogCollector([node], test_id="88976c04", storage_dir=str(tmp_path / "collected_logs"), params={})
 
     with patch.object(LoaderLogCollector, "archive_to_tarfile", return_value=None):
@@ -722,7 +722,7 @@ def test_collect_node_logs_keeps_the_local_files_when_the_remote_dir_fails(tmp_p
 def test_collect_node_logs_checks_ssh_of_a_dead_node_once(tmp_path):
     """Each is_up() waits 30s on a node without SSH: asking once per log entity took minutes per node."""
     node = SimpleNamespace(
-        name="longevity-loader-node-88976c04-1", remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None
+        name="longevity-loader-node-88976c04-1", remoter=Mock(is_up=Mock(return_value=False)), oob_runner=None
     )
     collector = LoaderLogCollector([node], test_id="88976c04", storage_dir=str(tmp_path), params={})
 

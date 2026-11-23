@@ -174,6 +174,10 @@ def test_provision_instance_sends_boot_volume_size_to_oci(
     assert launch_details.source_details.boot_volume_size_in_gbs == 100
     assert launch_details.source_details.image_id == "ocid1.image.oc1..example"
     assert launch_details.image_id is None
+    # the log collector's only channel to a node whose SSH is down (SCT-1471)
+    assert [(plugin.name, plugin.desired_state) for plugin in launch_details.agent_config.plugins_config] == [
+        ("Compute Instance Run Command", "ENABLED")
+    ]
 
 
 AVAILABILITY_DOMAINS = [
@@ -432,3 +436,48 @@ def test_az_fallback_moves_the_data_volumes_with_the_instance(fallback_provider_
     provider._bs_client.delete_volume.assert_called_once_with("vol-0")
     attached = provider._compute_client.launch_instance.call_args.args[0].launch_volume_attachments
     assert [attachment.volume_id for attachment in attached] == ["vol-1"]
+
+
+@pytest.fixture
+def run_command_provider():
+    agent_client = MagicMock()
+    agent_client.create_instance_agent_command.return_value = SimpleNamespace(data=SimpleNamespace(id="ocid1.command"))
+    with (
+        patch("sdcm.utils.oci_utils.OciService.get_compute_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_identity_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_network_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_compute_instance_agent_client", return_value=agent_client),
+    ):
+        provider = VirtualMachineProvider(_compartment_id="ocid1.compartment", _region="us-ashburn-1", _az="1")
+        provider._raw_cache["loader-node-1"] = SimpleNamespace(id="ocid1.instance.loader")
+        yield provider, agent_client
+
+
+def _execution(state, exit_code=0, text=""):
+    content = SimpleNamespace(exit_code=exit_code, text=text, message="")
+    return SimpleNamespace(data=SimpleNamespace(lifecycle_state=state, content=content))
+
+
+def test_run_command_goes_through_the_instance_agent_as_root(run_command_provider):
+    provider, agent_client = run_command_provider
+
+    with patch("oci.wait_until", return_value=_execution("SUCCEEDED", text="journal\n")) as wait_until:
+        result = provider.run_command("loader-node-1", "journalctl -b | tail -n 1")
+
+    assert (result.stdout, result.exited) == ("journal\n", 0)
+    details = agent_client.create_instance_agent_command.call_args.args[0]
+    assert details.target.instance_id == "ocid1.instance.loader"
+    assert details.content.source.text == "sudo -n bash -c 'journalctl -b | tail -n 1'"
+    agent_client.get_instance_agent_command_execution.assert_called_once_with("ocid1.command", "ocid1.instance.loader")
+    assert wait_until.call_args.kwargs["evaluate_response"](_execution("IN_PROGRESS")) is False
+
+
+def test_run_command_reports_a_command_the_agent_never_finished(run_command_provider):
+    provider, _ = run_command_provider
+
+    with patch("oci.wait_until", return_value=_execution("TIMED_OUT")):
+        result = provider.run_command("loader-node-1", "journalctl -b")
+
+    assert not result.ok
+    assert "TIMED_OUT" in result.stderr

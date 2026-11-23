@@ -654,6 +654,41 @@ def disable_daily_apt_triggers():
     """)
 
 
+def forward_boot_journal_to_console() -> str:
+    """Copy the sshd and cloud-init journal of this boot to the serial console (SCT-1471).
+
+    SCT saves every backend's console output, so this is what is left from a node whose SSH never
+    came up. Only these identifiers: journald's own `ForwardToConsole=yes` takes every unit, so the
+    Scylla log of a DB node would flood a slow serial console, and journald blocks on it.
+    `/dev/console` is whatever `console=` the image set, and `-b` replays the boot from its start.
+    """
+    return dedent("""\
+    cat > /etc/systemd/system/sct-boot-console.service <<'EOF'
+    [Unit]
+    Description=SCT: copy the sshd and cloud-init journal to the serial console
+    [Service]
+    ExecStart=/bin/sh -c 'exec journalctl -b -f -o short-precise SYSLOG_IDENTIFIER=sshd SYSLOG_IDENTIFIER=sshd-session SYSLOG_IDENTIFIER=sshd-auth SYSLOG_IDENTIFIER=cloud-init + _SYSTEMD_UNIT=cloud-final.service >/dev/console'
+    Restart=always
+    RestartSec=5
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+    systemctl daemon-reload || true
+    systemctl enable --now sct-boot-console.service || true
+    """)
+
+
+# The Instance Agent runs Run Command as `ocarun`: let it sudo, so the log collector can read the journal
+OCI_RUN_COMMAND_SUDOERS = "ocarun ALL=(ALL) NOPASSWD:ALL"
+
+
+def allow_oci_run_command_sudo() -> str:
+    return dedent(f"""\
+    echo '{OCI_RUN_COMMAND_SUDOERS}' > /etc/sudoers.d/101-oracle-cloud-agent-run-command
+    chmod 440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
+    """)
+
+
 # The backends whose images ship a firewall that has to go. Everything below is backend- and
 # distro-agnostic, so widening this tuple is all it takes to disable the firewall on another
 # backend - both cloud-init paths read it from here. OCI is the only one with a failure behind

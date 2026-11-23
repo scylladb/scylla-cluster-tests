@@ -23,6 +23,10 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
+from sdcm.sct_provision.user_data_objects.boot_console import (
+    BootJournalToConsoleUserDataObject,
+    OciRunCommandSudoUserDataObject,
+)
 from sdcm.sct_provision.user_data_objects.docker_service import DockerUserDataObject
 from sdcm.sct_provision.user_data_objects.firewall import DisableFirewallUserDataObject
 from sdcm.sct_provision.user_data_objects.sct_agent import SctAgentUserDataObject
@@ -238,6 +242,8 @@ class DefinitionBuilder(abc.ABC):
     def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:
         user_data_object_classes: List[Type[SctUserDataObject]] = [
             DisableFirewallUserDataObject,
+            BootJournalToConsoleUserDataObject,
+            OciRunCommandSudoUserDataObject,
             DisableAptTriggersUserDataObject,
             SyslogNgUserDataObject,
             SyslogNgExporterUserDataObject,

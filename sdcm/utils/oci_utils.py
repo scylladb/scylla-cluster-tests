@@ -25,6 +25,7 @@ from functools import (
 )
 
 import oci
+from oci.compute_instance_agent import ComputeInstanceAgentClient
 from oci.core import BlockstorageClient, ComputeClient, VirtualNetworkClient
 from oci.core.models import Image, Instance, InstanceSourceViaImageDetails
 from oci.exceptions import ServiceError
@@ -140,6 +141,13 @@ class OciService(metaclass=Singleton):
         if region:
             config["region"] = region
         return ComputeClient(config, retry_strategy=OCI_RETRY_STRATEGY)
+
+    def get_compute_instance_agent_client(self, region: str | None = None) -> ComputeInstanceAgentClient:
+        """Get Compute Instance Agent client (Run Command) for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return ComputeInstanceAgentClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_identity_client(self, region: str | None = None) -> IdentityClient:
         """Get Identity client for specified region."""

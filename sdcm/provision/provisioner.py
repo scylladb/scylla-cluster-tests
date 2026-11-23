@@ -169,6 +169,11 @@ class Provisioner(ABC):
     Limits only to machines related to provided test_id.
     """
 
+    # output characters one run_command() call returns, None when run_command() needs SSH:
+    # the log collector reads logs through it in slices when SSH is down (`oob_runner_for()`)
+    oob_chunk_size: int | None = None
+    oob_max_chunks: int = 1
+
     def __init__(self, test_id: str, region: str, availability_zone: str) -> None:
         self._test_id = test_id
         self._region = region

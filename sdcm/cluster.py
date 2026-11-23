@@ -228,6 +228,7 @@ from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.nvme_diagnostics import collect_all_smart_logs, install_nvme_cli, store_baseline_smart_logs
 from sdcm.utils.object_storage import backup_bucket_region, object_storage_endpoints
+from sdcm.utils.oob_runner import oob_runner_for
 from sdcm.utils.raft import get_raft_mode
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.replication_strategy_utils import DataCenterTopologyRfControl, ReplicationStrategy
@@ -812,10 +813,13 @@ class BaseNode(AutoSshContainerMixin):
         except Exception:  # noqa: BLE001
             self.log.warning("Failed to save the console output", exc_info=True)
 
-    @property
-    def aws_ssm_runner(self):
-        """No SSM outside AWS: the log collector falls back to it when SSH is down."""
-        return None
+    @cached_property
+    def oob_runner(self):
+        """Command channel through the cloud API, which the log collector falls back to when SSH is down.
+
+        None when the backend has none (GCE, docker, baremetal).
+        """
+        return oob_runner_for(getattr(self, "_instance", None))
 
     def _start_kernel_panic_checker(self):
         if not self.parent_cluster.params.get("enable_kernel_panic_checker"):
