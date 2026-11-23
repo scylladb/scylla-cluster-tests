@@ -320,6 +320,7 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
             ColumnMetadata(name="node_disk_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="expected_throughput", unit="MB/s", type=ResultType.FLOAT, visible=False),
             ColumnMetadata(name="node_idx", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="is_tablets", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -392,6 +393,10 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
             status=Status.UNSET,
         )
         table.add_result(column="node_idx", row=f"#{cycle}", value=result.metrics.get("node_idx"), status=Status.UNSET)
+        if "tablets_enabled" in result.metrics:
+            table.add_result(
+                column="is_tablets", row=f"#{cycle}", value=str(result.metrics["tablets_enabled"]), status=Status.UNSET
+            )
 
         LOGGER.debug("Submitting adaptive timeout results to Argus: %s", table.as_dict())
         submit_results_to_argus(argus_client, table)

@@ -43,7 +43,6 @@ def _get_decommission_timeout(
         node_info = node_info_service.as_dict()
         LOGGER.debug(f"Estimating decommission timeout with {node_info=}")
         if tablets_enabled:
-            node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
             soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
             return (soft_timeout, soft_timeout * 2), node_info
@@ -66,7 +65,6 @@ def _get_new_node_timeout(
     try:
         node_info = node_info_service.as_dict()
         if tablets_enabled:
-            node_info["tablets_enabled"] = True
             return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
         # For non-tablet cases, use the passed timeout
         return (timeout, None), node_info
@@ -92,7 +90,6 @@ def _get_tablet_migration_timeout(
         node_info = node_info_service.as_dict()
         LOGGER.debug(f"Estimating tablet migration timeout with {node_info=}")
         if tablets_enabled:
-            node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput)
             soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
             return (soft_timeout, soft_timeout * 2), node_info
@@ -359,7 +356,7 @@ def adaptive_timeout(  # noqa: PLR0914
     timeouts, load_metrics = timeout_func(node_info_service=metrics, **args)
     soft_timeout, hard_timeout = timeouts if isinstance(timeouts, tuple) else (timeouts, None)
     if store_metrics:
-        load_metrics.update(TestInfoServices.get(node))
+        load_metrics.update(TestInfoServices.get(node), tablets_enabled=tablets_enabled)
 
     # Apply operation-based timeout scaling (opt-in via config)
     operation_factor = _get_operation_timeout_factor(node.parent_cluster.params, operation)

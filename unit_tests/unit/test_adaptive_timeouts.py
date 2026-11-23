@@ -371,6 +371,19 @@ def test_cleanup_timeout_fallback_doubles_caller_timeout(fake_node, adaptive_tim
             assert timeout == 7200
 
 
+@pytest.mark.parametrize("tablets_enabled", [pytest.param(True, id="tablets"), pytest.param(False, id="vnodes")])
+@pytest.mark.parametrize("operation", [Operations.CLEANUP, Operations.SOFT_TIMEOUT], ids=lambda op: op.name)
+def test_adaptive_timeout_stores_whether_tablets_are_enabled(
+    fake_node, adaptive_timeout_store, mock_tablets_feature, operation, tablets_enabled
+):
+    """Each stored timeout tells whether tablets are enabled, so a calibration can split vnodes runs from tablets runs."""
+    mock_tablets_feature.return_value = tablets_enabled
+    with adaptive_timeout(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600):
+        pass
+
+    assert adaptive_timeout_store.get(operation=operation.name)[0]["tablets_enabled"] is tablets_enabled
+
+
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
 def test_tablet_migration_uses_formula_when_tablets_disabled(
@@ -773,3 +786,23 @@ def test_argus_store_reports_no_hard_timeout_when_not_set(mock_submit):
     table = mock_submit.call_args[0][1]
     hard_timeout_cells = [cell for cell in table.results if cell.column == "hard_timeout"]
     assert not hard_timeout_cells  # no cell reported when there's no hard timeout
+
+
+@mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
+def test_argus_store_reports_whether_tablets_are_enabled(mock_submit):
+    """The row shows whether tablets are enabled, which explains a short cleanup timeout on a node with much data."""
+    with (
+        mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
+        mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),
+    ):
+        ArgusAdaptiveTimeoutStore().store(
+            metrics={"tablets_enabled": True},
+            operation="CLEANUP",
+            duration=10,
+            timeout=300,
+            timeout_occurred=False,
+            hard_timeout=600,
+        )
+
+    table = mock_submit.call_args[0][1]
+    assert [cell.value for cell in table.results if cell.column == "is_tablets"] == ["True"]
