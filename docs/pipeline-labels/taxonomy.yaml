@@ -106,6 +106,7 @@ features:
     - zero-token-nodes
     - alternator-streams
     - elasticity
+    - auto-repair
 
 team_ownership:
   description: "GitHub team (scylladb/<team>) responsible for maintaining this test; each value maps to its Jira team"
