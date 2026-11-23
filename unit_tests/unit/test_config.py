@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
@@ -2255,4 +2256,16 @@ def test_azure_minicloud_yaml_only_activation_is_refused(monkeypatch, tmp_path):
     monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
 
     with pytest.raises(MinicloudActivationError, match="SCT_MINICLOUD_ENDPOINT_URL"):
+        sct_config.SCTConfiguration()
+
+
+def test_perf_steps_hdr_warmup_sec_rejects_a_negative_value(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_PERF_STEPS_HDR_WARMUP_SEC", "0")
+    assert sct_config.SCTConfiguration().get("perf_steps_hdr_warmup_sec") == 0
+
+    monkeypatch.setenv("SCT_PERF_STEPS_HDR_WARMUP_SEC", "-1")
+    with pytest.raises(ValidationError, match="perf_steps_hdr_warmup_sec"):
         sct_config.SCTConfiguration()

@@ -271,6 +271,7 @@ stress_image: {}
 service_level_shares: [1000]
 
 use_hdrhistogram: false
+perf_steps_hdr_warmup_sec: 30
 
 stop_on_hw_perf_failure: false
 

@@ -25,11 +25,19 @@ def make_hdrhistogram_summary(
     pattern: str = "",
     base_path="",
     absolute_time: bool = True,
+    warmup_sec: int | float = 0,
 ) -> list[dict[str, dict[str, int]]]:
     """
     Build time range HDR Histogram summary with time interval (start_time, end_time)
     from provided hdr log file.
     For timestamps is used absolute time in ms since epoch start
+
+    warmup_sec: the first seconds of every HDR file inside the time range, counted from the first
+    interval of that file, are left out of the summary. The stress tools start the load without a
+    warm-up, so it undershoots the rate and then catches up, and the latencies of that ramp-up do
+    not belong to the step. Each file is trimmed from its own first interval, because the loaders
+    start their load at different moments, all of them after the caller took start_time.
+    The HDR files themselves are only read, so they keep the whole window.
     """
     builder = _HdrRangeHistogramBuilder(
         hdr_tags=hdr_tags,
@@ -40,6 +48,7 @@ def make_hdrhistogram_summary(
     if pattern:
         builder.hdrh_files_pattern = pattern
     builder.absolute_time = absolute_time
+    builder.warmup_sec = warmup_sec
     return builder.build_histogram_summary(base_path)
 
 
@@ -131,6 +140,73 @@ class _HdrRangeHistogram:
     histogram: _HdrHistogram | None
 
 
+class _WarmupFilter:
+    """
+    Leave the first 'warmup_sec' of one HDR file, counted from its first interval, out of its summary.
+
+    The skipped intervals are added to a side histogram instead of being dropped, so the memory
+    stays the same whatever the length of the file. A file whose data is not longer than twice
+    the warm-up, or that has no interval after it, gets them back in finish(): trimming it would
+    leave too little, or nothing, to summarize, and a short step is better reported with its
+    ramp-up than not at all.
+    """
+
+    # how much earlier than its nominal time a stress tool may stamp an interval
+    INTERVAL_JITTER_MS = 100
+
+    def __init__(self, warmup_sec: int | float):
+        self.warmup_ms = (warmup_sec or 0) * 1000
+        self.first_ts = None
+        self.last_ts = 0
+        self.skipped = 0
+        self.kept = 0
+        self.warmup_histogram = _HdrHistogram()
+
+    def keep(self, interval_histogram: HdrHistogram) -> bool:
+        if not self.warmup_ms:
+            return True
+        start_ts = interval_histogram.get_start_time_stamp()
+        if self.first_ts is None:
+            self.first_ts = start_ts
+        self.last_ts = max(self.last_ts, interval_histogram.get_end_time_stamp())
+        # cassandra-stress stamps its 10s intervals at 3.000, 12.999, 22.999...: an exact comparison
+        # would drop the interval 29.999s in and cut 40s instead of 30s.
+        if start_ts - self.first_ts >= self.warmup_ms - self.INTERVAL_JITTER_MS:
+            self.kept += 1
+            return True
+        if self.warmup_histogram.get_start_time_stamp() == 0:
+            self.warmup_histogram.set_start_time_stamp(start_ts)
+        self.warmup_histogram.add(interval_histogram)
+        self.skipped += 1
+        return False
+
+    def finish(self, histogram: HdrHistogram, hdr_file: str, hdr_tag: str) -> None:
+        """Merge the warm-up back into 'histogram' when the file is too short to trim."""
+        if not self.skipped:
+            return
+        if self.kept and self.last_ts - self.first_ts > 2 * self.warmup_ms:
+            LOGGER.debug(
+                "HDR file %s, tag %s: skipped %s of %s intervals in the first %ss warm-up",
+                hdr_file,
+                hdr_tag,
+                self.skipped,
+                self.skipped + self.kept,
+                self.warmup_ms / 1000,
+            )
+            return
+        LOGGER.warning(
+            "HDR file %s holds %.1fs of data for tag %s with %s intervals after the %ss warm-up: "
+            "too little to trim, keep it whole",
+            hdr_file,
+            (self.last_ts - self.first_ts) / 1000,
+            hdr_tag,
+            self.kept,
+            self.warmup_ms / 1000,
+        )
+        histogram.add(self.warmup_histogram)
+        histogram.set_start_time_stamp(self.first_ts)
+
+
 class _HdrRangeHistogramBuilder:
     def __init__(
         self,
@@ -146,6 +222,7 @@ class _HdrRangeHistogramBuilder:
         self.end_time = end_time
         self.hdrh_files_pattern = hdr_file_pattern
         self.absolute_time = True
+        self.warmup_sec = 0
 
     @log_run_info("HdrHistogram Summary Builder")
     def build_histogram_summary(self, path: str) -> list[dict[str, dict[str, int]]]:
@@ -267,6 +344,7 @@ class _HdrRangeHistogramBuilder:
             file_with_correct_time_interval = True
             index_errors = 0
             line_index = 5
+            warmup = _WarmupFilter(self.warmup_sec)
             while next_hist:
                 tag = next_hist.get_tag()
                 # The tag in the HDR file for the stress command with the user profile is in lowercase.
@@ -274,9 +352,10 @@ class _HdrRangeHistogramBuilder:
                 if tag.lower() == hdr_tag.lower():
                     if tag_not_found:
                         LOGGER.debug(f"found histogram entry with tag {hdr_tag} in file {hdr_file}")
-                    if histogram.get_start_time_stamp() == 0:
-                        histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
-                    histogram.add(next_hist)
+                    if warmup.keep(next_hist):
+                        if histogram.get_start_time_stamp() == 0:
+                            histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
+                        histogram.add(next_hist)
                     tag_not_found = False
 
                 while next_hist:
@@ -294,6 +373,7 @@ class _HdrRangeHistogramBuilder:
                     break
             if index_errors > 0:
                 LOGGER.warning(f"{index_errors} lines were ignored in file {hdr_file} due to IndexError")
+            warmup.finish(histogram, hdr_file, hdr_tag)
             LOGGER.debug(
                 f"Finished reading file {hdr_file} with tag {hdr_tag}, tag_not_found={tag_not_found} file_with_correct_time_interval={file_with_correct_time_interval}"
             )

@@ -306,3 +306,25 @@ def test_latency_calculator_decorator_with_monitoring_set(tmp_path):
     assert cycle["Scylla P99_read - node-1"] == 1.5
     assert len(cycle["screenshots"]) == 1
     assert tester.monitors.screenshot_requests
+
+
+def test_latency_calculator_decorator_hdr_warmup_reaches_the_summary_only(tmp_path):
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+    tester.get_hdrhistogram = MagicMock(return_value=HDR_SUMMARY)
+    tester.get_hdrhistogram_by_interval = MagicMock(return_value=[HDR_SUMMARY])
+
+    @latency_calculator_decorator(workload_type="write", cycle_name="step_1", hdr_warmup_sec=30)
+    def _do_step(_self):
+        return {"hdr_tags": ["WRITE-st"]}
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.decorators.send_result_to_argus") as send_to_argus_mock,
+    ):
+        _do_step(tester)
+
+    assert tester.get_hdrhistogram.call_args.kwargs["warmup_sec"] == 30
+    # the per-interval view keeps the ramp-up
+    assert "warmup_sec" not in tester.get_hdrhistogram_by_interval.call_args.kwargs
+    assert send_to_argus_mock.call_args.kwargs["result"]["hdr_warmup_sec"] == 30
