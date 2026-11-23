@@ -2,8 +2,6 @@ test_duration: 300
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
-# cassandra-stress can run on the gemini loader. Limit each cassandra-stress container to 25% of the loader memory.
-cs_docker_memory_limit_percent: 25
 sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
   vcpu: 2
   memory: '>=16'
