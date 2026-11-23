@@ -1,0 +1,33 @@
+# Record the number of each pushed pull request for pr-range-diff.yaml.
+# This job runs with no token and no permissions. pr-range-diff.yaml runs on
+# workflow_run from master, and reads the number as untrusted input.
+#
+# A pull_request run takes this file from the merge ref of the pull request.
+# Each base branch of a pull request needs this file.
+#
+# The `name:` must match the `workflows:` entry in pr-range-diff.yaml.
+# A rename stops the range-diff comments.
+name: Record PR push for range-diff
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions: {}
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the PR number
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: echo "$PR" > number
+
+      - name: Upload the PR number
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-push
+          path: number
+          retention-days: 1
