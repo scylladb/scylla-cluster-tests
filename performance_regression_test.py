@@ -683,6 +683,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_r"), nemesis=True, sub_type="read")
 
@@ -690,6 +692,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_w"), nemesis=True, sub_type="write")
 
@@ -697,6 +701,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_m"), nemesis=True, sub_type="mixed")
 
@@ -705,6 +711,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_read_disk"), nemesis=True, sub_type="read_disk_only")
 
