@@ -1,7 +1,7 @@
 [project]
 name = 'scylla-cluster-tests'
 version = '0.1'
-requires-python = ">=3.10, <3.16"
+requires-python = ">=3.15, <3.16"
 dependencies = [
     "aexpect==1.6.2",
     "anyconfig==0.14.0",
@@ -25,8 +25,7 @@ dependencies = [
     "docker==7.1.0",
     "elasticsearch==9.2.0",
     "fabric==3.2.2",
-    "fastavro==1.11.1; python_version < '3.11'",
-    "fastavro==1.13.0; python_version >= '3.11'",
+    "fastavro==1.13.0",
     "gimme-aws-creds==2.8.2",
     "google-api-python-client>=2.93.0",
     "google-auth>=2.26.1",
