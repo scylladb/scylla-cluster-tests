@@ -19,7 +19,8 @@ tests keep the conventions from drifting back:
 
 - every option lives in exactly one mixin,
 - an option's name prefix agrees with the group it is in,
-- every option has a description that says more than its own name.
+- every option has a description that says more than its own name,
+- a section's fields drop the section's name as a prefix.
 
 The original `sct_config.py` had drifted on all three counts: options were appended to whatever
 section happened to be last (37 unrelated options had accumulated under `# minicloud params`), and
@@ -33,6 +34,7 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_config.config import is_ignored_field
 from sdcm.sct_config.mixins import CONFIG_GROUPS
+from sdcm.sct_config.sections import ConfigSection
 
 
 def _module(mixin):
@@ -46,6 +48,27 @@ DOCUMENTED_OPTIONS = {
 }
 
 OPTION_GROUP = {name: _module(mixin) for mixin in CONFIG_GROUPS for name in mixin.model_fields}
+
+
+def section_of(field) -> type[ConfigSection] | None:
+    annotation = field.annotation
+    return annotation if isinstance(annotation, type) and issubclass(annotation, ConfigSection) else None
+
+
+def section_fields(path: str, section: type[ConfigSection]) -> dict:
+    """``{dotted path: field}`` of every field of ``section``, nested sections included."""
+    fields = {}
+    for name, field in section.model_fields.items():
+        fields[f"{path}.{name}"] = field
+        if nested := section_of(field):
+            fields |= section_fields(f"{path}.{name}", nested)
+    return fields
+
+
+SECTIONS = {name: section for name, field in DOCUMENTED_OPTIONS.items() if (section := section_of(field))}
+SECTION_FIELDS = {
+    path: field for name, section in SECTIONS.items() for path, field in section_fields(name, section).items()
+}
 
 # name prefix -> the group an option with that prefix belongs in
 PREFIX_CONVENTION = {
@@ -149,10 +172,19 @@ def test_option_name_prefix_agrees_with_its_group(name):
             break
 
 
-@pytest.mark.parametrize("name", sorted(DOCUMENTED_OPTIONS))
+@pytest.mark.parametrize("path", sorted(SECTION_FIELDS))
+def test_section_field_carries_no_group_prefix(path):
+    """`config.agent.port`, not `config.agent.agent_port`."""
+    section, *_, name = path.split(".")
+    assert not name.startswith(f"{section}_"), f"{path} repeats its section's name as a prefix"
+
+
+@pytest.mark.parametrize("name", sorted(DOCUMENTED_OPTIONS.keys() | SECTION_FIELDS.keys()))
 def test_option_has_a_useful_description(name):
     """A description that only restates the name tells a reader nothing and hides the right group."""
-    description = " ".join((DOCUMENTED_OPTIONS[name].description or "").split())
+    field = DOCUMENTED_OPTIONS.get(name) or SECTION_FIELDS[name]
+    name = name.rsplit(".", 1)[-1]
+    description = " ".join((field.description or "").split())
     assert description, f"{name} has no description; it would appear blank in configuration_options.md"
 
     words = re.findall(r"[a-z0-9]+", description.lower())
