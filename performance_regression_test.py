@@ -285,13 +285,20 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         base_cmd_m = self.params.get("stress_cmd_m")
         self.run_workload(stress_cmd=base_cmd_m, nemesis=nemesis, sub_type="mixed")
 
+    def _workload_stress_params(self, stress_cmd):
+        params = {"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
+        # A list of several commands with round_robin runs each command on its own loader, as the
+        # predefined throughput steps test does. The config turns a single command into a list of
+        # one, and that command still runs on all loaders.
+        if isinstance(stress_cmd, list) and len(stress_cmd) > 1 and self.params.get("round_robin"):
+            params["round_robin"] = True
+        return params
+
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
         self.stress_cmd = stress_cmd
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
+        stress_queues = self._run_all_stress_cmds([], params=self._workload_stress_params(stress_cmd))
         all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
         if nemesis:
             interval = self.params.get("nemesis_interval")
