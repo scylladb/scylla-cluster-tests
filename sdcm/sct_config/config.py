@@ -3347,6 +3347,17 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 f"instance type '{instance_type}'. Available zones: {available}."
             )
 
+    @staticmethod
+    def _is_upcoming_xcloud_rc(version: str, supported_versions: list[str]) -> bool:
+        """An RC of a release newer than the latest one Scylla Cloud lists, e.g. 2026.4.0-rc1 after 2026.3.6."""
+        try:
+            candidate = ComparableScyllaVersion(version)
+        except ValueError:
+            return False
+        if not candidate.v_pre_release.startswith("rc") or not supported_versions:
+            return False
+        return candidate > max(supported_versions, key=ComparableScyllaVersion)
+
     def _validate_cloud_backend_parameters(self):
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.cloud_env_credentials["base_url"],
@@ -3359,12 +3370,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if cloud_provider not in ["aws", "gce"]:
             raise ValueError(f"Unsupported Scylla Cloud provider: {cloud_provider}. Must be 'aws' or 'gce'")
 
-        # validate if selected Scylla version is supported
+        # validate if selected Scylla version is supported, or is an RC of an upcoming release
         supported_versions = [v["version"] for v in cloud_api_client.get_scylla_versions()["scyllaVersions"]]
-        if (selected_version := self.get("scylla_version")) not in supported_versions:
+        selected_version = self.get("scylla_version")
+        if selected_version not in supported_versions and not self._is_upcoming_xcloud_rc(
+            selected_version, supported_versions
+        ):
             raise ValueError(
                 f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
-                f"Currently supported versions: {', '.join(supported_versions)}"
+                f"Currently supported versions: {', '.join(supported_versions)}, "
+                f"and release candidates newer than the latest of them"
             )
 
         # validate if selected region is supported by the cloud provider
