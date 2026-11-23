@@ -28,7 +28,6 @@ from typing import Callable, ClassVar, List, Literal, Set, Union, get_args, get_
 
 import anyconfig
 import yaml
-from packaging import version
 from pydantic import ConfigDict, Field
 from pydantic import fields as pydantic_fields
 from pydantic.functional_validators import BeforeValidator
@@ -119,7 +118,6 @@ from sdcm.utils.version_utils import (
 from sdcm.utils.vm_arch import VmArch
 from sdcm.xcloud.api_client import CloudProviderType, ScyllaCloudAPIClient
 from sdcm.xcloud.cluster_config_utils import (
-    MIN_SCYLLA_VERSION_FOR_VS,
     expand_availability_zones,
     get_cloud_rest_credentials_from_file,
     parse_availability_zones,
@@ -3410,15 +3408,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._validate_xcloud_availability_zones(cloud_api_client, provider_id, region_id)
 
         # validate Vector Search parameters for cloud backend
-        # TODO: update after Vector Search moves out of Beta for Scylla Cloud and limitations are changed/no longer apply
         if int(self.get("n_vector_store_nodes")) > 0:
-            scylla_version = self.get("scylla_version").split("~")[0]
-            if version.parse(scylla_version) < version.parse(MIN_SCYLLA_VERSION_FOR_VS):
-                raise ValueError(
-                    f"Vector Search requires ScyllaDB {MIN_SCYLLA_VERSION_FOR_VS}+, "
-                    f"but selected version is {scylla_version}"
-                )
-
             vs_instance_type = self.get("instance_type_vector_store")
             supported_vs_types = cloud_api_client.get_vector_search_instance_types(
                 cloud_provider_id=provider_id, region_id=region_id
