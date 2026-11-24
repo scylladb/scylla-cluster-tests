@@ -313,19 +313,40 @@ def test_run_step_reports_the_tags_of_whatever_stress_tool_ran(queues_hdr_tags, 
     """The tags are tool specific and, for cassandra-stress, step specific, so they can only come
     from the stress threads: each derives its own from the command it actually runs."""
     _, decorator_input = _run_step(queues_hdr_tags)
+    assert decorator_input.pop("stress_end") > 0
     assert decorator_input == {"hdr_tags": expected}
 
 
 def test_run_step_merges_the_tags_of_every_stress_queue():
     """A step running a write and a read command must report both, not just the first queue's."""
     _, decorator_input = _run_step([["WRITE-st"], ["READ-st"]])
+    assert decorator_input.pop("stress_end") > 0
     assert decorator_input == {"hdr_tags": ["WRITE-st", "READ-st"]}
 
 
 def test_run_step_deduplicates_repeated_tags():
     """Several commands of the same kind (split by -pop range) all report the same tag."""
     _, decorator_input = _run_step([["WRITE-st"], ["WRITE-st"]])
+    assert decorator_input.pop("stress_end") > 0
     assert decorator_input == {"hdr_tags": ["WRITE-st"]}
+
+
+def test_run_step_reports_when_the_stress_ended(monkeypatch):
+    """The busiest-shard window ends here: latency_calculator_decorator returns minutes later, after its
+    screenshots and uploads, and a window ending then averages idle time into the step."""
+    clock = iter([100.0, 2000.0])
+    monkeypatch.setattr(gradual_grow_module.time, "time", lambda: next(clock))
+    collected = []
+    instance = SimpleNamespace(
+        log=logging.getLogger(__name__),
+        run_stress_thread=lambda **_: SimpleNamespace(hdr_tags=["fn--write"]),
+        get_stress_results=lambda queue, store_results: collected.append(queue) or [{"op rate": "1000"}],
+    )
+    _, decorator_input = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
+        instance, ["cmd-0", "cmd-1"], {}, None
+    )
+    assert len(collected) == 2
+    assert decorator_input == {"hdr_tags": ["fn--write"], "stress_end": 100.0}
 
 
 def test_run_step_skips_a_queue_that_carries_no_tags():
@@ -340,6 +361,7 @@ def test_run_step_skips_a_queue_that_carries_no_tags():
     _, decorator_input = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
         instance, ["cmd-0", "cmd-1", "cmd-2"], {}, None
     )
+    assert decorator_input.pop("stress_end") > 0
     assert decorator_input == {"hdr_tags": ["WRITE-st"]}
 
 

@@ -601,8 +601,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             step_duration: Duration for this step
             stop_test_on_failure: False reports a failing stress command as an error instead of stopping the test
 
-        Returns the step's results and, for latency_calculator_decorator, the HDR tags to build
-        the histograms of the step from.
+        Returns the step's results and a dict with, for latency_calculator_decorator, the HDR tags to build
+        the histograms of the step from, and 'stress_end': when the stress commands ended. The decorator
+        returns several minutes later, after its screenshots and uploads, so the time it returns at is not
+        the end of the load.
         """
         results = []
         stress_queue = []
@@ -626,6 +628,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
+        stress_end = time.time()
         # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
         # Every stress thread derives its own tags from the command it actually runs, which is the
         # only place the tags of a step can come from: they are tool specific (cassandra-stress
@@ -637,7 +640,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             dict.fromkeys(tag for queue in stress_queue for tag in (getattr(queue, "hdr_tags", None) or []))
         )
         self.log.debug("HDR tags of the step, collected from %s stress queue(s): %s", len(stress_queue), hdr_tags)
-        return results, {"hdr_tags": hdr_tags}
+        return results, {"hdr_tags": hdr_tags, "stress_end": stress_end}
 
     def drop_keyspace(self, keyspace_name):
         self.log.debug(f"Drop keyspace {keyspace_name}")
@@ -1191,13 +1194,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.run_step
         )
         stress_start = time.time()
-        results, _ = run_step(
+        results, step_info = run_step(
             stress_cmds=workload.cs_cmd_tmpl,
             step_params=step_params,
             step_duration=step_duration,
             stop_test_on_failure=stop_test_on_failure,
         )
-        stress_end = time.time()
+        stress_end = step_info["stress_end"]
         self.log.debug("All c-s commands results collected and saved in Argus")
 
         summary_result = self.check_latency_during_steps(step=step_name)
