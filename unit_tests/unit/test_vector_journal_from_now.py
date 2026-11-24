@@ -65,7 +65,10 @@ def test_only_a_host_that_outlives_the_run_reads_vector_journal_from_now(node_cl
     node.test_config = mock.Mock(get_logging_service_host_port=mock.Mock(return_value=("127.0.0.1", 5003)))
     node.remoter = mock.Mock()
 
-    with mock.patch("sdcm.cluster.ConfigurationScriptBuilder") as builder:
+    with (
+        mock.patch("sdcm.cluster.ConfigurationScriptBuilder") as builder,
+        mock.patch.object(BaseNode, "_ensure_vector_is_active"),
+    ):
         node.configure_remote_logging()
 
     assert builder.call_args.kwargs["vector_journal_from_now"] is expected

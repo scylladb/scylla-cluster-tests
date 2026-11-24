@@ -13,7 +13,7 @@
 
 """AzureNode network interface introspection."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -308,3 +308,14 @@ class TestOsIpv6Fallback:
 
     def test_no_address_at_all_is_empty(self, node):
         assert self.node_with(node, {}, "eth0")._os_ipv6_address() == ""
+
+
+@pytest.mark.parametrize("logs_transport,checked", [("vector", True), ("syslog-ng", False)])
+def test_azure_node_checks_vector_only_for_the_vector_transport(logs_transport, checked):
+    node = AzureNode.__new__(AzureNode)
+    node.parent_cluster = Mock(params={"logs_transport": logs_transport})
+
+    with patch.object(AzureNode, "_ensure_vector_is_active") as ensure:
+        node.configure_remote_logging()
+
+    assert ensure.called is checked
