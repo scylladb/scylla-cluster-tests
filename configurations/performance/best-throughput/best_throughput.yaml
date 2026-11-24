@@ -27,9 +27,12 @@ perf_best_throughput_search:
 # with the shards move the bounds out and show in the Argus history.
 # i8g read: four runs of 3 x i8g.4xlarge on 2026.3.4 found 1.378M-1.566M op/s (30.6K-34.8K per shard); 32700 is
 # their middle, so +-25% covers them all (SCT-580).
+# i8g mixed: one run of 3 x i8g.4xlarge on 2026.3.4 found 939,344 op/s (20,874 per shard), between a pass at
+# 939,582 and a fail at 970,122 op/s (SCT-580).
 perf_best_throughput_baselines:
   i8g:
     read: 32700
+    mixed: 20874
 
 # Write and mixed get 30 minutes, so that compactions and tablet splits run within a step. Read and
 # read_disk_only don't write, and get 10. On i8g read, every step of four runs either held steady to its end or
