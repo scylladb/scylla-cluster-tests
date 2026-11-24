@@ -219,6 +219,18 @@ def positive_int_or_none(value: str | int | None) -> int | None:
 OptionalPositiveInt = Annotated[int | None, BeforeValidator(positive_int_or_none)]
 
 
+def positive_int_auto_or_none(value: str | int | None) -> int | str | None:
+    """Return "auto" for that word in any case, else what positive_int_or_none returns."""
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        return "auto"
+    return positive_int_or_none(value)
+
+
+OptionalPositiveIntOrAuto = Annotated[
+    int | str | None, BeforeValidator(positive_int_auto_or_none), InputType("int | 'auto'")
+]
+
+
 def dict_or_str(value: dict | str | None) -> dict | None:
     """Coerce a dict, or a Python/YAML literal string holding a mapping, into a dict."""
     if value is None:

@@ -100,7 +100,7 @@ groovy maps to that isn't in `SUPPORTED_PROJECTS` (`gce_project: gcp` maps to
 
 **Fix:** `uv run sct.py check-jenkins-builder-labels` lists the labels nothing serves. Fix the
 label, or configure that project too. A label pinned in a jenkinsfile (`-v<N>-CI`) or a job XML
-(`<assignedNode>`) isn't in the groovy map; find it with the `git grep` of Phase 5 step 3.
+(`<assignedNode>`) isn't in the groovy map; find it with the `git grep` of Phase 5 step 4.
 
 ## OCI jobs wait forever after the label commit merged
 

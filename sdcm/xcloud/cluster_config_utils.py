@@ -23,8 +23,6 @@ CLOUD_KEEP_ALIVE_HOURS = 72  # 3 days
 CLOUD_KEEP_BUFFER_MINUTES = 125
 MAX_CLUSTER_NAME_LENGTH = 63  # Siren limit for cluster name length
 
-MIN_SCYLLA_VERSION_FOR_VS = "2025.4.0"
-
 
 def compute_cluster_exp_hours(test_duration_minutes: int, keep_alive: bool = False) -> int:
     """

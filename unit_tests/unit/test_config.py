@@ -1549,6 +1549,25 @@ def test_xcloud_exact_scylla_version_skips_repo_lookup(monkeypatch):
         assert sct_config.SCTConfiguration()["scylla_version"] == rc_version
 
 
+@pytest.mark.parametrize(
+    "version, supported_versions, expected",
+    [
+        pytest.param("2026.4.0-rc1", ["2026.2.5", "2026.3.6"], True, id="next-release-rc"),
+        pytest.param("2026.4.0~rc2", ["2026.2.5", "2026.3.6"], True, id="tilde-separator"),
+        pytest.param("2026.4.0~rc0-0.20261101.0123456789ab", ["2026.2.5", "2026.3.6"], True, id="full-build"),
+        pytest.param("2027.1.0-rc1", ["2026.2.5", "2026.3.6"], True, id="year-rollover"),
+        pytest.param("2026.3.0-rc1", ["2026.2.5", "2026.3.6"], False, id="rc-older-than-latest"),
+        pytest.param("2026.4.0", ["2026.2.5", "2026.3.6"], False, id="unlisted-release"),
+        pytest.param("2026.4.0-dev", ["2026.2.5", "2026.3.6"], False, id="dev-build"),
+        pytest.param("release:latest", ["2026.2.5", "2026.3.6"], False, id="unparsable"),
+        pytest.param("2026.4.0-rc1", [], False, id="no-supported-versions"),
+    ],
+)
+def test_is_upcoming_xcloud_rc(version, supported_versions, expected):
+    """Scylla Cloud lists only released versions; RCs of the next release must pass validation too."""
+    assert sct_config.SCTConfiguration._is_upcoming_xcloud_rc(version, supported_versions) is expected
+
+
 GOSSIPING_SNITCH = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
 

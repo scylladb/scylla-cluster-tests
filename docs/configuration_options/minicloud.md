@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
 the local minicloud service.
 
-**23 options.**
+**25 options.**
 
 
 <a id="minicloud_azure_scratch_resource_group"></a>
@@ -24,7 +24,7 @@ Azure resource group that minicloud uses for the temporary managed disk of an im
 
 ## **minicloud_container_cpus** / SCT_MINICLOUD_CONTAINER_CPUS
 
-Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or '7.5'). Empty means no limit
+Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or '7.5'). Empty means no limit. `auto` sizing then counts only this many host threads, rounded down
 
 **default:** N/A
 
@@ -123,18 +123,40 @@ Enable lightweight mode for minicloud deployments
 
 ## **minicloud_lightweight_memory** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY
 
-Memory allocation for lightweight minicloud deployments
+Memory allocation for lightweight minicloud deployments, or `auto`: SCT derives it from the host when minicloud starts
 
 **default:** 4GiB
 
 **type:** str (appendable)
 
 
+<a id="minicloud_auto_memory_max"></a>
+
+## **minicloud_auto_memory_max** / SCT_MINICLOUD_AUTO_MEMORY_MAX
+
+Largest db guest memory that `auto` sizing picks, for example 16GiB on a big host. It steps down in 1GiB steps to the smallest size that gives each Scylla shard 1GiB
+
+**default:** 6GiB
+
+**type:** str (appendable)
+
+
+<a id="minicloud_auto_vcpus_max"></a>
+
+## **minicloud_auto_vcpus_max** / SCT_MINICLOUD_AUTO_VCPUS_MAX
+
+Largest db guest vCPU count that `auto` sizing picks, for example 4 on a big host. It steps down to 2 until the db guests, the monitor and the loader fit the host threads and the memory gives each Scylla shard 1GiB
+
+**default:** 2
+
+**type:** int
+
+
 <a id="minicloud_lightweight_memory_loader"></a>
 
 ## **minicloud_lightweight_memory_loader** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY_LOADER
 
-RAM for loader guests in lightweight mode (minicloud matches their NodeType tag), for example 2GiB. Empty gives them [`minicloud_lightweight_memory`](#minicloud_lightweight_memory), the db size
+RAM for loader guests in lightweight mode (minicloud matches their NodeType tag), for example 2GiB. Empty gives them [`minicloud_lightweight_memory`](#minicloud_lightweight_memory), the db size. Or `auto`: SCT gives the loader 2GiB to 4GiB from the memory the db guests leave
 
 **default:** 2GiB
 
@@ -156,22 +178,22 @@ RAM for monitor guests in lightweight mode (minicloud matches their NodeType tag
 
 ## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
 
-vCPUs per db guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every db guest in the test; raise it only on a host with cores to spare
+vCPUs per db guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every db guest in the test; raise it only on a host with cores to spare. Or `auto`: SCT derives it from the host when minicloud starts
 
 **default:** 1
 
-**type:** int
+**type:** int | 'auto' → int | str
 
 
 <a id="minicloud_lightweight_vcpus_loader"></a>
 
 ## **minicloud_lightweight_vcpus_loader** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER
 
-vCPUs for loader guests in lightweight mode (minicloud matches their NodeType tag). Empty gives them [`minicloud_lightweight_vcpus`](#minicloud_lightweight_vcpus), the db count
+vCPUs for loader guests in lightweight mode (minicloud matches their NodeType tag). Empty gives them [`minicloud_lightweight_vcpus`](#minicloud_lightweight_vcpus), the db count. Or `auto`: SCT derives it from the host when minicloud starts, at most 1 vCPU per GiB of loader memory: two cassandra-stress JVMs ran out of a 2GiB loader at 3-4 vCPUs
 
 **default:** 1
 
-**type:** int
+**type:** int | 'auto' → int | str
 
 
 <a id="minicloud_lightweight_vcpus_monitor"></a>

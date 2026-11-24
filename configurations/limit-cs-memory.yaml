@@ -1,0 +1,19 @@
+# Limit the memory of each cassandra-stress container to 25% of the loader memory.
+#
+# Problem: with no heap option, cassandra-stress uses ZGC on a loader with 4 CPUs or more
+# and more than 4 GiB of memory. Its heap can grow to 85% of the loader memory.
+# Its heap balancer shares the memory only with other cassandra-stress processes.
+# When another tool, such as gemini, runs on the same loader, the kernel OOM killer
+# can stop that tool.
+#
+# Consequences of this file:
+# - Each cassandra-stress container gets --memory and --memory-swap of 25% of the loader MemTotal.
+# - cassandra-stress reads the container limit and selects the collector and the heap size:
+#   - With a limit of 4 GiB or less, it uses G1 with a fixed heap of half the free memory of the container.
+#   - With a larger limit and 4 CPUs or more, it uses ZGC, and its heap balancer keeps the heap in the limit.
+# - The limit applies to each container. Each cassandra-stress command runs in its own container,
+#   so two commands on one loader can use 50% of the loader memory.
+# - When a cassandra-stress command needs more memory than the limit, the OOM killer stops its container.
+# - A heap option in cs_extra_jvm_opts, such as -Xmx, must fit in the limit.
+# - The limit applies to docker loaders only. It has no effect on k8s backends and prepared loaders.
+cs_docker_memory_limit_percent: 25

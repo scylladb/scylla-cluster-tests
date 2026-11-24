@@ -22,6 +22,7 @@ gce_n_local_ssd_disk_db: 0
 gce_pd_standard_disk_size_db: 50
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
+spot_termination_retry: ["spot", "on_demand"]
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0

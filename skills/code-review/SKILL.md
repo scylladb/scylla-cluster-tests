@@ -147,6 +147,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - Tests must use pytest style, not `unittest.TestCase`
 - Tests must use fixtures, not `setUp`/`tearDown`
 - Parametrize when testing multiple input variations
+- For a diff under `unit_tests/unit/`, go through the Success Criteria in `skills/writing-unit-tests/SKILL.md`. It is the one-line form of every unit test rule, and each item names the `UT-n` rule to cite in the finding. Tests under `unit_tests/integration/` or marked `@pytest.mark.integration` follow `skills/writing-integration-tests/SKILL.md` instead
 
 ### Check 6: Configuration Changes
 

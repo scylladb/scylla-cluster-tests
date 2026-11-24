@@ -25,7 +25,7 @@ from datetime import datetime
 from functools import cache, wraps
 from itertools import chain, zip_longest
 from itertools import count as itertools_count
-from typing import List
+from typing import Callable, List
 from uuid import UUID
 
 import cassandra
@@ -58,6 +58,7 @@ from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE, is_tablets_
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
+from sdcm.utils.stress_keep_alive import StressKeepAlive, finish_all
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
@@ -217,6 +218,34 @@ def recover_conf(node):
             r"/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do "
             r"if test -e $conf.backup; then sudo cp -v $conf.backup $conf; fi; done"
         )
+
+
+PKG_TIMEOUT = 600
+# The download gets this much, plus 30 s for the kill, so it ends on the node before the SSH timeout.
+PKG_DOWNLOAD_DEADLINE = PKG_TIMEOUT - 60
+
+
+def download_then_install(node, pkg_cmd: Callable[[str], str]) -> None:
+    """Download the packages of a yum/apt-get command under a remote deadline, then install them from the cache.
+
+    The SCT timeout closes only the SSH channel: a package manager stalled on a mirror keeps running
+    and holds its lock, and the retries fail on it. The remote `timeout` ends the download first.
+    Killing a download is safe, and the retry resumes it. The install then can't stall on a mirror,
+    and fails right away if the cache is incomplete. See SCT-1426 and SCT-1456.
+
+    `pkg_cmd` builds the command from the download-only or cache-only flag: an apt_cmd() with a lock
+    wait is wrapped in ``bash -c '...'``, so the flag has to go inside it.
+    """
+    if node.distro.is_rhel_like:
+        prefix, download_only, cache_only = "", "--downloadonly", "-C"
+    else:
+        prefix, download_only, cache_only = "env DEBIAN_FRONTEND=noninteractive ", "--download-only", "--no-download"
+    node.remoter.sudo(
+        f"timeout --kill-after=30s {PKG_DOWNLOAD_DEADLINE} {prefix}{pkg_cmd(download_only)}",
+        retry=3,
+        timeout=PKG_TIMEOUT,
+    )
+    node.remoter.sudo(f"{prefix}{pkg_cmd(cache_only)}", retry=3, timeout=PKG_TIMEOUT)
 
 
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
@@ -495,17 +524,15 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
-                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
+                    download_then_install(node, lambda flag: rf"yum update {scylla_pkg_ver}\* -y {flag}")
                 else:
                     # A retry after the SSH timeout finds the previous apt-get still running on the
                     # node and holding the locks (SCT-839, SCT-1426): wait for it, log who holds
                     # the locks, and kill a stale holder instead of failing every retry on the lock.
-                    node.remoter.sudo(apt_cmd("update", **UPGRADE_APT_LOCK_KWARGS), retry=3, timeout=600)
-                    node.remoter.sudo(
-                        f"DEBIAN_FRONTEND=noninteractive "
-                        f"{apt_cmd(f'dist-upgrade {scylla_pkg_ver} -y', **UPGRADE_APT_LOCK_KWARGS)}",
-                        retry=3,
-                        timeout=600,
+                    node.remoter.sudo(apt_cmd("update", **UPGRADE_APT_LOCK_KWARGS), retry=3, timeout=PKG_TIMEOUT)
+                    download_then_install(
+                        node,
+                        lambda flag: apt_cmd(f"dist-upgrade {scylla_pkg_ver} -y {flag}", **UPGRADE_APT_LOCK_KWARGS),
                     )
 
         node.remoter.sudo(
@@ -657,22 +684,20 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             if node.distro.is_rhel_like:
                 node.remoter.run(r"sudo yum remove scylla\* -y", retry=3)
-                node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y", retry=3, timeout=600)
+                download_then_install(node, lambda flag: f"yum install {scylla_pkg_ver} -y {flag}")
             else:
                 # Same as the upgrade: a retry may find the previous apt-get still holding the locks.
                 node.remoter.sudo(apt_cmd(r"remove scylla\* -y"), retry=3)
-                node.remoter.sudo(
-                    f"DEBIAN_FRONTEND=noninteractive "
-                    f"{apt_cmd(f'install {scylla_pkg_ver} -y', **UPGRADE_APT_LOCK_KWARGS)}",
-                    retry=3,
-                    timeout=600,
+                download_then_install(
+                    node, lambda flag: apt_cmd(f"install {scylla_pkg_ver} -y {flag}", **UPGRADE_APT_LOCK_KWARGS)
                 )
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
         elif self.upgrade_rollback_mode == "minor_release":
-            node.remoter.run(r"sudo yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0], retry=3, timeout=600)
+            downgrade_ver = self.orig_ver.split("-")[0]
+            download_then_install(node, lambda flag: rf"yum downgrade scylla\*{downgrade_ver}-\* -y {flag}")
         else:
-            node.remoter.run(r"sudo yum downgrade scylla\* -y", retry=3, timeout=600)
+            download_then_install(node, lambda flag: rf"yum downgrade scylla\* -y {flag}")
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
 
@@ -893,6 +918,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         entire_write_cs_thread_pools = self._run_all_stress_cmds(
             [], params={"stress_cmd": write_stress_during_entire_test}
         )
+        entire_write_keepers = self._keep_alive(
+            write_stress_during_entire_test, entire_write_cs_thread_pools, self._relaunch_all_stress_cmds
+        )
 
         # Let to write_stress_during_entire_test complete the schema changes
         self.metric_has_data(
@@ -1012,6 +1040,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.actions_log.info("Starting read workload for 60m")
             stress_cmd_read_60m = self.params.get("stress_cmd_read_60m")
             read_60m_cs_thread_pools = self._run_all_stress_cmds([], params={"stress_cmd": stress_cmd_read_60m})
+            read_60m_keepers = self._keep_alive(
+                stress_cmd_read_60m, read_60m_cs_thread_pools, self._relaunch_all_stress_cmds
+            )
             self.actions_log.info("Waiting 60s for cassandra-stress to start before rollback")
             time.sleep(60)
 
@@ -1045,11 +1076,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.actions_log.info("Step6 - Verify stress results after upgrade ")
         self.actions_log.info("Waiting for stress threads to complete after upgrade")
         # wait for the 60m read workload to finish
-        for pool in read_60m_cs_thread_pools:
-            self.verify_stress_thread(pool)
-
-        for pool in entire_write_cs_thread_pools:
-            self.verify_stress_thread(pool)
+        finish_all(read_60m_keepers + entire_write_keepers)
 
         self.actions_log.info("Step7 - Upgrade sstables to latest supported version ")
         # figure out what is the last supported sstable version
@@ -1198,6 +1225,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.rollback_node(node, upgrade_sstables=self.params.get("upgrade_sstables"))
         node.check_node_health()
 
+    def _keep_alive(self, stress_cmds, pools: list, relaunch) -> list[StressKeepAlive]:
+        """Wrap the thread pools of a during-upgrade workload so that finish() waits for them.
+
+        With keep_stress_alive_during_upgrade, a command that ends early is rerun in timed passes
+        until finish(). This needs one pool per command, so with stress_multiplier the pools are
+        only verified: a rerun would multiply its command again.
+        """
+        commands = [stress_cmds] if isinstance(stress_cmds, str) else list(stress_cmds or [])
+        one_pool_per_command = (self.params.get("stress_multiplier") or 1) <= 1 and len(commands) == len(pools)
+        if self.params.get("keep_stress_alive_during_upgrade") and one_pool_per_command:
+            return [StressKeepAlive(self, command, [pool], relaunch) for command, pool in zip(commands, pools)]
+        return [StressKeepAlive(self, "", [pool], None) for pool in pools]
+
+    def _relaunch_all_stress_cmds(self, stress_cmd: str) -> list:
+        """Start one more pass of a stress command the way test_rolling_upgrade starts its workloads."""
+        return self._run_all_stress_cmds([], params={"stress_cmd": [stress_cmd]})
+
     def _run_stress_workload(
         self,
         workload_name: str,
@@ -1281,6 +1325,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         step = itertools_count(start=1)
         self._run_stress_workload("stress_before_upgrade", wait_for_finish=True)
         stress_thread_pools = self._run_stress_workload("stress_during_entire_upgrade", wait_for_finish=False)
+        keepers = self._keep_alive(
+            self.params.get("stress_during_entire_upgrade"),
+            stress_thread_pools,
+            lambda cmd: [self.run_stress_thread(stress_cmd=cmd)],
+        )
 
         # generate random order to upgrade
         nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
@@ -1308,8 +1357,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.validate_limited_voters_feature_enabled()
 
         self.actions_log.info("Waiting for stress_during_entire_upgrade to finish")
-        for stress_thread_pool in stress_thread_pools:
-            self.verify_stress_thread(stress_thread_pool)
+        finish_all(keepers)
 
         self._run_stress_workload("stress_after_cluster_upgrade", wait_for_finish=True)
 

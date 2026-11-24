@@ -77,7 +77,23 @@ def test_rollback_node_yum_downgrade_passes_retry_and_timeout():
 
     UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
 
-    assert mock.call(r"sudo yum downgrade scylla\* -y", retry=3, timeout=600) in fake_node.remoter.run.call_args_list
+    assert mock.call(r"yum downgrade scylla\* -y -C", retry=3, timeout=600) in fake_node.remoter.sudo.call_args_list
+
+
+def test_rollback_node_minor_release_fails_when_version_unchanged():
+    """The minor-release downgrade must not hide a rollback that left the node on the same version."""
+    fake_self = _build_fake_self(upgrade_rollback_mode=None, orig_ver="2026.1.5-0.20261101.abc", new_ver="2026.1.9")
+    fake_node = _build_fake_node(
+        is_rhel_like=True, orig_ver="2026.1.9-0.20261115.def", new_ver="2026.1.9-0.20261115.def"
+    )
+
+    with pytest.raises(AssertionError, match="didn't change"):
+        UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
+
+    assert (
+        mock.call(r"yum downgrade scylla\*2026.1.5-\* -y -C", retry=3, timeout=600)
+        in fake_node.remoter.sudo.call_args_list
+    )
 
 
 @pytest.mark.parametrize(
