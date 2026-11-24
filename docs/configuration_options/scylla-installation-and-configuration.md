@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**46 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -287,6 +287,28 @@ enable peer verification for encrypted communication
 **default:** True
 
 **type:** bool
+
+
+<a id="perftune_irq_on_all_cpus"></a>
+
+## **perftune_irq_on_all_cpus** / SCT_PERFTUNE_IRQ_ON_ALL_CPUS
+
+Put NIC IRQs on every CPU and run Scylla on every CPU, instead of the IRQ cores perftune<br>reserves by default. Sets irq_cpu_mask to cpu_mask in /etc/scylla.d/perftune.yaml and the Scylla cpuset<br>to all CPUs, before Scylla starts. For testing NICs with a queue per CPU, e.g. gVNIC on GCE.
+
+**default:** False
+
+**type:** bool
+
+
+<a id="perftune_script_url"></a>
+
+## **perftune_script_url** / SCT_PERFTUNE_SCRIPT_URL
+
+URL of a perftune.py to install on DB nodes over the packaged one, before Scylla starts.<br>For testing an unreleased seastar perftune change, e.g. the raw file of a seastar pull request branch.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="prepare_saslauthd"></a>

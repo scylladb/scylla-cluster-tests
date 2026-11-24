@@ -228,6 +228,7 @@ from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.nvme_diagnostics import collect_all_smart_logs, install_nvme_cli, store_baseline_smart_logs
 from sdcm.utils.object_storage import backup_bucket_region, object_storage_endpoints
+from sdcm.utils.perftune_override import apply_perftune_overrides
 from sdcm.utils.raft import get_raft_mode
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.replication_strategy_utils import DataCenterTopologyRfControl, ReplicationStrategy
@@ -7200,6 +7201,13 @@ class BaseScyllaCluster:
         node.stop_scylla_server(verify_down=False)
         node.clean_scylla_data()
         node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
+
+        if self.params.get("perftune_script_url") or self.params.get("perftune_irq_on_all_cpus"):
+            apply_perftune_overrides(
+                node,
+                script_url=self.params.get("perftune_script_url"),
+                irq_on_all_cpus=self.params.get("perftune_irq_on_all_cpus"),
+            )
 
         if network_interfaces_count(self.params) > 1:
             node.run_scylla_sysconfig_setup()

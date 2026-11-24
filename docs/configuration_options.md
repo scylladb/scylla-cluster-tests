@@ -33,7 +33,7 @@ concerns first, then one page per backend, then one per test type.
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 77 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 46 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 17 | The monitoring stack, event severities, Argus reporting and email reports. |
@@ -414,6 +414,8 @@ concerns first, then one page per backend, then one per test type.
 | [`perf_simple_query_extra_command`](configuration_options/performance-regression-tests.md#perf_simple_query_extra_command) | `SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_keyspace`](configuration_options/performance-regression-tests.md#perf_stress_keyspace) | `SCT_PERF_STRESS_KEYSPACE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_table`](configuration_options/performance-regression-tests.md#perf_stress_table) | `SCT_PERF_STRESS_TABLE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perftune_irq_on_all_cpus`](configuration_options/scylla-installation-and-configuration.md#perftune_irq_on_all_cpus) | `SCT_PERFTUNE_IRQ_ON_ALL_CPUS` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`perftune_script_url`](configuration_options/scylla-installation-and-configuration.md#perftune_script_url) | `SCT_PERFTUNE_SCRIPT_URL` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`post_behavior_db_nodes`](configuration_options/logs-diagnostics-and-teardown.md#post_behavior_db_nodes) | `SCT_POST_BEHAVIOR_DB_NODES` | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) |
 | [`post_behavior_dedicated_host`](configuration_options/logs-diagnostics-and-teardown.md#post_behavior_dedicated_host) | `SCT_POST_BEHAVIOR_DEDICATED_HOST` | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) |
 | [`post_behavior_emr_cluster`](configuration_options/logs-diagnostics-and-teardown.md#post_behavior_emr_cluster) | `SCT_POST_BEHAVIOR_EMR_CLUSTER` | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) |
