@@ -175,22 +175,14 @@ def call(Map params, boolean localAgent = false) {
     if (!runnerIp && !localAgent) {
         error("SCT runner was not created; minicloud runs only on an SCT runner or the lab KVM agent")
     }
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-
+    // SCT_MINICLOUD_REGIONS (from the `region` param, see `jenkins_param` of minicloud_regions) narrows region
+    // preparation to the one the test uses; unset prepares every SCT-supported region, about two seconds each.
+    // GCE backends never prepare regions at all.
+    // SCT_MINICLOUD_DOCKER_IMAGE is exported build-wide by exportEnv - see the comment there
+    // for why it cannot live in this sh step alone.
+    withEnv(pipelineEnv(params: params)) {
     sh """#!/bin/bash
     set -xe
-
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_CONFIG_FILES=${test_config}
-
-    # SCT_MINICLOUD_DOCKER_IMAGE is exported build-wide by exportEnv - see the comment there
-    # for why it cannot live in this sh step alone.
-
-    # Narrows region preparation to the one the test uses; unset prepares every SCT-supported
-    # region, about two seconds each. GCE backends never prepare regions at all.
-    if [[ -n "${params.region ?: ''}" ]] ; then
-        export SCT_MINICLOUD_REGIONS="${params.region}"
-    fi
 
     RUNNER_IP="${runnerIp}"
     if [[ -n "\${RUNNER_IP}" ]] ; then
@@ -201,4 +193,5 @@ def call(Map params, boolean localAgent = false) {
         ./scripts/minicloud-firewalld-zone.sh
     fi
     """
+    }
 }

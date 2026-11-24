@@ -17,6 +17,7 @@ def call(Map params, RunWrapper currentBuild){
 
     // Tears the SCT runner down through hydra; it must not hold the builder if it hangs
     timeout(time: 30, unit: 'MINUTES') {
+        withEnv(pipelineEnv(params: params)) {
         sh """#!/bin/bash
 
         set -xe
@@ -47,5 +48,6 @@ def call(Map params, RunWrapper currentBuild){
 
         echo "Finished cleaning runner instances."
         """
+        }
     }
 }

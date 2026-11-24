@@ -37,18 +37,19 @@ def call(Map params, boolean build_image){
     // The config goes in through SCT_CONFIG_FILES, like in every other step: hydra evals the
     // command line, so a JSON list of files passed as a positional argument is split on its
     // spaces and `get-db-arch` fails with "Got unexpected extra argument".
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def needArm = false
     def needX86 = false
     try {
-        def dbArch = sh(
-            returnStdout: true,
-            script: """#!/bin/bash
-                set -o pipefail
-                export SCT_CONFIG_FILES=${test_config}
-                ./docker/env/hydra.sh get-db-arch -b ${params.backend}
-            """
-        ).trim()
+        def dbArch
+        withEnv(pipelineEnv(params: params)) {
+            dbArch = sh(
+                returnStdout: true,
+                script: """#!/bin/bash
+                    set -o pipefail
+                    ./docker/env/hydra.sh get-db-arch -b ${params.backend}
+                """
+            ).trim()
+        }
         // Extract the architecture value from output (hydra prints lots of noise before it)
         def archLine = dbArch.split('\n').findAll { it.trim() in ['arm64', 'x86_64'] }.last()
         dbArch = archLine.trim()
