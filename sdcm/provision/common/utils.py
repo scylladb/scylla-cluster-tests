@@ -132,7 +132,7 @@ EOF
         chmod 0755 /etc/vector
         chmod 0644 /etc/vector/vector.yaml
 
-        systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
+        systemctl restart vector || echo "WARNING: vector.service restart failed, SCT checks the service after this script"
     """).format(host=host, port=port)
 
 
