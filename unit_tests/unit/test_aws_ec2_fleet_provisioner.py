@@ -26,6 +26,7 @@ from sdcm.provision.aws.constants import (
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams, AWSPlacementInfo
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provisioner import ProvisionParameters
+from sdcm.provision.provisioner import ProvisionError
 
 
 def make_instance_parameters(instance_type: str) -> AWSInstanceParams:
@@ -352,6 +353,28 @@ def test_fleet_instances_are_terminated_when_tagging_them_fails(provision_parame
         patch("sdcm.provision.aws.provisioner.set_tags_on_instances", side_effect=RuntimeError("CreateTags failed")),
         patch("sdcm.provision.aws.provisioner.terminate_instances_by_id") as terminate,
         pytest.raises(RuntimeError, match="CreateTags failed"),
+    ):
+        provisioner._execute_ec2_fleet_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large")],
+            count=2,
+            tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+        )
+
+    terminate.assert_called_once_with(region_name="us-east-1", instance_ids=["i-1", "i-2"])
+
+
+def test_fleet_instances_are_terminated_when_their_tags_cannot_be_set(provision_parameters, fleet_mocks):
+    """`set_tags_on_instances` reports a persistent failure by returning False, not by raising.
+
+    An instance it couldn't retag keeps the first node's tags, NodeIndex included.
+    """
+    fleet_mocks["create_fleet"].return_value = ("fleet-1", ["i-1", "i-2"], [])
+    provisioner = AWSInstanceProvisioner()
+    with (
+        patch("sdcm.provision.aws.provisioner.set_tags_on_instances", side_effect=[True, False]),
+        patch("sdcm.provision.aws.provisioner.terminate_instances_by_id") as terminate,
+        pytest.raises(ProvisionError, match="Failed to tag EC2 Fleet instance i-2"),
     ):
         provisioner._execute_ec2_fleet_instance_request(
             provision_parameters=provision_parameters,

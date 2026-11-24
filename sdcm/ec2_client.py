@@ -12,7 +12,7 @@ from mypy_boto3_ec2.type_defs import TagSpecificationTypeDef
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.provision.aws.utils import provision_ec2_fleet, split_instance_types
+from sdcm.provision.aws.utils import provision_ec2_fleet, split_instance_types, terminate_instances_by_id
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import list_placement_groups_aws
@@ -288,20 +288,26 @@ class EC2ClientWrapper:
     ):
         """Create `count` spot instances with one all-or-nothing EC2 Fleet request.
 
-        :param instance_type: preferred instance type
-        :param image_id: image id
-        :param region_name: availability zone name
-        :param network_if: network interfaces
-        :param key_pair: user credentials
-        :param user_data: user data to be passed to instances
-        :param count: number of instances to launch
-        :param block_device_mappings:
-        :param aws_instance_profile: instance profile granting access to S3 objects
-        :param placement_group_name: to create instances in the placement group
-        :param tag_specifications: tags to be added to the instances
-        :param alternative_instance_types: interchangeable instance types EC2 Fleet may use, at a lower priority,
-            when the preferred type's spot pool can't take the whole request
-        :return: list of EC2.Instance objects
+        Args:
+            instance_type: Preferred instance type.
+            image_id: AMI id.
+            region_name: Availability zone name.
+            network_if: Network interfaces.
+            key_pair: Name of the key pair to log in with.
+            user_data: User data passed to the instances.
+            count: Number of instances to launch.
+            block_device_mappings: Block device mappings of the instances.
+            aws_instance_profile: Instance profile granting access to S3 objects.
+            placement_group_name: Placement group to create the instances in.
+            tag_specifications: Tags added to the instances.
+            alternative_instance_types: Interchangeable instance types EC2 Fleet may use, at a lower priority,
+                when the preferred type's spot pool can't take the whole request.
+
+        Returns:
+            The launched EC2.Instance objects.
+
+        Raises:
+            CreateSpotFleetError: If EC2 Fleet can't launch all `count` instances.
         """
         assert tag_specifications, "Tag specifications is a must for all instances creation api"
         instance_tags = tag_specifications[0]["Tags"]
@@ -342,9 +348,14 @@ class EC2ClientWrapper:
             )
 
         LOGGER.info("Spot instances: %s", instance_ids)
-        for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, {"Name": f"spot_fleet_{instance_id}_{ind}"})
-        return [self.get_instance(instance_id) for instance_id in instance_ids]
+        try:
+            for ind, instance_id in enumerate(instance_ids):
+                self.add_tags(instance_id, {"Name": f"spot_fleet_{instance_id}_{ind}"})
+            return [self.get_instance(instance_id) for instance_id in instance_ids]
+        except Exception:
+            # The caller never sees these instances, so it can neither adopt nor terminate them.
+            terminate_instances_by_id(region_name=self.region_name, instance_ids=instance_ids)
+            raise
 
     def terminate_instances(self, instance_ids):
         """Terminate instances"""

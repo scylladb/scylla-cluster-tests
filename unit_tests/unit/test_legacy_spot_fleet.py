@@ -181,6 +181,26 @@ def test_create_spot_fleet_launches_through_ec2_fleet(wrapper):
     assert parameters["TagSpecifications"] == [{"ResourceType": "instance", "Tags": tags}]
 
 
+def test_create_spot_fleet_terminates_its_instances_when_tagging_them_fails(wrapper):
+    """The caller never gets the instances, so it could neither adopt nor terminate them."""
+    with (
+        patch("sdcm.ec2_client.provision_ec2_fleet", return_value=["i-1", "i-2"]),
+        patch.object(EC2ClientWrapper, "add_tags", side_effect=[None, RuntimeError("CreateTags failed")]),
+        patch("sdcm.ec2_client.terminate_instances_by_id") as terminate,
+        pytest.raises(RuntimeError, match="CreateTags failed"),
+    ):
+        wrapper.create_spot_fleet(
+            instance_type="i7i.large",
+            image_id="ami-1",
+            region_name="eu-west-1a",
+            network_if=[],
+            count=2,
+            tag_specifications=[{"Tags": [{"Key": "TestId", "Value": "t-1"}]}],
+        )
+
+    terminate.assert_called_once_with(region_name="eu-west-1", instance_ids=["i-1", "i-2"])
+
+
 def test_create_spot_fleet_raises_when_aws_cannot_launch_them_all(wrapper):
     with (
         patch("sdcm.ec2_client.provision_ec2_fleet", return_value=[]),

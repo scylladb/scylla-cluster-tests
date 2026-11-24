@@ -38,6 +38,7 @@ from sdcm.provision.aws.utils import (
     wait_for_provision_request_done,
 )
 from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters, TagsType
+from sdcm.provision.provisioner import ProvisionError
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 
 LOGGER = logging.getLogger(__name__)
@@ -257,11 +258,13 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         try:
             for ind, instance_id in enumerate(instance_ids):
                 instance_tags = tags.pop()
-                set_tags_on_instances(
+                # Every instance starts with the first node's tags; one left with them would duplicate its NodeIndex.
+                if not set_tags_on_instances(
                     region_name=region_name,
                     instance_ids=[instance_id],
                     tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
-                )
+                ):
+                    raise ProvisionError(f"Failed to tag EC2 Fleet instance {instance_id} in {region_name}")
             return [
                 find_instance_by_id(region_name=region_name, instance_id=instance_id) for instance_id in instance_ids
             ]
