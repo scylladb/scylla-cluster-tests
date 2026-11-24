@@ -249,10 +249,13 @@ class IOPropertiesResultsTable(StaticGenericResultTable):
 
 
 class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
-    def __init__(self, cluster_backend: str, instance_type: str, limit_pct: int):
+    def __init__(self, cluster_backend: str, instance_type: str, limit_pct: int | None):
+        """A limit_pct of None reports the deviation without validation rules, so it never fails the run."""
         super().__init__(
             name=f"{cluster_backend} - {instance_type} - Disk Performance Percent deviation",
-            validation_rules={column.name: ValidationRule(fixed_limit=limit_pct) for column in self.Meta.Columns},
+            validation_rules={}
+            if limit_pct is None
+            else {column.name: ValidationRule(fixed_limit=limit_pct) for column in self.Meta.Columns},
         )
 
     class Meta:
