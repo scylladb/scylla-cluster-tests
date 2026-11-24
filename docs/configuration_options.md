@@ -28,14 +28,14 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-541 options across 29 groups.
+545 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 77 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 73 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 17 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
@@ -52,10 +52,10 @@ concerns first, then one page per backend, then one per test type.
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
-| [Minicloud](configuration_options/minicloud.md) | 23 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
+| [Minicloud](configuration_options/minicloud.md) | 25 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 14 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
-| [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
+| [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
 | [Jepsen tests](configuration_options/jepsen-tests.md) | 4 | Jepsen consistency test runs. |
@@ -156,6 +156,7 @@ concerns first, then one page per backend, then one per test type.
 | [`compaction_strategy`](configuration_options/longevity-tests.md#compaction_strategy) | `SCT_COMPACTION_STRATEGY` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`config_files`](configuration_options/general-and-provisioning.md#config_files) | `SCT_CONFIG_FILES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`cs_debug`](configuration_options/stress-commands-and-load-generation.md#cs_debug) | `SCT_CS_DEBUG` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
+| [`cs_docker_memory_limit_percent`](configuration_options/stress-commands-and-load-generation.md#cs_docker_memory_limit_percent) | `SCT_CS_DOCKER_MEMORY_LIMIT_PERCENT` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_duration`](configuration_options/stress-commands-and-load-generation.md#cs_duration) | `SCT_CS_DURATION` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_extra_jvm_opts`](configuration_options/stress-commands-and-load-generation.md#cs_extra_jvm_opts) | `SCT_CS_EXTRA_JVM_OPTS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_populating_distribution`](configuration_options/stress-commands-and-load-generation.md#cs_populating_distribution) | `SCT_CS_POPULATING_DISTRIBUTION` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
@@ -305,6 +306,7 @@ concerns first, then one page per backend, then one per test type.
 | [`k8s_use_chaos_mesh`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_use_chaos_mesh) | `SCT_K8S_USE_CHAOS_MESH` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`kafka_backend`](configuration_options/kafka-cdc-connectors.md#kafka_backend) | `SCT_KAFKA_BACKEND` | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) |
 | [`kafka_connectors`](configuration_options/kafka-cdc-connectors.md#kafka_connectors) | `SCT_KAFKA_CONNECTORS` | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) |
+| [`keep_stress_alive_during_upgrade`](configuration_options/upgrade-tests.md#keep_stress_alive_during_upgrade) | `SCT_KEEP_STRESS_ALIVE_DURING_UPGRADE` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`keyspace_num`](configuration_options/stress-commands-and-load-generation.md#keyspace_num) | `SCT_KEYSPACE_NUM` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`keystore_backend`](configuration_options/general-and-provisioning.md#keystore_backend) | `SCT_KEYSTORE_BACKEND` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`keystore_sm_prefix`](configuration_options/general-and-provisioning.md#keystore_sm_prefix) | `SCT_KEYSTORE_SM_PREFIX` | [General and provisioning](configuration_options/general-and-provisioning.md) |
@@ -341,6 +343,8 @@ concerns first, then one page per backend, then one per test type.
 | [`migrator_target_keyspace`](configuration_options/spark-migrator-cassandra-to-scylla.md#migrator_target_keyspace) | `SCT_MIGRATOR_TARGET_KEYSPACE` | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) |
 | [`migrator_target_table`](configuration_options/spark-migrator-cassandra-to-scylla.md#migrator_target_table) | `SCT_MIGRATOR_TARGET_TABLE` | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) |
 | [`mini_k8s_version`](configuration_options/kubernetes-backends-eks-gke-kind.md#mini_k8s_version) | `SCT_MINI_K8S_VERSION` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
+| [`minicloud_auto_memory_max`](configuration_options/minicloud.md#minicloud_auto_memory_max) | `SCT_MINICLOUD_AUTO_MEMORY_MAX` | [Minicloud](configuration_options/minicloud.md) |
+| [`minicloud_auto_vcpus_max`](configuration_options/minicloud.md#minicloud_auto_vcpus_max) | `SCT_MINICLOUD_AUTO_VCPUS_MAX` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_azure_scratch_resource_group`](configuration_options/minicloud.md#minicloud_azure_scratch_resource_group) | `SCT_MINICLOUD_AZURE_SCRATCH_RESOURCE_GROUP` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_cpus`](configuration_options/minicloud.md#minicloud_container_cpus) | `SCT_MINICLOUD_CONTAINER_CPUS` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_memory`](configuration_options/minicloud.md#minicloud_container_memory) | `SCT_MINICLOUD_CONTAINER_MEMORY` | [Minicloud](configuration_options/minicloud.md) |

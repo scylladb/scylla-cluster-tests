@@ -485,6 +485,10 @@ export SCT_GCE_PROJECT="<new-project-id>"
 ./sct.py prepare-regions -c gce -r us-east1
 ```
 
+Resources that exist once for all of SCT, such as the `scylla-sct-coredumps` bucket that Scylla
+coredumps go to, are set up by `./sct.py prepare-global-resources`. A new project doesn't need it;
+run it only when the global resources change. It is safe to re-run.
+
 ---
 
 ## Step 12: Create Runner Image and Jenkins Worker

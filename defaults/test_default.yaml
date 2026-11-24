@@ -179,6 +179,7 @@ enable_tablets_on_upgrade: false
 enable_views_with_tablets_on_upgrade: false
 upgrade_node_system: true
 enable_truncate_checks_on_node_upgrade: true
+keep_stress_alive_during_upgrade: false
 
 stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"
 
@@ -443,6 +444,10 @@ minicloud_lightweight_memory_loader: '2GiB'
 minicloud_lightweight_memory_monitor: '2GiB'
 minicloud_lightweight_vcpus_loader: 1
 minicloud_lightweight_vcpus_monitor: 1
+# largest db guest memory that `auto` sizing picks; it steps down in 1GiB to the per-shard floor
+minicloud_auto_memory_max: '6GiB'
+# largest db guest vCPU count that `auto` sizing picks; it steps down to 2 to fit the host threads
+minicloud_auto_vcpus_max: 2
 # Extra OS memory for scylla-server via --reserve-memory.
 # By default, Scylla keeps about ~1.5 GiB on guests below ~22 GiB RAM, which can be too little
 # for sshd and SCT tools. Empty means do not pass this option (tests opt in).

@@ -42,6 +42,9 @@ class MockRemoter:
     def is_up(self, timeout=None):
         return True
 
+    def send_files(self, src, dst, **kwargs):
+        return True
+
     def _process_response(self, response):
         if isinstance(response, Result):
             return response

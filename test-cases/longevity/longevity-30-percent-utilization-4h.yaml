@@ -14,9 +14,6 @@
 #     - Migration (killed when the migration ends; the 600m duration only has to outlast it,
 #       a run with three node replaces took ~6h)
 #     - Post-migration benchmark (60m)
-#
-# Verification (stress_read_cmd):
-#   After the post-migration benchmark, read every prepared row at CL=QUORUM.
 
 test_duration: 840
 
@@ -94,22 +91,6 @@ stress_cmd:
     -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
     -mode cql3 native
     -rate threads=50 throttle=30000/s
-    -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
-    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
-    -log interval=5
-
-stress_read_cmd:
-  - >-
-    cassandra-stress read cl=QUORUM n={{ rows_per_cmd }}
-    -mode cql3 native
-    -rate threads=100
-    -pop seq=1..{{ rows_per_cmd }}
-    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
-    -log interval=5
-  - >-
-    cassandra-stress read cl=QUORUM n={{ rows_per_cmd }}
-    -mode cql3 native
-    -rate threads=100
     -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
     -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
     -log interval=5

@@ -110,14 +110,23 @@ uv run sct.py create-runner-image -c oci -r us-ashburn-1 -z a
 
 **Entry:** the user approved Phase 4.
 
-1. Bump `VERSION` in `AwsBuilder` and `AwsFipsCiBuilder` (`vN-fibs`), `GceBuilder` and `OciBuilder`.
+1. Check that no other PR is bumping the builders:
+
+   ```bash
+   gh pr list -R scylladb/scylla-cluster-tests --state open --label "New Builders Version"
+   ```
+
+   If one is listed, stop and tell the user. Wait for it to merge, rebase on it, and continue from
+   its versions: the next free version is one above the highest of master and that PR.
+   Add the label to your PR when you open it (`gh pr edit <N> --add-label "New Builders Version"`).
+2. Bump `VERSION` in `AwsBuilder` and `AwsFipsCiBuilder` (`vN-fibs`), `GceBuilder` and `OciBuilder`.
    `AwsCiBuilder` takes its version from `AwsBuilder`.
-2. Change every builder label in `vars/getJenkinsLabels.groovy` to the new versions. Labels the
+3. Change every builder label in `vars/getJenkinsLabels.groovy` to the new versions. Labels the
    builders create:
    - AWS: `aws-sct-builders-<region>-<version>-asg`, FIPS `aws-sct-builders-us-east-1-<version>-CI-FIPS`
    - GCE: `gcp-<project>-builders-<region>-template-<version>` (the groovy builds `gcp-<project>` from `gce_project`)
    - OCI: `oci-sct-builders-<region>-<version>`
-3. Move the pinned labels too. The PR job, the hydra utility jobs and the trigger matrix ask for
+4. Move the pinned labels too. The PR job, the hydra utility jobs and the trigger matrix ask for
    `aws-sct-builders-eu-west-1-<version>-CI` (made by `AwsCiBuilder`) directly, and freestyle job
    XMLs set `<assignedNode>`, all outside `getJenkinsLabels.groovy`, so neither the groovy map nor
    the Phase 6 label check sees them:
@@ -129,8 +138,8 @@ uv run sct.py create-runner-image -c oci -r us-ashburn-1 -z a
    Move every hit to the new version. Jenkins doesn't reload a job XML from the repository: after
    Phase 6, change that job's live config in Jenkins too.
 
-4. Commit the builder versions and all the labels together.
-5. Phase 6 must finish on every cloud before this commit merges. Master jobs ask for the new labels
+5. Commit the builder versions and all the labels together.
+6. Phase 6 must finish on every cloud before this commit merges. Master jobs ask for the new labels
    as soon as it merges, and a label without a cloud or template makes them wait forever.
 
 **Exit:** one commit with the builder versions, the groovy labels and the pinned labels.
@@ -139,9 +148,10 @@ uv run sct.py create-runner-image -c oci -r us-ashburn-1 -z a
 
 **Entry:** Phase 5 is pushed and the user approved changing Jenkins.
 
-The PR job asks for the new `-CI` label of Phase 5 step 3, so it stays queued until this phase
+The PR job asks for the new `-CI` label of Phase 5 step 4, so it stays queued until this phase
 creates the AWS CI builder. That wait is expected: the job starts by itself once the builder
-exists, and doubles as the check for the CI label.
+exists, and doubles as the check for the CI label. Push anyway, so the `New Builders Version` PR is
+visible to anyone else about to bump.
 
 ```bash
 uv run sct.py configure-jenkins-builders -c aws
@@ -171,7 +181,7 @@ image from Phase 3 first.
 
    It exits 1 and lists the labels of `vars/getJenkinsLabels.groovy` that nothing serves, which
    also catches a typo in a label. Check a release branch's copy with `--groovy-file`. It doesn't
-   read the pinned labels of Phase 5 step 3: the queued PR job picking up a builder confirms
+   read the pinned labels of Phase 5 step 4: the queued PR job picking up a builder confirms
    the CI label, and the next run of each job with an XML pin confirms its label.
 
 **Exit:** the new clouds and templates exist in Jenkins next to the old ones,

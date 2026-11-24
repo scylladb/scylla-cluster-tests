@@ -12,6 +12,7 @@ from sdcm.utils.minicloud.preflight import (
     container_mem_in_use_gib,
     db_guest_count,
     host_available_memory_gib,
+    nemesis_growth_guests,
     scylla_reserve_memory,
 )
 from unit_tests.unit.minicloud.conftest import _meminfo_path_patch
@@ -255,6 +256,34 @@ def test_check_host_memory_ignores_a_target_below_the_initial_size(tmp_path):
     with _meminfo_path_patch(16 * 1024 * 1024):
         with pytest.raises(MinicloudError, match="6 guest.*32.0GiB needed"):
             manager._check_host_memory(params)
+
+
+def test_nemesis_growth_skips_a_selection_without_disruptive_nemeses():
+    params = {
+        "nemesis_class_name": ["SisyphusMonkey"],
+        "nemesis_selector": ["not disruptive"],
+        "nemesis_add_node_cnt": 3,
+    }
+    assert nemesis_growth_guests(params) == 0
+    assert nemesis_growth_guests({"nemesis_class_name": ["NoOpMonkey"], "nemesis_add_node_cnt": 3}) == 0
+
+
+def test_check_host_memory_counts_nemesis_growth(tmp_path):
+    # 6 x 4 + 2 + 2 + (2 + 8) = 38GiB, where the 3 db guests alone fit
+    config = MinicloudConfig(
+        state_dir=str(tmp_path), lightweight=True, lightweight_memory_loader="2GiB", lightweight_memory_monitor="2GiB"
+    )
+    params = {
+        "n_db_nodes": 3,
+        "n_loaders": 1,
+        "n_monitor_nodes": 1,
+        "nemesis_class_name": ["SisyphusMonkey"],
+        "nemesis_selector": ["disruptive"],
+        "nemesis_add_node_cnt": 3,
+    }
+    with _meminfo_path_patch(30 * 1024 * 1024):
+        with pytest.raises(MinicloudError, match=r"8 guest.*38\.0GiB needed"):
+            MinicloudManager(config=config)._check_host_memory(params)
 
 
 def test_check_host_memory_measures_against_container_cap(tmp_path):
