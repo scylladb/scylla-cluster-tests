@@ -2,13 +2,15 @@ from __future__ import absolute_import, annotations
 
 import logging
 import threading
+import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import wraps
 from typing import Callable, Iterable, List
 
 LOGGER = logging.getLogger("utils")
+WAIT_STEP = 10  # seconds
 
 
 class ParallelObject:
@@ -91,7 +93,7 @@ class ParallelObject:
         time_out = self.timeout
         for future, target_obj in futures:
             try:
-                result = future.result(time_out)
+                result = self._wait_result(future, time_out)
             except FuturesTimeoutError as exception:
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
                 time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
@@ -109,6 +111,24 @@ class ParallelObject:
         if runs_that_finished_with_exception:
             raise ParallelObjectException(results=results)
         return results
+
+    @staticmethod
+    def _wait_result(future: Future, timeout: float | None):
+        """future.result(timeout), waited for in steps of WAIT_STEP.
+
+        A thread gets an exception raised in it from another thread, like KillNemesis, only between two steps:
+        a single wait runs in C until the result is ready.
+        """
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            step = WAIT_STEP if deadline is None else min(WAIT_STEP, max(deadline - time.monotonic(), 0))
+            try:
+                return future.result(step)
+            except FuturesTimeoutError:
+                if future.done():  # the object raised TimeoutError itself, or just ended
+                    return future.result()
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise
 
     def call_objects(self, ignore_exceptions: bool = False) -> list["ParallelObjectResult"]:
         """
