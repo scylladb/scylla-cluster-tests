@@ -157,3 +157,17 @@ def test_non_preferred_families_rank_last_and_only_on_request(catalog):
 
     assert [inst.instance_type for inst in preferred] == ["i8g.xlarge", "i8ge.xlarge"]
     assert [inst.instance_type for inst in everything] == ["i8g.xlarge", "i8ge.xlarge", "im4gn.xlarge"]
+
+
+def test_interruption_ranking_keeps_non_preferred_families_last(catalog, monkeypatch):
+    """A less-interrupted type outside the preferred families must not jump ahead of the preferred ones."""
+    catalog.instances.append(_inst("im4gn.xlarge", "im4gn", 4, 0.30))
+    monkeypatch.setattr(
+        interruption,
+        "aws_spot_buckets",
+        lambda: {"us-east-1": {"i8g.xlarge": 4, "i8ge.xlarge": 1, "im4gn.xlarge": 0}},
+    )
+
+    ranked = rank_instances(catalog, "db", "aws", {"vcpu": 4}, spot_region="us-east-1", preferred_families_only=False)
+
+    assert [inst.instance_type for inst in ranked] == ["i8ge.xlarge", "i8g.xlarge", "im4gn.xlarge"]

@@ -566,13 +566,17 @@ def _rank_candidates(
     # A stable sort, so equal keys keep catalog order - the same tie-break `min()` gives the single pick.
     ranked = sorted(candidates, key=sort_key)
     # Only AWS has interruption data. Spot keeps the normal pick's size (candidates already share one arch), and
-    # moves the least-interrupted of its same-size siblings first.
+    # moves the least-interrupted of its same-size siblings first - preferred families still ahead of the rest.
     spot_buckets = interruption.aws_spot_buckets().get(spot_region, {}) if spot_region and cloud == "aws" else {}
     if spot_buckets:
         size = ranked[0].vcpus
         siblings = sorted(
             (inst for inst in ranked if inst.vcpus == size),
-            key=lambda inst: (spot_buckets.get(inst.instance_type, _UNKNOWN_BUCKET), sort_key(inst)),
+            key=lambda inst: (
+                inst.family not in family_rank,
+                spot_buckets.get(inst.instance_type, _UNKNOWN_BUCKET),
+                sort_key(inst),
+            ),
         )
         ranked = siblings + [inst for inst in ranked if inst.vcpus != size]
     return ranked, parsed

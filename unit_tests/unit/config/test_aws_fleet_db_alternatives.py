@@ -71,9 +71,10 @@ def test_spot_alternatives_follow_the_interruption_ranking(aws_env):
     )
     conf = SCTConfiguration()
 
-    # the same ranking picks instance_type_db and orders what is left behind it
+    # the same ranking picks instance_type_db and orders what is left behind it; i3en is outside the preferred
+    # families, so it stays last although it is as rarely interrupted as the pick
     assert conf.get("instance_type_db") == "i7ie.large"
-    assert conf.get("aws_fleet_db_alternative_types") == ["i3en.large", "i4i.large", "i7i.large"]
+    assert conf.get("aws_fleet_db_alternative_types") == ["i4i.large", "i7i.large", "i3en.large"]
 
 
 def test_no_alternatives_unless_requested(aws_env):
