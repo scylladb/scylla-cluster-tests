@@ -9,7 +9,7 @@ from urllib.parse import unquote
 import pytest
 
 import performance_regression_gradual_grow_throughput as gradual_grow_module
-from sdcm.utils.rate_search import RateSearch, RateSearchConfig, baseline_for, in_flight_for
+from sdcm.utils.rate_search import RateRepeat, RateSearch, RateSearchConfig, baseline_for, in_flight_for
 
 LATTE_READ = (
     "latte run --function read --consistency QUORUM --duration $duration "
@@ -259,6 +259,12 @@ def test_in_flight_for(rate, p99_limit_ms, expected):
             id="workload overrides default key by key",
         ),
         pytest.param(
+            {"default": {"repeat_runs": 2}, "read": {"max_repeat_steps": 4}},
+            "read",
+            RateSearchConfig(repeat_runs=2, max_repeat_steps=4),
+            id="repeat runs",
+        ),
+        pytest.param(
             {"default": {}, "read": {"max_busiest_shard_util_pct": 98.5}},
             "read",
             RateSearchConfig(max_busiest_shard_util_pct=98.5),
@@ -294,6 +300,8 @@ def _test_instance(run_gradual_step, threads=32, stress_cmd=LATTE_READ):
     )
     instance.configured_step_params = lambda workload_type: test_class.configured_step_params(instance, workload_type)
     instance.search_step_params = lambda **kwargs: test_class.search_step_params(instance, **kwargs)
+    instance.run_search_step = lambda *args: test_class.run_search_step(instance, *args)
+    instance.repeat_best_rate = lambda *args: test_class.repeat_best_rate(instance, *args)
     workload = SimpleNamespace(workload_type="read", cs_cmd_tmpl=[stress_cmd] * 4)
     return test_class, instance, workload
 
@@ -637,3 +645,163 @@ def test_fixed_steps_are_not_required_when_the_search_is_set(helper):
     instance = SimpleNamespace(params={"perf_best_throughput_search": {"default": {}}}, db_cluster=None)
     instance.rate_search_config = lambda workload_type: test_class.rate_search_config(instance, workload_type)
     assert getattr(test_class, helper)(instance, "read") == []
+
+
+def _repeat(repeat: RateRepeat, outcomes) -> list[int]:
+    """Drive the repeat runs with `outcomes`, a list of (passed, throughput) in run order; return the rates run."""
+    ran, outcomes = [], iter(outcomes)
+    while (rate := repeat.next_rate()) is not None:
+        ran.append(rate)
+        passed, throughput = next(outcomes)
+        repeat.record(rate=rate, passed=passed, throughput=throughput)
+    return ran
+
+
+def test_repeat_confirms_the_best_rate_when_every_run_passes():
+    repeat = RateRepeat([1287562, 1425516, 1379531], repeat_runs=2, max_steps=6)
+    assert _repeat(repeat, [(True, 1425000)] * 2) == [1425516, 1425516]
+    assert repeat.confirmed_rate == 1425516
+    assert repeat.stop_kind is None
+
+
+def test_repeat_steps_down_to_the_next_lower_passing_rate_when_a_run_fails():
+    repeat = RateRepeat([1287562, 1425516, 1379531], repeat_runs=2, max_steps=6)
+    # 1,425,516 passes its first repeat and fails the second; 1,379,531 passes both.
+    ran = _repeat(repeat, [(True, 1425000), (False, 1400000), (True, 1379000), (True, 1379000)])
+    assert ran == [1425516, 1425516, 1379531, 1379531]
+    assert repeat.confirmed_rate == 1379531
+
+
+def test_repeat_is_not_repeatable_when_every_passing_rate_fails_a_run():
+    repeat = RateRepeat([900000, 800000], repeat_runs=2, max_steps=6)
+    assert _repeat(repeat, [(False, 890000), (True, 800000), (False, 790000)]) == [900000, 800000, 800000]
+    assert repeat.confirmed_rate is None
+    assert repeat.stop_kind == "not repeatable"
+    assert "800000 op/s, failed" in repeat.stop_reason
+
+
+def test_repeat_stops_at_its_budget():
+    repeat = RateRepeat([900000, 800000, 700000], repeat_runs=2, max_steps=3)
+    assert _repeat(repeat, [(True, 900000), (False, 850000), (True, 800000)]) == [900000, 900000, 800000]
+    assert repeat.confirmed_rate is None
+    assert repeat.stop_kind == "not repeatable"
+    assert "budget of 3" in repeat.stop_reason
+
+
+def test_repeat_reruns_a_run_without_results_outside_the_budget():
+    repeat = RateRepeat([900000], repeat_runs=2, max_steps=2)
+    assert _repeat(repeat, [(False, None), (True, 900000), (True, 900000)]) == [900000] * 3
+    assert repeat.confirmed_rate == 900000
+
+
+def test_repeat_stops_when_a_run_has_no_results_twice():
+    repeat = RateRepeat([900000], repeat_runs=2, max_steps=6)
+    assert _repeat(repeat, [(False, None), (False, None)]) == [900000, 900000]
+    assert repeat.stop_kind == "no results"
+
+
+def _flaky_step(fail_steps):
+    """P99 crosses 10 ms at 500k op/s; the steps named in `fail_steps` go over the limit at any rate."""
+    run_steps = []
+
+    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+        run_steps.append(step_name)
+        rate = int(throttle_step_dict["rate"])
+        return {step_name: _step_summary(rate, p99=50.0 if step_name in fail_steps else rate / 50000, throughput=rate)}
+
+    return run_steps, run_gradual_step
+
+
+def test_test_class_repeats_the_best_rate_and_steps_down_when_a_repeat_fails():
+    run_steps, run_gradual_step = _flaky_step({"rate_400194_repeat_2"})
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    search = RateSearch(config=RateSearchConfig(max_steps=4, repeat_runs=2), shards=40)
+    total_summary = {}
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary=total_summary, stress_num=1, num_loaders=4
+    )
+    assert run_steps == [
+        "rate_309839",
+        "rate_862330",
+        "rate_516898",
+        "rate_400194",
+        "rate_400194_repeat_1",
+        "rate_400194_repeat_2",
+        "rate_309839_repeat_1",
+        "rate_309839_repeat_2",
+    ]
+    assert search.repeated
+    assert search.confirmed_rate == 309839
+    assert search.stop_kind == "budget"  # the search's own stop stands
+
+
+def test_test_class_reports_an_error_when_no_rate_passes_all_its_runs(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        gradual_grow_module,
+        "TestFrameworkEvent",
+        lambda **kwargs: SimpleNamespace(publish=lambda: events.append(kwargs)),
+    )
+    run_steps, run_gradual_step = _flaky_step({"rate_400194_repeat_1", "rate_309839_repeat_1"})
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    search = RateSearch(config=RateSearchConfig(max_steps=4, repeat_runs=2), shards=40)
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary={}, stress_num=1, num_loaders=4
+    )
+    assert run_steps[4:] == ["rate_400194_repeat_1", "rate_309839_repeat_1"]
+    assert search.confirmed_rate is None
+    assert search.stop_kind == "not repeatable"
+    assert [event["severity"] for event in events] == [gradual_grow_module.Severity.ERROR]
+
+
+def test_test_class_does_not_repeat_without_repeat_runs():
+    run_steps, run_gradual_step = _flaky_step(set())
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    search = RateSearch(config=RateSearchConfig(max_steps=4), shards=40)
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary={}, stress_num=1, num_loaders=4
+    )
+    assert not any("repeat" in name for name in run_steps)
+    assert not search.repeated
+
+
+def test_test_class_does_not_repeat_after_a_search_error(monkeypatch):
+    monkeypatch.setattr(
+        gradual_grow_module, "TestFrameworkEvent", lambda **kwargs: SimpleNamespace(publish=lambda: None)
+    )
+    run_steps = []
+
+    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+        run_steps.append(step_name)
+        rate = int(throttle_step_dict["rate"])
+        return {step_name: _step_summary(rate, p99=1.0, throughput=rate)}
+
+    test_class, instance, workload = _test_instance(run_gradual_step)
+    search = RateSearch(config=RateSearchConfig(max_steps=10, repeat_runs=2, max_rate_per_shard=10000), shards=40)
+    test_class.run_rate_search(
+        instance, workload=workload, search=search, total_summary={}, stress_num=1, num_loaders=4
+    )
+    assert search.stop_kind == "max rate passes"
+    assert not any("repeat" in name for name in run_steps)
+
+
+def test_best_step_candidates_after_repeat_runs():
+    pick = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.best_step_candidates
+    total_summary = {
+        "rate_1425516": {"rate": 1425516},
+        "rate_1425516_repeat_1": {"rate": 1425516},
+        "rate_1425516_repeat_2": {"rate": 1425516},
+        "rate_1379531": {"rate": 1379531},
+        "rate_1379531_repeat_1": {"rate": 1379531},
+        "rate_1379531_repeat_2": {"rate": 1379531},
+    }
+    search = RateSearch(config=RateSearchConfig(repeat_runs=2), shards=45)
+    # No repeat runs: every step.
+    assert pick(total_summary, search) is total_summary
+    assert pick(total_summary, None) is total_summary
+    # 1,425,516 failed a repeat run and 1,379,531 passed all: only its steps, though 1,425,516 measured more.
+    search.repeated, search.confirmed_rate = True, 1379531
+    assert list(pick(total_summary, search)) == ["rate_1379531", "rate_1379531_repeat_1", "rate_1379531_repeat_2"]
+    # No rate passed all its runs: no step.
+    search.confirmed_rate = None
+    assert pick(total_summary, search) == {}

@@ -16,6 +16,11 @@ perf_best_throughput_search:
     min_sent_ratio: 0.98
     baseline_range_pct: 25
     max_loader_cpu_pct: 90
+    # The best rate runs 2 more times and is the result only when all 3 runs pass; when one fails, the next lower
+    # passing rate is repeated instead, within 6 repeat runs. Where the busiest shard tips moves between runs, and
+    # a rate that passed once may not pass again.
+    repeat_runs: 2
+    max_repeat_steps: 6
 
 # Per-shard best throughput by DB instance family and sub-test, from the first runs on each family. With a
 # baseline the search starts at it, within +-25%, and takes about 4 steps instead of 7. Results that don't scale

@@ -64,11 +64,15 @@ class PerformanceConfigMixin(BaseModel):
         "result, as the step measured the loaders), max_busiest_shard_util_pct (not set by default: a step "
         "passes only when the busiest DB shard's average reactor utilization, read from the monitor, stayed at or "
         "under this, so the result keeps headroom below the point where that shard tips into overload; every "
-        "step logs and saves the value either way). The search bisects the rate on the plain middle with a "
+        "step logs and saves the value either way), repeat_runs (0 by default: after the search, the best rate runs this "
+        "many more times and is the result only when every run passes; when one fails, the next lower passing rate "
+        "is repeated instead, and when none passes all its runs the run reports an error), max_repeat_steps (the "
+        "budget of those repeat runs). The search bisects the rate on the plain middle with a "
         "baseline, and on the log scale between the bounds. A step that collected no results is run once more; a "
         "second miss stops the search with an error and no Argus result. "
         "Example: {'default': {'min_rate_per_shard': 1000, 'max_rate_per_shard': 60000, 'precision_pct': 5, "
-        "'max_steps': 10, 'min_sent_ratio': 0.98, 'baseline_range_pct': 25, 'max_loader_cpu_pct': 90}}",
+        "'max_steps': 10, 'min_sent_ratio': 0.98, 'baseline_range_pct': 25, 'max_loader_cpu_pct': 90, "
+        "'repeat_runs': 2, 'max_repeat_steps': 6}}",
     )
     perf_best_throughput_baselines: DictOrStr = SctField(
         description="Known best throughput per DB shard, for the rate search of perf_best_throughput_search to "

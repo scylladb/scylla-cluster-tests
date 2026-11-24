@@ -124,6 +124,12 @@ latte keeps the threads of the sub-test's first `perf_gradual_throttle_steps` en
 over them as its concurrency, which is per thread; other tools get them as threads. The cache warmup uses the threads
 and concurrency of that first entry.
 
+After the search, the best rate runs `repeat_runs` (2 in `best_throughput.yaml`, 0 when not set) more times,
+named `rate_<rate>_repeat_<n>`, and is the result only when every run passes. When one fails, the next lower
+passing rate is repeated instead, within `max_repeat_steps` (6) repeat runs; when none passes all its runs, the
+search stops with `not repeatable` and the run reports an error. The repeat runs don't run after a search that
+ended with an error.
+
 A step that collected no results (e.g. a failed latency collection) runs once more at the same rate, named
 `rate_<rate>_retry`; the rerun doesn't use the step budget. If that has no results either, the search stops
 with `no results`, the run reports an error, and no best-throughput row goes to Argus.

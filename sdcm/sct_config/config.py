@@ -2236,7 +2236,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if not (search := self.get("perf_best_throughput_search")):
             return
 
-        positive_ints = {"min_rate_per_shard", "max_rate_per_shard", "max_steps"}
+        positive_ints = {"min_rate_per_shard", "max_rate_per_shard", "max_steps", "max_repeat_steps"}
+        non_negative_ints = {"repeat_runs"}
         positive_numbers = {
             "precision_pct",
             "min_sent_ratio",
@@ -2245,12 +2246,19 @@ class SCTConfiguration(*CONFIG_GROUPS):
             "max_busiest_shard_util_pct",
         }
         for workload, settings in search.items():
-            if not isinstance(settings, dict) or set(settings) - positive_ints - positive_numbers:
+            if not isinstance(settings, dict) or set(settings) - positive_ints - non_negative_ints - positive_numbers:
                 raise ValueError(
                     f"perf_best_throughput_search for {workload} should be a dict with keys from "
-                    f"{sorted(positive_ints | positive_numbers)}, got {settings!r}"
+                    f"{sorted(positive_ints | non_negative_ints | positive_numbers)}, got {settings!r}"
                 )
             for key, value in settings.items():
+                if key in non_negative_ints:
+                    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                        raise ValueError(
+                            f"perf_best_throughput_search for {workload}: '{key}' should be a non-negative integer, "
+                            f"got {value!r}"
+                        )
+                    continue
                 allowed = int if key in positive_ints else int | float
                 if isinstance(value, bool) or not isinstance(value, allowed) or value <= 0:
                     raise ValueError(
@@ -2272,6 +2280,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
         default = search.get("default") or {}
         for workload, settings in search.items():
             merged = default | settings
+            if merged.get("repeat_runs", 0) > merged.get("max_repeat_steps", 6):
+                raise ValueError(
+                    f"perf_best_throughput_search for {workload}: 'max_repeat_steps' should be at least 'repeat_runs'"
+                )
             min_rate, max_rate = merged.get("min_rate_per_shard", 1000), merged.get("max_rate_per_shard", 60000)
             if min_rate >= max_rate:
                 raise ValueError(

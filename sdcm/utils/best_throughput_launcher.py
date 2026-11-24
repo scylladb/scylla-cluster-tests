@@ -24,6 +24,7 @@ A job starts only once Argus has a test for it. Argus creates tests by scanning 
 hasn't scanned yet can't report results, so the first request for a configuration waits for the next scan.
 """
 
+import copy
 import json
 import logging
 import re
@@ -31,6 +32,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Self
 
+import anyconfig
 import requests
 import yaml
 
@@ -350,14 +352,22 @@ class BestThroughputRequest:
     def test_duration_minutes(self, variables: dict[str, str], sct_root: Path | None = None) -> int:
         """Minutes for the longest run these settings allow, so the test timeout can't end it before it reports.
 
-        A search runs up to max_steps steps, the bounds included, plus reruns of steps without results, then
-        one step per overload factor. A step without a duration is allowed `UNTIMED_STEP_MINUTES`.
-        `variables` are the run's SCT variables; a setting they don't hold comes from the best-throughput overlay.
+        A search runs up to max_steps steps, the bounds included, and with repeat_runs up to max_repeat_steps
+        repeat runs, plus reruns of steps without results, then one step per overload factor. A step without a
+        duration is allowed `UNTIMED_STEP_MINUTES`. `variables` are the run's SCT variables; a setting they hold is
+        merged into the best-throughput overlay's the way SCT merges it, dicts key by key at every level.
         """
         overlay = yaml.safe_load(((sct_root or get_sct_root_path()) / BEST_THROUGHPUT_OVERLAY).read_text())
 
         def setting(variable: str, key: str):
-            return yaml.safe_load(variables[variable]) if variable in variables else overlay.get(key)
+            value = copy.deepcopy(overlay.get(key))
+            if variable not in variables:
+                return value
+            override = yaml.safe_load(variables[variable])
+            if isinstance(value, dict) and isinstance(override, dict):
+                anyconfig.merge(value, override, ac_merge=anyconfig.MS_DICTS)
+                return value
+            return override
 
         workloads = [
             sub_test.removeprefix("test_").removesuffix("_gradual_increase_load") for sub_test in self.sub_tests
@@ -369,7 +379,8 @@ class BestThroughputRequest:
         for workload in workloads:
             search = RateSearchConfig.from_params(search_params, workload) or RateSearchConfig()
             overload = OverloadConfig.from_params(overload_params, workload)
-            steps = search.max_steps + RERUN_STEPS + (len(overload.factors) if overload else 0)
+            repeat_steps = search.max_repeat_steps if search.repeat_runs else 0
+            steps = search.max_steps + repeat_steps + RERUN_STEPS + (len(overload.factors) if overload else 0)
             # The predefined-steps configs spell "no duration" as the string None.
             step_duration = step_durations.get(workload)
             step_minutes = (

@@ -242,6 +242,8 @@ def test_best_throughput_search_valid():
                     "baseline_range_pct": 20,
                     "max_loader_cpu_pct": 85,
                     "max_busiest_shard_util_pct": 98.5,
+                    "repeat_runs": 0,
+                    "max_repeat_steps": 4,
                 },
             },
             "perf_best_throughput_baselines": {"i8g": {"read": 40000}, "i4i.4xlarge": {"write": 15000}},
@@ -268,6 +270,14 @@ def test_best_throughput_search_valid():
         pytest.param({"default": {"max_loader_cpu_pct": 0}}, "positive number", id="zero_loader_cpu"),
         pytest.param({"read": {"max_busiest_shard_util_pct": 101}}, "at most 100", id="busiest_shard_above_100"),
         pytest.param({"read": {"max_busiest_shard_util_pct": 0}}, "positive number", id="zero_busiest_shard"),
+        pytest.param({"read": {"repeat_runs": -1}}, "non-negative integer", id="negative_repeat_runs"),
+        pytest.param({"read": {"repeat_runs": 1.5}}, "non-negative integer", id="float_repeat_runs"),
+        pytest.param({"read": {"max_repeat_steps": 0}}, "positive integer", id="zero_repeat_budget"),
+        pytest.param(
+            {"default": {"max_repeat_steps": 2}, "read": {"repeat_runs": 3}},
+            "for read: 'max_repeat_steps' should be at least 'repeat_runs'",
+            id="repeat_budget_below_repeat_runs",
+        ),
         pytest.param(
             {"default": {"max_rate_per_shard": 5000}, "read": {"min_rate_per_shard": 5000}},
             "for read: 'min_rate_per_shard'",

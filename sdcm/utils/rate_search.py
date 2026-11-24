@@ -30,6 +30,10 @@ only when the search narrows to it, or, when no step passed yet, the lower bound
 budget. A baseline bound that is crossed there moves out by another range, so a big regression or improvement
 still gets a result. The minimum and maximum rates per shard always cap the bounds, and the minimum must pass and
 the maximum must fail there.
+
+Where the busiest shard tips into overload moves between runs, so a rate that passed once may not pass again. With
+repeat runs set, `RateRepeat` runs the best rate that many more times after the search, and it is the result only
+when every run passes; when one fails, the next lower passing rate is repeated instead.
 """
 
 import logging
@@ -59,6 +63,11 @@ class RateSearchConfig:
     # tips moves between runs; under this limit the result keeps headroom below that point and repeats closely.
     # None: not checked. The test measures it, not the search.
     max_busiest_shard_util_pct: float | None = None
+    # After the search, the best rate runs this many more times, and is the result only when every run passed; when
+    # one fails, the next lower passing rate is repeated instead. 0: the best rate is not repeated.
+    repeat_runs: int = 0
+    # The budget of those repeat runs, over all the rates repeated; reruns of runs without results don't count.
+    max_repeat_steps: int = 6
 
     @classmethod
     def from_params(
@@ -100,10 +109,18 @@ def in_flight_for(rate: int, p99_limit_ms: float) -> int:
 
 
 # Why a search ended, as the best-throughput row in Argus reports it.
-STOP_KINDS = ("narrowed", "budget", "min rate fails", "max rate passes", "no results", "loader cpu")
+STOP_KINDS = (
+    "narrowed",
+    "budget",
+    "min rate fails",
+    "max rate passes",
+    "no results",
+    "loader cpu",
+    "not repeatable",
+)
 # The search ended without finding the cluster's limit: the run reports an error. "min rate fails" and "max rate
-# passes" mean the bounds don't fit the cluster.
-ERROR_STOP_KINDS = ("min rate fails", "max rate passes", "no results", "loader cpu")
+# passes" mean the bounds don't fit the cluster; "not repeatable": no passing rate passed all its repeat runs.
+ERROR_STOP_KINDS = ("min rate fails", "max rate passes", "no results", "loader cpu", "not repeatable")
 # The search ended on a step that didn't measure the cluster: the run sends no best-throughput row, so its result
 # doesn't land in the Argus history. "no results": a step collected none twice; "loader cpu": a loader ran out of CPU.
 NO_RESULT_STOP_KINDS = ("no results", "loader cpu")
@@ -137,6 +154,9 @@ class RateSearch:
         self.stop_kind: str | None = None
         self.is_retry = False
         self._retries = 0
+        # Set by the repeat runs: whether they ran, and the rate that passed all of them.
+        self.repeated = False
+        self.confirmed_rate: int | None = None
 
     def _widen_down(self, rate: int) -> int:
         return max(round(rate * (1 - self._range)), self.min_rate)
@@ -172,6 +192,16 @@ class RateSearch:
             self._next = self.low_bound
         if self._next is not None and steps_run >= self.config.max_steps:
             self._next = self._stop(f"used the step budget of {self.config.max_steps}", kind="budget")
+
+    def passing_rates(self) -> list[int]:
+        """The rates whose step passed, highest first."""
+        return sorted({rate for rate, passed, _ in self.steps if passed}, reverse=True)
+
+    def end_repeats(self, repeat: "RateRepeat") -> None:
+        """Take the outcome of the repeat runs: the rate that passed all of them, or why none did."""
+        self.repeated, self.confirmed_rate = True, repeat.confirmed_rate
+        if repeat.stop_kind:
+            self.stop_reason, self.stop_kind = repeat.stop_reason, repeat.stop_kind
 
     def stop_on_loader_cpu(self, rate: int, loaders_cpu_pct: dict[str, float]) -> None:
         """Stop the search: a loader went over `max_loader_cpu_pct` in the step at `rate`, so the step measured the
@@ -230,3 +260,72 @@ class RateSearch:
     def _stop(self, reason: str, kind: str) -> None:
         self.stop_reason, self.stop_kind = reason, kind
         LOGGER.info("Rate search stopped: %s", reason)
+
+
+class RateRepeat:
+    """Repeat the search's best rate, stepping down through the lower passing rates until one passes every run.
+
+    Each rate runs `repeat_runs` more times; a failed run drops it, and the next lower passing rate is repeated.
+    Usage like `RateSearch`: run a step at `next_rate()`, report it with `record()`, until `next_rate()` is None.
+    `confirmed_rate` is then the rate that passed all its runs, or None with `stop_reason` and `stop_kind` set.
+    """
+
+    def __init__(self, passing_rates: list[int], repeat_runs: int, max_steps: int):
+        self.candidates = sorted(set(passing_rates), reverse=True)
+        self.repeat_runs, self.max_steps = repeat_runs, max_steps
+        self.steps: list[tuple[int, bool, int | None]] = []
+        # The repeat run number of the next step at the current rate, from 1.
+        self.run = 1
+        self.confirmed_rate: int | None = None
+        self.stop_reason: str | None = None
+        self.stop_kind: str | None = None
+        self.is_retry = False
+        self._retries = 0
+
+    def next_rate(self) -> int | None:
+        return self.candidates[0] if self.candidates else None
+
+    def record(self, rate: int, passed: bool, throughput: int | None) -> None:
+        """Record a repeat run; `throughput` None means it collected no results, and it is run once more."""
+        self.steps.append((rate, passed, throughput))
+        if throughput is None and not self.is_retry:
+            LOGGER.warning("Rate repeat: the run at %s op/s collected no results, running it again", rate)
+            self.is_retry = True
+            self._retries += 1
+            return
+        self.is_retry = False
+        if throughput is None:
+            self._stop(f"the repeat run at {rate} op/s collected no results twice", kind="no results")
+            return
+        if passed and self.run == self.repeat_runs:
+            LOGGER.info("Rate repeat: %s op/s passed all its %s runs", rate, self.repeat_runs + 1)
+            self.confirmed_rate, self.candidates = rate, []
+            return
+        if passed:
+            self.run += 1
+        else:
+            self.candidates.pop(0)
+            self.run = 1
+            LOGGER.info(
+                "Rate repeat: %s op/s failed its repeat run, so %s",
+                rate,
+                f"{self.candidates[0]} op/s is repeated instead" if self.candidates else "no passing rate is left",
+            )
+            if not self.candidates:
+                self._stop(
+                    f"no passing rate passed all its {self.repeat_runs + 1} runs: the lowest, {rate} op/s, failed "
+                    "a repeat run",
+                    kind="not repeatable",
+                )
+                return
+        if len(self.steps) - self._retries >= self.max_steps:
+            self._stop(
+                f"used the repeat budget of {self.max_steps} runs before a rate passed all its "
+                f"{self.repeat_runs + 1} runs",
+                kind="not repeatable",
+            )
+
+    def _stop(self, reason: str, kind: str) -> None:
+        self.candidates = []
+        self.stop_reason, self.stop_kind = reason, kind
+        LOGGER.info("Rate repeat stopped: %s", reason)

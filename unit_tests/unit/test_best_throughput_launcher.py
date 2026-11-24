@@ -128,7 +128,7 @@ def test_empty_environment_variables_are_ignored():
     assert parse_properties(request.final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
-        "SCT_TEST_DURATION": "660",
+        "SCT_TEST_DURATION": "900",
     }
 
 
@@ -136,28 +136,28 @@ def test_environment_variables_minimal_request():
     assert parse_properties(_request().final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
-        "SCT_TEST_DURATION": "660",
+        "SCT_TEST_DURATION": "900",
     }
 
 
 @pytest.mark.parametrize(
     "request_params, expected_minutes",
     [
-        # 180 for setup, preload and teardown, then (10 search steps, the bounds included, + 2 reruns)
-        # x (the step + 10 minutes of waits): 30-minute steps for write and mixed, 10 for read. Every step of the
-        # default test-case is time-bound.
-        pytest.param({}, 180 + 12 * 40, id="defaults"),
-        pytest.param({"sub_tests": READ_ONLY}, 180 + 12 * 20, id="one_workload"),
-        pytest.param({"sub_tests": READ_ONLY, "max_search_steps": "20"}, 180 + 22 * 20, id="larger_budget"),
-        pytest.param({"sub_tests": READ_ONLY, "step_duration": "1h"}, 180 + 12 * 70, id="longer_steps"),
-        pytest.param({"step_duration": "5m"}, 180 + 12 * 15, id="shorter_steps"),
-        pytest.param({"sub_tests": READ_ONLY, "overload_factors": "1.3,2"}, 180 + 14 * 20, id="overload_steps"),
+        # 180 for setup, preload and teardown, then (10 search steps, the bounds included, + 6 repeat runs of the
+        # best rate + 2 reruns) x (the step + 10 minutes of waits): 30-minute steps for write and mixed, 10 for
+        # read. Every step of the default test-case is time-bound.
+        pytest.param({}, 180 + 18 * 40, id="defaults"),
+        pytest.param({"sub_tests": READ_ONLY}, 180 + 18 * 20, id="one_workload"),
+        pytest.param({"sub_tests": READ_ONLY, "max_search_steps": "20"}, 180 + 28 * 20, id="larger_budget"),
+        pytest.param({"sub_tests": READ_ONLY, "step_duration": "1h"}, 180 + 18 * 70, id="longer_steps"),
+        pytest.param({"step_duration": "5m"}, 180 + 18 * 15, id="shorter_steps"),
+        pytest.param({"sub_tests": READ_ONLY, "overload_factors": "1.3,2"}, 180 + 20 * 20, id="overload_steps"),
         pytest.param(
             {
                 "sub_tests": '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load"]',
                 "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_steps": 4}}',
             },
-            180 + 12 * 40,
+            180 + 18 * 40,
             id="the_longest_workload_counts",
         ),
         pytest.param(
@@ -165,7 +165,7 @@ def test_environment_variables_minimal_request():
                 "sub_tests": READ_ONLY,
                 "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_steps": 4}}',
             },
-            180 + 6 * 20,
+            180 + 12 * 20,
             id="lower_budget",
         ),
     ],
@@ -583,4 +583,4 @@ def test_write_step_spelled_as_the_string_none_has_no_duration():
         extra_environment_variables='SCT_PERF_GRADUAL_STEP_DURATION={"read": "30m", "write": "None"}',
     )
     # A write step without a duration is allowed 120 minutes.
-    assert int(parse_properties(request.final_environment_variables())["SCT_TEST_DURATION"]) == 180 + 12 * 130
+    assert int(parse_properties(request.final_environment_variables())["SCT_TEST_DURATION"]) == 180 + 18 * 130

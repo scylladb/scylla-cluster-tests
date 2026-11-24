@@ -143,6 +143,12 @@ Each workload (read, write, mixed, read_disk_only) runs on its own cluster, one 
     `none passed`; the run reports an error. Lower `min_rate_per_shard`.
   - `max rate passes`: the search narrowed up to the maximum rate, which stayed within the limit, so the
     throughput is a lower bound; the run reports an error. Raise `max_rate_per_shard`.
+  - `not repeatable`: no passing rate passed all its repeat runs (below) within their budget. Throughput 0 with
+    step `none passed`; the run reports an error.
+- Repeat runs (`rate_<rate>_repeat_<n>`): after the search, the best rate runs `repeat_runs` (2) more times, and
+  is the result only when all 3 runs pass. When one fails, the next lower passing rate is repeated instead, up to
+  `max_repeat_steps` (6) repeat runs. The reported step is one of the confirmed rate's runs; the other rates, and
+  the rate that failed a repeat, can't be the best step. `repeat_runs: 0` turns it off.
 - Per-step tables `<workload> - rate_<rate> - latencies`: what the search tried.
 - The run log gives each step's measured throughput against its rate. A `..._retry` step is a rerun of a step
   that collected no results. If the rerun has none either, the search stops with an error and sends no
@@ -174,6 +180,10 @@ match each other within 0.2% at every rate both passed. So read one run's number
 the range of several earlier runs of the job, and check its busiest shard in the run's monitor (per-shard
 reactor utilization and `sl:default` task time) before calling a change. The run log gives each step's busiest
 shard utilization (`busiest shard: 98.84%`), and the results log keeps it as `busiest_shard_util_pct`.
+
+The repeat runs (section 4) guard against the luckiest case: a rate that passed once, just before its busiest
+shard would have tipped, must pass twice more to be the result. They add 2 steps when the best rate holds, and
+more when it doesn't.
 
 For a number that repeats more closely, set `max_busiest_shard_util_pct` in the workload's
 `perf_best_throughput_search` entry, e.g. `read: {max_busiest_shard_util_pct: 98.5}`: a step whose busiest shard

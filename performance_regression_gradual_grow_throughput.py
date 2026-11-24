@@ -45,6 +45,7 @@ from sdcm.utils.overload import MIN_ATTEMPTED_RATIO, GoodputResult, OverloadConf
 from sdcm.utils.rate_search import (
     ERROR_STOP_KINDS,
     NO_RESULT_STOP_KINDS,
+    RateRepeat,
     RateSearch,
     RateSearchConfig,
     in_flight_for,
@@ -788,7 +789,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         best_step = self.find_best_step(
             workload=workload,
-            total_summary=total_summary,
+            total_summary=self.best_step_candidates(total_summary, search),
             min_sent_ratio=search_config.min_sent_ratio if search_config else None,
             max_busiest_shard_util_pct=search_config.max_busiest_shard_util_pct if search_config else None,
         )
@@ -813,6 +814,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.report_goodput(
                     workload=workload, overload_config=overload_config, best_step=best_step, results=overload_results
                 )
+
+    @staticmethod
+    def best_step_candidates(total_summary: dict, search: RateSearch | None) -> dict:
+        """The steps the best throughput is picked from: after repeat runs, only the steps of the rate that passed
+        all of them, and none when no rate did; else every step."""
+        if not (search and search.repeated):
+            return total_summary
+        return {
+            name: step
+            for name, step in total_summary.items()
+            if search.confirmed_rate is not None and step.get("rate") == search.confirmed_rate
+        }
 
     def overload_config(self, workload_type: str) -> OverloadConfig | None:
         """The workload's goodput-under-overload settings, or None when it runs no overload steps."""
@@ -955,70 +968,124 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return {"rate": str(rate), "threads": in_flight}
 
     def run_rate_search(self, workload: Workload, search: RateSearch, total_summary: dict, stress_num, num_loaders):
-        """Run fixed-rate steps at the rates the search picks, until it stops."""
+        """Run fixed-rate steps at the rates the search picks, until it stops; then repeat the best rate when
+        repeat_runs is set."""
         p99_limit_ms = self.p99_limit_ms(workload)
         while (rate := search.next_rate()) is not None:
             # A rerun of a step that collected no results gets its own name, so its results stand alone.
             step_name = f"rate_{rate}{'_retry' if search.is_retry else ''}"
-            step_params = self.search_step_params(workload=workload, rate=rate, p99_limit_ms=p99_limit_ms)
-            step_start = time.time()
-            step_summary = self.run_gradual_step(
-                workload=workload,
-                throttle_step_dict=step_params,
-                num_threads=step_params["threads"],
-                step_name=step_name,
-                stress_num=stress_num,
-                num_loaders=num_loaders,
-            )
-            total_summary.update(step_summary)
-            if busy_loaders := self.busy_loaders(step_start, time.time(), search.config.max_loader_cpu_pct):
-                search.stop_on_loader_cpu(rate=rate, loaders_cpu_pct=busy_loaders)
-                break
-            step = step_summary[step_name]
-            # Measured in every step, so the results show how close each step came to the busiest shard's limit;
-            # it decides a step only with max_busiest_shard_util_pct.
-            busiest_util = self.busiest_shard_utilization(
-                step.get("stress_start", step_start), step.get("stress_end", time.time())
-            )
-            step["busiest_shard_util_pct"] = busiest_util
-            util_limit = search.config.max_busiest_shard_util_pct
-            within_util = util_limit is None or busiest_util is None or busiest_util <= util_limit
-            if (latency := step_latency(step_name, step)) is None:
-                passed, throughput = False, None
-                self.log.info("Rate search step %s at %s op/s: no results", step_name, rate)
-            else:
-                p99, throughput = latency
-                within_limit = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
-                # A step that couldn't send its rate shows a low P99 at a lower rate: it doesn't pass, whatever its
-                # P99. A loader that lags goes over the limit too, as latte measures from the scheduled start.
-                sent_rate = throughput >= rate * search.config.min_sent_ratio
-                passed = within_limit and sent_rate and within_util
-                self.log.info(
-                    "Rate search step %s: %s op/s of %s; P99 within %s ms: %s; rate sent: %s; busiest shard: %s%s; "
-                    "passed: %s",
-                    step_name,
-                    throughput,
-                    rate,
-                    p99_limit_ms,
-                    within_limit,
-                    sent_rate,
-                    "not measured" if busiest_util is None else f"{busiest_util:.2f}%",
-                    "" if util_limit is None else f" (limit {util_limit:g}%: {within_util})",
-                    passed,
+            if (
+                outcome := self.run_search_step(
+                    workload, search, rate, step_name, p99_limit_ms, total_summary, stress_num, num_loaders
                 )
-            search.record(rate=rate, passed=passed, throughput=throughput)
+            ) is None:
+                break
+            search.record(rate=rate, passed=outcome[0], throughput=outcome[1])
         self.log.info(
             "Rate search for '%s' ran %s steps and stopped: %s",
             workload.workload_type,
             len(search.steps),
             search.stop_reason,
         )
+        if search.config.repeat_runs and search.stop_kind not in ERROR_STOP_KINDS and search.passing_rates():
+            self.repeat_best_rate(workload, search, p99_limit_ms, total_summary, stress_num, num_loaders)
         if search.stop_kind in ERROR_STOP_KINDS:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 message=f"Rate search for '{workload.workload_type}': {search.stop_reason}",
                 severity=Severity.ERROR,
             ).publish()
+
+    def repeat_best_rate(  # noqa: PLR0913
+        self, workload: Workload, search: RateSearch, p99_limit_ms: float, total_summary: dict, stress_num, num_loaders
+    ) -> None:
+        """Run the search's best rate repeat_runs more times; when a run fails, repeat the next lower passing rate.
+
+        The rate that passes every run is the result (`search.confirmed_rate`); when none does within the budget,
+        the search ends as "not repeatable".
+        """
+        repeat = RateRepeat(
+            search.passing_rates(), repeat_runs=search.config.repeat_runs, max_steps=search.config.max_repeat_steps
+        )
+        while (rate := repeat.next_rate()) is not None:
+            step_name = f"rate_{rate}_repeat_{repeat.run}{'_retry' if repeat.is_retry else ''}"
+            if (
+                outcome := self.run_search_step(
+                    workload, search, rate, step_name, p99_limit_ms, total_summary, stress_num, num_loaders
+                )
+            ) is None:
+                return
+            repeat.record(rate=rate, passed=outcome[0], throughput=outcome[1])
+        search.end_repeats(repeat)
+        self.log.info(
+            "Rate repeat for '%s' ran %s steps: %s",
+            workload.workload_type,
+            len(repeat.steps),
+            f"{repeat.confirmed_rate} op/s passed all its {repeat.repeat_runs + 1} runs"
+            if repeat.confirmed_rate
+            else repeat.stop_reason,
+        )
+
+    def run_search_step(  # noqa: PLR0913
+        self,
+        workload: Workload,
+        search: RateSearch,
+        rate: int,
+        step_name: str,
+        p99_limit_ms: float,
+        total_summary: dict,
+        stress_num,
+        num_loaders,
+    ) -> tuple[bool, int | None] | None:
+        """Run one fixed-rate step and return whether it passed and its throughput (None: no results).
+
+        Returns None when a loader ran out of CPU: the search is then stopped, as the step measured the loaders.
+        """
+        step_params = self.search_step_params(workload=workload, rate=rate, p99_limit_ms=p99_limit_ms)
+        step_start = time.time()
+        step_summary = self.run_gradual_step(
+            workload=workload,
+            throttle_step_dict=step_params,
+            num_threads=step_params["threads"],
+            step_name=step_name,
+            stress_num=stress_num,
+            num_loaders=num_loaders,
+        )
+        total_summary.update(step_summary)
+        if busy_loaders := self.busy_loaders(step_start, time.time(), search.config.max_loader_cpu_pct):
+            search.stop_on_loader_cpu(rate=rate, loaders_cpu_pct=busy_loaders)
+            return None
+        step = step_summary[step_name]
+        # Measured in every step, so the results show how close each step came to the busiest shard's limit;
+        # it decides a step only with max_busiest_shard_util_pct.
+        busiest_util = self.busiest_shard_utilization(
+            step.get("stress_start", step_start), step.get("stress_end", time.time())
+        )
+        step["busiest_shard_util_pct"] = busiest_util
+        util_limit = search.config.max_busiest_shard_util_pct
+        within_util = util_limit is None or busiest_util is None or busiest_util <= util_limit
+        if (latency := step_latency(step_name, step)) is None:
+            self.log.info("Rate search step %s at %s op/s: no results", step_name, rate)
+            return False, None
+        p99, throughput = latency
+        within_limit = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
+        # A step that couldn't send its rate shows a low P99 at a lower rate: it doesn't pass, whatever its
+        # P99. A loader that lags goes over the limit too, as latte measures from the scheduled start.
+        sent_rate = throughput >= rate * search.config.min_sent_ratio
+        passed = within_limit and sent_rate and within_util
+        self.log.info(
+            "Rate search step %s: %s op/s of %s; P99 within %s ms: %s; rate sent: %s; busiest shard: %s%s; passed: %s",
+            step_name,
+            throughput,
+            rate,
+            p99_limit_ms,
+            within_limit,
+            sent_rate,
+            "not measured" if busiest_util is None else f"{busiest_util:.2f}%",
+            "" if util_limit is None else f" (limit {util_limit:g}%: {within_util})",
+            passed,
+        )
+        return passed, throughput
 
     def busy_loaders(self, start: float, end: float, max_cpu_pct: float) -> dict[str, float]:
         """The loaders whose CPU use went over `max_cpu_pct` between `start` and `end`, with their highest use.
