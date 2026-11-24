@@ -198,8 +198,10 @@ class AzureNode(cluster.BaseNode):
         return self._instance.private_ip_address
 
     def configure_remote_logging(self) -> None:
-        """Remote logging configured upon vm provisioning using UserDataObject"""
-        return
+        """Check that vector runs: a UserDataObject configures remote logging when the VM is provisioned."""
+        if self.parent_cluster.params.get("logs_transport") != "vector":
+            return
+        self._ensure_vector_is_active()
 
     def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
         url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"

@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, terminate_on_failure
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, NodeSetupFailed, terminate_on_failure
 from sdcm.cluster_docker import VectorStoreDockerNode, VectorStoreSetDocker
 from sdcm.db_log_reader import DbLogReader
 from sdcm.exceptions import WaitForTimeoutError
@@ -1373,3 +1373,104 @@ def test_wait_ssh_up_timeout_through_the_sct_agent_stays_a_timeout():
         pytest.raises(WaitForTimeoutError, match=r"\(as ubuntu@10\.4\.0\.201\)$"),
     ):
         BaseNode.wait_ssh_up(node)
+
+
+VECTOR_JOURNAL = "vector[4710]: ERROR vector::config::loading: Config file not found in path"
+VECTOR_RESET = "systemctl reset-failed vector.service"
+VECTOR_RESTART = "systemctl restart vector.service"
+
+
+@pytest.fixture(name="vector_node")
+def fixture_vector_node(monkeypatch):
+    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_TIMEOUT", 0.2)
+    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_CHECK_STEP", 0.05)
+    monkeypatch.setattr("sdcm.cluster.VECTOR_SETTLE_TIME", 0)
+    node = BaseNode.__new__(BaseNode)
+    node.name = "node-1"
+    node.log = unittest.mock.Mock()
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.return_value = SimpleNamespace(stdout=VECTOR_JOURNAL)
+    return node
+
+
+def vector_sudo_commands(node):
+    return [call.args[0] for call in node.remoter.sudo.call_args_list]
+
+
+def test_steady_vector_needs_two_readings_and_no_restart(vector_node):
+    vector_node.remoter.run.return_value = SimpleNamespace(stdout="active\n")
+
+    vector_node._ensure_vector_is_active()
+
+    assert vector_node.remoter.run.call_count == 2
+    vector_node.remoter.sudo.assert_not_called()
+
+
+def test_vector_that_dies_after_its_start_is_restarted(vector_node):
+    readings = iter(["active\n", "failed\n"] * 100)
+
+    def run(*_, **__):
+        if VECTOR_RESTART in vector_sudo_commands(vector_node):
+            return SimpleNamespace(stdout="active\n")
+        return SimpleNamespace(stdout=next(readings))
+
+    vector_node.remoter.run.side_effect = run
+
+    vector_node._ensure_vector_is_active()
+
+    commands = vector_sudo_commands(vector_node)
+    assert commands.count(VECTOR_RESET) == 1 and commands.count(VECTOR_RESTART) == 1
+    assert commands.index(VECTOR_RESET) < commands.index(VECTOR_RESTART)
+
+
+def test_node_setup_fails_when_vector_stays_down(vector_node):
+    vector_node.remoter.run.return_value = SimpleNamespace(stdout="failed\n")
+
+    with pytest.raises(NodeSetupFailed) as error:
+        vector_node._ensure_vector_is_active()
+
+    assert error.value.node is vector_node
+    assert "could not confirm that vector.service is active" in error.value.error_msg
+    assert VECTOR_JOURNAL in error.value.error_msg
+    assert vector_sudo_commands(vector_node).count(VECTOR_RESTART) == 1
+
+
+def test_ssh_drop_ends_in_node_setup_failed(vector_node):
+    vector_node.remoter.run.side_effect = ConnectionError("ssh is down")
+    vector_node.remoter.sudo.side_effect = ConnectionError("ssh is down")
+
+    with pytest.raises(NodeSetupFailed) as error:
+        vector_node._ensure_vector_is_active()
+
+    assert "could not confirm that vector.service is active" in error.value.error_msg
+
+
+def test_every_vector_command_has_a_timeout(vector_node):
+    """A hung SSH or systemctl command must not block the node setup past the waits."""
+    vector_node.remoter.run.return_value = SimpleNamespace(stdout="failed\n")
+
+    with pytest.raises(NodeSetupFailed):
+        vector_node._ensure_vector_is_active()
+
+    calls = vector_node.remoter.run.call_args_list + vector_node.remoter.sudo.call_args_list
+    assert calls and all(call.kwargs.get("timeout") for call in calls)
+
+
+@pytest.mark.parametrize("logs_transport,checked", [("vector", True), ("syslog-ng", False)])
+def test_base_node_checks_vector_only_for_the_vector_transport(logs_transport, checked):
+    node = BaseNode.__new__(BaseNode)
+    node.name = "node-1"
+    node.journal_since = None
+    node.parent_cluster = SimpleNamespace(params={"logs_transport": logs_transport}, ip_ssh_connections=None)
+    node.test_config = unittest.mock.Mock(
+        get_logging_service_host_port=unittest.mock.Mock(return_value=("127.0.0.1", 5003))
+    )
+    node.remoter = unittest.mock.Mock()
+
+    with (
+        unittest.mock.patch("sdcm.cluster.ConfigurationScriptBuilder"),
+        unittest.mock.patch.object(BaseNode, "_ensure_vector_is_active") as ensure,
+    ):
+        node.configure_remote_logging()
+
+    assert ensure.called is checked
