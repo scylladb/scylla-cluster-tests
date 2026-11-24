@@ -1,22 +1,25 @@
 name: Test Hydra on MacOS
 
+# Runs the PR's own hydra.sh on macOS. It uses no credentials, so it runs on `pull_request`
+# (fork PRs included) with a read-only token and no secrets, and only commands sct.py runs
+# without AWS / Okta / the keystore (see the list in sct.py's `cli()`).
 on:
-  pull_request_target:
+  pull_request:
     types: [labeled]
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    if: contains(github.event.pull_request.labels.*.name, 'test-macos')
-    permissions:
-      contents: read
+    if: github.event.label.name == 'test-macos'
     runs-on: macos-26-intel
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Setup Docker
       uses: douglascamata/setup-docker-macos-action@d5ccc6aae0ce23e7700154f5e63cc53e6433ac48 # v1.1.0
     - name: Run Hydra
-      run: bash -x ./docker/env/hydra.sh list-images
+      run: bash -x ./docker/env/hydra.sh nemesis-list
