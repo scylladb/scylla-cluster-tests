@@ -2632,6 +2632,15 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 **type:** str_or_list (appendable)
 
 
+## **perf_nemesis_write_preload** / SCT_PERF_NEMESIS_WRITE_PRELOAD
+
+Run prepare_write_cmd before the write load of test_latency_write_with_nemesis.<br>Set it to false when stress_cmd_w writes the data that the nemesis operations need,<br>so the write load starts from an empty table, as in the predefined throughput steps test.
+
+**default:** True
+
+**type:** boolean
+
+
 ## **stress_cmd_no_mv** / SCT_STRESS_CMD_NO_MV
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list

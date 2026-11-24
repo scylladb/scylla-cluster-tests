@@ -1,6 +1,7 @@
 """Unit tests for the stress command parameters of PerformanceRegressionTest.run_workload."""
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -35,3 +36,15 @@ def test_command_per_loader_runs_round_robin():
 
 def test_command_list_without_round_robin_runs_on_all_loaders():
     assert "round_robin" not in _params(LOADER_CMDS, round_robin=False)
+
+
+@pytest.mark.parametrize("preload", [True, False], ids=["preload", "empty-table"])
+def test_write_with_nemesis_preload(preload):
+    tester = MagicMock()
+    tester.params = {"perf_nemesis_write_preload": preload, "stress_cmd_w": LOADER_CMDS}
+    perf_module.PerformanceRegressionTest.test_latency_write_with_nemesis(tester)
+
+    assert tester.preload_data.called is preload
+    assert tester.wait_no_compactions_running.called is preload
+    assert tester.wait_for_no_tablets_splits.called is preload
+    tester.run_workload.assert_called_once_with(stress_cmd=LOADER_CMDS, nemesis=True, sub_type="write")

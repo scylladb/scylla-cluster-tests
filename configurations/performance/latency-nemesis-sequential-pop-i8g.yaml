@@ -14,10 +14,13 @@
 # Differences from the steps test, needed by the nemesis test:
 #   - The commands run for a fixed duration (the load stops when the nemesis sequence ends), so the
 #     write commands use duration= instead of n=, over the same key ranges.
-#   - The write test runs on top of the preloaded dataset, because the nemesis operations need data.
-#     Its key ranges are the steps test ones and go past the preload (1.61B keys against 650M),
-#     so it overwrites the preloaded keys and also adds new ones.
 #   - No cache warm-up step: the test runs the load for one nemesis_interval before the first nemesis.
+#
+# The write test starts from an empty table, as the write step of the steps test (perf_nemesis_write_preload).
+# Its key ranges (1.61B keys) contain the preload ones (650M), and by the first nemesis, after one
+# nemesis_interval, it has written about as much data as the preload, so the nemesis operations have data.
+# The read, mixed and read_disk_only tests still run the preload.
+perf_nemesis_write_preload: false
 
 prepare_write_cmd: [
     "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",

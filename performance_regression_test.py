@@ -690,11 +690,16 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def test_latency_write_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
-        self.wait_no_compactions_running(n=160)
-        # Tablet splits can still run after the compactions end, as in the steps test
-        self.wait_for_no_tablets_splits()
-        self.run_fstrim_on_all_db_nodes()
+        # Without the preload, the write load starts from an empty table and writes the data
+        # that the nemesis operations need, so there are no compactions or splits to wait for.
+        if self.params.get("perf_nemesis_write_preload"):
+            self.preload_data()
+            self.wait_no_compactions_running(n=160)
+            # Tablet splits can still run after the compactions end, as in the steps test
+            self.wait_for_no_tablets_splits()
+            self.run_fstrim_on_all_db_nodes()
+        else:
+            self.log.info("perf_nemesis_write_preload is false: the write load starts from an empty table")
         self.run_workload(stress_cmd=self.params.get("stress_cmd_w"), nemesis=True, sub_type="write")
 
     def test_latency_mixed_with_nemesis(self):
