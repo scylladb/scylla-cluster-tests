@@ -153,7 +153,7 @@ lazy from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_te
 lazy from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
 lazy from sdcm.utils.vm_arch import AWS_ARCH_TYPES, VmArch
 lazy from sdcm.utils.aws_okta import try_auth_with_okta
-lazy from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
+lazy from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, configure_coredump_bucket, gce_public_addresses
 lazy from sdcm.utils.context_managers import environment
 lazy from sdcm.cluster_k8s import mini_k8s
 lazy from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
@@ -2804,6 +2804,37 @@ def prepare_regions(cloud_provider, regions):
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()
+
+
+@cli.command(
+    "prepare-global-resources",
+    help="Configure the resources SCT needs once, not per region or per cloud (safe to re-run)",
+)
+@click.option("--coredump-region", default="us-east1", show_default=True, help="Coredump bucket region, on creation")
+@click.option(
+    "--coredump-coldline-after-days",
+    default=14,
+    type=click.IntRange(min=1),
+    show_default=True,
+    help="Move coredumps to Coldline after this many days; most downloads happen before, when Standard has no fee",
+)
+@click.option(
+    "--coredump-retention-days",
+    default=90,
+    # a lower value deletes existing coredumps for good, and saves nothing: Coldline bills 90 days anyway
+    type=click.IntRange(min=90),
+    show_default=True,
+    help="Delete coredumps after this many days; Coldline bills 90 days anyway, so less saves nothing",
+)
+def prepare_global_resources(coredump_region, coredump_coldline_after_days, coredump_retention_days):
+    if coredump_coldline_after_days >= coredump_retention_days:
+        raise click.BadParameter("must be below --coredump-retention-days", param_hint="--coredump-coldline-after-days")
+    add_file_logger()
+    configure_coredump_bucket(
+        region=coredump_region,
+        coldline_after_days=coredump_coldline_after_days,
+        retention_days=coredump_retention_days,
+    )
 
 
 @cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")
