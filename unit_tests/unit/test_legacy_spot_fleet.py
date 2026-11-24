@@ -90,6 +90,24 @@ def test_spot_fleet_add_nodes_never_falls_back_to_on_demand(cluster, ec2_wrapper
     ec2_wrapper.create_spot_instances.assert_not_called()
 
 
+def test_failed_spot_fleet_add_nodes_is_reported(cluster, ec2_wrapper):
+    """There is no fallback ladder to record the failure, so the spot_fleet branch records it itself."""
+    ec2_wrapper.create_spot_fleet.side_effect = CreateSpotFleetError(
+        error_response={"Error": {"Code": "capacity-not-available", "Message": "no capacity"}},
+        operation_name="create_spot_fleet",
+    )
+    with (
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,
+        pytest.raises(CreateSpotFleetError),
+    ):
+        cluster._create_instances(count=5)
+
+    event.assert_called_once()
+    reported = event.call_args.kwargs
+    assert (reported["requested"], reported["realized"]) == (INSTANCE_PROVISION_SPOT_FLEET, None)
+    assert (reported["instance_type"], reported["count"]) == ("i7i.large", 5)
+
+
 def test_spot_fleet_add_nodes_is_one_request_with_the_db_alternatives(cluster, ec2_wrapper):
     instances = cluster._create_instances(count=50)
 
@@ -139,6 +157,15 @@ def test_only_db_nodes_of_instance_type_db_get_alternatives(cluster, ec2_wrapper
     cluster._create_instances(count=3, instance_type=instance_type)
 
     assert ec2_wrapper.create_spot_fleet.call_args.kwargs["alternative_instance_types"] == []
+
+
+def test_zero_token_nodes_of_instance_type_db_get_no_alternatives(cluster, ec2_wrapper):
+    """Without `zero_token_instance_type_db` a zero-token node asks for `instance_type_db`, but stays single-type."""
+    with patch("sdcm.cluster_aws.count_instance_types_by_id") as lookup:
+        cluster._create_instances(count=1, instance_type="i7i.large", is_zero_node=True)
+
+    assert ec2_wrapper.create_spot_fleet.call_args.kwargs["alternative_instance_types"] == []
+    lookup.assert_not_called()
 
 
 @pytest.fixture

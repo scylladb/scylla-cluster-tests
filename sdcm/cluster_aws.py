@@ -234,7 +234,10 @@ class AWSCluster(cluster.BaseCluster):
             # One all-or-nothing EC2 Fleet request for the whole count, so DB nodes added mid-test (cluster growth,
             # nemesis) get the same instance type alternatives as the initial cluster.
             instances = ec2.create_spot_fleet(
-                **spot_params, alternative_instance_types=self._fleet_alternative_instance_types(spot_params)
+                **spot_params,
+                alternative_instance_types=self._fleet_alternative_instance_types(
+                    spot_params["instance_type"], is_zero_node
+                ),
             )
             if is_zero_node:
                 ec2.add_tags(instances, {"ZeroTokenNode": "True"})
@@ -261,24 +264,26 @@ class AWSCluster(cluster.BaseCluster):
 
         return instances
 
-    def _fleet_alternative_instance_types(self, spot_params) -> list[str]:
-        """Instance types EC2 Fleet may use instead of the requested one: DB nodes of `instance_type_db` only.
+    def _fleet_alternative_instance_types(self, instance_type, is_zero_node=False) -> list[str]:
+        """Instance types EC2 Fleet may use instead of the requested one: token-owning `instance_type_db` nodes.
 
-        Zero-token nodes and platform-migration targets ask for their own type explicitly, and loaders and
-        monitors have no alternatives option.
+        Zero-token nodes keep a single type even when it is `instance_type_db`, as on the upfront path. Platform
+        migration targets ask for their own type explicitly, and loaders and monitors have no alternatives option.
         """
-        if self.node_type != "scylla-db" or spot_params["instance_type"] != self.params.get("instance_type_db"):
+        if is_zero_node or self.node_type != "scylla-db" or instance_type != self.params.get("instance_type_db"):
             return []
         return list(self.params.get("aws_fleet_db_alternative_types") or [])
 
-    def _fleet_instance_type_counts(self, instances, dc_idx, instance_type=None) -> list[tuple[str, int]]:
+    def _fleet_instance_type_counts(
+        self, instances, dc_idx, instance_type=None, is_zero_node=False
+    ) -> list[tuple[str, int]]:
         """(instance type, count) for each type an EC2 Fleet launch actually used.
 
         Asks AWS only when alternatives were offered - otherwise every instance is the requested type - and
         falls back to the requested type if the lookup fails, since this only feeds reporting.
         """
         requested_type = instance_type or self._ec2_instance_type
-        if self._fleet_alternative_instance_types({"instance_type": requested_type}):
+        if self._fleet_alternative_instance_types(requested_type, is_zero_node):
             if counts := count_instance_types_by_id(
                 self.region_names[dc_idx], [instance.instance_id for instance in instances]
             ):
@@ -346,18 +351,32 @@ class AWSCluster(cluster.BaseCluster):
                 count=count,
             )
         elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET:
-            instances = self._create_spot_instances(
-                count,
-                interfaces,
-                ec2_user_data,
-                dc_idx,
-                instance_type=instance_type,
-                is_zero_node=is_zero_node,
-                ami_id=ami_id,
-            )
             # spot or nothing, whatever the count: no ladder, so a failure raises out of here rather than
-            # downgrading to on-demand. One record per type EC2 Fleet actually launched.
-            for realized_type, realized_count in self._fleet_instance_type_counts(instances, dc_idx, instance_type):
+            # downgrading to on-demand.
+            try:
+                instances = self._create_spot_instances(
+                    count,
+                    interfaces,
+                    ec2_user_data,
+                    dc_idx,
+                    instance_type=instance_type,
+                    is_zero_node=is_zero_node,
+                    ami_id=ami_id,
+                )
+            except Exception:
+                self._publish_provision_outcome(
+                    requested=INSTANCE_PROVISION_SPOT_FLEET,
+                    realized=None,
+                    dc_idx=dc_idx,
+                    az_idx=az_idx,
+                    instance_type=instance_type,
+                    count=count,
+                )
+                raise
+            # One record per type EC2 Fleet actually launched.
+            for realized_type, realized_count in self._fleet_instance_type_counts(
+                instances, dc_idx, instance_type, is_zero_node
+            ):
                 self._publish_provision_outcome(
                     requested=INSTANCE_PROVISION_SPOT_FLEET,
                     realized=INSTANCE_PROVISION_SPOT_FLEET,
