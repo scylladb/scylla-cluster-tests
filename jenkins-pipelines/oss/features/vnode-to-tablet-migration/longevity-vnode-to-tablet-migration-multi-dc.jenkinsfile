@@ -5,9 +5,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    region: 'eu-west-1',
-    availability_zone: 'c',
+    region: '''["eu-west-1", "eu-west-2"]''',
     test_name: 'vnode_to_tablet_migration_test.VnodeToTabletMigrationTest.test_vnode_to_tablet_migration',
-    test_config: """['test-cases/longevity/longevity-vnode-to-tablet-migration-mv-si.yaml', 'configurations/tablets_disabled.yaml', 'configurations/exclude-vnode-to-tablet-migration-limitations.yaml']""",
+    test_config: """['test-cases/features/vnode-to-tablet-migration/longevity-30-percent-utilization-multi-dc.yaml', 'configurations/tablets_disabled.yaml', 'configurations/exclude-vnode-to-tablet-migration-limitations.yaml']""",
     instance_provision_fallback_on_demand: true
 )

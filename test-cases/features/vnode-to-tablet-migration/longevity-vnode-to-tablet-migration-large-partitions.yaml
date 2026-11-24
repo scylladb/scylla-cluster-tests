@@ -15,6 +15,7 @@ test_metadata:
   workload: mixed
   features:
     - tablets
+    - vnode-to-tablet-migration
     - large-partitions
   team_ownership: scylladb/storage-qa
 

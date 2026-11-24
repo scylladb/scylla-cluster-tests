@@ -17,6 +17,7 @@ test_metadata:
   workload: mv
   features:
     - tablets
+    - vnode-to-tablet-migration
   team_ownership: scylladb/storage-qa
 
 test_duration: 600
