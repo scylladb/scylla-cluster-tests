@@ -7,7 +7,7 @@ test_metadata:
     full-row upsert mix for 6 hours under the nemeses of the operations the customer had issues with:
     cluster grow-shrink, node crashes, repair and backup.
   test_type: longevity
-  tier: ondemand
+  tier: tier1
   duration_class: medium
   supported_backends:
     - aws
