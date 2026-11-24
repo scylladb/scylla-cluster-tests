@@ -1,0 +1,38 @@
+test_metadata:
+  description: >-
+    Single copy backup and restore via the Scylla REST API on a 3-node tablets cluster. Cassandra-stress
+    writes 1 TB of user-profile data, most of it repaired by incremental repair, then a cluster backup
+    uploads repaired sstables from one replica only. The restore test restores a given snapshot, or this
+    backup, then every node reads all the data with CL=ONE. The abort test aborts a backup and a restore
+    mid-way and checks both succeed when run again.
+  test_type: manager
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: user-profile
+  features:
+    - tablets
+  team_ownership: scylladb/mgmt
+
+test_duration: 720
+
+instance_type_db: 'i8ge.xlarge'
+sizing_loader:
+  vcpu: 4
+  memory: '>=16'
+
+n_db_nodes: 3
+n_loaders: 4
+
+# dataset per rack (1 row = 1Kb, RF=3), override with SCT_MGMT_PREPARE_SNAPSHOT_SIZE
+mgmt_prepare_snapshot_size: 1000  # GB
+mgmt_backup_repaired_percent: 85
+user_profile_table_count: 1
+mgmt_flush_and_wait_for_compactions: true
+
+user_prefix: scylla-api-backup-restore
+
+fallback_to_next_region: false

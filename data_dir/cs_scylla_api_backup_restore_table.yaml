@@ -1,0 +1,32 @@
+# Scylla API backup/restore tests: template of `user_profile_table_count` tables `standard1`..`standardN`,
+# 1KB rows (like the snapshot preparer's standard1).
+# Table name filled in by the test
+keyspace: keyspace1
+
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
+
+table: ${table_name}
+
+table_definition: |
+  CREATE TABLE IF NOT EXISTS keyspace1.${table_name} (
+      key blob,
+      c0 blob,
+      PRIMARY KEY (key)
+  ) WITH compaction = {'class': 'IncrementalCompactionStrategy'};
+
+columnspec:
+  - name: key
+    size: fixed(10)
+  - name: c0
+    size: fixed(1024)
+
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: SELECT * FROM keyspace1.${table_name} WHERE key = ?
+    fields: samerow

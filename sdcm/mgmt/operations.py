@@ -115,6 +115,19 @@ class ClusterOperations(ClusterTester):
         major_compaction_nodes(cluster=self.db_cluster, keyspace=keyspace, table=table)
         self.wait_no_compactions_running(n=400, sleep_time=60)
 
+    def flush_and_wait_for_compactions(self, keyspaces: list[str]) -> None:
+        """If `mgmt_flush_and_wait_for_compactions` is set, flush and wait for the compactions to finish.
+
+        Flush first, otherwise the backup snapshot flushes memtables and triggers new compactions.
+        """
+        if not self.params.get("mgmt_flush_and_wait_for_compactions"):
+            return
+        for keyspace in keyspaces:
+            flush_nodes(cluster=self.db_cluster, keyspace=keyspace)
+        # `is_compaction_running` checks the last minute, wait until it holds only samples taken after the flush
+        time.sleep(60)
+        self.wait_no_compactions_running(n=240)
+
     def align_cluster_data_state(self, keyspace: str, table: str, clear_snapshots: bool = True):
         if clear_snapshots:
             clear_snapshot_nodes(cluster=self.db_cluster)
@@ -377,6 +390,7 @@ class SnapshotData:
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
     - one_one_restore_params: dict with parameters for 1-1 restore ('account_credential_id' and 'sm_cluster_id')
+    - prefix: backup prefix in the bucket, for backups made via Scylla API instead of Manager
     """
 
     locations: list[str]
@@ -389,6 +403,7 @@ class SnapshotData:
     prohibit_verification_read: bool
     node_ids: list[str]
     one_one_restore_params: dict[str, str | int] | None
+    prefix: str | None = None
 
 
 class SnapshotOperations(ClusterTester):
@@ -425,6 +440,7 @@ class SnapshotOperations(ClusterTester):
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
             node_ids=snapshot_dict.get("node_ids"),
             one_one_restore_params=snapshot_dict.get("one_one_restore_params"),
+            prefix=snapshot_dict.get("prefix"),
         )
         return snapshot_data
 
