@@ -8,7 +8,7 @@ artifactsPipeline(
 
     test_config: 'test-cases/artifacts/gce-image-arm.yaml',
     backend: 'gce',
-    provision_type: 'on_demand',
+    provision_type: 'spot',
     gce_datacenter: 'us-central1',
 
     timeout: [time: 45, unit: 'MINUTES'],
