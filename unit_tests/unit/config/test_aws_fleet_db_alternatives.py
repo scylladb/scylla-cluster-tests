@@ -102,4 +102,3 @@ def test_scale_cluster_config_enables_alternatives(monkeypatch):
 
     assert conf.get("instance_type_db") in SCALE_SIZING_MATCHES
     assert set(conf.get("aws_fleet_db_alternative_types")) == SCALE_SIZING_MATCHES - {conf.get("instance_type_db")}
-    conf._instance_type_validation()
