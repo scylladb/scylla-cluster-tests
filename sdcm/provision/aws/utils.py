@@ -262,6 +262,22 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     return provisioned
 
 
+def get_spot_request_instance_ids(region_name: str, request_ids: List[str]) -> List[str]:
+    """Return the instances the given spot requests launched so far, fulfilled or not; never raises.
+
+    Cancelling a one-time spot request doesn't terminate the instance it launched, so a caller that gives up on
+    a set of requests uses this to find what it must terminate itself.
+    """
+    if not request_ids:  # no ids would describe every spot request in the region, other tests' included
+        return []
+    try:
+        resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to look up the instances of spot requests %s in %s: %s", request_ids, region_name, exc)
+        return []
+    return [req["InstanceId"] for req in resp["SpotInstanceRequests"] if req.get("InstanceId")]
+
+
 def create_spot_instance_request(
     region_name: str,
     count: int,

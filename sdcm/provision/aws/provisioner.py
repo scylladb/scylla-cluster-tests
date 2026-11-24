@@ -32,6 +32,7 @@ from sdcm.provision.aws.utils import (
     ec2_clients,
     ec2_services,
     find_instance_by_id,
+    get_spot_request_instance_ids,
     provision_ec2_fleet,
     set_tags_on_instances,
     terminate_instances_by_id,
@@ -306,6 +307,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         if not instance_ids:
             with contextlib.suppress(Exception):
                 self._ec2_client(provision_parameters).cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
+            # Some requests may have been fulfilled before the others failed or the wait timed out. Cancelling them
+            # doesn't terminate their instances, and nothing else would: they belong to no cluster.
+            if launched := get_spot_request_instance_ids(
+                region_name=provision_parameters.region_name, request_ids=request_ids
+            ):
+                terminate_instances_by_id(region_name=provision_parameters.region_name, instance_ids=launched)
             return []
         for ind, instance_id in enumerate(instance_ids):
             instance_tags = tags.pop()

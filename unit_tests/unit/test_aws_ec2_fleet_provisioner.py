@@ -386,6 +386,31 @@ def test_fleet_instances_are_terminated_when_their_tags_cannot_be_set(provision_
     terminate.assert_called_once_with(region_name="us-east-1", instance_ids=["i-1", "i-2"])
 
 
+def test_abandoned_plain_spot_requests_have_their_instances_terminated(provision_parameters):
+    """Cancelling a spot request doesn't terminate the instance it launched, so a timed-out wait must."""
+    provisioner = AWSInstanceProvisioner()
+    calls = MagicMock()
+    with (
+        patch("sdcm.provision.aws.provisioner.create_spot_instance_request", return_value=["sir-1", "sir-2"]),
+        patch("sdcm.provision.aws.provisioner.wait_for_provision_request_done", return_value=[]),
+        patch.object(AWSInstanceProvisioner, "_ec2_client", return_value=calls.ec2),
+        patch("sdcm.provision.aws.provisioner.get_spot_request_instance_ids", return_value=["i-1"]) as lookup,
+        patch("sdcm.provision.aws.provisioner.terminate_instances_by_id", calls.terminate),
+    ):
+        instances = provisioner._execute_spot_instance_request(
+            provision_parameters=provision_parameters,
+            instance_parameters=make_instance_parameters("i7i.large"),
+            count=2,
+            tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+        )
+
+    assert instances == []
+    lookup.assert_called_once_with(region_name="us-east-1", request_ids=["sir-1", "sir-2"])
+    # cancelled first, so no request launches another instance after the lookup
+    assert [name for name, *_ in calls.mock_calls] == ["ec2.cancel_spot_instance_requests", "terminate"]
+    calls.terminate.assert_called_once_with(region_name="us-east-1", instance_ids=["i-1"])
+
+
 def test_on_demand_uses_preferred_instance_type_only(provision_parameters):
     with (
         patch("sdcm.provision.aws.provisioner.ec2_services") as ec2_services,

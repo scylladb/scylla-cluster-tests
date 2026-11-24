@@ -33,6 +33,7 @@ from sdcm.provision.aws.utils import (
     delete_ec2_fleet,
     filter_instance_types_offered,
     get_provisioned_spot_instance_ids,
+    get_spot_request_instance_ids,
     is_ec2_fleet_retryable,
     split_instance_types,
 )
@@ -508,3 +509,28 @@ def test_a_failed_offering_lookup_keeps_every_type(mock_ec2_client):
         "i7i.large",
         "i4i.large",
     ]
+
+
+def test_spot_request_instance_ids_include_requests_that_are_not_fulfilled_yet(mock_ec2_client):
+    """A request can launch its instance and still not count as fulfilled, e.g. while one of its siblings fails."""
+    mock_ec2_client.__getitem__.return_value.describe_spot_instance_requests.return_value = {
+        "SpotInstanceRequests": [
+            {"SpotInstanceRequestId": "sir-1", "InstanceId": "i-1"},
+            {"SpotInstanceRequestId": "sir-2"},
+            {"SpotInstanceRequestId": "sir-3", "InstanceId": "i-3"},
+        ]
+    }
+
+    assert get_spot_request_instance_ids("us-east-1", ["sir-1", "sir-2", "sir-3"]) == ["i-1", "i-3"]
+
+
+def test_spot_request_instance_ids_never_describe_every_request_in_the_region(mock_ec2_client):
+    """Without ids AWS would list every spot request in the region, including other tests' requests."""
+    assert get_spot_request_instance_ids("us-east-1", []) == []
+    mock_ec2_client.__getitem__.return_value.describe_spot_instance_requests.assert_not_called()
+
+
+def test_spot_request_instance_ids_never_raise(mock_ec2_client):
+    mock_ec2_client.__getitem__.return_value.describe_spot_instance_requests.side_effect = Exception("throttled")
+
+    assert get_spot_request_instance_ids("us-east-1", ["sir-1"]) == []
