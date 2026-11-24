@@ -18,6 +18,10 @@ export SCT_GCE_PROJECT=gcp-local-ssd-latency
 # details of the backup service account
 # and upload to the credential store
 
+# resources that exist once for all of SCT, such as the `scylla-sct-coredumps` bucket that Scylla
+# coredumps go to, are set up by `./sct.py prepare-global-resources`. A new project doesn't need it;
+# run it only when the global resources change. It is safe to re-run.
+
 # create the runner image
 ./sct.py create-runner-image --cloud-provider gce --region us-east1
 
