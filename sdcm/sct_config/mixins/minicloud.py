@@ -55,6 +55,17 @@ class MinicloudConfigMixin(BaseModel):
         "limit, so the container can consume the whole host. Setting it also makes this, rather "
         "than the host's free memory, the budget the preflight guest-memory gate measures against",
     )
+    minicloud_max_vms: String = SctField(
+        description="Cap how many VMs minicloud runs at once (minicloud --max-vms). A launch past it "
+        "fails with each cloud's out-of-capacity error. Needs a minicloud image with the VM budget, "
+        "an older one rejects the flag and does not start. Empty means no cap",
+    )
+    minicloud_max_vm_memory: String = SctField(
+        description="Cap the total guest memory of the VMs minicloud runs at once (e.g. '48GiB'; "
+        "minicloud --max-vm-memory). A launch past it fails with each cloud's out-of-capacity error. "
+        "Needs a minicloud image with the VM budget, an older one rejects the flag and does not start. "
+        "Empty means no cap",
+    )
     minicloud_container_name: String = SctField(
         description="Name of the minicloud docker container. Change it to run two emulators on one "
         "host — a second run under the same name force-removes the first one's container",

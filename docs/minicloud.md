@@ -602,6 +602,7 @@ config option with a default in `defaults/test_default.yaml`; the pipeline layer
 | (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_monitor` | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
 | `minicloud_container_memory` | `minicloud_container_memory` | no docker cap on the container |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
+| (`extra_environment_variables` only) | `minicloud_max_vms`, `minicloud_max_vm_memory` | no VM cap |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_state_dir` | `~/.cache/minicloud` |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_name` | `minicloud` |
 

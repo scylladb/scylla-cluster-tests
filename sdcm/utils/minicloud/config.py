@@ -177,6 +177,12 @@ def resolve_minicloud_default_region(params=None) -> str:
     return MINICLOUD_DEFAULT_REGION
 
 
+def _text_param(params, name: str) -> str:
+    """A param as text; unset is empty, but a configured 0 stays "0" so validation can reject it."""
+    value = (params or {}).get(name)
+    return "" if value in (None, "") else str(value)
+
+
 @dataclasses.dataclass
 class MinicloudConfig:
     """Configuration for MinicloudManager."""
@@ -195,6 +201,9 @@ class MinicloudConfig:
     # bounded only by the host, which is what every run did before these became configurable.
     container_memory: str = ""
     container_cpus: str = ""
+    # minicloud VM budget (--max-vms, --max-vm-memory); empty means no cap
+    max_vms: str = ""
+    max_vm_memory: str = ""
     container_name: str = MINICLOUD_CONTAINER_NAME
     s3_passthrough_buckets: List[str] = dataclasses.field(
         default_factory=lambda: list(MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT)
@@ -361,6 +370,8 @@ class MinicloudConfig:
             lightweight_vcpus_monitor=_monitor_size_param(params, "minicloud_lightweight_vcpus_monitor"),
             container_memory=container_memory,
             container_cpus=container_cpus,
+            max_vms=_text_param(params, "minicloud_max_vms"),
+            max_vm_memory=_text_param(params, "minicloud_max_vm_memory"),
             container_name=container_name,
             s3_passthrough_buckets=s3_passthrough_buckets,
             regions=resolve_minicloud_regions(params),

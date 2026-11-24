@@ -429,6 +429,13 @@ class MinicloudManager:
                 f"--lock-guest-memory is {'--lock-guest-memory' in cmd}, this run wants {self.config.lock_guest_memory}"
             )
 
+        # the VM budget is a start-time flag too
+        wanted_budget = dict(self._budget_flags())
+        for flag in ("--max-vms", "--max-vm-memory"):
+            wanted = wanted_budget.get(flag, "")
+            if (running := running_arg(flag)) != wanted:
+                gaps.append(f"{flag} is {running or 'unset'}, this run wants {wanted or 'unset'}")
+
         # --intercept-s3 is fixed at container start, so a container started without it needs a restart
         if "--intercept-s3" not in cmd:
             gaps.append("no --intercept-s3")
@@ -529,6 +536,7 @@ class MinicloudManager:
             raise MinicloudError(
                 "the minicloud sizes are still 'auto': resolve_minicloud_sizing() has to run before start()"
             )
+        self._budget_flags()  # an invalid cap fails here, before anything running is stopped
         self._setup_gcp_credentials()
         if self.config.native:
             self._start_native()
@@ -698,7 +706,22 @@ class MinicloudManager:
                 "--lightweight-vcpus",
                 lightweight_vcpus,
             ]
+        for flag, value in self._budget_flags():
+            minicloud_args += [flag, value]
         return minicloud_args
+
+    def _budget_flags(self) -> list[tuple[str, str]]:
+        """The --max-vms / --max-vm-memory flags this run wants; a value is validated before it is passed."""
+        flags = []
+        if self.config.max_vms:
+            if not (self.config.max_vms.isascii() and self.config.max_vms.isdigit()) or int(self.config.max_vms) < 1:
+                raise MinicloudError(f"minicloud_max_vms must be a positive integer, got {self.config.max_vms!r}")
+            flags.append(("--max-vms", self.config.max_vms))
+        if self.config.max_vm_memory:
+            if parse_memory_gib(self.config.max_vm_memory, "minicloud_max_vm_memory") <= 0:
+                raise MinicloudError(f"minicloud_max_vm_memory must be above zero, got {self.config.max_vm_memory!r}")
+            flags.append(("--max-vm-memory", self.config.max_vm_memory))
+        return flags
 
     def _start_native(self) -> None:
         """Start the native minicloud binary as a host process and wait for it to become healthy.

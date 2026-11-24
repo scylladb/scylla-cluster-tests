@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
 the local minicloud service.
 
-**25 options.**
+**27 options.**
 
 
 <a id="minicloud_azure_scratch_resource_group"></a>
@@ -36,6 +36,28 @@ Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or 
 ## **minicloud_container_memory** / SCT_MINICLOUD_CONTAINER_MEMORY
 
 Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker limit, so the container can consume the whole host. Setting it also makes this, rather than the host's free memory, the budget the preflight guest-memory gate measures against
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+<a id="minicloud_max_vms"></a>
+
+## **minicloud_max_vms** / SCT_MINICLOUD_MAX_VMS
+
+Cap how many VMs minicloud runs at once (minicloud --max-vms). A launch past it fails with each cloud's out-of-capacity error. Needs a minicloud image with the VM budget, an older one rejects the flag and does not start. Empty means no cap
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+<a id="minicloud_max_vm_memory"></a>
+
+## **minicloud_max_vm_memory** / SCT_MINICLOUD_MAX_VM_MEMORY
+
+Cap the total guest memory of the VMs minicloud runs at once (e.g. '48GiB'; minicloud --max-vm-memory). A launch past it fails with each cloud's out-of-capacity error. Needs a minicloud image with the VM budget, an older one rejects the flag and does not start. Empty means no cap
 
 **default:** N/A
 

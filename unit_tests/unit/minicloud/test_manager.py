@@ -130,6 +130,52 @@ def test_start_passes_intercept_s3(tmp_path):
     assert "--intercept-s3" in cmd
 
 
+@pytest.mark.parametrize(
+    "max_vms, max_vm_memory, expected",
+    [
+        ("", "", []),
+        ("6", "", ["--max-vms", "6"]),
+        ("", "48GiB", ["--max-vm-memory", "48GiB"]),
+        ("6", "48GiB", ["--max-vms", "6", "--max-vm-memory", "48GiB"]),
+    ],
+)
+def test_start_passes_the_vm_budget_flags_when_configured(tmp_path, max_vms, max_vm_memory, expected):
+    config = MinicloudConfig(
+        state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"), max_vms=max_vms, max_vm_memory=max_vm_memory
+    )
+    cmd = _started_docker_cmd(config)
+    assert [a for a in cmd if a in ("--max-vms", "--max-vm-memory")] == expected[::2]
+    for flag, value in zip(expected[::2], expected[1::2]):
+        assert cmd[cmd.index(flag) + 1] == value
+
+
+@pytest.mark.parametrize("max_vms, max_vm_memory", [("abc", ""), ("0", ""), ("", "8GB-ish"), ("", "0GiB")])
+def test_start_rejects_an_invalid_vm_budget(tmp_path, max_vms, max_vm_memory):
+    manager = MinicloudManager(
+        config=MinicloudConfig(state_dir=str(tmp_path), max_vms=max_vms, max_vm_memory=max_vm_memory)
+    )
+    with pytest.raises(MinicloudError, match="minicloud_max_vm"):
+        manager._budget_flags()
+
+
+@pytest.mark.parametrize(
+    "running_cmd, max_vms, expected",
+    [
+        ([], "6", ["--max-vms is unset, this run wants 6"]),
+        (["--max-vms", "4"], "6", ["--max-vms is 4, this run wants 6"]),
+        (["--max-vms", "4"], "", ["--max-vms is 4, this run wants unset"]),
+        (["--max-vms", "6"], "6", []),
+    ],
+)
+def test_container_sizing_gaps_compare_the_vm_budget(tmp_path, running_cmd, max_vms, expected):
+    """The budget is fixed at start, so a rerun with another cap must not reuse the container."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), max_vms=max_vms))
+    cmd = RUNNING_DEFAULT_SIZING_CMD + running_cmd
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(cmd)):
+        gaps = [g for g in manager._container_sizing_gaps() if "--max-vm" in g]
+    assert gaps == expected
+
+
 def test_start_sizes_container_to_host_memory_by_default(tmp_path):
     """Unset caps keep the container bounded only by the host, but still without swap:
     docker needs --memory alongside --memory-swap, so the host's total RAM stands in.

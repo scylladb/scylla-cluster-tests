@@ -462,6 +462,10 @@ minicloud_io_properties_margin: 0.05
 minicloud_container_memory: ''
 # Empty = no docker limit. docker --cpus form, e.g. '8' or '7.5'.
 minicloud_container_cpus: ''
+# Empty = no cap. A launch past either cap fails with the cloud's out-of-capacity error.
+minicloud_max_vms: ''
+# Empty = no cap. Total guest memory of the running VMs, e.g. '48GiB'.
+minicloud_max_vm_memory: ''
 # Empty = ~/.cache/minicloud. Holds the image cache, per-instance disks and minicloud.log.
 minicloud_state_dir: ''
 # Change to run two emulators on one host; same name means the second run removes the first.
