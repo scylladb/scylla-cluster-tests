@@ -39,7 +39,8 @@ def io_properties_file(disk: dict) -> nullcontext:
 
 def submit_deviation_table(backend: str, instance_type: str):
     """Validate the I/O properties of one node and return the deviation table sent to Argus."""
-    validator = IOTuneValidator(node=MagicMock(), backend=backend)
+    node = MagicMock(db_node_instance_type=instance_type)
+    validator = IOTuneValidator(node=node, backend=backend)
     with patch(
         "sdcm.utils.validators.iotune.remote_file",
         side_effect=[io_properties_file(INSTALLED), io_properties_file(MEASURED)],
@@ -51,7 +52,7 @@ def submit_deviation_table(backend: str, instance_type: str):
     send_iotune_results_to_argus(
         argus_client=argus_client,
         results=validator.results,
-        node=MagicMock(db_node_instance_type=instance_type),
+        node=node,
         params={"cluster_backend": backend},
     )
 
@@ -82,6 +83,17 @@ def test_iotune_validator_sends_absolute_deviation_with_backend_limit(backend, l
     assert {column: rule.fixed_limit for column, rule in table.validation_rules.items()} == {
         column: limit_pct for column in EXPECTED_DEVIATION_PCT
     }
+
+
+@pytest.mark.parametrize("instance_type", ["i3en.6xlarge", "i3en.metal"])
+def test_iotune_validator_reports_i3en_deviation_without_limit(instance_type):
+    """The i3en presets do not match iotune reliably (SMI-332), so their deviation goes to Argus without validation
+    rules and never fails the run.
+    """
+    table = submit_deviation_table("aws", instance_type)
+
+    assert {cell.column: cell.value for cell in table.results} == pytest.approx(EXPECTED_DEVIATION_PCT)
+    assert table.validation_rules == {}
 
 
 def test_iotune_validator_uses_one_table_per_backend_and_instance_type():
