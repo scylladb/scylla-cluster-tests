@@ -1859,6 +1859,14 @@ class SCTConfiguration(dict):
                     multiple commands can passed as a list""",
         ),
         dict(
+            name="perf_nemesis_write_preload",
+            env="SCT_PERF_NEMESIS_WRITE_PRELOAD",
+            type=boolean,
+            help="""Run prepare_write_cmd before the write load of test_latency_write_with_nemesis.
+                    Set it to false when stress_cmd_w writes the data that the nemesis operations need,
+                    so the write load starts from an empty table, as in the predefined throughput steps test.""",
+        ),
+        dict(
             name="stress_cmd_no_mv",
             env="SCT_STRESS_CMD_NO_MV",
             type=str_or_list,

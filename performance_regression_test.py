@@ -285,13 +285,20 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         base_cmd_m = self.params.get("stress_cmd_m")
         self.run_workload(stress_cmd=base_cmd_m, nemesis=nemesis, sub_type="mixed")
 
+    def _workload_stress_params(self, stress_cmd):
+        params = {"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
+        # A list of several commands with round_robin runs each command on its own loader, as the
+        # predefined throughput steps test does. The config turns a single command into a list of
+        # one, and that command still runs on all loaders.
+        if isinstance(stress_cmd, list) and len(stress_cmd) > 1 and self.params.get("round_robin"):
+            params["round_robin"] = True
+        return params
+
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
         self.stress_cmd = stress_cmd
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
+        stress_queues = self._run_all_stress_cmds([], params=self._workload_stress_params(stress_cmd))
         all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
         if nemesis:
             interval = self.params.get("nemesis_interval")
@@ -676,22 +683,43 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_r"), nemesis=True, sub_type="read")
 
     def test_latency_write_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
-        self.wait_no_compactions_running(n=160)
-        self.run_fstrim_on_all_db_nodes()
+        # Without the preload, the write load starts from an empty table and writes the data
+        # that the nemesis operations need, so there are no compactions or splits to wait for.
+        if self.params.get("perf_nemesis_write_preload"):
+            self.preload_data()
+            self.wait_no_compactions_running(n=160)
+            # Tablet splits can still run after the compactions end, as in the steps test
+            self.wait_for_no_tablets_splits()
+            self.run_fstrim_on_all_db_nodes()
+        else:
+            self.log.info("perf_nemesis_write_preload is false: the write load starts from an empty table")
         self.run_workload(stress_cmd=self.params.get("stress_cmd_w"), nemesis=True, sub_type="write")
 
     def test_latency_mixed_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get("stress_cmd_m"), nemesis=True, sub_type="mixed")
+
+    def test_latency_read_disk_only_with_nemesis(self):
+        """Read keys from the whole dataset, so the reads go to disk, while the nemesis runs."""
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.wait_no_compactions_running(n=160)
+        # Tablet splits can still run after the compactions end, as in the steps test
+        self.wait_for_no_tablets_splits()
+        self.run_fstrim_on_all_db_nodes()
+        self.run_workload(stress_cmd=self.params.get("stress_cmd_read_disk"), nemesis=True, sub_type="read_disk_only")
 
     # MV Tests
     def test_mv_write(self):
