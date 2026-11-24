@@ -16,7 +16,8 @@ LOGGER = logging.getLogger(__name__)
 #
 # An installed value above the measured value lets the I/O scheduler send more I/O than the disk can serve.
 # An installed value below the measured value keeps Scylla from using the full disk performance.
-# Argus fails the run when the deviation is at or above the limit of the backend. The limits come from the Argus
+# Argus fails the run when the deviation is at or above the limit of the backend, except for the instance families in
+# IO_DEVIATION_REPORT_ONLY_FAMILIES. The limits come from the Argus
 # "Disk Performance" tables of release image artifacts runs, 2025-07 to 2026-10 (SCT-1274). The "healthy max"
 # columns do not include the instance types with a known preset defect.
 #
@@ -30,6 +31,12 @@ LOGGER = logging.getLogger(__name__)
 #   azure    35%    35% (Lsv3), 12% (v4)      32% (Lsv3), 11% (v4)     98% above (Lsv3 low-IOPS hosts),
 #                                                                      360% below (2026.1 L8aos_v4)
 IO_DEVIATION_LIMIT_PCT = {"aws": 25, "gce": 20, "oci": 30, "azure": 35}
+
+# Instance families whose deviation goes to Argus without a limit, so it never fails the run. The i3en presets do not
+# match iotune reliably (SMI-332): re-measured presets went wrong again within days, i3en.24xlarge measured 80% above
+# its preset, and i3en.24xlarge and i3en.metal (same disks) measure 2.10M and 1.35M read IOPS. A looser limit that
+# passes these would catch little. Restore the limit once SMI-332 gives stable presets.
+IO_DEVIATION_REPORT_ONLY_FAMILIES = ("i3en.",)
 
 
 class IOTuneDiskParams(TypedDict):
@@ -57,9 +64,10 @@ class IOTuneValidator:
         self.node = node
         self.node_io_properties: IOProperties = {}
         self.preset_io_properties: IOProperties = {}
+        report_only = (node.db_node_instance_type or "").startswith(IO_DEVIATION_REPORT_ONLY_FAMILIES)
         self.results = {
             "mountpoint": None,
-            "limit_pct": IO_DEVIATION_LIMIT_PCT[backend],
+            "limit_pct": None if report_only else IO_DEVIATION_LIMIT_PCT[backend],
             "deviation_pct": {},
             "active": {},
             "preset": {},
