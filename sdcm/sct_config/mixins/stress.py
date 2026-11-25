@@ -48,7 +48,7 @@ class StressConfigMixin(BaseModel):
 
     | Tool | Options |
     |---|---|
-    | cassandra-stress | cs_user_profiles, prepare_cs_user_profiles, cs_duration, cs_debug, cs_extra_jvm_opts, cs_populating_distribution, c_s_driver_version, user_profile_table_count, add_cs_user_profiles_extra_tables, stress_cmd_no_mv_profile |
+    | cassandra-stress | cs_user_profiles, prepare_cs_user_profiles, cs_duration, cs_debug, cs_extra_jvm_opts, cs_docker_memory_limit_percent, cs_populating_distribution, c_s_driver_version, user_profile_table_count, add_cs_user_profiles_extra_tables, stress_cmd_no_mv_profile |
     | gemini | gemini_cmd, gemini_seed, gemini_schema_url, gemini_table_options, gemini_log_cql_statements |
     | latte | latte_schema_parameters |
     | cdc log reader | stress_cdclog_reader_cmd, stress_cdc_log_reader_batching_enable, store_cdclog_reader_stats_in_es |
@@ -96,6 +96,12 @@ class StressConfigMixin(BaseModel):
         description="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
         "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
         "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
+    )
+    cs_docker_memory_limit_percent: int = SctField(
+        description="Memory limit of each cassandra-stress container, in percent of the loader memory. "
+        "Use it when cassandra-stress shares a loader with another tool, such as gemini. "
+        "Each cassandra-stress command runs in its own container with this limit. "
+        "Use a value from 1 to 100. Empty means no limit. Not supported for k8s backends and prepared loaders.",
     )
     cs_populating_distribution: String = SctField(
         description="set c-s parameter '-pop' with gauss/uniform distribution for performance gradual throughput grow tests",

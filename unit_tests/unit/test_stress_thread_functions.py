@@ -321,3 +321,15 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
     assert extract_gemini_seed(gemini_cmd) == expected_seed
+
+
+@pytest.mark.parametrize(
+    "mem_total_kib,percent,expected",
+    (
+        (8_000_000, 25, " --memory=2000000k --memory-swap=2000000k"),
+        (8_000_003, 25, " --memory=2000000k --memory-swap=2000000k"),
+        (16_000_000, 100, " --memory=16000000k --memory-swap=16000000k"),
+    ),
+)
+def test_docker_memory_opts(mem_total_kib, percent, expected):
+    assert CassandraStressThread._docker_memory_opts(mem_total_kib, percent) == expected
