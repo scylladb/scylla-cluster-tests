@@ -12,7 +12,20 @@ from sdcm.utils.minicloud.log_collection import (
 )
 
 
+def fake_docker_logs(stdout=b"", stderr=b"", returncode=0):
+    """Stand in for subprocess.run(['docker', 'logs', ...]) inside collect_minicloud_logs."""
+
+    def run(cmd, capture_output=False, check=False):  # noqa: ARG001
+        if cmd[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
+        # docker inspect — irrelevant here, report it as unavailable
+        return subprocess.CompletedProcess(cmd, 1, b"", b"no such container")
+
+    return run
+
+
 def test_collect_native_log_copies_into_logdir(tmp_path):
+    """collect_native_minicloud_log copies the native minicloud log into the logdir."""
     native_log = tmp_path / "state" / "minicloud-native.log"
     native_log.parent.mkdir()
     native_log.write_text("minicloud output\n")
@@ -23,11 +36,13 @@ def test_collect_native_log_copies_into_logdir(tmp_path):
 
 
 def test_collect_native_log_without_log_file(tmp_path):
+    """A missing native log is reported as not collected and creates no logdir."""
     assert not collect_native_minicloud_log(str(tmp_path / "run"), str(tmp_path / "missing.log"))
     assert not (tmp_path / "run").exists()
 
 
 def test_collect_native_log_into_its_own_dir(tmp_path):
+    """A native log already in the logdir is collected without being moved or rewritten."""
     native_log = tmp_path / "minicloud-native.log"
     native_log.write_text("minicloud output\n")
 
@@ -36,6 +51,7 @@ def test_collect_native_log_into_its_own_dir(tmp_path):
 
 
 def test_redact_docker_inspect_strips_credentials():
+    """redact_docker_inspect removes AWS secrets and keeps non-secret env and state fields."""
     raw = (
         b'[{"Config": {"Env": ["AWS_ACCESS_KEY_ID=AKIAXXXX", "AWS_SECRET_ACCESS_KEY=verysecret", '
         b'"AWS_SESSION_TOKEN=tok", "AWS_REGION=eu-west-1", "PATH=/usr/bin"]}, "State": {"ExitCode": 137}}]'
@@ -86,18 +102,6 @@ def test_collect_guest_serial_logs_survives_a_missing_state_dir(tmp_path):
     assert collect_minicloud_guest_serial_logs(str(tmp_path / "logdir"), state_dir=str(tmp_path / "absent")) == 0
 
 
-def _fake_docker_logs(stdout=b"", stderr=b"", returncode=0):
-    """Stand in for subprocess.run(['docker', 'logs', ...]) inside collect_minicloud_logs."""
-
-    def run(cmd, capture_output=False, check=False):  # noqa: ARG001
-        if cmd[:2] == ["docker", "logs"]:
-            return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
-        # docker inspect — irrelevant here, report it as unavailable
-        return subprocess.CompletedProcess(cmd, 1, b"", b"no such container")
-
-    return run
-
-
 def test_collect_logs_keeps_streamed_copy_and_still_captures_the_ending(tmp_path, monkeypatch):
     """The streamed copy stops at teardown, so the full `docker logs` must still be collected.
 
@@ -107,7 +111,7 @@ def test_collect_logs_keeps_streamed_copy_and_still_captures_the_ending(tmp_path
     logdir = tmp_path / "run"
     logdir.mkdir()
     (logdir / "minicloud.log").write_bytes(b"streamed up to teardown\n")
-    monkeypatch.setattr(subprocess, "run", _fake_docker_logs(stdout=b"streamed up to teardown\nplus the ending\n"))
+    monkeypatch.setattr(subprocess, "run", fake_docker_logs(stdout=b"streamed up to teardown\nplus the ending\n"))
 
     collect_minicloud_logs(str(logdir))
 
@@ -119,7 +123,7 @@ def test_collect_logs_keeps_streamed_copy_and_still_captures_the_ending(tmp_path
 def test_collect_logs_writes_minicloud_log_when_nothing_was_streamed(tmp_path, monkeypatch):
     """With no streamed copy (container adopted, or a bare collect-logs run) it keeps the plain name."""
     logdir = tmp_path / "run"
-    monkeypatch.setattr(subprocess, "run", _fake_docker_logs(stdout=b"whole log\n"))
+    monkeypatch.setattr(subprocess, "run", fake_docker_logs(stdout=b"whole log\n"))
 
     collect_minicloud_logs(str(logdir))
 
@@ -132,7 +136,7 @@ def test_collect_logs_leaves_streamed_copy_alone_when_container_is_gone(tmp_path
     logdir = tmp_path / "run"
     logdir.mkdir()
     (logdir / "minicloud.log").write_bytes(b"streamed\n")
-    monkeypatch.setattr(subprocess, "run", _fake_docker_logs(returncode=1, stderr=b"No such container: minicloud"))
+    monkeypatch.setattr(subprocess, "run", fake_docker_logs(returncode=1, stderr=b"No such container: minicloud"))
 
     collect_minicloud_logs(str(logdir))
 

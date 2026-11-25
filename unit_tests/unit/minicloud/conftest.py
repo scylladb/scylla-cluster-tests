@@ -1,6 +1,5 @@
 """Shared fixtures and helpers for the minicloud unit-test package."""
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,37 +8,35 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def no_atexit(monkeypatch):
-    # start() registers an atexit teardown; in tests that would run a real
-    # `docker rm -f` at interpreter exit, escaping the unit-test sandbox.
+    """start() registers no atexit teardown, so no test runs a real `docker rm -f` at interpreter exit."""
     monkeypatch.setattr("sdcm.utils.minicloud.manager.atexit.register", lambda *a, **k: None)
 
 
 @pytest.fixture(autouse=True)
 def container_mode(monkeypatch):
-    # The native-process default follows the host OS. Pin it, so a run on a macOS laptop
-    # tests the same container path as the Linux CI. Native-mode tests pass native=True.
+    """Pin the minicloud default to container mode, so tests take the same path on macOS and Linux."""
+    # Native-mode tests pass native=True.
     monkeypatch.setattr("sdcm.utils.minicloud.config.MINICLOUD_NATIVE_DEFAULT", False)
 
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    # MinicloudManager.set_env_overrides() writes straight into os.environ (that is its
-    # job - it configures the SCT process). monkeypatch cannot undo what it never saw, so
-    # snapshot and restore the whole environment: a leaked AWS_ENDPOINT_URL makes
-    # is_minicloud_active() true for every test that runs afterwards in this process,
-    # which silently disables AZ/region fallback and reds the provisioner suite.
-    original_env = os.environ.copy()
-    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
-    monkeypatch.delenv("GCE_ENDPOINT_URL", raising=False)
-    monkeypatch.delenv("SCT_MINICLOUD_ENDPOINT_URL", raising=False)
-    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
-    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
-    # region resolution reads this; a developer's exported value must not decide what
-    # these tests assert
-    monkeypatch.delenv("SCT_REGION_NAME", raising=False)
-    yield
-    os.environ.clear()
-    os.environ.update(original_env)
+    """Clear the endpoint and region variables for each test and restore whatever the code under test sets."""
+    # set_env_overrides() writes straight into os.environ. A setenv/delenv pair makes
+    # monkeypatch record each variable even when it was absent, so it is restored afterwards.
+    # A leaked AWS_ENDPOINT_URL would make is_minicloud_active() true for later tests.
+    for name in (
+        "AWS_ENDPOINT_URL",
+        "GCE_ENDPOINT_URL",
+        "SCT_MINICLOUD_ENDPOINT_URL",
+        "AZURE_ENDPOINT_URL",
+        "REQUESTS_CA_BUNDLE",
+        # region resolution reads this; a developer's exported value must not decide what
+        # these tests assert
+        "SCT_REGION_NAME",
+    ):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
 
 
 @pytest.fixture(autouse=True)

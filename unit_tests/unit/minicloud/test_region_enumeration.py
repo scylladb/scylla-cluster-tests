@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from sdcm.sct_runner import AwsSctRunner, AzureSctRunner, list_sct_runners
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.common import all_aws_regions
+from sdcm.utils.common import DEFAULT_AWS_REGION, all_aws_regions
 
 
 def test_all_aws_regions_uses_static_list_when_minicloud_active(monkeypatch):
@@ -26,7 +26,7 @@ def test_all_aws_regions_queries_the_api_without_minicloud(monkeypatch):
         boto3_mock.client.return_value.describe_regions.return_value = {"Regions": [{"RegionName": "eu-west-1"}]}
         regions = all_aws_regions()
     assert regions == ["eu-west-1"]
-    boto3_mock.client.assert_called_once()
+    boto3_mock.client.assert_called_once_with("ec2", region_name=DEFAULT_AWS_REGION)
 
 
 def test_runner_lookup_bypasses_the_minicloud_endpoint(monkeypatch):
@@ -54,7 +54,9 @@ def test_azure_runner_lookup_uses_the_real_cloud_service(monkeypatch):
     monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
     with patch("sdcm.sct_runner.list_instances_azure", return_value=[]) as listing:
         assert AzureSctRunner.list_sct_runners(verbose=False) == []
-    listing.assert_called_once()
+    listing.assert_called_once_with(
+        tags_dict={"NodeType": AzureSctRunner.NODE_TYPE}, verbose=False, azure_service=AzureService.real_cloud()
+    )
     assert listing.call_args.kwargs["azure_service"] is AzureService.real_cloud()
 
 

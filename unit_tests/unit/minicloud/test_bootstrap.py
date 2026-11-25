@@ -7,6 +7,7 @@ from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
 
 
 def test_ensure_minicloud_ready_retries_then_succeeds(monkeypatch):
+    """ensure_minicloud_ready retries an unreachable endpoint and sets the AWS endpoint once reachable."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
 
     call_count = {"n": 0}
@@ -17,9 +18,11 @@ def test_ensure_minicloud_ready_retries_then_succeeds(monkeypatch):
             raise RuntimeError("not reachable")
         return True
 
-    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", side_effect=mock_check):
-        with patch("sdcm.utils.minicloud.bootstrap.time.sleep"):
-            ensure_minicloud_ready()
+    with (
+        patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", side_effect=mock_check),
+        patch("sdcm.utils.minicloud.bootstrap.time.sleep"),
+    ):
+        ensure_minicloud_ready()
 
     assert call_count["n"] == 3
     assert os.environ.get("AWS_ENDPOINT_URL") == "http://localhost:5000"
@@ -43,6 +46,7 @@ def test_ensure_minicloud_ready_healthy_path_sets_gce_endpoint(monkeypatch):
 
 
 def test_ensure_minicloud_ready_falls_through_to_auto_start(monkeypatch):
+    """Unreachable after retries: ensure_minicloud_ready runs the full preflight, starts and prepares AWS regions."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
 
     def mock_check_always_fails(endpoint=None, timeout=5):
@@ -50,17 +54,19 @@ def test_ensure_minicloud_ready_falls_through_to_auto_start(monkeypatch):
 
     mock_manager = MagicMock()
 
-    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", side_effect=mock_check_always_fails):
-        with patch("sdcm.utils.minicloud.bootstrap.time.sleep"):
-            with patch("sdcm.utils.minicloud.bootstrap.MinicloudConfig.from_env"):
-                with patch("sdcm.utils.minicloud.bootstrap.MinicloudManager", return_value=mock_manager):
-                    ensure_minicloud_ready(backend="aws")
+    with (
+        patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", side_effect=mock_check_always_fails),
+        patch("sdcm.utils.minicloud.bootstrap.time.sleep"),
+        patch("sdcm.utils.minicloud.bootstrap.MinicloudConfig.from_env"),
+        patch("sdcm.utils.minicloud.bootstrap.MinicloudManager", return_value=mock_manager),
+    ):
+        ensure_minicloud_ready(backend="aws")
 
     # Full preflight: this path can be the FIRST container start (standalone run-test /
     # provision-resources), so credential validation must not be skipped here.
     mock_manager.preflight_check.assert_called_once_with(params=None)
-    mock_manager.start.assert_called_once()
-    mock_manager.prepare_regions.assert_called_once()
+    mock_manager.start.assert_called_once_with()
+    mock_manager.prepare_regions.assert_called_once_with()
 
 
 def test_ensure_minicloud_ready_validates_params_when_adopting_a_healthy_container(monkeypatch):
@@ -74,9 +80,11 @@ def test_ensure_minicloud_ready_validates_params_when_adopting_a_healthy_contain
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     params = MagicMock()
 
-    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True):
-        with patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate:
-            ensure_minicloud_ready(params=params)
+    with (
+        patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True),
+        patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate,
+    ):
+        ensure_minicloud_ready(params=params)
 
     mock_validate.assert_called_once_with(params)
 
@@ -85,8 +93,10 @@ def test_ensure_minicloud_ready_healthy_path_tolerates_no_params(monkeypatch):
     """Callers without an SCTConfiguration to hand must still be able to adopt a container."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
 
-    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True):
-        with patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate:
-            ensure_minicloud_ready()
+    with (
+        patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True),
+        patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate,
+    ):
+        ensure_minicloud_ready()
 
     mock_validate.assert_not_called()
