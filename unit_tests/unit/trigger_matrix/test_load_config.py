@@ -20,6 +20,7 @@ from sdcm.utils.trigger_matrix.models import MatrixConfig
 
 
 def test_load_valid_yaml(sample_matrix_yaml):
+    """load_matrix_config parses the sample matrix into MatrixConfig with the expected jobs."""
     config = load_matrix_config(sample_matrix_yaml)
 
     assert isinstance(config, MatrixConfig)
@@ -31,12 +32,14 @@ def test_load_valid_yaml(sample_matrix_yaml):
 
 
 def test_load_defaults(sample_matrix_yaml):
+    """load_matrix_config exposes the defaults block of the matrix."""
     config = load_matrix_config(sample_matrix_yaml)
     assert config.defaults["provision_type"] == "spot"
     assert config.defaults["post_behavior_db_nodes"] == "destroy"
 
 
 def test_load_cron_triggers(sample_matrix_yaml):
+    """load_matrix_config parses cron triggers with their schedule and params."""
     config = load_matrix_config(sample_matrix_yaml)
     assert len(config.cron_triggers) == 1
     assert config.cron_triggers[0].schedule == "00 06 * * 6"
@@ -44,11 +47,13 @@ def test_load_cron_triggers(sample_matrix_yaml):
 
 
 def test_load_file_not_found(tmp_path):
+    """load_matrix_config raises FileNotFoundError for a missing file."""
     with pytest.raises(FileNotFoundError):
         load_matrix_config(tmp_path / "nonexistent.yaml")
 
 
 def test_load_invalid_not_mapping(tmp_path):
+    """load_matrix_config rejects a top-level YAML list that is not a mapping."""
     path = tmp_path / "bad.yaml"
     path.write_text("- just a list")
     with pytest.raises(MatrixValidationError, match="YAML mapping"):
@@ -56,6 +61,7 @@ def test_load_invalid_not_mapping(tmp_path):
 
 
 def test_load_missing_jobs_key(tmp_path):
+    """load_matrix_config rejects a matrix without a 'jobs' key."""
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.dump({"defaults": {}}))
     with pytest.raises(MatrixValidationError, match="'jobs' key"):
@@ -63,6 +69,7 @@ def test_load_missing_jobs_key(tmp_path):
 
 
 def test_load_jobs_not_list(tmp_path):
+    """load_matrix_config rejects a 'jobs' value that is not a list."""
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.dump({"jobs": "not-a-list"}))
     with pytest.raises(MatrixValidationError, match="'jobs' must be a list"):
@@ -70,6 +77,7 @@ def test_load_jobs_not_list(tmp_path):
 
 
 def test_load_job_missing_name(tmp_path):
+    """load_matrix_config rejects a job without job_name."""
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.dump({"jobs": [{"backend": "aws"}]}))
     with pytest.raises(MatrixValidationError, match="job_name"):
@@ -77,6 +85,7 @@ def test_load_job_missing_name(tmp_path):
 
 
 def test_load_job_missing_backend(tmp_path):
+    """load_matrix_config rejects a job without backend."""
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test"}]}))
     with pytest.raises(MatrixValidationError, match="backend"):
@@ -84,6 +93,7 @@ def test_load_job_missing_backend(tmp_path):
 
 
 def test_load_empty_jobs_list(tmp_path):
+    """load_matrix_config accepts a matrix with an empty jobs list."""
     path = tmp_path / "empty.yaml"
     path.write_text(yaml.dump({"jobs": []}))
     config = load_matrix_config(path)
@@ -91,6 +101,7 @@ def test_load_empty_jobs_list(tmp_path):
 
 
 def test_load_minimal_job(tmp_path):
+    """load_matrix_config fills optional job fields with empty defaults."""
     path = tmp_path / "minimal.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test", "backend": "aws"}]}))
     config = load_matrix_config(path)
@@ -100,6 +111,7 @@ def test_load_minimal_job(tmp_path):
 
 
 def test_invalid_backend_raises(tmp_path):
+    """load_matrix_config rejects a backend outside the supported set and names it in the error."""
     path = tmp_path / "bad-backend.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test", "backend": "gec"}]}))
     with pytest.raises(MatrixValidationError, match=r"'gec'"):
@@ -108,6 +120,7 @@ def test_invalid_backend_raises(tmp_path):
 
 @pytest.mark.parametrize("backend", sorted(["aws", "gce", "azure", "docker", "oci", "xcloud"]))
 def test_valid_backends_accepted(tmp_path, backend):
+    """load_matrix_config accepts every supported backend."""
     path = tmp_path / "valid.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test", "backend": backend}]}))
     config = load_matrix_config(path)
@@ -131,6 +144,7 @@ def test_same_job_under_two_arches_rejected(tmp_path):
     ],
 )
 def test_same_job_under_two_arches_with_overlapping_versions_rejected(tmp_path, x86_range, arm_range):
+    """load_matrix_config rejects one job on two arches whose version ranges overlap."""
     path = tmp_path / "twins.yaml"
     job = {"job_name": "tier1/twcs", "backend": "aws"}
     path.write_text(yaml.dump({"jobs": [{**job, **x86_range}, {**job, "arch": "aarch64", **arm_range}]}))
@@ -157,6 +171,7 @@ def test_same_job_under_two_arches_split_by_release_allowed(tmp_path):
 
 
 def test_same_job_repeated_on_one_arch_allowed(tmp_path):
+    """load_matrix_config keeps repeated entries of one job on the same arch."""
     path = tmp_path / "repeats.yaml"
     twin = {"job_name": "perf", "backend": "aws", "arch": "aarch64"}
     path.write_text(yaml.dump({"jobs": [{**twin, "include_versions": ["master"]}, {**twin, "labels": ["weekly"]}]}))
@@ -164,6 +179,7 @@ def test_same_job_repeated_on_one_arch_allowed(tmp_path):
 
 
 def test_pre_release_loaded_from_yaml(tmp_path):
+    """load_matrix_config reads the pre_release list of a job."""
     data = {
         "jobs": [
             {
@@ -181,6 +197,7 @@ def test_pre_release_loaded_from_yaml(tmp_path):
 
 
 def test_include_versions_loaded_from_yaml(tmp_path):
+    """load_matrix_config reads the include_versions list of a job."""
     data = {
         "jobs": [
             {

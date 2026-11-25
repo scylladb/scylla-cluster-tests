@@ -26,6 +26,7 @@ TRIGGERS_DIR = Path(__file__).parent.parent.parent.parent / "configurations" / "
 
 
 def write_matrix(tmp_path, data) -> Path:
+    """Write data as matrix.yaml under tmp_path and return its path."""
     path = tmp_path / "matrix.yaml"
     path.write_text(yaml.dump(data))
     return path
@@ -39,18 +40,21 @@ def test_job_level_region_rejected(tmp_path):
 
 
 def test_unknown_job_level_key_rejected(tmp_path):
+    """An unknown job-level key is rejected by name."""
     path = write_matrix(tmp_path, {"jobs": [{"job_name": "test", "backend": "aws", "instance_type_db": "i4i.4xlarge"}]})
     with pytest.raises(MatrixValidationError, match=r"unknown job-level key 'instance_type_db'"):
         load_matrix_config(path)
 
 
 def test_typo_in_job_level_key_suggests_correction(tmp_path):
+    """A near-miss job-level key error suggests the correct key."""
     path = write_matrix(tmp_path, {"jobs": [{"job_name": "test", "backend": "aws", "label": ["weekly"]}]})
     with pytest.raises(MatrixValidationError, match=r"did you mean 'labels'\?"):
         load_matrix_config(path)
 
 
 def test_error_names_the_offending_job(tmp_path):
+    """The layout error names the bad job and its index in jobs."""
     path = write_matrix(
         tmp_path,
         {
@@ -65,6 +69,7 @@ def test_error_names_the_offending_job(tmp_path):
 
 
 def test_all_layout_errors_reported_at_once(tmp_path):
+    """Every bad job is named in one error, not only the first one."""
     path = write_matrix(
         tmp_path,
         {
@@ -82,18 +87,21 @@ def test_all_layout_errors_reported_at_once(tmp_path):
 
 @pytest.mark.parametrize("key", sorted(JOB_LEVEL_KEYS - {"params"}))
 def test_job_level_key_nested_under_params_rejected(tmp_path, key):
+    """Every job-level key placed under params is rejected."""
     path = write_matrix(tmp_path, {"jobs": [{"job_name": "test", "backend": "aws", "params": {key: "x"}}]})
     with pytest.raises(MatrixValidationError, match=rf"'{key}' is a job-level key"):
         load_matrix_config(path)
 
 
 def test_list_valued_param_rejected(tmp_path):
+    """A list-valued Jenkins parameter is rejected because it must be a scalar."""
     path = write_matrix(tmp_path, {"jobs": [{"job_name": "test", "backend": "aws", "params": {"sub_tests": ["a"]}}]})
     with pytest.raises(MatrixValidationError, match=r"'sub_tests' must be a scalar"):
         load_matrix_config(path)
 
 
 def test_list_valued_region_suggests_json_string(tmp_path):
+    """A list-valued region error tells the user to pass a JSON string."""
     path = write_matrix(
         tmp_path,
         {"jobs": [{"job_name": "test", "backend": "aws", "params": {"region": ["eu-west-1", "eu-west-2"]}}]},
@@ -103,6 +111,7 @@ def test_list_valued_region_suggests_json_string(tmp_path):
 
 
 def test_multi_region_json_string_accepted(tmp_path):
+    """A multi-region JSON string in params is kept as the same string."""
     path = write_matrix(
         tmp_path,
         {"jobs": [{"job_name": "test", "backend": "aws", "params": {"region": '["eu-west-1", "eu-west-2"]'}}]},
@@ -112,30 +121,35 @@ def test_multi_region_json_string_accepted(tmp_path):
 
 
 def test_params_not_a_mapping_rejected(tmp_path):
+    """A params list instead of a mapping is rejected."""
     path = write_matrix(tmp_path, {"jobs": [{"job_name": "test", "backend": "aws", "params": ["region=eu-west-1"]}]})
     with pytest.raises(MatrixValidationError, match=r"must be a mapping of Jenkins parameters"):
         load_matrix_config(path)
 
 
 def test_unknown_top_level_key_rejected(tmp_path):
+    """An unknown top-level key in the matrix is rejected by name."""
     path = write_matrix(tmp_path, {"jobs": [], "job": []})
     with pytest.raises(MatrixValidationError, match=r"unknown top-level key 'job'"):
         load_matrix_config(path)
 
 
 def test_job_level_key_in_defaults_rejected(tmp_path):
+    """A job-level key in defaults is rejected."""
     path = write_matrix(tmp_path, {"defaults": {"labels": ["weekly"]}, "jobs": []})
     with pytest.raises(MatrixValidationError, match=r"defaults: 'labels' is a job-level key"):
         load_matrix_config(path)
 
 
 def test_list_valued_default_rejected(tmp_path):
+    """A list-valued default parameter is rejected because it must be a scalar."""
     path = write_matrix(tmp_path, {"defaults": {"post_behavior_db_nodes": ["destroy"]}, "jobs": []})
     with pytest.raises(MatrixValidationError, match=r"defaults: 'post_behavior_db_nodes' must be a scalar"):
         load_matrix_config(path)
 
 
 def test_list_valued_cron_param_rejected(tmp_path):
+    """A list-valued cron trigger param is rejected because it must be a scalar."""
     path = write_matrix(
         tmp_path,
         {"cron_triggers": [{"schedule": "0 6 * * 6", "params": {"labels_selector": ["weekly"]}}], "jobs": []},
@@ -162,6 +176,7 @@ def test_production_matrices_pass_layout_validation(filename):
 
 @pytest.mark.parametrize("filename", sorted(p.name for p in TRIGGERS_DIR.glob("*.yaml")))
 def test_production_matrices_have_no_job_level_region(filename):
+    """No shipped trigger matrix sets region at job level instead of under params."""
     raw = yaml.safe_load((TRIGGERS_DIR / filename).read_text(encoding="utf-8"))
     offenders = [job["job_name"] for job in raw["jobs"] if "region" in job]
     assert not offenders, f"{filename}: region must live under 'params:' for {offenders}"

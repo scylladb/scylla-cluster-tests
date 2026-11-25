@@ -12,6 +12,7 @@
 # Copyright (c) 2026 ScyllaDB
 
 import logging
+from unittest import mock
 
 import pytest
 import yaml
@@ -25,6 +26,7 @@ from sdcm.utils.trigger_matrix.models import JobConfig
 
 
 def test_job_config_wait_defaults_false():
+    """JobConfig defaults to no wait, no fail_on_error and no collect_results."""
     job = JobConfig(job_name="test", backend="aws")
     assert job.wait is False
     assert job.fail_on_error is False
@@ -32,6 +34,7 @@ def test_job_config_wait_defaults_false():
 
 
 def test_load_yaml_with_wait_fields(tmp_path):
+    """load_matrix_config reads wait, fail_on_error and collect_results from the YAML job entry."""
     data = {
         "jobs": [
             {
@@ -52,6 +55,7 @@ def test_load_yaml_with_wait_fields(tmp_path):
 
 
 def test_dry_run_wait_mode(tmp_path, caplog):
+    """A dry-run wait job is reported as triggered and waited on with a SUCCESS build."""
     data = {
         "jobs": [
             {
@@ -77,6 +81,7 @@ def test_dry_run_wait_mode(tmp_path, caplog):
 
 
 def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
+    """A failed fail_on_error wait job is reported as failed, and the next job is still triggered."""
     data = {
         "jobs": [
             {
@@ -111,6 +116,7 @@ def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
 
 
 def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
+    """trigger_matrix_versions waits for the wait-mode builds of all versions in one wait_for_builds call."""
     data = {
         "jobs": [
             {"job_name": "/gating/job-1", "backend": "docker", "wait": True},
@@ -139,7 +145,14 @@ def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
     assert results["triggered"] == ["gating/job-1", "gating/job-2", "gating/job-1", "gating/job-2"]
     assert results["versions"] == {"gating/job-1": "2025.4.3, 2026.1.1", "gating/job-2": "2025.4.3, 2026.1.1"}
     assert results["skipped"] == []
-    reporting.Email.return_value.send.assert_called_once()
+    reporting.Email.return_value.send.assert_called_once_with(
+        subject="[Trigger Matrix] PASSED — gating-matrix: 2025.4.3, 2026.1.1",
+        content=mock.ANY,
+        recipients=["qa@scylladb.com"],
+        html=True,
+    )
+    content = reporting.Email.return_value.send.call_args.kwargs["content"]
+    assert "<b>Version:</b> 2025.4.3, 2026.1.1<br/>" in content
 
 
 @pytest.mark.parametrize(
@@ -150,6 +163,7 @@ def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
     ],
 )
 def test_no_wait_job_triggered_fails(tmp_path, filters):
+    """trigger_matrix raises when no wait-mode job is triggered, and sends no report email."""
     data = {
         "jobs": [
             {"job_name": "/gating/job-1", "backend": "docker", "wait": True, "labels": ["os-a"]},
@@ -166,6 +180,7 @@ def test_no_wait_job_triggered_fails(tmp_path, filters):
 
 
 def test_no_job_triggered_without_wait_jobs_does_not_fail(tmp_path):
+    """A matrix with no wait-mode job that matches the filter triggers nothing and does not fail."""
     data = {"jobs": [{"job_name": "/sanity/job-1", "backend": "docker", "labels": ["weekly"]}]}
     path = tmp_path / "matrix.yaml"
     path.write_text(yaml.dump(data))
@@ -184,6 +199,7 @@ def test_no_job_triggered_without_wait_jobs_does_not_fail(tmp_path):
     ],
 )
 def test_report_recipients(tmp_path, cli_recipients, expected):
+    """The report goes to the matrix email_recipients unless CLI recipients are given."""
     data = {
         "email_recipients": "matrix@example.com",
         "jobs": [{"job_name": "/gating/job-1", "backend": "docker", "wait": True}],

@@ -40,42 +40,58 @@ from sdcm.utils.trigger_matrix.versions import determine_job_folder
     ],
 )
 def test_version_to_folder(version, expected):
+    """determine_job_folder maps each version format to its scylla-<release> folder."""
     assert determine_job_folder(version) == expected
 
 
 def test_explicit_override():
+    """An explicit job_folder argument wins over the folder derived from the version."""
     assert determine_job_folder("master:latest", job_folder="my-folder") == "my-folder"
 
 
 def test_branch_qualifier():
+    """A branch-<release>:all version maps to the scylla-branch-<release> folder."""
     assert determine_job_folder("branch-2019.1:all") == "scylla-branch-2019.1"
 
 
 def test_invalid_version_raises():
+    """An unrecognised version raises TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder("not-a-version")
 
 
-@pytest.mark.parametrize("version", ["2026.4.0-rc", "2026.4-rc1", "2026.4.0-rc1-extra"])
+@pytest.mark.parametrize(
+    "version",
+    [
+        pytest.param("2026.4.0-rc", id="rc-without-number"),
+        pytest.param("2026.4-rc1", id="two-part-version"),
+        pytest.param("2026.4.0-rc1-extra", id="trailing-suffix"),
+    ],
+)
 def test_malformed_short_rc_version_raises(version):
+    """Malformed short rc versions raise TriggerMatrixError instead of guessing a folder."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder(version)
 
 
 def test_empty_version_raises():
+    """An empty version raises TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder("")
 
 
 def test_relative_path():
+    """A relative job path is placed under the folder."""
     assert resolve_job_path("tier1/longevity-test", "scylla-master") == "scylla-master/tier1/longevity-test"
 
 
 def test_absolute_path():
+    """An absolute job path replaces the folder with its own top-level folder."""
     assert resolve_job_path("/scylla-enterprise/perf/test", "scylla-master") == "scylla-enterprise/perf/test"
 
 
 def test_absolute_path_strips_leading_slash():
+    """resolve_job_path returns an absolute job path without the leading slash."""
     result = resolve_job_path("/enterprise/perf/test", "branch-2025.4")
     assert not result.startswith("/")
     assert result == "enterprise/perf/test"

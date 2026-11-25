@@ -38,8 +38,20 @@ def biweekly_crons(config):
     return [cron for cron in config.cron_triggers if WEEK_LABELS & set(cron.params["labels_selector"].split(","))]
 
 
-@pytest.fixture(name="config", params=BIWEEKLY_MATRICES)
-def fixture_config(request):
+def expand_days(field: str) -> set[int]:
+    """Expand a cron day-of-month field such as "1-3,5" into the set of days it selects."""
+    result: set[int] = set()
+    for part in field.split(","):
+        if match := re.fullmatch(r"(\d+)-(\d+)", part):
+            result |= set(range(int(match.group(1)), int(match.group(2)) + 1))
+        else:
+            result.add(int(part))
+    return result
+
+
+@pytest.fixture(params=BIWEEKLY_MATRICES)
+def config(request):
+    """The trigger matrix config of each biweekly matrix in turn."""
     return load_matrix_config(TRIGGERS_DIR / request.param)
 
 
@@ -111,16 +123,7 @@ def test_cron_lines_same_time_of_day_and_disjoint_day_windows(config):
     days_of_week = {fields[4] for fields in schedules}
     assert len(days_of_week) == 1, f"Halves fire on different days of the week: {days_of_week}"
 
-    def days(field: str) -> set[int]:
-        result: set[int] = set()
-        for part in field.split(","):
-            if match := re.fullmatch(r"(\d+)-(\d+)", part):
-                result |= set(range(int(match.group(1)), int(match.group(2)) + 1))
-            else:
-                result.add(int(part))
-        return result
-
-    window_a, window_b = (days(fields[2]) for fields in schedules)
+    window_a, window_b = (expand_days(fields[2]) for fields in schedules)
     assert not window_a & window_b, f"Day-of-month windows overlap on {sorted(window_a & window_b)}"
     assert window_a | window_b == set(range(1, 32)), (
         f"Day-of-month windows leave gaps: {sorted(set(range(1, 32)) - (window_a | window_b))}"
