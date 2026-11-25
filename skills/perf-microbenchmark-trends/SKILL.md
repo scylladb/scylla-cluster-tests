@@ -55,7 +55,8 @@ three months: master runs less often than releases, and two months gave only 3-4
 - **Master trend:** rows are the metrics, named exactly as in Argus (`instructions_per_op`,
   `cpu_cycles_per_op`, `allocs_per_op`); columns are read arm64, read x86_64, write arm64,
   write x86_64. Each cell is a sparkline of every master run in the window (oldest to newest, the
-  last point dark), the change of the last run against the first, and the run count. Master builds
+  last point dark), the change of the last run against the first, and the run count. A chart with
+  a single master run shows its value instead: one dot is not a trend. Master builds
   map from any `~dev` version; the last one is "the last master run", never "the latest master",
   because it is the last build the microbenchmarks were triggered on, not current master.
 - **Across releases:** per metric and chart, the latest run of each release line in order

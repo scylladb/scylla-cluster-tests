@@ -124,6 +124,7 @@ def master_trend_table(rows: list, bench: str, sparks: list, spark_dir: str) -> 
     """Per metric x chart: a sparkline of every master run, the change of the last against the first, the run count.
 
     Each sparkline PNG is appended to `sparks`; its position is its cid index (cid:attN).
+    A chart with a single master run shows its value instead of a sparkline.
     """
     lines = [table_open(["Metric", *CHARTS])]
     for metric in METRICS:
@@ -134,7 +135,16 @@ def master_trend_table(rows: list, bench: str, sparks: list, spark_dir: str) -> 
                 cells += f'<td style="{BORDER}">–</td>'
                 continue
             values = [float(r[metric]) for r in runs]
-            change = pct_span(pct(values[-1], values[0])) if len(values) > 1 else ""
+            if len(values) == 1:
+                # No trend yet: show the value, not a one-dot image. Single-run images are also
+                # byte-identical across cells, and Gmail's composer mixes up identical inline
+                # images when the draft is edited.
+                cells += (
+                    f'<td style="{BORDER}">{fmt_value(metric, values[0])}<br>'
+                    f'<span style="color:#6c757d;font-size:11px;">{runs_label(1)}</span></td>'
+                )
+                continue
+            change = pct_span(pct(values[-1], values[0]))
             name = f"spark-{bench}-{metric}-{chart.replace(' ', '_')}.png"
             path = os.path.join(spark_dir, name)
             draw_sparkline(values, path, METRIC_TINT[metric])

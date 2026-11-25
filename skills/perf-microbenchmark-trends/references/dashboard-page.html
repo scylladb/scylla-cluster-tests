@@ -386,6 +386,12 @@ dash.draw('trend-rows', (el) => {
       const r = T.data.find((x) => x.benchmark === bench && x.metric === metric && x.chart === chart);
       if (!r) { td.textContent = '–'; tr.append(td); continue; }
       const vals = r.series.split(' ').map(Number);
+      if (vals.length === 1) {
+        // No trend yet: show the value instead of a one-dot sparkline.
+        const v = document.createElement('span'); v.className = 'num'; v.textContent = mbFmt(metric, vals[0]);
+        const n = document.createElement('div'); n.className = 'ver'; n.textContent = '1 run';
+        td.append(v, n); tr.append(td); continue;
+      }
       const box = document.createElement('div'); box.className = 'mb-trendcell';
       const W = 64, H = 20;
       const svg = document.createElementNS(ns, 'svg');

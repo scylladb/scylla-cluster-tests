@@ -74,10 +74,13 @@ attached; delete it only if they ask.
    It applies the rules of the dashboard's `master_trend` and `ladder` calcs, so email and page agree to the decimal. Gmail strips
    SVG, so the master-trend sparklines are PNGs in `--spark-dir`, referenced as `cid:att0..attN` in
    the order of `attachments.json`. Attach them inline (`inline: true`, `image/png`) in that order.
-   Gmail drafts accept at most 10 attachments by file reference, so pass the small PNGs (12 per
-   benchmark, 36 in all) as base64
+   Gmail drafts accept at most 10 attachments by file reference, so pass the small PNGs (up to 12
+   per benchmark) as base64
    content instead; and `update_draft` cannot add files, so a changed body means a new draft (then
-   delete the superseded one).
+   delete the superseded one). A chart with a single master run gets its value instead of a
+   sparkline, so no two images are identical: editing a draft in Gmail's web composer re-numbers
+   identical inline images and puts them in the wrong cells. After any edit in Gmail, re-read the
+   draft and check each `cid` still names its chart's PNG.
 2. Fill the two placeholders in the generated file:
    - `NOTES-GO-HERE`: 2-4 `<li>` notes, each a fact the tables cannot show by themselves:
      - where a master change sits and which build brought it (e.g. "write only, both
@@ -96,7 +99,7 @@ attached; delete it only if they ask.
    |---|---|
    | Intro | One sentence on what the dashboard covers, then the link |
    | Date line | "Runs from START to END", lower is better, the color rule |
-   | Master trend | Run count and dates, then one table per benchmark: rows per metric (Argus names, monospace), columns read arm64, read x86_64, write arm64, write x86_64; each cell a sparkline image, the last-vs-first change and "N runs" |
+   | Master trend | Run count and dates, then one table per benchmark: rows per metric (Argus names, monospace), columns read arm64, read x86_64, write arm64, write x86_64; each cell a sparkline image, the last-vs-first change and "N runs" (a single run: its value and "1 run") |
    | Across releases | One table per benchmark: metric, chart, then 2025.1 ... 2026.4, master; latest value with the change against the previous release under it |
    | Styling | Inline CSS only (Gmail strips `<style>`); light gray `#c8ccd0` borders on every cell, light gray header row, `cpu_cycles_per_op` rows lightly shaded, changes of 1% or more in bold muted green (lower) or muted red (higher); no averages |
    | Notes | The placeholder list from step 2 |
