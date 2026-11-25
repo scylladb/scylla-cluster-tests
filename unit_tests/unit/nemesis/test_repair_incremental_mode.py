@@ -10,6 +10,7 @@ from sdcm.nemesis import NemesisRunner
 
 @pytest.fixture
 def nodetool_runner():
+    """Nemesis runner and node mocks with adaptive timeout, auto-repair disable and tablets patched; yields both."""
     runner = MagicMock()
     node = MagicMock()
     with (
@@ -36,11 +37,12 @@ def runner_with_timed_out_mgr_repair():
 @pytest.mark.parametrize(
     "incremental_mode,expected_args",
     [
-        (RepairIncrementalMode.FULL, "--incremental-mode full"),
-        (None, ""),
+        pytest.param(RepairIncrementalMode.FULL, "--incremental-mode full", id="full"),
+        pytest.param(None, "", id="none"),
     ],
 )
 def test_run_repair_nodetool_incremental_mode(nodetool_runner, incremental_mode, expected_args):
+    """run_repair_nodetool passes --incremental-mode to cluster repair only, never to plain repair."""
     runner, node = nodetool_runner
 
     NemesisRunner.run_repair_nodetool.__wrapped__(runner, nodes=[node], incremental_mode=incremental_mode)
@@ -50,8 +52,15 @@ def test_run_repair_nodetool_incremental_mode(nodetool_runner, incremental_mode,
     assert "args" not in calls["repair"]
 
 
-@pytest.mark.parametrize("incremental_mode,flag_expected", [(RepairIncrementalMode.FULL, True), (None, False)])
+@pytest.mark.parametrize(
+    "incremental_mode,flag_expected",
+    [
+        pytest.param(RepairIncrementalMode.FULL, True, id="full"),
+        pytest.param(None, False, id="none"),
+    ],
+)
 def test_create_repair_task_incremental_mode(incremental_mode, flag_expected):
+    """create_repair_task adds --incremental-mode full to the sctool command only in FULL mode."""
     mgr_cluster = ManagerCluster.__new__(ManagerCluster)
     mgr_cluster.id = "cluster-id"
     mgr_cluster.manager_node = MagicMock()

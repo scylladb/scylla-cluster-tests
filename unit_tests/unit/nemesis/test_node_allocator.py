@@ -22,13 +22,15 @@ from sdcm.nemesis.utils.node_allocator import (
 
 @pytest.fixture(autouse=True)
 def reset_node_allocator_singleton():
-    """Reset NemesisNodeAllocator singleton state before each test"""
+    """Reset NemesisNodeAllocator singleton state before each test."""
     if hasattr(NemesisNodeAllocator.__class__, "_instances"):
         NemesisNodeAllocator.__class__._instances.clear()
     yield
 
 
 class MockNode(BaseNode):
+    """BaseNode stand-in carrying only the attributes the allocator reads."""
+
     def __init__(self, name, node_type="data_nodes", is_seed=False, dc_idx=0, rack=0):
         self.name = name
         self.node_type = node_type
@@ -42,17 +44,22 @@ class MockNode(BaseNode):
 
 
 class MockTester:
+    """Tester stand-in exposing its nodes to the allocator as a plain list."""
+
     def __init__(self, nodes):
         self._nodes = list(nodes)
 
     @property
     def all_db_nodes(self):
+        """Nodes the allocator selects from."""
         return self._nodes
 
     def add_node(self, node):
+        """Append a node to the tester's node list."""
         self._nodes.append(node)
 
     def remove_node(self, node):
+        """Remove a node from the tester's node list if present."""
         if node in self._nodes:
             self._nodes.remove(node)
 
@@ -71,7 +78,35 @@ def allocator_with_nodes():
     return allocator, tester, nodes
 
 
+def allocate_sequence(allocator, random_generator, draws=10):
+    """Allocate and release ``draws`` data nodes in a row with ``random_generator``, returning the picked nodes."""
+    picks = []
+    for _ in range(draws):
+        node = allocator.select_target_node(
+            nemesis_name="SeededNemesis",
+            pool_type=NEMESIS_TARGET_POOLS.data_nodes,
+            filter_seed=False,
+            random_generator=random_generator,
+        )
+        allocator.unset_running_nemesis(node, "SeededNemesis")
+        picks.append(node)
+    return picks
+
+
+@pytest.fixture
+def seeded_frontend(allocator_with_nodes):
+    """A RunnerNodeAllocator over the real allocator with a probe generator whose ``choice``
+    returns the first candidate, plus the data nodes in pool order.
+    """
+    allocator, _, nodes = allocator_with_nodes
+    random_generator = MagicMock()
+    random_generator.choice.side_effect = lambda seq: seq[0]
+    data_nodes = [node for node in nodes if node.node_type == "data_nodes"]
+    return RunnerNodeAllocator(allocator, random_generator), random_generator, data_nodes
+
+
 def test_nodes_list(allocator_with_nodes):
+    """The all_nodes pool follows removals and re-adds of nodes on the tester."""
     allocator, tester, nodes = allocator_with_nodes
     assert len(allocator._get_pool_type_nodes(NEMESIS_TARGET_POOLS.all_nodes)) == 4
 
@@ -83,6 +118,7 @@ def test_nodes_list(allocator_with_nodes):
 
 
 def test_select_and_release_target_node(allocator_with_nodes):
+    """select_target_node records the nemesis on the node, and unset_running_nemesis frees it."""
     allocator, _, _ = allocator_with_nodes
 
     # select a node
@@ -106,6 +142,7 @@ def test_select_and_release_target_node(allocator_with_nodes):
 
 
 def test_no_available_nodes(allocator_with_nodes):
+    """select_target_node raises AllNodesRunNemesisError when every data node already runs a nemesis."""
     allocator, _, nodes = allocator_with_nodes
 
     data_nodes = [n for n in nodes if n.node_type == "data_nodes"]
@@ -119,6 +156,7 @@ def test_no_available_nodes(allocator_with_nodes):
 
 
 def test_nodes_filtering(allocator_with_nodes):
+    """select_target_node honours the is_seed, rack and pool type filters."""
     allocator, _, _ = allocator_with_nodes
 
     # filter seed node
@@ -137,6 +175,7 @@ def test_nodes_filtering(allocator_with_nodes):
 
 
 def test_switch_target_node(allocator_with_nodes):
+    """switch_target_node moves the nemesis from the old node to the new one."""
     allocator, _, nodes = allocator_with_nodes
 
     allocator.set_running_nemesis(nodes[1], "SwitchNemesis")
@@ -150,6 +189,7 @@ def test_switch_target_node(allocator_with_nodes):
 
 
 def test_switch_to_reserved_node_fails(allocator_with_nodes):
+    """switch_target_node refuses a new node that already runs another nemesis and keeps both entries."""
     allocator, _, nodes = allocator_with_nodes
 
     allocator.set_running_nemesis(nodes[1], "NemesisA")
@@ -193,6 +233,7 @@ def test_thread_safety():
 
 
 def test_context_manager_sets_and_releases_single_node(allocator_with_nodes):
+    """nodes_running_nemesis marks one node for the block and releases it on exit."""
     allocator, _, nodes = allocator_with_nodes
     node_to_mark = nodes[0]
 
@@ -203,6 +244,7 @@ def test_context_manager_sets_and_releases_single_node(allocator_with_nodes):
 
 
 def test_context_manager_sets_and_releases_multiple_nodes(allocator_with_nodes):
+    """nodes_running_nemesis marks every node in a list and releases them all on exit."""
     allocator, _, nodes = allocator_with_nodes
     nodes_to_mark = [nodes[0], nodes[1]]
 
@@ -210,24 +252,6 @@ def test_context_manager_sets_and_releases_multiple_nodes(allocator_with_nodes):
         assert all(node in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
 
     assert all(node not in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
-
-
-# -- seeded node selection ---------------------------------------------------
-
-
-def allocate_sequence(allocator, random_generator, draws=10):
-    """Allocate and release ``draws`` data nodes in a row with ``random_generator``, returning the picked nodes."""
-    picks = []
-    for _ in range(draws):
-        node = allocator.select_target_node(
-            nemesis_name="SeededNemesis",
-            pool_type=NEMESIS_TARGET_POOLS.data_nodes,
-            filter_seed=False,
-            random_generator=random_generator,
-        )
-        allocator.unset_running_nemesis(node, "SeededNemesis")
-        picks.append(node)
-    return picks
 
 
 @pytest.mark.parametrize("seed", [pytest.param(0, id="seed-zero"), pytest.param(42, id="seed-42")])
@@ -291,21 +315,6 @@ def test_select_target_node_without_random_generator_uses_a_fresh_one(allocator_
         assert allocator.active_nemesis_on_nodes[node].startswith("KMS encryption check")
 
     assert not allocator.active_nemesis_on_nodes
-
-
-# -- per-runner frontend -----------------------------------------------------
-
-
-@pytest.fixture
-def seeded_frontend(allocator_with_nodes):
-    """A RunnerNodeAllocator over the real allocator with a probe generator whose ``choice``
-    returns the first candidate, plus the data nodes in pool order.
-    """
-    allocator, _, nodes = allocator_with_nodes
-    random_generator = MagicMock()
-    random_generator.choice.side_effect = lambda seq: seq[0]
-    data_nodes = [node for node in nodes if node.node_type == "data_nodes"]
-    return RunnerNodeAllocator(allocator, random_generator), random_generator, data_nodes
 
 
 def test_frontend_select_target_node_uses_the_runner_generator(seeded_frontend):
