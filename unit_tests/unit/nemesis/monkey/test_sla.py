@@ -22,7 +22,7 @@ from sdcm.nemesis.monkey.sla import (
 )
 from sdcm.sct_events.system import TestStepEvent
 
-_MODULE = "sdcm.nemesis.monkey.sla"
+MODULE = "sdcm.nemesis.monkey.sla"
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -328,8 +328,8 @@ def test_remove_sl_raises_when_roles_attr_missing(runner):
 def test_remove_sl_drops_and_recreates_service_level(remove_sl_runner):
     """disrupt() drops the service level and re-creates it when drop succeeds."""
     with (
-        patch(f"{_MODULE}.time.sleep"),
-        patch(f"{_MODULE}.ServiceLevel") as mock_sl_cls,
+        patch(f"{MODULE}.time.sleep"),
+        patch(f"{MODULE}.ServiceLevel") as mock_sl_cls,
     ):
         mock_new_sl = MagicMock()
         mock_sl_cls.return_value.create.return_value = mock_new_sl
@@ -353,8 +353,8 @@ def test_remove_sl_recreates_even_when_drop_fails(remove_sl_runner):
     role.attached_service_level.drop.side_effect = RuntimeError("drop failed")
 
     with (
-        patch(f"{_MODULE}.time.sleep"),
-        patch(f"{_MODULE}.ServiceLevel") as mock_sl_cls,
+        patch(f"{MODULE}.time.sleep"),
+        patch(f"{MODULE}.ServiceLevel") as mock_sl_cls,
         pytest.raises(RuntimeError, match="drop failed"),
     ):
         mock_new_sl = MagicMock()
@@ -367,8 +367,8 @@ def test_remove_sl_recreates_even_when_drop_fails(remove_sl_runner):
 def test_remove_sl_sleeps_between_drop_and_recreate(remove_sl_runner):
     """Verify the 300s sleep between drop and re-create is called."""
     with (
-        patch(f"{_MODULE}.time.sleep") as mock_sleep,
-        patch(f"{_MODULE}.ServiceLevel"),
+        patch(f"{MODULE}.time.sleep") as mock_sleep,
+        patch(f"{MODULE}.ServiceLevel"),
     ):
         RemoveServiceLevelMonkey(remove_sl_runner).disrupt()
 
@@ -383,28 +383,40 @@ def test_remove_sl_sleeps_between_drop_and_recreate(remove_sl_runner):
 # correct SlaTests method is called with the expected arguments.
 # ---------------------------------------------------------------------------
 
-_SLA_TESTS_PATCH = f"{_MODULE}.SlaTests"
-_PROMETHEUS_PATCH = f"{_MODULE}.PrometheusDBStats"
+SLA_TESTS_PATCH = f"{MODULE}.SlaTests"
+PROMETHEUS_PATCH = f"{MODULE}.PrometheusDBStats"
 
-_EXPECTED_COL_DEF = "-col n=5 size=FIXED(64)"
-_EXPECTED_DATASET = 1000000
+EXPECTED_COL_DEF = "-col n=5 size=FIXED(64)"
+EXPECTED_DATASET = 1000000
 
 
 @pytest.mark.parametrize(
     "monkey_cls, sla_method",
     [
-        (SlaIncreaseSharesDuringLoad, "test_increase_shares_during_load"),
-        (SlaDecreaseSharesDuringLoad, "test_decrease_shares_during_load"),
-        (SlaReplaceUsingDetachDuringLoad, "test_replace_service_level_using_detach_during_load"),
-        (SlaReplaceUsingDropDuringLoad, "test_replace_service_level_using_drop_during_load"),
-        (SlaIncreaseSharesByAttachAnotherSlDuringLoad, "test_increase_shares_by_attach_another_sl_during_load"),
+        pytest.param(SlaIncreaseSharesDuringLoad, "test_increase_shares_during_load", id="increase-shares"),
+        pytest.param(SlaDecreaseSharesDuringLoad, "test_decrease_shares_during_load", id="decrease-shares"),
+        pytest.param(
+            SlaReplaceUsingDetachDuringLoad,
+            "test_replace_service_level_using_detach_during_load",
+            id="replace-using-detach",
+        ),
+        pytest.param(
+            SlaReplaceUsingDropDuringLoad,
+            "test_replace_service_level_using_drop_during_load",
+            id="replace-using-drop",
+        ),
+        pytest.param(
+            SlaIncreaseSharesByAttachAnotherSlDuringLoad,
+            "test_increase_shares_by_attach_another_sl_during_load",
+            id="attach-another-sl",
+        ),
     ],
 )
 def test_sla_monkey_delegates_to_correct_sla_test_method(runner, monkey_cls, sla_method):
     """Each monkey calls exactly the expected SlaTests method."""
     with (
-        patch(_PROMETHEUS_PATCH) as mock_prom_cls,
-        patch(_SLA_TESTS_PATCH) as mock_sla_cls,
+        patch(PROMETHEUS_PATCH) as mock_prom_cls,
+        patch(SLA_TESTS_PATCH) as mock_sla_cls,
     ):
         mock_sla_instance = mock_sla_cls.return_value
         getattr(mock_sla_instance, sla_method).return_value = []
@@ -415,16 +427,16 @@ def test_sla_monkey_delegates_to_correct_sla_test_method(runner, monkey_cls, sla
     getattr(mock_sla_instance, sla_method).assert_called_once_with(
         tester=runner.tester,
         prometheus_stats=mock_prom_cls.return_value,
-        num_of_partitions=_EXPECTED_DATASET,
-        cassandra_stress_column_definition=_EXPECTED_COL_DEF,
+        num_of_partitions=EXPECTED_DATASET,
+        cassandra_stress_column_definition=EXPECTED_COL_DEF,
     )
 
 
 @pytest.mark.parametrize(
     "monkey_cls, sla_method",
     [
-        (SlaIncreaseSharesDuringLoad, "test_increase_shares_during_load"),
-        (SlaDecreaseSharesDuringLoad, "test_decrease_shares_during_load"),
+        pytest.param(SlaIncreaseSharesDuringLoad, "test_increase_shares_during_load", id="increase-shares"),
+        pytest.param(SlaDecreaseSharesDuringLoad, "test_decrease_shares_during_load", id="decrease-shares"),
     ],
 )
 def test_sla_monkey_raises_on_error_events(runner, monkey_cls, sla_method):
@@ -435,8 +447,8 @@ def test_sla_monkey_raises_on_error_events(runner, monkey_cls, sla_method):
     error_event.__str__ = lambda self: "validation failed"
 
     with (
-        patch(_PROMETHEUS_PATCH),
-        patch(_SLA_TESTS_PATCH) as mock_sla_cls,
+        patch(PROMETHEUS_PATCH),
+        patch(SLA_TESTS_PATCH) as mock_sla_cls,
     ):
         getattr(mock_sla_cls.return_value, sla_method).return_value = [error_event]
 
@@ -447,8 +459,8 @@ def test_sla_monkey_raises_on_error_events(runner, monkey_cls, sla_method):
 def test_sla_monkey_passes_prometheus_host(runner):
     """PrometheusDBStats is constructed with the monitoring node's external address."""
     with (
-        patch(_PROMETHEUS_PATCH) as mock_prom_cls,
-        patch(_SLA_TESTS_PATCH) as mock_sla_cls,
+        patch(PROMETHEUS_PATCH) as mock_prom_cls,
+        patch(SLA_TESTS_PATCH) as mock_sla_cls,
     ):
         mock_sla_cls.return_value.test_increase_shares_during_load.return_value = []
 
@@ -467,10 +479,10 @@ def test_maximum_sls_queries_existing_service_levels(runner):
     existing_sl_count = 3
 
     with (
-        patch(_PROMETHEUS_PATCH) as mock_prom_cls,
-        patch(_SLA_TESTS_PATCH) as mock_sla_cls,
-        patch(f"{_MODULE}.ServiceLevel") as mock_sl_cls,
-        patch(f"{_MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 10),
+        patch(PROMETHEUS_PATCH) as mock_prom_cls,
+        patch(SLA_TESTS_PATCH) as mock_sla_cls,
+        patch(f"{MODULE}.ServiceLevel") as mock_sl_cls,
+        patch(f"{MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 10),
     ):
         mock_sl_cls.return_value.list_all_service_levels.return_value = ["sl1"] * existing_sl_count
         mock_sla_cls.return_value.test_maximum_allowed_sls_with_max_shares_during_load.return_value = []
@@ -481,8 +493,8 @@ def test_maximum_sls_queries_existing_service_levels(runner):
     mock_sla_cls.return_value.test_maximum_allowed_sls_with_max_shares_during_load.assert_called_once_with(
         tester=runner.tester,
         prometheus_stats=mock_prom_cls.return_value,
-        num_of_partitions=_EXPECTED_DATASET,
-        cassandra_stress_column_definition=_EXPECTED_COL_DEF,
+        num_of_partitions=EXPECTED_DATASET,
+        cassandra_stress_column_definition=EXPECTED_COL_DEF,
         service_levels_amount=6,
     )
 
@@ -490,9 +502,9 @@ def test_maximum_sls_queries_existing_service_levels(runner):
 def test_maximum_sls_raises_when_no_capacity_remaining(runner):
     """Raise UnsupportedNemesis when all service-level slots are already occupied."""
     with (
-        patch(_PROMETHEUS_PATCH),
-        patch(f"{_MODULE}.ServiceLevel") as mock_sl_cls,
-        patch(f"{_MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 3),
+        patch(PROMETHEUS_PATCH),
+        patch(f"{MODULE}.ServiceLevel") as mock_sl_cls,
+        patch(f"{MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 3),
     ):
         # list_all_service_levels returns 3 entries → created_service_levels = 4 → remaining = -1
         mock_sl_cls.return_value.list_all_service_levels.return_value = ["sl1", "sl2", "sl3"]
@@ -509,10 +521,10 @@ def test_maximum_sls_raises_on_errors(runner):
     error_event.__str__ = lambda self: "max sls failed"
 
     with (
-        patch(_PROMETHEUS_PATCH),
-        patch(_SLA_TESTS_PATCH) as mock_sla_cls,
-        patch(f"{_MODULE}.ServiceLevel") as mock_sl_cls,
-        patch(f"{_MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 10),
+        patch(PROMETHEUS_PATCH),
+        patch(SLA_TESTS_PATCH) as mock_sla_cls,
+        patch(f"{MODULE}.ServiceLevel") as mock_sl_cls,
+        patch(f"{MODULE}.MAX_ALLOWED_SERVICE_LEVELS", 10),
     ):
         mock_sl_cls.return_value.list_all_service_levels.return_value = []
         mock_sla_cls.return_value.test_maximum_allowed_sls_with_max_shares_during_load.return_value = [error_event]

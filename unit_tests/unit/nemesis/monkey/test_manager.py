@@ -179,6 +179,17 @@ def restore_snapshot_with_schema_runner(restore_snapshot_runner, restored_ks):
         yield restore_snapshot_runner
 
 
+@pytest.fixture()
+def backup_mgr_cluster(runner):
+    """Manager cluster of ``runner`` with no previous backup tasks, whose new backup task finishes successfully."""
+    mgr_cluster = runner.cluster.get_cluster_manager.return_value
+    mgr_cluster.backup_task_list = []
+    mgr_cluster.create_backup_task.return_value.wait_and_get_final_status.return_value = TaskStatus.DONE
+    runner.cluster.get_test_keyspaces.return_value = ["keyspace1", '"Keyspace2"']
+    with patch(f"{MODULE}.backup_bucket_region", return_value="us-east-1"):
+        yield mgr_cluster
+
+
 # ---------------------------------------------------------------------------
 # get_manager_tool
 # ---------------------------------------------------------------------------
@@ -235,17 +246,6 @@ def test_mgmt_backup_raises_when_no_bucket_location(runner, set_params):
         mgmt_backup(runner, backup_specific_tables=False)
 
 
-@pytest.fixture()
-def backup_mgr_cluster(runner):
-    """Manager cluster of ``runner`` with no previous backup tasks, whose new backup task finishes successfully."""
-    mgr_cluster = runner.cluster.get_cluster_manager.return_value
-    mgr_cluster.backup_task_list = []
-    mgr_cluster.create_backup_task.return_value.wait_and_get_final_status.return_value = TaskStatus.DONE
-    runner.cluster.get_test_keyspaces.return_value = ["keyspace1", '"Keyspace2"']
-    with patch(f"{MODULE}.backup_bucket_region", return_value="us-east-1"):
-        yield mgr_cluster
-
-
 @pytest.mark.parametrize(
     "backup_keyspaces, backup_specific_tables, expected_keyspace_list",
     [
@@ -284,7 +284,7 @@ def test_manager_backup_calls_report_and_deletes_snapshot(mock_report, runner):
     manager_backup(runner, ObjectStorageUploadMode.RCLONE, "test_label")
 
     assert mock_report.call_args.args[2].startswith("test_label_")
-    mock_report.return_value.delete_backup_snapshot.assert_called_once()
+    mock_report.return_value.delete_backup_snapshot.assert_called_once_with()
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def test_mgmt_repair_calls_run_repair_manager(runner):
     """MgmtRepair.disrupt() delegates straight to run_repair_manager()."""
     MgmtRepair(runner).disrupt()
 
-    runner.run_repair_manager.assert_called_once()
+    runner.run_repair_manager.assert_called_once_with()
 
 
 @patch(f"{MODULE}.destroy_data_and_restart_scylla")
@@ -336,7 +336,9 @@ def test_destroy_data_happy_path(destroy_node_data_runner):
     destroy_data_and_restart_scylla(destroy_node_data_runner, sstables_to_destroy_perc=100)
 
     destroy_node_data_runner.target_node.stop_scylla_server.assert_called_once_with(verify_up=False, verify_down=True)
-    destroy_node_data_runner.target_node.remoter.sudo.assert_called_once()
+    destroy_node_data_runner.target_node.remoter.sudo.assert_called_once_with(
+        "rm -f /var/lib/scylla/data/ks1/table1/mc-1-*"
+    )
     destroy_node_data_runner.target_node.start_scylla_server.assert_called_once_with(verify_up=True, verify_down=False)
 
 
@@ -391,7 +393,13 @@ OCI_ENDPOINTS = {"object_storage_endpoints": [{"name": "https://oci.example/{reg
 OCI_BACKUP_SKIP = "Manager backup on OCI needs object_storage_endpoints in append_scylla_yaml"
 
 
-@pytest.mark.parametrize("monkey_cls", [MgmtBackup, MgmtBackupSpecificKeyspaces])
+@pytest.mark.parametrize(
+    "monkey_cls",
+    [
+        pytest.param(MgmtBackup, id="mgmt-backup"),
+        pytest.param(MgmtBackupSpecificKeyspaces, id="mgmt-backup-specific-keyspaces"),
+    ],
+)
 @pytest.mark.parametrize(
     "params,expected",
     [
@@ -426,9 +434,15 @@ def test_restore_happy_path_existing_keyspace(restore_snapshot_runner, snapshot_
     mgr_cluster.create_restore_task.assert_called_once_with(
         restore_data=True, location_list=["s3:backup-bucket-us-east-1"], snapshot_tag=snapshot_tag
     )
-    mgr_cluster.create_restore_task.return_value.wait_and_get_final_status.assert_called_once()
+    mgr_cluster.create_restore_task.return_value.wait_and_get_final_status.assert_called_once_with(
+        step=30, timeout=3600
+    )
     restore_snapshot_runner.cluster.restart_scylla.assert_not_called()  # no schema restoration
-    restore_snapshot_runner.tester.run_stress_thread.assert_called_once()
+    restore_snapshot_runner.tester.run_stress_thread.assert_called_once_with(
+        stress_cmd="cassandra-stress read n=1000 -schema 'keyspace=restored_ks' -pop 'seq=1..1000'",
+        round_robin=True,
+        stop_test_on_failure=False,
+    )
     restore_snapshot_runner.tester.verify_stress_thread.assert_called_once_with(
         restore_snapshot_runner.tester.run_stress_thread.return_value
     )
@@ -445,7 +459,7 @@ def test_restore_happy_path_with_schema_restoration(restore_snapshot_with_schema
     assert any("dc_local" in stmt for stmt in statements), "DC name should be rewritten in the keyspace statement"
     assert any("CREATE TABLE" in stmt for stmt in statements), "Table creation CQL should be applied"
     assert any("DROP KEYSPACE" in stmt for stmt in statements), "Restored keyspace should be cleaned up"
-    restore_snapshot_with_schema_runner.cluster.restart_scylla.assert_called_once()
+    restore_snapshot_with_schema_runner.cluster.restart_scylla.assert_called_once_with()
     mgr_cluster = restore_snapshot_with_schema_runner.cluster.get_cluster_manager.return_value
     mgr_cluster.create_restore_task.assert_called_once_with(
         restore_data=True, location_list=["s3:backup-bucket-us-east-1"], snapshot_tag=snapshot_tag
