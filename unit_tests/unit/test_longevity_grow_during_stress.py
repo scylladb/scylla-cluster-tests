@@ -31,8 +31,11 @@ from sdcm.sct_events import Severity
 LongevityTest.__test__ = False
 
 
-class _OrderRecordingLongevityTest(LongevityTest):
+class OrderRecordingLongevityTest(LongevityTest):
+    """LongevityTest that records the order of the main steps in `calls`."""
+
     def __init__(self, params):  # skip the full ClusterTester.__init__
+        """Build the test with `params` and mocked collaborators."""
         self.params = params
         self.calls = []
         self.partitions_attrs = None
@@ -53,16 +56,20 @@ class _OrderRecordingLongevityTest(LongevityTest):
         self._get_tombstone_gc_verification_params = MagicMock(return_value=None)
 
     def run_prepare_write_cmd(self):
+        """Record the prepare step."""
         self.calls.append("prepare")
 
     def assemble_and_run_all_stress_cmd(self, stress_queue, stress_cmd, keyspace_num):
+        """Record a stress round."""
         self.calls.append("stress")
 
     def _grow_cluster_to_target_size(self, stop_event=None, creating_batch=None):
+        """Record the growth."""
         self.calls.append("grow")
 
 
-def _params(**overrides):
+def longevity_params(**overrides):
+    """Params of a minimal longevity run, with `overrides` applied on top."""
     params = {
         "prepare_write_cmd": ["cassandra-stress write n=10"],
         "stress_cmd": ["cassandra-stress write duration=1m"],
@@ -72,6 +79,94 @@ def _params(**overrides):
     }
     params.update(overrides)
     return params
+
+
+def cluster_with_nodes(sizes_per_dc):
+    """A mocked db_cluster with `sizes_per_dc[dc]` data nodes in each DC; add_nodes appends to them."""
+    cluster = MagicMock()
+    cluster.data_nodes = [MagicMock(dc_idx=dc_idx) for dc_idx, size in enumerate(sizes_per_dc) for _ in range(size)]
+
+    def add_nodes(count, dc_idx, **_):
+        """Append `count` mocked nodes to DC `dc_idx`."""
+        new_nodes = [MagicMock(dc_idx=dc_idx) for _ in range(count)]
+        cluster.data_nodes.extend(new_nodes)
+        return new_nodes
+
+    cluster.add_nodes.side_effect = add_nodes
+    return cluster
+
+
+def stress_thread(done: bool = True, failed: bool = False) -> SimpleNamespace:
+    """A stand-in for a stress thread: `results_futures` is waited for, and `failed` is what its verification finds."""
+    future = Future()
+    if done:
+        future.set_result(None)
+    return SimpleNamespace(results_futures=[future], failed=failed)
+
+
+def finish_shortly_after(thread: SimpleNamespace, event: threading.Event) -> None:
+    """End `thread` shortly after `event` is set, so that what the event reports is already done by then."""
+
+    def finish():
+        event.wait(timeout=10)
+        threading.Event().wait(0.3)
+        thread.results_futures[0].set_result(None)
+
+    threading.Thread(target=finish, daemon=True).start()
+
+
+def no_rerun_expected(number):
+    """Fail the test: stress_cmd must not be run for round `number`."""
+    raise AssertionError(f"stress_cmd was run again (round {number + 1}) although no more rounds were expected")
+
+
+class StoppedByCriticalEvent(BaseException):
+    """What a critical event raises in the main thread of the test (`CriticalTestFailure`)."""
+
+
+class RoundsLongevityTest(LongevityTest):
+    """LongevityTest that counts the stress rounds and runs `make_round` for each of them."""
+
+    def __init__(self, grow, make_round):  # skip the full ClusterTester.__init__
+        """Build the test; `grow` is run as the growth and `make_round(number)` builds round `number`."""
+        self.params = {"stress_cmd": ["cassandra-stress write duration=1m"]}
+        self.rounds = 0
+        self.log = MagicMock()
+        self._grow = grow
+        self._make_round = make_round
+
+    def assemble_and_run_all_stress_cmd(self, stress_queue, stress_cmd, keyspace_num):
+        """Queue the next stress round built by `make_round`."""
+        self.rounds += 1
+        stress_queue.append(self._make_round(self.rounds))
+
+    def _grow_cluster_to_target_size(self, stop_event=None, creating_batch=None):
+        """Remember the stop event and the batch lock, then run `grow`."""
+        self.stop_event = stop_event
+        self.creating_batch = creating_batch
+        self._grow()
+
+    def verify_stress_thread(self, thread_pool, error_handler=None):
+        """Re-raise the stop of the test; otherwise return whether the round did not fail."""
+        if thread_pool.failed is StoppedByCriticalEvent:
+            raise StoppedByCriticalEvent
+        return not thread_pool.failed
+
+
+@pytest.fixture(autouse=True)
+def stub_info_event(monkeypatch):
+    """Replace InfoEvent in longevity_test, so that the growth events are not published."""
+    monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
+
+
+@pytest.fixture
+def error_event(monkeypatch):
+    """The event that reports a failed round; its `published` is set once the event is published."""
+    event = MagicMock()
+    event.published = threading.Event()
+    event.return_value.publish.side_effect = event.published.set
+    monkeypatch.setattr("longevity_test.TestFrameworkEvent", event)
+    return event
 
 
 @pytest.mark.parametrize(
@@ -84,7 +179,8 @@ def _params(**overrides):
     ],
 )
 def test_growth_order_relative_to_stress(grow_during_stress, expected_order):
-    test = _OrderRecordingLongevityTest(_params(grow_cluster_during_stress=grow_during_stress))
+    """grow_cluster_during_stress decides whether the growth runs before or under the stress."""
+    test = OrderRecordingLongevityTest(longevity_params(grow_cluster_during_stress=grow_during_stress))
 
     test.test_custom_time()
 
@@ -92,7 +188,8 @@ def test_growth_order_relative_to_stress(grow_during_stress, expected_order):
 
 
 def test_without_a_target_size_the_flag_keeps_the_old_order():
-    test = _OrderRecordingLongevityTest(_params(grow_cluster_during_stress=True, cluster_target_size=None))
+    """Without a cluster_target_size the growth is skipped and no extra stress round is run."""
+    test = OrderRecordingLongevityTest(longevity_params(grow_cluster_during_stress=True, cluster_target_size=None))
 
     test.test_custom_time()
 
@@ -100,25 +197,13 @@ def test_without_a_target_size_the_flag_keeps_the_old_order():
     assert test.calls == ["prepare", "grow", "stress", "nemesis"]
 
 
-def _cluster_with_nodes(sizes_per_dc):
-    cluster = MagicMock()
-    cluster.data_nodes = [MagicMock(dc_idx=dc_idx) for dc_idx, size in enumerate(sizes_per_dc) for _ in range(size)]
-
-    def add_nodes(count, dc_idx, **_):
-        new_nodes = [MagicMock(dc_idx=dc_idx) for _ in range(count)]
-        cluster.data_nodes.extend(new_nodes)
-        return new_nodes
-
-    cluster.add_nodes.side_effect = add_nodes
-    return cluster
-
-
 def test_grow_adds_batches_until_target(monkeypatch):
+    """The growth adds full add_node_cnt batches, then only what is left to reach the target."""
     monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
     monkeypatch.setattr("longevity_test.adaptive_timeout", MagicMock())
     test = LongevityTest.__new__(LongevityTest)
     test.params = {"cluster_target_size": [7], "add_node_cnt": 3, "n_db_nodes": [2]}
-    test.db_cluster = _cluster_with_nodes([2])
+    test.db_cluster = cluster_with_nodes([2])
     test.monitors = MagicMock()
     test.nemesis_allocator = MagicMock()
 
@@ -131,11 +216,12 @@ def test_grow_adds_batches_until_target(monkeypatch):
 
 
 def test_new_nodes_are_reserved_from_the_nemesis_until_they_are_up(monkeypatch):
+    """Each new node is reserved from the nemesis from its creation until it is up and normal."""
     monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
     monkeypatch.setattr("longevity_test.adaptive_timeout", MagicMock())
     test = LongevityTest.__new__(LongevityTest)
     test.params = {"cluster_target_size": [4], "add_node_cnt": 2, "n_db_nodes": [2]}
-    test.db_cluster = _cluster_with_nodes([2])
+    test.db_cluster = cluster_with_nodes([2])
     test.monitors = MagicMock()
     steps = MagicMock()
     test.nemesis_allocator = steps.allocator
@@ -159,11 +245,12 @@ def test_new_nodes_are_reserved_from_the_nemesis_until_they_are_up(monkeypatch):
 
 
 def test_nodes_that_a_nemesis_adds_for_a_while_are_not_counted_as_growth(monkeypatch):
+    """Nodes a nemesis adds during the growth do not count towards the target."""
     monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
     monkeypatch.setattr("longevity_test.adaptive_timeout", MagicMock())
     test = LongevityTest.__new__(LongevityTest)
     test.params = {"cluster_target_size": [7], "add_node_cnt": 3, "n_db_nodes": [2]}
-    test.db_cluster = _cluster_with_nodes([2])
+    test.db_cluster = cluster_with_nodes([2])
     test.monitors = MagicMock()
     test.nemesis_allocator = MagicMock()
     nemesis_nodes = [MagicMock(dc_idx=0) for _ in range(3)]
@@ -183,78 +270,11 @@ def test_nodes_that_a_nemesis_adds_for_a_while_are_not_counted_as_growth(monkeyp
     assert len(test.db_cluster.data_nodes) == 7
 
 
-# ------------------------------------------------------------------ re-running stress_cmd during growth
-
-
-def _stress_thread(done: bool = True, failed: bool = False) -> SimpleNamespace:
-    """A stand-in for a stress thread: `results_futures` is waited for, and `failed` is what its verification finds."""
-    future = Future()
-    if done:
-        future.set_result(None)
-    return SimpleNamespace(results_futures=[future], failed=failed)
-
-
-def _finish_shortly_after(thread: SimpleNamespace, event: threading.Event) -> None:
-    """End `thread` shortly after `event` is set, so that what the event reports is already done by then."""
-
-    def finish():
-        event.wait(timeout=10)
-        threading.Event().wait(0.3)
-        thread.results_futures[0].set_result(None)
-
-    threading.Thread(target=finish, daemon=True).start()
-
-
-def _no_rerun_expected(number):
-    raise AssertionError(f"stress_cmd was run again (round {number + 1}) although no more rounds were expected")
-
-
-class _TestStopped(BaseException):
-    """What a critical event raises in the main thread of the test (`CriticalTestFailure`)."""
-
-
-class _RoundsLongevityTest(LongevityTest):
-    def __init__(self, grow, make_round):  # skip the full ClusterTester.__init__
-        self.params = {"stress_cmd": ["cassandra-stress write duration=1m"]}
-        self.rounds = 0
-        self.log = MagicMock()
-        self._grow = grow
-        self._make_round = make_round
-
-    def assemble_and_run_all_stress_cmd(self, stress_queue, stress_cmd, keyspace_num):
-        self.rounds += 1
-        stress_queue.append(self._make_round(self.rounds))
-
-    def _grow_cluster_to_target_size(self, stop_event=None, creating_batch=None):
-        self.stop_event = stop_event
-        self.creating_batch = creating_batch
-        self._grow()
-
-    def verify_stress_thread(self, thread_pool, error_handler=None):
-        if thread_pool.failed is _TestStopped:
-            raise _TestStopped
-        return not thread_pool.failed
-
-
-@pytest.fixture(autouse=True)
-def _no_events(monkeypatch):
-    monkeypatch.setattr("longevity_test.InfoEvent", MagicMock())
-
-
-@pytest.fixture
-def error_event(monkeypatch):
-    """The event that reports a failed round; its `published` is set once the event is published."""
-    event = MagicMock()
-    event.published = threading.Event()
-    event.return_value.publish.side_effect = event.published.set
-    monkeypatch.setattr("longevity_test.TestFrameworkEvent", event)
-    return event
-
-
 def test_stress_is_run_again_until_the_growth_finishes_and_once_more_after_it():
+    """stress_cmd is re-run while the growth runs, and once more after it, but not after the last round."""
     third_round_started, growth_returned = threading.Event(), threading.Event()
-    round_that_outlives_the_growth = _stress_thread(done=False)
-    round_on_the_full_size_cluster = _stress_thread()
+    round_that_outlives_the_growth = stress_thread(done=False)
+    round_on_the_full_size_cluster = stress_thread()
 
     def grow():
         third_round_started.wait(timeout=10)  # the growth outlasts two re-runs of stress_cmd
@@ -262,17 +282,17 @@ def test_stress_is_run_again_until_the_growth_finishes_and_once_more_after_it():
 
     def make_round(number):
         if number == 1:
-            return _stress_thread()
+            return stress_thread()
         if number == 2:
             third_round_started.set()
-            _finish_shortly_after(round_that_outlives_the_growth, growth_returned)
+            finish_shortly_after(round_that_outlives_the_growth, growth_returned)
             return round_that_outlives_the_growth
         if number == 3:
             return round_on_the_full_size_cluster
-        return _no_rerun_expected(number)
+        return no_rerun_expected(number)
 
-    test = _RoundsLongevityTest(grow, make_round)
-    first_round = [_stress_thread()]
+    test = RoundsLongevityTest(grow, make_round)
+    first_round = [stress_thread()]
     stress_queue = list(first_round)
 
     test._grow_cluster_under_stress(stress_queue, first_round, keyspace_num=1)
@@ -284,22 +304,27 @@ def test_stress_is_run_again_until_the_growth_finishes_and_once_more_after_it():
 
 
 def test_only_one_round_is_run_after_the_growth_finished():
+    """Once the growth returns during the first round, exactly one more round runs on the full-size cluster."""
     growth_returned = threading.Event()
-    first_round = [_stress_thread(done=False)]
-    _finish_shortly_after(first_round[0], growth_returned)
+    first_round = [stress_thread(done=False)]
+    finish_shortly_after(first_round[0], growth_returned)
 
     def make_round(number):
-        return _stress_thread() if number == 1 else _no_rerun_expected(number)
+        return stress_thread() if number == 1 else no_rerun_expected(number)
 
-    test = _RoundsLongevityTest(growth_returned.set, make_round)
+    test = RoundsLongevityTest(growth_returned.set, make_round)
 
     test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
 
     assert test.rounds == 1
 
 
-@pytest.mark.parametrize("healthy_rounds", [0, 2], ids=["first-round-fails", "third-round-fails"])
+@pytest.mark.parametrize(
+    "healthy_rounds",
+    [pytest.param(0, id="first-round-fails"), pytest.param(2, id="third-round-fails")],
+)
 def test_stress_is_not_run_again_after_a_round_failed(error_event, healthy_rounds):
+    """After a failed round no more stress rounds run, the failure is published, and the growth is still awaited."""
     growth_finished = threading.Event()
 
     def grow():
@@ -308,11 +333,11 @@ def test_stress_is_not_run_again_after_a_round_failed(error_event, healthy_round
 
     def make_round(number):
         if number <= healthy_rounds:
-            return _stress_thread(failed=number == healthy_rounds)
-        return _no_rerun_expected(number)
+            return stress_thread(failed=number == healthy_rounds)
+        return no_rerun_expected(number)
 
-    test = _RoundsLongevityTest(grow, make_round)
-    first_round = [_stress_thread(failed=healthy_rounds == 0)]
+    test = RoundsLongevityTest(grow, make_round)
+    first_round = [stress_thread(failed=healthy_rounds == 0)]
     stress_queue = list(first_round)
 
     test._grow_cluster_under_stress(stress_queue, first_round, keyspace_num=1)
@@ -325,10 +350,11 @@ def test_stress_is_not_run_again_after_a_round_failed(error_event, healthy_round
 
 
 def test_no_round_is_run_on_the_full_size_cluster_after_a_failed_round(error_event):
+    """A round that fails while the growth runs stops the stress: no round is run after the growth."""
     growth_returned = threading.Event()
-    first_round = [_stress_thread(done=False, failed=True)]
-    _finish_shortly_after(first_round[0], growth_returned)
-    test = _RoundsLongevityTest(growth_returned.set, make_round=_no_rerun_expected)
+    first_round = [stress_thread(done=False, failed=True)]
+    finish_shortly_after(first_round[0], growth_returned)
+    test = RoundsLongevityTest(growth_returned.set, make_round=no_rerun_expected)
 
     test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
 
@@ -337,15 +363,16 @@ def test_no_round_is_run_on_the_full_size_cluster_after_a_failed_round(error_eve
 
 
 def test_growth_failure_is_raised_once_the_running_round_ends():
+    """An exception from the growth is raised once the running stress round has ended."""
     growth_returned = threading.Event()
-    first_round = [_stress_thread(done=False)]
-    _finish_shortly_after(first_round[0], growth_returned)
+    first_round = [stress_thread(done=False)]
+    finish_shortly_after(first_round[0], growth_returned)
 
     def grow():
         growth_returned.set()
         raise RuntimeError("add_nodes failed")
 
-    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
+    test = RoundsLongevityTest(grow, make_round=no_rerun_expected)
 
     with pytest.raises(RuntimeError, match="add_nodes failed"):
         test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
@@ -353,13 +380,14 @@ def test_growth_failure_is_raised_once_the_running_round_ends():
 
 
 def test_without_a_stress_round_the_growth_is_awaited_and_nothing_is_re_run():
+    """With no stress round the growth is still awaited, and stress_cmd is not run."""
     grown = threading.Event()
 
     def grow():
         threading.Event().wait(0.2)
         grown.set()
 
-    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
+    test = RoundsLongevityTest(grow, make_round=no_rerun_expected)
 
     test._grow_cluster_under_stress([], [], keyspace_num=1)
 
@@ -368,16 +396,19 @@ def test_without_a_stress_round_the_growth_is_awaited_and_nothing_is_re_run():
 
 
 def test_stopped_test_does_not_wait_for_the_bootstrap_of_a_batch():
+    """A stopped test returns without waiting for the bootstrap of a batch, and tells the growth to stop."""
     growth_can_end, growth_ended = threading.Event(), threading.Event()
 
     def grow():  # the nodes of the batch are created, the growth waits for them to join
         growth_can_end.wait(timeout=10)
         growth_ended.set()
 
-    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
-    first_round = [_stress_thread(failed=_TestStopped)]  # the test is stopped while the growth is still running
+    test = RoundsLongevityTest(grow, make_round=no_rerun_expected)
+    first_round = [
+        stress_thread(failed=StoppedByCriticalEvent)
+    ]  # the test is stopped while the growth is still running
 
-    with pytest.raises(_TestStopped):
+    with pytest.raises(StoppedByCriticalEvent):
         test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
 
     try:
@@ -389,6 +420,7 @@ def test_stopped_test_does_not_wait_for_the_bootstrap_of_a_batch():
 
 
 def test_stopped_test_waits_for_the_batch_that_is_being_created():
+    """A stopped test waits for the batch being created, so that the teardown sees all its nodes."""
     creating_batch, batch_created = threading.Event(), threading.Event()
 
     def grow():
@@ -398,11 +430,11 @@ def test_stopped_test_waits_for_the_batch_that_is_being_created():
             threading.Event().wait(0.3)  # the nodes are still being created after the test was stopped
             batch_created.set()
 
-    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
-    first_round = [_stress_thread(done=False, failed=_TestStopped)]
-    _finish_shortly_after(first_round[0], creating_batch)  # the test is stopped while the batch is being created
+    test = RoundsLongevityTest(grow, make_round=no_rerun_expected)
+    first_round = [stress_thread(done=False, failed=StoppedByCriticalEvent)]
+    finish_shortly_after(first_round[0], creating_batch)  # the test is stopped while the batch is being created
 
-    with pytest.raises(_TestStopped):
+    with pytest.raises(StoppedByCriticalEvent):
         test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
 
     # the teardown starts only now: it stops and destroys only the nodes that are registered in the cluster
@@ -411,6 +443,7 @@ def test_stopped_test_waits_for_the_batch_that_is_being_created():
 
 
 def test_stopped_test_gives_up_on_a_batch_that_takes_too_long_to_create(monkeypatch):
+    """A stopped test stops waiting for a batch after GROWTH_BATCH_CREATION_TIMEOUT and logs a warning."""
     monkeypatch.setattr("longevity_test.GROWTH_BATCH_CREATION_TIMEOUT", 0.1)
     creating_batch, batch_can_end = threading.Event(), threading.Event()
 
@@ -419,14 +452,17 @@ def test_stopped_test_gives_up_on_a_batch_that_takes_too_long_to_create(monkeypa
             creating_batch.set()
             batch_can_end.wait(timeout=10)
 
-    test = _RoundsLongevityTest(grow, make_round=_no_rerun_expected)
-    first_round = [_stress_thread(done=False, failed=_TestStopped)]
-    _finish_shortly_after(first_round[0], creating_batch)
+    test = RoundsLongevityTest(grow, make_round=no_rerun_expected)
+    first_round = [stress_thread(done=False, failed=StoppedByCriticalEvent)]
+    finish_shortly_after(first_round[0], creating_batch)
 
     try:
-        with pytest.raises(_TestStopped):
+        with pytest.raises(StoppedByCriticalEvent):
             test._grow_cluster_under_stress(list(first_round), first_round, keyspace_num=1)
-        test.log.warning.assert_called_once()
+        test.log.warning.assert_called_once_with(
+            "The growth is still creating nodes after %s seconds, the teardown can miss some of them",
+            0.1,
+        )
     finally:
         batch_can_end.set()
 
@@ -440,12 +476,13 @@ def test_stopped_test_gives_up_on_a_batch_that_takes_too_long_to_create(monkeypa
     ],
 )
 def test_grow_adds_no_more_batches_once_stopped(monkeypatch, stopped_during, expected_batches, expected_waits):
+    """Once the stop event is set the growth adds no more batches."""
     monkeypatch.setattr("longevity_test.adaptive_timeout", MagicMock())
     stop_event = threading.Event()
     test = LongevityTest.__new__(LongevityTest)
     test.params = {"cluster_target_size": [8], "add_node_cnt": 3, "n_db_nodes": [2]}
     test.log = MagicMock()
-    test.db_cluster = _cluster_with_nodes([2])
+    test.db_cluster = cluster_with_nodes([2])
     test.monitors = MagicMock()
     test.nemesis_allocator = MagicMock()
     add_nodes = test.db_cluster.add_nodes.side_effect
@@ -470,6 +507,7 @@ def test_grow_adds_no_more_batches_once_stopped(monkeypatch, stopped_during, exp
 
 
 def test_grow_without_target_is_noop():
+    """Without a cluster_target_size the growth adds no nodes."""
     test = LongevityTest.__new__(LongevityTest)
     test.params = {"cluster_target_size": None}
     test.db_cluster = MagicMock()

@@ -59,9 +59,142 @@ COMPLEX_CMD_EXPECTATIONS = {
     ),
     "stress_cmd_complex_verify_delete": ("write", ["delete_row"]),
 }
+SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000.tsv")
+HOST_SHARD = "/home/loader/latte-staging/run/loader-1/files/tmp/fts/ds/shards/documents_000.tsv"
+
+
+def load_complex_cmd(config_file, param_name):
+    """Return the latte command stored under param_name in config_file."""
+    with open(sct_abs_path(config_file), encoding="utf-8") as config:
+        return yaml.safe_load(config)[param_name]
+
+
+def make_staging_thread(files, backend="docker", **kwargs):
+    """Build a LatteStressThread that stages the given files, on the given backend."""
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": backend, "client_encrypt": False, "latte_schema_parameters": {}},
+        extra_files_to_stage=files,
+        **kwargs,
+    )
+
+
+def make_hdr_thread(stress_cmd, use_hdrhistogram=True, **kwargs):
+    """Build a docker LatteStressThread with use_hdrhistogram set as given."""
+    return LatteStressThread(
+        loader_set=types.SimpleNamespace(
+            get_db_auth=lambda: None,
+            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        ),
+        stress_cmd=stress_cmd,
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "use_hdrhistogram": use_hdrhistogram},
+        **kwargs,
+    )
+
+
+class FakeRemoter:
+    """Records the commands run on the loader host and the files sent to it."""
+
+    def __init__(self):
+        """Start with no commands run and no files sent."""
+        self.commands = []
+        self.sent = []
+
+    def run(self, cmd, **_):
+        """Record cmd; answer the home lookup with a fixed home directory."""
+        self.commands.append(cmd)
+        return types.SimpleNamespace(stdout="/home/loader\n" if cmd == "echo $HOME" else "")
+
+    def send_files(self, src, dst, **_):
+        """Record the basename of src and its destination; report success."""
+        self.sent.append((os.path.basename(src), dst))
+        return True
+
+
+def make_loader(name="loader-1"):
+    """Build a loader stub with a FakeRemoter."""
+    return types.SimpleNamespace(name=name, remoter=FakeRemoter())
+
+
+def make_thread(stress_cmd="latte run -f load data_dir/latte/bench/bench.rn -d 100"):
+    """Build a docker LatteStressThread with the given stress command."""
+    return LatteStressThread(
+        loader_set=types.SimpleNamespace(
+            get_db_auth=lambda: None,
+            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        ),
+        stress_cmd=stress_cmd,
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker"},
+    )
+
+
+def fail_sends_to(loader, path_part):
+    """Make the loader's send_files fail for any destination containing path_part."""
+    send_files = loader.remoter.send_files
+    loader.remoter.send_files = lambda src, dst, **kw: path_part not in dst and send_files(src, dst, **kw)
+
+
+def make_pinnable_thread(**kwargs):
+    """Build a round-robin docker LatteStressThread over two loaders, with a next-round-robin loader."""
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        get_loader=lambda: "next-round-robin-loader",
+        nodes=["loader-1", "loader-2"],
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
+        round_robin=True,
+        **kwargs,
+    )
+
+
+@pytest.fixture(autouse=True)
+def nothing_sent_yet(monkeypatch):
+    """Reset the module-level send bookkeeping and staging run name for each test."""
+    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
+    monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
+    monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
+    monkeypatch.setattr(latte_thread, "_STAGING_RUN", "run")
+
+
+@pytest.fixture
+def script_dir(tmp_path, monkeypatch):
+    """A rune script directory under a fake SCT root, with a subdirectory that must not be sent."""
+    directory = tmp_path / "data_dir" / "latte" / "bench"
+    (directory / "corpus").mkdir(parents=True)
+    for name in ("bench.rn", "helpers.rn", "plan.yaml"):
+        (directory / name).write_text(name, encoding="utf-8")
+    (directory / "corpus" / "documents.tsv").write_text("too big to ship", encoding="utf-8")
+    monkeypatch.setattr(latte_thread, "get_sct_root_path", lambda: str(tmp_path))
+    return directory
+
+
+@pytest.fixture
+def shard(tmp_path):
+    """A TSV shard written under tmp_path, as (local path, container path)."""
+    path = tmp_path / "documents_000.tsv"
+    path.write_text("doc_0\tbody\n", encoding="utf-8")
+    return str(path), SHARD[1]
 
 
 def test_05_latte_parse_final_output():
+    """parse_final_output reads the p99 latency, mean latency and op rate from latte's final output."""
     latte = LatteStressThread(
         loader_set=["fake-loader"],
         stress_cmd="fake",
@@ -86,15 +219,22 @@ def test_05_latte_parse_final_output():
 @pytest.mark.parametrize(
     "cmd,items",
     (
-        ("latte run /foo/bar.rn %swrite -q -r 500", ["write"]),
-        ("latte run /foo/bar.rn %sread -q -r 500", ["read"]),
-        ("latte run /foo/bar.rn %scustom -q -r 500", ["custom"]),
-        ("latte run /foo/bar.rn %sread,write -q -r 500", ["read", "write"]),
-        ("latte run /foo/bar.rn %sread,custom,write,user -q -r 500", ["read", "custom", "write", "user"]),
-        ("latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", ["foo_bar", "quuz_tea"]),
+        pytest.param("latte run /foo/bar.rn %swrite -q -r 500", ["write"], id="write"),
+        pytest.param("latte run /foo/bar.rn %sread -q -r 500", ["read"], id="read"),
+        pytest.param("latte run /foo/bar.rn %scustom -q -r 500", ["custom"], id="custom"),
+        pytest.param("latte run /foo/bar.rn %sread,write -q -r 500", ["read", "write"], id="read-write"),
+        pytest.param(
+            "latte run /foo/bar.rn %sread,custom,write,user -q -r 500",
+            ["read", "custom", "write", "user"],
+            id="read-custom-write-user",
+        ),
+        pytest.param(
+            "latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", ["foo_bar", "quuz_tea"], id="weighted-functions"
+        ),
     ),
 )
 def test_find_latte_fn_names(cmd, items):
+    """find_latte_fn_names returns the functions of a command, in every -f/--function form."""
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
     for fn_param in fn_params:
         result = find_latte_fn_names(cmd % fn_param)
@@ -107,51 +247,56 @@ def test_find_latte_fn_names(cmd, items):
 @pytest.mark.parametrize(
     "cmd,expected_operation_type",
     (
-        ("latte run /foo/bar.rn %swrite -q -r 500", "write"),
-        ("latte run /foo/bar.rn %swrite_batch -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sbatch_write -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sinsert -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sinsert_batch -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sbatch_insert -q -r 500", "write"),
-        ("latte run /foo/bar.rn %supdate -q -r 500", "write"),
-        ("latte run /foo/bar.rn %supdate_batch -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sbatch_update -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sinsert_foo,update_bar -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sdelete -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sinsert_delete -q -r 500", "write"),
-        ("latte run /foo/bar.rn %sinsert_delete_by_one -q -r 500", "write"),
-        ("latte run /foo/bar.rn %scounter_write -q -r 500", "counter_write"),
-        ("latte run /foo/bar.rn %sread -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sread_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_read -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_read_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %scount -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sselect -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sselect_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_select -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_select_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sget -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sget_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %smulti_get -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read"),
-        ("latte run /foo/bar.rn %ssearch -q -r 500", "read"),
-        ("latte run /foo/bar.rn %sdo_search -q -r 500", "read"),
-        ("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read"),
-        ("latte run /foo/bar.rn %sread,write -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %sbatch_insert:1,read_all:2,get_bar:0.5 -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %sread,counter_write -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %sread,counter_read -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %swrite,counter_read -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %swrite,counter_write -q -r 500", "mixed"),
-        ("latte run /foo/bar.rn %scustom -q -r 500", "user"),
-        ("latte run /foo/bar.rn %suser_profile -q -r 500", "user"),
-        ("latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", "user"),
-        ("latte run /foo/bar.rn %sread,write,custom -q -r 500", "user"),
+        pytest.param("latte run /foo/bar.rn %swrite -q -r 500", "write", id="write"),
+        pytest.param("latte run /foo/bar.rn %swrite_batch -q -r 500", "write", id="write-batch"),
+        pytest.param("latte run /foo/bar.rn %sbatch_write -q -r 500", "write", id="batch-write"),
+        pytest.param("latte run /foo/bar.rn %sinsert -q -r 500", "write", id="insert"),
+        pytest.param("latte run /foo/bar.rn %sinsert_batch -q -r 500", "write", id="insert-batch"),
+        pytest.param("latte run /foo/bar.rn %sbatch_insert -q -r 500", "write", id="batch-insert"),
+        pytest.param("latte run /foo/bar.rn %supdate -q -r 500", "write", id="update"),
+        pytest.param("latte run /foo/bar.rn %supdate_batch -q -r 500", "write", id="update-batch"),
+        pytest.param("latte run /foo/bar.rn %sbatch_update -q -r 500", "write", id="batch-update"),
+        pytest.param("latte run /foo/bar.rn %sinsert_foo,update_bar -q -r 500", "write", id="insert-and-update"),
+        pytest.param("latte run /foo/bar.rn %sdelete -q -r 500", "write", id="delete"),
+        pytest.param("latte run /foo/bar.rn %sinsert_delete -q -r 500", "write", id="insert-delete"),
+        pytest.param("latte run /foo/bar.rn %sinsert_delete_by_one -q -r 500", "write", id="insert-delete-by-one"),
+        pytest.param("latte run /foo/bar.rn %scounter_write -q -r 500", "counter_write", id="counter-write"),
+        pytest.param("latte run /foo/bar.rn %sread -q -r 500", "read", id="read"),
+        pytest.param("latte run /foo/bar.rn %sread_all -q -r 500", "read", id="read-all"),
+        pytest.param("latte run /foo/bar.rn %sdo_read -q -r 500", "read", id="do-read"),
+        pytest.param("latte run /foo/bar.rn %sdo_read_all -q -r 500", "read", id="do-read-all"),
+        pytest.param("latte run /foo/bar.rn %scount -q -r 500", "read", id="count"),
+        pytest.param("latte run /foo/bar.rn %sselect -q -r 500", "read", id="select"),
+        pytest.param("latte run /foo/bar.rn %sselect_all -q -r 500", "read", id="select-all"),
+        pytest.param("latte run /foo/bar.rn %sdo_select -q -r 500", "read", id="do-select"),
+        pytest.param("latte run /foo/bar.rn %sdo_select_all -q -r 500", "read", id="do-select-all"),
+        pytest.param("latte run /foo/bar.rn %sget -q -r 500", "read", id="get"),
+        pytest.param("latte run /foo/bar.rn %sget_all -q -r 500", "read", id="get-all"),
+        pytest.param("latte run /foo/bar.rn %smulti_get -q -r 500", "read", id="multi-get"),
+        pytest.param("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read", id="do-get-all"),
+        pytest.param("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read", id="get-all-and-get-single"),
+        pytest.param("latte run /foo/bar.rn %ssearch -q -r 500", "read", id="search"),
+        pytest.param("latte run /foo/bar.rn %sdo_search -q -r 500", "read", id="do-search"),
+        pytest.param("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read", id="counter-read"),
+        pytest.param("latte run /foo/bar.rn %sread,write -q -r 500", "mixed", id="read-write"),
+        pytest.param("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed", id="weighted-write-read"),
+        pytest.param(
+            "latte run /foo/bar.rn %sbatch_insert:1,read_all:2,get_bar:0.5 -q -r 500",
+            "mixed",
+            id="weighted-three-functions",
+        ),
+        pytest.param("latte run /foo/bar.rn %sread,counter_write -q -r 500", "mixed", id="read-counter-write"),
+        pytest.param("latte run /foo/bar.rn %sread,counter_read -q -r 500", "mixed", id="read-counter-read"),
+        pytest.param("latte run /foo/bar.rn %swrite,counter_read -q -r 500", "mixed", id="write-counter-read"),
+        pytest.param("latte run /foo/bar.rn %swrite,counter_write -q -r 500", "mixed", id="write-counter-write"),
+        pytest.param("latte run /foo/bar.rn %scustom -q -r 500", "user", id="custom"),
+        pytest.param("latte run /foo/bar.rn %suser_profile -q -r 500", "user", id="user-profile"),
+        pytest.param("latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", "user", id="weighted-user-functions"),
+        pytest.param("latte run /foo/bar.rn %sread,write,custom -q -r 500", "user", id="read-write-custom"),
     ),
 )
 def test_get_latte_operation_type(cmd, expected_operation_type):
+    """get_latte_operation_type classifies a command by its functions, in every -f/--function form."""
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
     for fn_param in fn_params:
         result = get_latte_operation_type(cmd % fn_param)
@@ -161,16 +306,31 @@ def test_get_latte_operation_type(cmd, expected_operation_type):
 @pytest.mark.parametrize(
     "cmd,items",
     (
-        ("%s --tag=latte-prepare-01 -q -r 500", ["latte-prepare-01"]),
-        ("%s --tag latte-main-01 -q -r 500", ["latte-main-01"]),
-        ("%s --tag  latte-prepare-01,write  -q -r 500", ["latte-prepare-01", "write"]),
-        ("%s --tag=latte-main-01,read    -q -r 500", ["latte-main-01", "read"]),
-        ("%s  --tag=latte-main-01  --tag   write,table1    -q -r 500", ["latte-main-01", "write", "table1"]),
-        ("%s --tag=latte-main-01,read  --tag table2  -q -r 500", ["latte-main-01", "read", "table2"]),
-        ("%s --tag=latte-main-01,read -q -r 500 --tag table2", ["latte-main-01", "read", "table2"]),
+        pytest.param("%s --tag=latte-prepare-01 -q -r 500", ["latte-prepare-01"], id="tag-equals"),
+        pytest.param("%s --tag latte-main-01 -q -r 500", ["latte-main-01"], id="tag-space"),
+        pytest.param(
+            "%s --tag  latte-prepare-01,write  -q -r 500", ["latte-prepare-01", "write"], id="tag-list-spaced"
+        ),
+        pytest.param("%s --tag=latte-main-01,read    -q -r 500", ["latte-main-01", "read"], id="tag-equals-list"),
+        pytest.param(
+            "%s  --tag=latte-main-01  --tag   write,table1    -q -r 500",
+            ["latte-main-01", "write", "table1"],
+            id="repeated-tag-flags",
+        ),
+        pytest.param(
+            "%s --tag=latte-main-01,read  --tag table2  -q -r 500",
+            ["latte-main-01", "read", "table2"],
+            id="two-tag-flags",
+        ),
+        pytest.param(
+            "%s --tag=latte-main-01,read -q -r 500 --tag table2",
+            ["latte-main-01", "read", "table2"],
+            id="tag-after-options",
+        ),
     ),
 )
 def test_find_latte_tags(cmd, items):
+    """find_latte_tags collects every --tag value, in the = and space forms, repeated or comma-separated."""
     result = find_latte_tags(cmd % "latte run /foo/bar.rn")
     assert len(result) > 0
     assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
@@ -178,28 +338,17 @@ def test_find_latte_tags(cmd, items):
         assert item in result
 
 
-def _load_complex_cmd(config_file, param_name):
-    with open(sct_abs_path(config_file), encoding="utf-8") as config:
-        return yaml.safe_load(config)[param_name]
-
-
 @pytest.mark.parametrize("config_file", COMPLEX_CONFIG_FILES)
-@pytest.mark.parametrize("param_name", sorted(COMPLEX_CMD_EXPECTATIONS))
-def test_complex_schema_cmds_are_classified(config_file, param_name):
-    """Each complex command must run the rune script and map onto the right latte metrics."""
-    cmd = _load_complex_cmd(config_file, param_name)
-    expected_operation_type, expected_fn_names = COMPLEX_CMD_EXPECTATIONS[param_name]
-
-    assert COMPLEX_SCHEMA_SCRIPT in cmd
-    assert find_latte_fn_names(cmd) == expected_fn_names
-    assert get_latte_operation_type(cmd) == expected_operation_type
-
-
-@pytest.mark.parametrize("config_file", COMPLEX_CONFIG_FILES)
-@pytest.mark.parametrize("param_name", ("stress_cmd_complex_prepare", "stress_cmd_complex_verify_read"))
+@pytest.mark.parametrize(
+    "param_name",
+    (
+        pytest.param("stress_cmd_complex_prepare", id="prepare"),
+        pytest.param("stress_cmd_complex_verify_read", id="verify-read"),
+    ),
+)
 def test_complex_schema_cmds_cover_every_row(config_file, param_name):
     """The workload writes one row per cycle, so these steps must run exactly 'row_count' cycles."""
-    cmd = _load_complex_cmd(config_file, param_name)
+    cmd = load_complex_cmd(config_file, param_name)
 
     cycles = re.search(r"-d (\d+)", cmd)
     row_count = re.search(r"-P row_count=(\d+)", cmd)
@@ -207,62 +356,44 @@ def test_complex_schema_cmds_cover_every_row(config_file, param_name):
     assert cycles.group(1) == row_count.group(1)
 
 
-def _staging_thread(files, backend="docker", **kwargs):
-    loader_set = types.SimpleNamespace(
-        get_db_auth=lambda: None,
-        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
-    )
-    return LatteStressThread(
-        loader_set=loader_set,
-        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
-        timeout=60,
-        node_list=["fake-db-node-1"],
-        params={"cluster_backend": backend, "client_encrypt": False, "latte_schema_parameters": {}},
-        extra_files_to_stage=files,
-        **kwargs,
-    )
+@pytest.mark.parametrize("config_file", COMPLEX_CONFIG_FILES)
+@pytest.mark.parametrize("param_name", sorted(COMPLEX_CMD_EXPECTATIONS))
+def test_complex_schema_cmds_are_classified(config_file, param_name):
+    """Each complex command must run the rune script and map onto the right latte metrics."""
+    cmd = load_complex_cmd(config_file, param_name)
+    expected_operation_type, expected_fn_names = COMPLEX_CMD_EXPECTATIONS[param_name]
 
-
-SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000.tsv")
+    assert COMPLEX_SCHEMA_SCRIPT in cmd
+    assert find_latte_fn_names(cmd) == expected_fn_names
+    assert get_latte_operation_type(cmd) == expected_operation_type
 
 
 def test_a_staged_file_needs_an_absolute_container_path():
+    """A staged file's container path must be absolute."""
     with pytest.raises(ValueError, match="not absolute"):
-        _staging_thread([("/local/documents.tsv", "documents.tsv")])
+        make_staging_thread([("/local/documents.tsv", "documents.tsv")])
 
 
 def test_staged_files_need_one_command_per_loader():
     """Two commands on one loader would share the file, and the first to finish would remove it."""
     with pytest.raises(ValueError, match="needs stress_num=1"):
-        _staging_thread([SHARD], stress_num=2)
+        make_staging_thread([SHARD], stress_num=2)
 
 
 def test_round_robin_stages_files_whatever_stress_num_says():
     """Round-robin runs a single command per call, so the file is never shared."""
-    assert _staging_thread([SHARD], stress_num=2, round_robin=True).extra_files_to_stage == [SHARD]
+    assert make_staging_thread([SHARD], stress_num=2, round_robin=True).extra_files_to_stage == [SHARD]
 
 
 def test_staged_files_need_a_docker_loader():
+    """Staged files are refused on k8s backends."""
     with pytest.raises(ValueError, match="k8s loaders lack"):
-        _staging_thread([SHARD], backend="k8s-eks")
-
-
-def _hdr_thread(stress_cmd, use_hdrhistogram=True, **kwargs):
-    return LatteStressThread(
-        loader_set=types.SimpleNamespace(
-            get_db_auth=lambda: None,
-            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
-        ),
-        stress_cmd=stress_cmd,
-        timeout=60,
-        node_list=["fake-db-node-1"],
-        params={"cluster_backend": "docker", "use_hdrhistogram": use_hdrhistogram},
-        **kwargs,
-    )
+        make_staging_thread([SHARD], backend="k8s-eks")
 
 
 def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
-    assert _hdr_thread("latte run -f search data_dir/latte/x.rn").records_hdr()
+    """A run records HDR histograms when use_hdrhistogram is on."""
+    assert make_hdr_thread("latte run -f search data_dir/latte/x.rn").records_hdr()
 
 
 @pytest.mark.parametrize(
@@ -274,70 +405,16 @@ def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
     ],
 )
 def test_no_hdr_is_recorded(stress_cmd, use_hdrhistogram, kwargs):
-    assert not _hdr_thread(stress_cmd, use_hdrhistogram, **kwargs).records_hdr()
-
-
-# The script directory is staged once per loader, not copied into every container
-
-
-class _FakeRemoter:
-    """Records the commands run on the loader host and the files sent to it."""
-
-    def __init__(self):
-        self.commands = []
-        self.sent = []
-
-    def run(self, cmd, **_):
-        self.commands.append(cmd)
-        return types.SimpleNamespace(stdout="/home/loader\n" if cmd == "echo $HOME" else "")
-
-    def send_files(self, src, dst, **_):
-        self.sent.append((os.path.basename(src), dst))
-        return True
-
-
-def _loader(name="loader-1"):
-    return types.SimpleNamespace(name=name, remoter=_FakeRemoter())
-
-
-def _thread(stress_cmd="latte run -f load data_dir/latte/bench/bench.rn -d 100"):
-    return LatteStressThread(
-        loader_set=types.SimpleNamespace(
-            get_db_auth=lambda: None,
-            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
-        ),
-        stress_cmd=stress_cmd,
-        timeout=60,
-        node_list=["fake-db-node-1"],
-        params={"cluster_backend": "docker"},
-    )
-
-
-@pytest.fixture(autouse=True)
-def nothing_sent_yet(monkeypatch):
-    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
-    monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
-    monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
-    monkeypatch.setattr(latte_thread, "_STAGING_RUN", "run")
-
-
-@pytest.fixture
-def script_dir(tmp_path, monkeypatch):
-    """A rune script directory under a fake SCT root, with a subdirectory that must not be sent."""
-    directory = tmp_path / "data_dir" / "latte" / "bench"
-    (directory / "corpus").mkdir(parents=True)
-    for name in ("bench.rn", "helpers.rn", "plan.yaml"):
-        (directory / name).write_text(name, encoding="utf-8")
-    (directory / "corpus" / "documents.tsv").write_text("too big to ship", encoding="utf-8")
-    monkeypatch.setattr(latte_thread, "get_sct_root_path", lambda: str(tmp_path))
-    return directory
+    """No HDR is recorded when the run opts out, for schema commands, or with use_hdrhistogram off."""
+    assert not make_hdr_thread(stress_cmd, use_hdrhistogram, **kwargs).records_hdr()
 
 
 def test_the_script_directory_is_sent_once_per_loader(script_dir):
-    loader = _loader()
+    """The script directory is sent once per loader; later calls reuse the copy."""
+    loader = make_loader()
 
-    first = _thread()._script_dir_mount(loader)
-    second = _thread("latte run -f search data_dir/latte/bench/bench.rn -d 10s")._script_dir_mount(loader)
+    first = make_thread()._script_dir_mount(loader)
+    second = make_thread("latte run -f search data_dir/latte/bench/bench.rn -d 10s")._script_dir_mount(loader)
 
     host_dir = "/home/loader/latte-staging/run/loader-1/scripts/data_dir/latte/bench"
     assert first == second == f"-v {host_dir}:/data_dir/latte/bench:ro,z"
@@ -351,22 +428,23 @@ def test_the_script_directory_is_sent_once_per_loader(script_dir):
 
 def test_another_run_on_the_same_host_stages_apart(script_dir, monkeypatch):
     """Parallel runs on one docker host share its home and their loaders' names."""
-    loader = _loader()
-    _thread()._script_dir_mount(loader)
+    loader = make_loader()
+    make_thread()._script_dir_mount(loader)
     monkeypatch.setattr(latte_thread, "_STAGING_RUN", "other-run")
     monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
 
-    _thread()._script_dir_mount(loader)
+    make_thread()._script_dir_mount(loader)
 
     first, second = loader.remoter.sent[:3], loader.remoter.sent[3:]
     assert {dst for _, dst in first}.isdisjoint(dst for _, dst in second)
 
 
 def test_every_loader_gets_a_copy_of_its_own(script_dir):
-    first, second = _loader("loader-1"), _loader("loader-2")
+    """Each loader gets its own copy of the script directory, even on a shared docker host."""
+    first, second = make_loader("loader-1"), make_loader("loader-2")
 
-    _thread()._script_dir_mount(first)
-    _thread()._script_dir_mount(second)
+    make_thread()._script_dir_mount(first)
+    make_thread()._script_dir_mount(second)
 
     # Docker loaders share one host, so the copies must not share a directory either.
     assert len(first.remoter.sent) == len(second.remoter.sent) == 3
@@ -374,33 +452,36 @@ def test_every_loader_gets_a_copy_of_its_own(script_dir):
 
 
 def test_a_changed_file_is_sent_again(script_dir):
-    loader = _loader()
-    _thread()._script_dir_mount(loader)
+    """A file whose mtime changed is sent again, even when its size is the same."""
+    loader = make_loader()
+    make_thread()._script_dir_mount(loader)
 
     edited = script_dir / "bench.rn"
     edited.write_text("BENCH.RN", encoding="utf-8")  # the same size: only the mtime tells
     os.utime(edited, ns=(edited.stat().st_atime_ns, edited.stat().st_mtime_ns + 1))
-    _thread()._script_dir_mount(loader)
+    make_thread()._script_dir_mount(loader)
 
     assert [name for name, _ in loader.remoter.sent] == ["bench.rn", "helpers.rn", "plan.yaml", "bench.rn"]
 
 
 def test_a_failed_send_fails_the_call_and_is_retried(script_dir):
-    loader = _loader()
+    """A failed send raises, and the next call sends the files again."""
+    loader = make_loader()
     loader.remoter.send_files = lambda src, dst, **_: False
     with pytest.raises(RuntimeError, match="Failed to send"):
-        _thread()._script_dir_mount(loader)
+        make_thread()._script_dir_mount(loader)
 
-    loader.remoter = _FakeRemoter()
-    _thread()._script_dir_mount(loader)
+    loader.remoter = FakeRemoter()
+    make_thread()._script_dir_mount(loader)
 
     assert len(loader.remoter.sent) == 3, "a failed send must not count as sent"
 
 
 def test_host_paths_are_quoted(script_dir):
-    loader = _loader("loader 1")
+    """Host paths with spaces are quoted in the mount and in the mkdir command."""
+    loader = make_loader("loader 1")
 
-    mount = _thread()._script_dir_mount(loader)
+    mount = make_thread()._script_dir_mount(loader)
 
     assert (
         mount == "-v '/home/loader/latte-staging/run/loader 1/scripts/data_dir/latte/bench:/data_dir/latte/bench:ro,z'"
@@ -410,23 +491,11 @@ def test_host_paths_are_quoted(script_dir):
     )
 
 
-# Staged files go to the loader's host, are mounted read-only and removed afterwards
-
-
-@pytest.fixture
-def shard(tmp_path):
-    path = tmp_path / "documents_000.tsv"
-    path.write_text("doc_0\tbody\n", encoding="utf-8")
-    return str(path), SHARD[1]
-
-
-HOST_SHARD = "/home/loader/latte-staging/run/loader-1/files/tmp/fts/ds/shards/documents_000.tsv"
-
-
 def test_a_staged_file_goes_to_the_loaders_host_and_is_mounted_read_only(shard):
-    loader = _loader()
+    """A staged file is sent to the loader host, mounted read-only, and removed after the run."""
+    loader = make_loader()
 
-    with _staging_thread([shard])._staged_files(loader) as mounts:
+    with make_staging_thread([shard])._staged_files(loader) as mounts:
         assert loader.remoter.sent == [("documents_000.tsv", HOST_SHARD)]
         assert mounts == f" -v {HOST_SHARD}:{SHARD[1]}:ro,z"
 
@@ -435,18 +504,19 @@ def test_a_staged_file_goes_to_the_loaders_host_and_is_mounted_read_only(shard):
 
 def test_nothing_is_staged_by_default():
     """The default has to stay empty: every existing caller stages nothing, and pays nothing for it."""
-    loader = _loader()
+    loader = make_loader()
 
-    with _staging_thread(None)._staged_files(loader) as mounts:
+    with make_staging_thread(None)._staged_files(loader) as mounts:
         assert mounts == ""
 
     assert loader.remoter.commands == loader.remoter.sent == []
 
 
 def test_a_staged_file_is_removed_even_when_the_command_fails(shard):
-    loader = _loader()
+    """A staged file is removed when the command raises."""
+    loader = make_loader()
 
-    with pytest.raises(RuntimeError, match="latte failed"), _staging_thread([shard])._staged_files(loader):
+    with pytest.raises(RuntimeError, match="latte failed"), make_staging_thread([shard])._staged_files(loader):
         raise RuntimeError("latte failed")
 
     assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
@@ -454,10 +524,10 @@ def test_a_staged_file_is_removed_even_when_the_command_fails(shard):
 
 def test_a_file_that_failed_to_send_is_removed_too(shard):
     """A send that fails partway can leave a partial file behind."""
-    loader = _loader()
+    loader = make_loader()
     loader.remoter.send_files = lambda src, dst, **_: False
 
-    with pytest.raises(RuntimeError, match="Failed to send"), _staging_thread([shard])._staged_files(loader):
+    with pytest.raises(RuntimeError, match="Failed to send"), make_staging_thread([shard])._staged_files(loader):
         pytest.fail("the command must not run without its file")
 
     assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
@@ -465,7 +535,7 @@ def test_a_file_that_failed_to_send_is_removed_too(shard):
 
 def test_a_failed_removal_does_not_replace_the_commands_outcome(shard):
     """A connection dropped during the cleanup must not fail a load that succeeded."""
-    loader = _loader()
+    loader = make_loader()
     run = loader.remoter.run
 
     def rm_drops_the_connection(cmd, **kwargs):
@@ -475,15 +545,19 @@ def test_a_failed_removal_does_not_replace_the_commands_outcome(shard):
 
     loader.remoter.run = rm_drops_the_connection
 
-    with _staging_thread([shard])._staged_files(loader):
+    with make_staging_thread([shard])._staged_files(loader):
         pass
 
 
 def test_staging_stops_when_the_home_cannot_be_resolved(shard):
-    loader = _loader()
+    """Staging raises when the loader home cannot be resolved, before sending anything."""
+    loader = make_loader()
     loader.remoter.run = lambda cmd, **_: types.SimpleNamespace(stdout="\n")
 
-    with pytest.raises(RuntimeError, match="Cannot resolve the home"), _staging_thread([shard])._staged_files(loader):
+    with (
+        pytest.raises(RuntimeError, match="Cannot resolve the home"),
+        make_staging_thread([shard])._staged_files(loader),
+    ):
         pytest.fail("the command must not run without its file")
 
     assert loader.remoter.sent == []
@@ -491,55 +565,54 @@ def test_staging_stops_when_the_home_cannot_be_resolved(shard):
 
 def test_a_file_sent_ahead_is_not_sent_again(shard):
     """A caller may send a file ahead of the command that stages it."""
-    loader = _loader()
+    loader = make_loader()
     latte_thread.send_to_loader(loader, [(shard[0], latte_thread.staged_file_path(loader, shard[1]))])
 
-    with _staging_thread([shard])._staged_files(loader):
+    with make_staging_thread([shard])._staged_files(loader):
         assert len(loader.remoter.sent) == 1
 
 
 def test_a_removed_file_is_sent_again(shard):
-    loader = _loader()
-    with _staging_thread([shard])._staged_files(loader):
+    """A staged file removed after a run is sent again for the next run."""
+    loader = make_loader()
+    with make_staging_thread([shard])._staged_files(loader):
         pass
 
-    with _staging_thread([shard])._staged_files(loader):
+    with make_staging_thread([shard])._staged_files(loader):
         assert len(loader.remoter.sent) == 2
 
 
 def test_docker_loaders_stage_apart(shard):
     """Docker loaders share one host: one finishing must not remove the other's file."""
-    first, second = _loader("loader-1"), _loader("loader-2")
+    first, second = make_loader("loader-1"), make_loader("loader-2")
 
-    with _staging_thread([shard])._staged_files(first), _staging_thread([shard])._staged_files(second):
+    with make_staging_thread([shard])._staged_files(first), make_staging_thread([shard])._staged_files(second):
         assert first.remoter.sent[0][1] != second.remoter.sent[0][1]
 
 
 def test_a_staged_file_mount_is_quoted(shard):
-    loader = _loader("loader 1")
+    """Host paths with spaces are quoted in the staged mount and in the rm command."""
+    loader = make_loader("loader 1")
 
-    with _staging_thread([shard])._staged_files(loader) as mounts:
+    with make_staging_thread([shard])._staged_files(loader) as mounts:
         host_path = HOST_SHARD.replace("loader-1", "loader 1")
         assert mounts == f" -v '{host_path}:{SHARD[1]}:ro,z'"
 
     assert loader.remoter.commands[-1] == f"rm -f '{host_path}'"
 
 
-# A failed staging is reported as a failed run, though it happens before the stress event opens
-
-
-def _fail_sends_to(loader, path_part):
-    send_files = loader.remoter.send_files
-    loader.remoter.send_files = lambda src, dst, **kw: path_part not in dst and send_files(src, dst, **kw)
-
-
 @pytest.mark.parametrize(
-    "stop_test_on_failure, severity", [(True, Severity.CRITICAL), (False, Severity.ERROR)], ids=["stops", "continues"]
+    "stop_test_on_failure, severity",
+    [
+        pytest.param(True, Severity.CRITICAL, id="stops"),
+        pytest.param(False, Severity.ERROR, id="continues"),
+    ],
 )
 def test_a_failed_script_directory_send_is_reported_as_a_failed_run(script_dir, stop_test_on_failure, severity):
-    loader = _loader()
-    _fail_sends_to(loader, "/scripts/")
-    thread = _thread()
+    """A failed script-directory send reports the run as failed, at the severity stop_test_on_failure sets."""
+    loader = make_loader()
+    fail_sends_to(loader, "/scripts/")
+    thread = make_thread()
     thread.stop_test_on_failure = stop_test_on_failure
 
     with patch.object(thread, "_run_container") as run_container:
@@ -552,9 +625,10 @@ def test_a_failed_script_directory_send_is_reported_as_a_failed_run(script_dir, 
 
 
 def test_a_failed_staged_file_send_is_reported_as_a_failed_run_and_removed(shard):
-    loader = _loader()
-    _fail_sends_to(loader, "/files/")
-    thread = _staging_thread([shard])
+    """A failed staged-file send reports a critical failed run and still removes the file."""
+    loader = make_loader()
+    fail_sends_to(loader, "/files/")
+    thread = make_staging_thread([shard])
 
     with patch.object(thread, "_run_container") as run_container:
         _, result, event = thread._run_stress(loader, 0, 0)
@@ -567,8 +641,9 @@ def test_a_failed_staged_file_send_is_reported_as_a_failed_run_and_removed(shard
 
 
 def test_a_run_gets_the_mounts_of_both_the_script_directory_and_its_staged_files(shard):
-    loader = _loader()
-    thread = _staging_thread([shard])
+    """A run mounts both the script directory and the staged files, and removes the files after the run."""
+    loader = make_loader()
+    thread = make_staging_thread([shard])
 
     def run_container(*_):
         assert not any(cmd.startswith("rm -f ") for cmd in loader.remoter.commands), "removed before the run"
@@ -583,32 +658,15 @@ def test_a_run_gets_the_mounts_of_both_the_script_directory_and_its_staged_files
     assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
 
 
-def _pinnable_thread(**kwargs):
-    loader_set = types.SimpleNamespace(
-        get_db_auth=lambda: None,
-        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
-        get_loader=lambda: "next-round-robin-loader",
-        nodes=["loader-1", "loader-2"],
-    )
-    return LatteStressThread(
-        loader_set=loader_set,
-        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
-        timeout=60,
-        node_list=["fake-db-node-1"],
-        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
-        round_robin=True,
-        **kwargs,
-    )
-
-
 def test_a_pinned_loader_runs_the_command_there_only():
     """A caller that sent the staged files ahead to one loader must get that loader."""
-    thread = _pinnable_thread(loader="loader-2")
+    thread = make_pinnable_thread(loader="loader-2")
     thread.configure_executer()
     assert thread.loaders == ["loader-2"]
 
 
 def test_without_a_pinned_loader_round_robin_picks_it():
-    thread = _pinnable_thread()
+    """Without a pinned loader, round-robin picks the next loader in turn."""
+    thread = make_pinnable_thread()
     thread.configure_executer()
     assert thread.loaders == ["next-round-robin-loader"]

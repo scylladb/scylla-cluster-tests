@@ -15,6 +15,7 @@ from sdcm.utils.apt import apt_cmd
 
 @pytest.fixture
 def node():
+    """Mock node on a Debian-like distro, neither RHEL-like nor SLES."""
     node = MagicMock()
     node.distro.is_rhel_like = False
     node.distro.is_sles = False
@@ -22,12 +23,14 @@ def node():
 
 
 def test_remove_package_uses_apt_on_debian_like(node):
+    """remove_package removes the package through apt on Debian-like distros."""
     BaseNode.remove_package(node, "scylla-node-exporter")
 
     node.remoter.sudo.assert_called_once_with(apt_cmd("remove -y scylla-node-exporter"), ignore_status=True)
 
 
 def test_remove_package_uses_the_rpm_manager_on_rhel_like(node):
+    """remove_package removes the package with the rpm manager on RHEL-like distros, not apt-get."""
     node.distro.is_rhel_like = True
 
     BaseNode.remove_package(node, "scylla-node-exporter")
@@ -38,6 +41,7 @@ def test_remove_package_uses_the_rpm_manager_on_rhel_like(node):
 
 
 def test_remove_package_uses_zypper_on_sles(node):
+    """remove_package removes the package with zypper on SLES."""
     node.distro.is_sles = True
 
     BaseNode.remove_package(node, "scylla-node-exporter")
@@ -53,6 +57,7 @@ def test_remove_package_tolerates_a_package_that_is_not_installed(node):
 
 
 def test_manager_backend_install_drops_the_conflicting_node_exporter(node):
+    """install_scylla_manager removes scylla-node-exporter from the node before installing."""
     monitor_set = MagicMock()
     monitor_set.params.get.side_effect = {
         "scylla_repo_m": "https://downloads.scylladb.com/deb/debian/scylla-2025.4.list",

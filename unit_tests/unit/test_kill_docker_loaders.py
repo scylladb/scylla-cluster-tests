@@ -23,8 +23,8 @@ from sdcm.cluster import BaseLoaderSet
 TEST_ID = "7001f1a8-74b6-48a7-8a04-395da916410e"
 
 
-@pytest.fixture(name="loader_set")
-def fixture_loader_set():
+@pytest.fixture
+def loader_set():
     """Bind the real 'kill_docker_loaders' to a mock, so only its remoter calls are faked."""
     loader_set = MagicMock()
     loader_set.nodes = [MagicMock(), MagicMock()]
@@ -34,6 +34,7 @@ def fixture_loader_set():
 
 
 def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
+    """kill_docker_loaders runs one filtered docker rm per loader, in a new SSH session."""
     loader_set.kill_docker_loaders()
 
     # NOTE: 'shell_marker' is set on the stress containers only, so the db, monitoring and
@@ -44,13 +45,14 @@ def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
         f"docker ps -a -q --filter label=TestId={TEST_ID} --filter label=shell_marker | xargs -r docker rm -f"
     )
     for node in loader_set.nodes:
-        node.remoter.run.assert_called_once()
+        node.remoter.run.assert_called_once_with(cmd=expected_cmd, verbose=True, ignore_status=True, new_session=True)
         assert node.remoter.run.call_args.kwargs["cmd"] == expected_cmd
         # NOTE: a cached connection to a vanished loader hangs on opening a channel (SCT-711)
         assert node.remoter.run.call_args.kwargs["new_session"] is True
 
 
 def test_kill_docker_loaders_aborts_commands_on_unreachable_loader(loader_set):
+    """kill_docker_loaders aborts the running commands of a loader that fails to answer, and only that one."""
     alive_loader, preempted_loader = loader_set.nodes
     preempted_loader.remoter.run.side_effect = ConnectionError("host is not reachable")
 

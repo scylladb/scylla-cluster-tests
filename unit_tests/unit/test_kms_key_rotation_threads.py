@@ -115,7 +115,7 @@ def test_aws_kms_key_rotation_stop_during_rotation_skips_the_nodes_check(cloud_k
     db_cluster.kms_key_rotation_threads[0].join(timeout=5)
 
     assert not db_cluster.kms_key_rotation_threads[0].is_alive()
-    cloud_kms["aws"].assert_called_once()
+    cloud_kms["aws"].assert_called_once_with(kms_key_alias_name="alias/testid-auto")
     db_node.db_up.assert_not_called()
 
 

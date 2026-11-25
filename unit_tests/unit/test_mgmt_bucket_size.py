@@ -12,6 +12,7 @@ CLUSTER_ID = "8c20f334-cf37-4528-9219-862d75b84c99"
 
 @pytest.fixture
 def bucket_ops():
+    """SnapshotOperations instance with a mocked params and a real logger, built without __init__."""
     ops = SnapshotOperations.__new__(SnapshotOperations)
     ops.log = logging.getLogger(__name__)
     ops.params = MagicMock()
@@ -20,6 +21,7 @@ def bucket_ops():
 
 @pytest.fixture
 def s3_bucket():
+    """Moto S3 bucket manager-backup-tests holding sst, meta, schema and foreign-cluster objects."""
     with mock_aws():
         s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket="manager-backup-tests")
@@ -37,6 +39,7 @@ def s3_bucket():
 
 
 def test_get_cluster_size_on_bucket_s3(bucket_ops, s3_bucket):
+    """get_cluster_size_on_bucket sums the cluster's S3 objects, honouring the region prefix and path."""
     assert bucket_ops.get_cluster_size_on_bucket(CLUSTER_ID, "s3:manager-backup-tests") == 3035
     assert bucket_ops.get_cluster_size_on_bucket(CLUSTER_ID, "AWS_US_EAST_1:s3:manager-backup-tests") == 3035
     assert bucket_ops.get_cluster_size_on_bucket(CLUSTER_ID, "s3:manager-backup-tests/path") == 7
@@ -44,6 +47,7 @@ def test_get_cluster_size_on_bucket_s3(bucket_ops, s3_bucket):
 
 
 def test_get_cluster_size_on_bucket_gcs(bucket_ops):
+    """get_cluster_size_on_bucket sums the cluster's GCS blobs across sst, meta and schema prefixes."""
     blobs_by_prefix = {
         f"backup/sst/cluster/{CLUSTER_ID}/": [MagicMock(size=1000), MagicMock(size=2000)],
         f"backup/meta/cluster/{CLUSTER_ID}/": [MagicMock(size=30)],
@@ -59,6 +63,7 @@ def test_get_cluster_size_on_bucket_gcs(bucket_ops):
 
 
 def test_get_cluster_size_on_bucket_azure(bucket_ops):
+    """get_cluster_size_on_bucket sums the cluster's Azure blobs across sst, meta and schema prefixes."""
     blobs_by_prefix = {
         f"backup/sst/cluster/{CLUSTER_ID}/": [MagicMock(size=1000), MagicMock(size=2000)],
         f"backup/meta/cluster/{CLUSTER_ID}/": [MagicMock(size=30)],
@@ -76,24 +81,35 @@ def test_get_cluster_size_on_bucket_azure(bucket_ops):
 
 
 def test_get_cluster_size_on_bucket_unsupported_backend(bucket_ops):
+    """get_cluster_size_on_bucket returns None for an unknown backend."""
     assert bucket_ops.get_cluster_size_on_bucket(CLUSTER_ID, "unknown:bucket") is None
 
 
 @pytest.mark.parametrize(
     "location_list, expected",
     [
-        (["s3:bucket"], ["s3:bucket"]),
-        (["AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2"], ["AWS_EU_SOUTH_1:s3:b1", "AWS_EU_WEST_1:s3:b2"]),
-        (["'AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2'"], ["AWS_EU_SOUTH_1:s3:b1", "AWS_EU_WEST_1:s3:b2"]),
-        (["'GCE_US_EAST_1:gcs:b1'"], ["GCE_US_EAST_1:gcs:b1"]),
-        (["s3:b1", "gcs:b2"], ["s3:b1", "gcs:b2"]),
+        pytest.param(["s3:bucket"], ["s3:bucket"], id="single-location"),
+        pytest.param(
+            ["AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2"],
+            ["AWS_EU_SOUTH_1:s3:b1", "AWS_EU_WEST_1:s3:b2"],
+            id="comma-separated",
+        ),
+        pytest.param(
+            ["'AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2'"],
+            ["AWS_EU_SOUTH_1:s3:b1", "AWS_EU_WEST_1:s3:b2"],
+            id="quoted-comma-separated",
+        ),
+        pytest.param(["'GCE_US_EAST_1:gcs:b1'"], ["GCE_US_EAST_1:gcs:b1"], id="quoted-single"),
+        pytest.param(["s3:b1", "gcs:b2"], ["s3:b1", "gcs:b2"], id="multiple-items"),
     ],
 )
 def test_parse_backup_locations(location_list, expected):
+    """parse_backup_locations splits comma-separated and quoted location strings."""
     assert SnapshotOperations.parse_backup_locations(location_list) == expected
 
 
 def test_get_snapshot_size_on_bucket_sums_locations_in_gib(bucket_ops):
+    """get_snapshot_size_on_bucket adds the locations and converts bytes to GiB."""
     sizes = {"s3:b1": 1024**3, "s3:b2": 512 * 1024**2}
     with patch.object(
         SnapshotOperations, "get_cluster_size_on_bucket", side_effect=lambda cluster_id, location: sizes[location]
@@ -102,11 +118,13 @@ def test_get_snapshot_size_on_bucket_sums_locations_in_gib(bucket_ops):
 
 
 def test_get_snapshot_size_on_bucket_rounds(bucket_ops):
+    """get_snapshot_size_on_bucket rounds the GiB total to two decimals."""
     with patch.object(SnapshotOperations, "get_cluster_size_on_bucket", return_value=1234567890):
         assert bucket_ops.get_snapshot_size_on_bucket(CLUSTER_ID, ["s3:b1"]) == 1.15
 
 
 def test_get_snapshot_size_on_bucket_none_if_any_location_unsupported(bucket_ops):
+    """get_snapshot_size_on_bucket returns None when any location is unsupported."""
     sizes = {"s3:b1": 1024**3, "unknown:b2": None}
     with patch.object(
         SnapshotOperations, "get_cluster_size_on_bucket", side_effect=lambda cluster_id, location: sizes[location]
@@ -115,11 +133,13 @@ def test_get_snapshot_size_on_bucket_none_if_any_location_unsupported(bucket_ops
 
 
 def test_get_snapshot_size_on_bucket_none_on_error(bucket_ops):
+    """get_snapshot_size_on_bucket returns None when a location lookup raises."""
     with patch.object(SnapshotOperations, "get_cluster_size_on_bucket", side_effect=RuntimeError("access denied")):
         assert bucket_ops.get_snapshot_size_on_bucket(CLUSTER_ID, ["s3:b1"]) is None
 
 
 def test_get_cluster_bucket_files_s3(bucket_ops, s3_bucket):
+    """get_cluster_bucket_files lists the cluster's S3 sst keys in the bucket."""
     bucket_ops.params.get.side_effect = {"backup_bucket_backend": "s3"}.get
     bucket_ops.params.region_names = ["us-east-1"]
     files = bucket_ops.get_cluster_bucket_files(CLUSTER_ID, bucket_location="manager-backup-tests")

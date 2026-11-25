@@ -50,6 +50,7 @@ PERF_ALTERNATOR_CONFIG = BASE_CONFIG | {
 
 
 def expected_command(benchmark: str, workload: str) -> str:
+    """The scylla command line that runs one benchmark workload with the pinned options."""
     workdir = f"/tmp/scylla-{benchmark}-workdir"
     return (
         f"/usr/bin/scylla {benchmark} --json-result {benchmark}-result.json"
@@ -97,6 +98,7 @@ def make_test(test_class, fail_at=None):
 
 
 def benchmark_commands(node):
+    """The scylla benchmark command lines the node ran, in order."""
     return [call.args[0] for call in node.remoter.run.call_args_list if call.args[0].startswith("/usr/bin/scylla ")]
 
 
@@ -107,7 +109,7 @@ def written_config(node) -> dict:
     return yaml.safe_load(body)
 
 
-@pytest.mark.parametrize("workload", ["read", "write"])
+@pytest.mark.parametrize("workload", [pytest.param("read", id="read"), pytest.param("write", id="write")])
 @pytest.mark.parametrize("test_class,benchmark,benchmark_name,config", BENCHMARKS)
 def test_command_config_and_result(test_class, benchmark, benchmark_name, config, workload):
     """The whole config is pinned: a new key, such as a storage directory, must be a deliberate change."""
@@ -120,17 +122,21 @@ def test_command_config_and_result(test_class, benchmark, benchmark_name, config
     test.submit_results.assert_called_once_with(node, f"{benchmark}-result.json", benchmark_name=benchmark_name)
 
 
-@pytest.mark.parametrize("test_class", [PerfCqlRawTest, PerfAlternatorTest])
+@pytest.mark.parametrize(
+    "test_class",
+    [pytest.param(PerfCqlRawTest, id="perf-cql-raw"), pytest.param(PerfAlternatorTest, id="perf-alternator")],
+)
 @pytest.mark.parametrize(
     "fail_at,expected_steps",
     [
-        (None, ["stop", "tool", "submit", "start"]),
-        ("stop", ["stop", "start"]),
-        ("tool", ["stop", "tool", "start"]),
-        ("submit", ["stop", "tool", "submit", "start"]),
+        pytest.param(None, ["stop", "tool", "submit", "start"], id="no-failure"),
+        pytest.param("stop", ["stop", "start"], id="stop-fails"),
+        pytest.param("tool", ["stop", "tool", "start"], id="tool-fails"),
+        pytest.param("submit", ["stop", "tool", "submit", "start"], id="submit-fails"),
     ],
 )
 def test_scylla_server_is_down_for_the_run_and_starts_again(test_class, fail_at, expected_steps):
+    """scylla-server is stopped for the run and started again, whether a step fails or not."""
     test, node, steps = make_test(test_class, fail_at=fail_at)
 
     if fail_at:

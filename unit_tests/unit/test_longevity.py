@@ -15,18 +15,22 @@ LongevityTest.__test__ = False
 
 @pytest.fixture(scope="function", autouse=True)
 def fixture_mock_calls():
+    """Patch raft validation and time.sleep in sdcm.tester for every test."""
     with unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"), unittest.mock.patch("sdcm.tester.time.sleep"):
         yield
 
 
 @pytest.mark.sct_config(files="unit_tests/test_configs/longevity-elasticity-unit-test.yaml")
 class DummyLongevityTest(LongevityTest):
+    """LongevityTest with DB, Argus and stress side effects stubbed for unit runs."""
+
     __test__ = True
     test_custom_time = None
     test_batch_custom_time = None
 
     @pytest.fixture(autouse=True)
     def fixture_params(self, params):
+        """Override test params with unit-run defaults and clear the timeout thread, k8s and kafka state."""
         self.params = params
         self.params["cluster_health_check"] = False
         self.params["n_monitor_nodes"] = 0
@@ -35,38 +39,41 @@ class DummyLongevityTest(LongevityTest):
         self.k8s_clusters = []
         self.kafka_cluster = None
 
-    @pytest.fixture(autouse=True, name="event_system")
-    def fixture_event_system(self, setup_logging):
+    @pytest.fixture(autouse=True)
+    def event_system(self, setup_logging):
+        """Run the test inside a fake events system and expose its event processes registry."""
         with make_fake_events() as device:
             self._fake_device = device
             self.events_processes_registry = SctEvent._events_processes_registry
             yield
 
     def _init_params(self):
-        pass
+        """Skip param initialization; the fixture sets params."""
 
     def init_argus_run(self):
-        pass
+        """Skip Argus run creation."""
 
     def collect_relocatable_package(self):
-        pass
+        """Skip relocatable package collection."""
 
     def collect_grafana_screenshots(self):
-        pass
+        """Skip Grafana screenshot collection."""
 
     def argus_finalize_test_run(self):
-        pass
+        """Skip Argus run finalization."""
 
     def start_argus_heartbeat_thread(self):
+        """Return an unset Event instead of starting the heartbeat thread, which could outlive the test."""
         # prevent from heartbeat thread to start
         # because it can be left running after the test
         # and break other tests
         return threading.Event()
 
     def _pre_create_templated_user_schema(self, *args, **kwargs):
-        pass
+        """Skip templated user schema creation."""
 
     def create_templated_user_stress_params(self, idx, cs_profile):
+        """Return two fake cassandra-stress user-profile commands for table ``idx``."""
         fake_profile_path = f"/tmp/mock_profile_table{idx}.yaml"
         return [
             {
@@ -80,6 +87,7 @@ class DummyLongevityTest(LongevityTest):
         ]
 
     def init_resources(self):
+        """Build a dummy DB cluster with one node and no monitors."""
         node = DummyNode(
             name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
         )
@@ -92,18 +100,19 @@ class DummyLongevityTest(LongevityTest):
         self.timeout_thread = self._init_test_timeout_thread()
 
     def init_nodes(self, db_cluster):
-        pass
+        """Skip node initialization."""
 
     def argus_collect_manager_version(self):
-        pass
+        """Skip Argus manager version collection."""
 
     def argus_get_scylla_version(self):
-        pass
+        """Skip Argus Scylla version collection."""
 
     def argus_collect_packages(self):
-        pass
+        """Skip Argus package collection."""
 
     def _run_all_stress_cmds(self, stress_queue, params):
+        """Append one MagicMock stress result per stress command to ``stress_queue``."""
         for _ in range(len(params["stress_cmd"])):
             m = MagicMock()
             m.parse_results.return_value = ([], {})
@@ -154,14 +163,15 @@ def make_longevity_test_with_df_output(
 @pytest.mark.parametrize(
     "df_available_per_node, compression_ratio, expected",
     [
-        ([111], 1.0, 100),
-        ([56], 0.5, 101),
-        ([748_001], 0.68, 1_000_001),
-        ([67, 111, 89], 1.0, 80),  # average of three nodes
-        ([660_001, 1_100_001, 880_001], 0.5, 1_600_001),
+        pytest.param([111], 1.0, 100, id="single-node"),
+        pytest.param([56], 0.5, 101, id="half-compression"),
+        pytest.param([748_001], 0.68, 1_000_001, id="fractional-ratio"),
+        pytest.param([67, 111, 89], 1.0, 80, id="three-nodes-average"),
+        pytest.param([660_001, 1_100_001, 880_001], 0.5, 1_600_001, id="three-nodes-half-compression"),
     ],
 )
 def test_effective_disk_size_bytes(monkeypatch, df_available_per_node, compression_ratio, expected):
+    """effective_disk_size_bytes averages free disk over nodes and scales it by the compression ratio."""
     instance = make_longevity_test_with_df_output(monkeypatch, df_available_per_node, compression_ratio)
     with patch("longevity_test.ParallelObject") as mock_parallel:
         mock_parallel.return_value.run.return_value = [MagicMock(result=b) for b in df_available_per_node]
@@ -169,6 +179,7 @@ def test_effective_disk_size_bytes(monkeypatch, df_available_per_node, compressi
 
 
 def test_longevity_whitelist_allows_effective_disk_size_bytes(monkeypatch):
+    """effective_disk_size_bytes is usable in stress command templates."""
     instance = make_longevity_test_with_df_output(monkeypatch, [111])
     with patch("longevity_test.ParallelObject") as mock_parallel:
         mock_parallel.return_value.run.return_value = [MagicMock(result=111)]
@@ -177,6 +188,7 @@ def test_longevity_whitelist_allows_effective_disk_size_bytes(monkeypatch):
 
 
 def test_longevity_whitelist_allows_db_node_count_per_dc(monkeypatch):
+    """db_node_count_per_dc is usable in stress command templates."""
     instance = make_longevity_test_with_df_output(
         monkeypatch,
         [600_000_000, 1_000_000_000, 800_000_000],
@@ -189,6 +201,7 @@ def test_longevity_whitelist_allows_db_node_count_per_dc(monkeypatch):
 
 
 def test_db_node_count_per_dc_falls_back_to_runtime_nodes_when_config_missing(monkeypatch):
+    """db_node_count_per_dc counts runtime nodes per DC when n_db_nodes is not configured."""
     instance = make_longevity_test_with_df_output(
         monkeypatch,
         [600_000_000, 1_000_000_000, 800_000_000],
@@ -198,6 +211,7 @@ def test_db_node_count_per_dc_falls_back_to_runtime_nodes_when_config_missing(mo
 
 
 def test_longevity_stress_template_context_can_use_whitelisted_builtins(monkeypatch):
+    """stress_template_context may reference built-in variables such as effective_disk_size_bytes."""
     instance = make_longevity_test_with_df_output(
         monkeypatch,
         [660_001, 1_100_001],
@@ -215,6 +229,7 @@ def test_longevity_stress_template_context_can_use_whitelisted_builtins(monkeypa
 
 
 def test_longevity_rejects_context_key_conflicting_with_builtin(monkeypatch):
+    """A stress_template_context key that shadows a built-in template variable raises RuntimeError."""
     instance = make_longevity_test_with_df_output(monkeypatch, [1_000_000_000], configured_n_db_nodes=[1])
     instance.params["stress_template_context"] = {"db_node_count_per_dc": 99}
     with pytest.raises(RuntimeError, match="conflicts with a built-in stress template variable"):
@@ -222,6 +237,7 @@ def test_longevity_rejects_context_key_conflicting_with_builtin(monkeypatch):
 
 
 def test_longevity_whitelist_blocks_other_owner_attributes(monkeypatch):
+    """Template rendering rejects owner attributes that are not on the whitelist."""
     instance = make_longevity_test_with_df_output(monkeypatch, [1_000_000_000])
     instance.some_other_template_value = 17
     with pytest.raises(RuntimeError, match="unknown Jinja variable"):

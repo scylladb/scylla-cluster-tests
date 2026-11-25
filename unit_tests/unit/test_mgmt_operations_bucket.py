@@ -10,7 +10,8 @@ OCI_ENDPOINT = "https://ns.compat.objectstorage.us-phoenix-1.oci.customer-oci.co
 OCI_CREDS = {"access_key_id": "SENTINEL_OCI_ACCESS_KEY_ID", "secret_access_key": "SENTINEL_OCI_SECRET_ACCESS_KEY"}
 
 
-def _bucket_ops(params: dict) -> BucketOperations:
+def make_bucket_ops(params: dict) -> BucketOperations:
+    """BucketOperations with the given params and OCI credentials, skipping the real constructor."""
     ops = BucketOperations.__new__(BucketOperations)
     ops.params = params
     ops.test_config = Mock(backup_oci_credentials=OCI_CREDS)
@@ -18,7 +19,8 @@ def _bucket_ops(params: dict) -> BucketOperations:
 
 
 def test_download_from_s3_uses_plain_aws_cli_outside_oci():
-    ops = _bucket_ops({"cluster_backend": "aws"})
+    """Outside OCI, download_from_s3 runs plain aws s3 cp and sends no AWS config file."""
+    ops = make_bucket_ops({"cluster_backend": "aws"})
     node = Mock()
     ops.install_awscli_dependencies(node)
     ops.download_from_s3(node, source="s3://bucket/key", destination="/upload")
@@ -28,7 +30,8 @@ def test_download_from_s3_uses_plain_aws_cli_outside_oci():
 
 
 def test_download_from_s3_on_oci_uses_endpoint_and_installed_config():
-    ops = _bucket_ops(
+    """On OCI, the AWS config holds the OCI credentials and endpoint, and no credential leaks into commands."""
+    ops = make_bucket_ops(
         {
             "cluster_backend": "oci",
             "append_scylla_yaml": {"object_storage_endpoints": [{"name": OCI_ENDPOINT, "aws_region": "us-phoenix-1"}]},
@@ -59,7 +62,8 @@ def test_download_from_s3_on_oci_uses_endpoint_and_installed_config():
 
 
 def test_download_from_s3_on_oci_fills_region_placeholder_from_oci_region_name():
-    ops = _bucket_ops(
+    """The {region} placeholders in the OCI endpoint and aws_region are filled from oci_region_name."""
+    ops = make_bucket_ops(
         {
             "cluster_backend": "oci",
             "oci_region_name": ["us-ashburn-1"],

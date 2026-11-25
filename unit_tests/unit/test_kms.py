@@ -52,6 +52,7 @@ KMS_APPEND_SCYLLA_YAML = {
 
 @pytest.fixture
 def kms_dummy_node(tmp_path):
+    """DummyNode on a DummyDbCluster whose append_scylla_yaml carries the KMS config."""
     node = DummyNode(
         name="test_node",
         parent_cluster=None,
@@ -65,7 +66,7 @@ def kms_dummy_node(tmp_path):
     return node
 
 
-def _make_kms_tester_self(**param_overrides):
+def make_kms_tester_self(**param_overrides):
     """Build a fake ClusterTester self for prepare_kms_host testing."""
     params = DotDict(
         {
@@ -93,11 +94,11 @@ def _make_kms_tester_self(**param_overrides):
 
 def test_prepare_kms_host_configures_kms_for_mixed_scylla():
     """mixed_scylla enterprise tests must still get KMS configured for the tested cluster."""
-    fake_self = _make_kms_tester_self()
+    fake_self = make_kms_tester_self()
     with patch("sdcm.tester.AwsKms") as aws_kms_mock, patch("sdcm.tester.SkipPerIssues", return_value=False):
         ClusterTester.prepare_kms_host(fake_self)
 
-    aws_kms_mock.return_value.create_alias.assert_called_once()
+    aws_kms_mock.return_value.create_alias.assert_called_once_with(kms_key_alias_name="alias/testid-test-id-123")
     append_scylla_yaml = fake_self.params["append_scylla_yaml"]
     assert append_scylla_yaml["kms_hosts"]["auto"]["master_key"] == "alias/testid-test-id-123"
     assert append_scylla_yaml["user_info_encryption"]["enabled"] is True
@@ -106,7 +107,7 @@ def test_prepare_kms_host_configures_kms_for_mixed_scylla():
 
 def test_prepare_kms_host_skips_when_kms_disabled():
     """enterprise_disable_kms must short-circuit KMS configuration."""
-    fake_self = _make_kms_tester_self(enterprise_disable_kms=True)
+    fake_self = make_kms_tester_self(enterprise_disable_kms=True)
     with patch("sdcm.tester.AwsKms") as aws_kms_mock, patch("sdcm.tester.SkipPerIssues", return_value=False):
         ClusterTester.prepare_kms_host(fake_self)
 
@@ -132,7 +133,7 @@ def test_proposed_scylla_yaml_includes_kms_for_tested_cluster(kms_dummy_node):
     assert scylla_yaml.kms_hosts == KMS_APPEND_SCYLLA_YAML["kms_hosts"]
     assert scylla_yaml.user_info_encryption == KMS_APPEND_SCYLLA_YAML["user_info_encryption"]
     assert scylla_yaml.system_info_encryption == KMS_APPEND_SCYLLA_YAML["system_info_encryption"]
-    install_mock.assert_called_once()
+    install_mock.assert_called_once_with(kms_dummy_node.remoter)
 
 
 def test_proposed_scylla_yaml_excludes_kms_for_oracle_cluster(kms_dummy_node):

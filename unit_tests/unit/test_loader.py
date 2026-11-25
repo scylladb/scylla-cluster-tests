@@ -20,6 +20,7 @@ class RegistryMetrics:
         self.registry = prometheus_client.CollectorRegistry()
 
     def create_gauge(self, name, desc, param_list):
+        """Return a Gauge bound to this registry instead of the global one."""
         return prometheus_client.Gauge(name, desc, param_list, registry=self.registry)
 
 

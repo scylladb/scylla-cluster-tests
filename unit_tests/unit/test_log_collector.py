@@ -42,6 +42,7 @@ from unit_tests.lib.fake_resources import prepare_fake_region
 
 @pytest.fixture(scope="session")
 def test_id():
+    """Random UUID string shared by the whole test session."""
     return f"{uuid.uuid4()!s}"
 
 
@@ -73,7 +74,35 @@ def baremetal_config():
     }
 
 
+def remote_dir_node(file_sizes="704512\n3145728\n", dir_exists=True, tar_exit_status=0):
+    """A node whose remoter answers the commands the entity issues, by command shape."""
+    node = MagicMock()
+    node.name = "perf-collector-node-1"
+
+    def sudo(cmd, **_):
+        if cmd.startswith("find "):
+            return MagicMock(ok=dir_exists, stdout=file_sizes if dir_exists else "")
+        if cmd.startswith("tar "):
+            return MagicMock(exit_status=tar_exit_status, stdout="")
+        return MagicMock(ok=True, stdout="")
+
+    node.remoter.sudo.side_effect = sudo
+    return node
+
+
+def aws_node_with_ssh_down():
+    """AWSNode without __init__, with SSH down and the instance and EC2 client a SSM fallback needs."""
+    node = AWSNode.__new__(AWSNode)
+    node.name = "loader-node-1"
+    node._instance = Mock(id="i-028fa089cded5826b")
+    node._ec2_service = Mock()
+    node._ec2_service.meta.client.meta.region_name = "eu-west-1"
+    node.remoter = Mock(is_up=Mock(return_value=False))
+    return node
+
+
 def test_create_collecting_nodes(test_id, tmp_path_factory):
+    """Collecting nodes mirror the provisioned db, loader and monitor instances by name."""
     test_dir = tmp_path_factory.mktemp("log-collector")
     prepare_fake_region(test_id, "region_1", n_db_nodes=3, n_loaders=2, n_monitor_nodes=1)
     collector = Collector(
@@ -99,7 +128,7 @@ def test_create_collecting_nodes(test_id, tmp_path_factory):
 
 
 def test_create_collecting_nodes_deduplicates_overlapping_provisioners(test_id, tmp_path_factory):
-    """Test that a node discovered by several provisioners is collected only once.
+    """A node discovered by several provisioners is collected only once.
 
     Provisioners of the same region may report overlapping sets of instances (OCI discovers one
     provisioner per availability domain of a region). Duplicated nodes make the parallel collectors
@@ -145,7 +174,7 @@ def test_create_collecting_nodes_without_public_ip_uses_private_ip(tmp_path_fact
 
 
 def test_base_sct_log_collector_raises_when_no_local_files(tmp_path):
-    """Test that BaseSCTLogCollector raises FileNotFoundError when no local files are found."""
+    """BaseSCTLogCollector raises FileNotFoundError when no local files are found."""
     test_id = str(uuid.uuid4())
     storage_dir = tmp_path / "storage"
     storage_dir.mkdir()
@@ -160,7 +189,7 @@ def test_base_sct_log_collector_raises_when_no_local_files(tmp_path):
 
 
 def test_python_sct_log_collector_raises_when_no_local_files(tmp_path):
-    """Test that PythonSCTLogCollector raises FileNotFoundError when no local files are found."""
+    """PythonSCTLogCollector raises FileNotFoundError when no local files are found."""
     test_id = str(uuid.uuid4())
     storage_dir = tmp_path / "storage"
     storage_dir.mkdir()
@@ -175,7 +204,7 @@ def test_python_sct_log_collector_raises_when_no_local_files(tmp_path):
 
 
 def test_collector_tracks_critical_failures(test_id, tmp_path_factory, monkeypatch):
-    """Test that Collector.run() tracks and returns error message for critical SCT log failures."""
+    """Collector.run() returns an error message when critical SCT logs are missing."""
     test_dir = tmp_path_factory.mktemp("log-collector-fail")
 
     # Create a collector instance
@@ -202,7 +231,7 @@ def test_collector_tracks_critical_failures(test_id, tmp_path_factory, monkeypat
 
 
 def test_schema_log_collector_is_tracked_as_critical(tmp_path):
-    """Test that SchemaLogCollector (subclass of BaseSCTLogCollector) is tracked as critical."""
+    """SchemaLogCollector, a BaseSCTLogCollector subclass, is tracked as critical."""
     test_id = str(uuid.uuid4())
     storage_dir = tmp_path / "storage"
     storage_dir.mkdir()
@@ -218,7 +247,7 @@ def test_schema_log_collector_is_tracked_as_critical(tmp_path):
 
 
 def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
-    """Test that FailureStatisticsCollector does NOT raise exception when no files are found.
+    """FailureStatisticsCollector returns an empty list instead of raising when no files are found.
 
     Failure statistics are optional diagnostic files created only on test failures.
     This collector should not be treated as critical and should gracefully handle
@@ -238,7 +267,7 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
 
 
 def test_get_baremetal_instances_by_testid(test_id, tmp_path_factory, baremetal_config):
-    """Test that baremetal instances are correctly collected from config."""
+    """Baremetal instances are collected from the config, grouped by role."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal")
 
     mock_keystore = MagicMock()
@@ -278,7 +307,7 @@ def test_get_baremetal_instances_by_testid(test_id, tmp_path_factory, baremetal_
 
 
 def test_get_baremetal_instances_uses_private_ip(test_id, tmp_path_factory, baremetal_config):
-    """Test that baremetal uses private IPs when configured."""
+    """Baremetal uses private IPs when ip_ssh_connections is private."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal-private")
 
     mock_keystore = MagicMock()
@@ -385,7 +414,7 @@ def test_get_baremetal_instances_skip_a_lab_host_the_access_service_cant_reach(t
 
 
 def test_get_baremetal_instances_no_config(test_id, tmp_path_factory):
-    """Test graceful handling when s3_baremetal_config is not set."""
+    """A missing s3_baremetal_config collects no nodes and does not raise."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal-noconfig")
 
     params = {
@@ -405,7 +434,7 @@ def test_get_baremetal_instances_no_config(test_id, tmp_path_factory):
 
 
 def test_get_running_cluster_sets_baremetal(test_id, tmp_path_factory, baremetal_config):
-    """Test that get_running_cluster_sets dispatches to baremetal correctly."""
+    """get_running_cluster_sets dispatches to the baremetal collection."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal-dispatch")
 
     mock_keystore = MagicMock()
@@ -429,7 +458,7 @@ def test_get_running_cluster_sets_baremetal(test_id, tmp_path_factory, baremetal
 
 
 def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
-    """Test that monitoring entities skip collection when n_monitor_nodes=0.
+    """Monitoring entities skip collection when n_monitor_nodes=0.
 
     Regression: IntOrList normalization means SCTConfiguration.get("n_monitor_nodes")
     now returns [0] (always a list). The collectors must use sum() not truthiness, because
@@ -474,25 +503,9 @@ def test_hydra_watchdog_log_collected_from_result_dir(tmp_path):
     assert (local_dst / "hydra-watchdog.log").read_text().startswith("=== 2026-09-23T17:30:32Z")
 
 
-def _remote_dir_node(file_sizes="704512\n3145728\n", dir_exists=True, tar_exit_status=0):
-    """A node whose remoter answers the commands the entity issues, by command shape."""
-    node = MagicMock()
-    node.name = "perf-collector-node-1"
-
-    def sudo(cmd, **_):
-        if cmd.startswith("find "):
-            return MagicMock(ok=dir_exists, stdout=file_sizes if dir_exists else "")
-        if cmd.startswith("tar "):
-            return MagicMock(exit_status=tar_exit_status, stdout="")
-        return MagicMock(ok=True, stdout="")
-
-    node.remoter.sudo.side_effect = sudo
-    return node
-
-
 def test_remote_dir_archive_log_archives_and_receives(tmp_path, caplog):
     """The directory is tarred on the node under sudo and the archive is fetched."""
-    node = _remote_dir_node()
+    node = remote_dir_node()
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf/")
 
     with (
@@ -521,7 +534,7 @@ def test_remote_dir_archive_log_archives_and_receives(tmp_path, caplog):
 )
 def test_remote_dir_archive_log_skips_when_there_is_nothing_to_collect(tmp_path, dir_exists, file_sizes):
     """The package creates the directory, so an empty one is normal and not an error."""
-    node = _remote_dir_node(file_sizes=file_sizes, dir_exists=dir_exists)
+    node = remote_dir_node(file_sizes=file_sizes, dir_exists=dir_exists)
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
     with patch("sdcm.logcollector.LogCollector.receive_log") as mock_receive:
@@ -532,7 +545,8 @@ def test_remote_dir_archive_log_skips_when_there_is_nothing_to_collect(tmp_path,
 
 
 def test_remote_dir_archive_log_does_not_fetch_a_failed_archive(tmp_path):
-    node = _remote_dir_node(tar_exit_status=2)
+    """A failed tar leaves nothing to fetch."""
+    node = remote_dir_node(tar_exit_status=2)
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
     with patch("sdcm.logcollector.LogCollector.receive_log") as mock_receive:
@@ -542,7 +556,8 @@ def test_remote_dir_archive_log_does_not_fetch_a_failed_archive(tmp_path):
 
 
 def test_remote_dir_archive_log_does_not_fetch_a_corrupted_archive(tmp_path):
-    node = _remote_dir_node()
+    """An archive failing check_archive is not fetched."""
+    node = remote_dir_node()
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
     with (
@@ -556,7 +571,7 @@ def test_remote_dir_archive_log_does_not_fetch_a_corrupted_archive(tmp_path):
 
 def test_remote_dir_archive_log_needs_a_remote_storage_dir(tmp_path):
     """Without remote_dst there is nowhere on the node to put the archive."""
-    node = _remote_dir_node()
+    node = remote_dir_node()
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
     assert entity.collect(node=node, local_dst=str(tmp_path), remote_dst=None) is None
@@ -583,6 +598,7 @@ def test_archive_log_remotely_defaults_to_the_source_dir_without_sudo():
 
 
 def test_archive_log_remotely_with_sudo_writes_to_the_given_destination():
+    """use_sudo writes the archive to archive_dst through sudo and returns its path."""
     node = MagicMock()
     node.remoter.sudo.return_value = MagicMock(ok=True, exit_status=0, stdout="")
 
@@ -628,6 +644,7 @@ def test_archive_log_remotely_warns_when_the_archive_cannot_be_made_readable(cap
     ),
 )
 def test_archive_log_remotely_tolerates_files_changing_while_read(exit_status, archived):
+    """Tar exit 1 (file changed while read) still archives; exit 2 does not."""
     node = MagicMock()
     node.remoter.sudo.return_value = MagicMock(ok=exit_status == 0, exit_status=exit_status, stdout="")
 
@@ -640,19 +657,9 @@ def test_archive_log_remotely_tolerates_files_changing_while_read(exit_status, a
     assert mock_check.called == archived
 
 
-def _aws_node_with_ssh_down():
-    node = AWSNode.__new__(AWSNode)
-    node.name = "loader-node-1"
-    node._instance = Mock(id="i-028fa089cded5826b")
-    node._ec2_service = Mock()
-    node._ec2_service.meta.client.meta.region_name = "eu-west-1"
-    node.remoter = Mock(is_up=Mock(return_value=False))
-    return node
-
-
 def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
     """SCT-1439: the in-test AWSNode had no aws_ssm_runner, so the SSM fallback raised AttributeError."""
-    node = _aws_node_with_ssh_down()
+    node = aws_node_with_ssh_down()
     log_file = str(tmp_path / "node" / "system.log")
 
     with patch("sdcm.cluster_aws.SSMCommandRunner") as ssm_runner:
@@ -660,10 +667,13 @@ def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
         assert LogCollector.collect_log_remotely(node, "journalctl", log_file) == (log_file, False)
 
     ssm_runner.assert_called_once_with(region_name="eu-west-1", instance_id="i-028fa089cded5826b")
-    ssm_runner.return_value.run_command_and_save_output.assert_called_once()
+    ssm_runner.return_value.run_command_and_save_output.assert_called_once_with(
+        command="journalctl", local_output_file=log_file, comment=f"Collect log {log_file}", ignore_status=True
+    )
 
 
 def test_collect_log_remotely_without_ssh_or_ssm_collects_nothing(tmp_path):
+    """A node with neither SSH nor SSM collects nothing."""
     node = SimpleNamespace(remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
 
     assert LogCollector.collect_log_remotely(node, "journalctl", str(tmp_path / "system.log")) == (None, True)
@@ -679,6 +689,7 @@ def test_collect_logs_logs_the_failure_of_a_node(tmp_path, caplog):
 
 
 def test_cluster_log_type_argument_leaves_the_class_alone(tmp_path):
+    """cluster_log_type sets the instance local_dir without changing the class attribute."""
     collector = ScyllaLogCollector(
         [], test_id="4f7398ef", storage_dir=str(tmp_path), params=None, cluster_log_type="db-node-1"
     )
@@ -729,4 +740,4 @@ def test_collect_node_logs_checks_ssh_of_a_dead_node_once(tmp_path):
     with patch.object(LoaderLogCollector, "archive_to_tarfile", return_value=None):
         collector.collect_node_logs()
 
-    node.remoter.is_up.assert_called_once()
+    node.remoter.is_up.assert_called_once_with()
