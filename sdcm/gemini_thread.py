@@ -18,6 +18,7 @@ import random
 import time
 import uuid
 from pathlib import Path
+from typing import NamedTuple
 
 from sdcm.cluster import BaseCluster, BaseScyllaCluster
 from sdcm.reporting.tooling_reporter import GeminiVersionReporter
@@ -31,6 +32,28 @@ from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
+
+# The monitor scrapes the metrics of the first gemini worker of each loader on this port.
+GEMINI_METRICS_PORT = 2112
+GEMINI_PROFILING_PORT = 6060
+
+
+class GeminiWorkerFiles(NamedTuple):
+    """The output files of one gemini worker, in the loader home and in the root of its container."""
+
+    result: str
+    test_statements: str
+    oracle_statements: str
+    summary: str
+
+    @classmethod
+    def for_worker(cls, worker_id: str) -> "GeminiWorkerFiles":
+        return cls(
+            result=f"gemini_result_{worker_id}.log",
+            test_statements=f"gemini_test_statements_{worker_id}.log",
+            oracle_statements=f"gemini_oracle_statements_{worker_id}.log",
+            summary=f"gemini-summary-{worker_id}.txt",
+        )
 
 
 class NotGeminiErrorResult:
@@ -91,44 +114,22 @@ class GeminiStressThread(DockerBasedStressThread):
         self.oracle_cluster = oracle_cluster
         self.gemini_commands = []
         self.unique_id = uuid.uuid4()
-        self.gemini_default_flags = {
-            "level": "debug",
-            "request-timeout": "3s",
-            "connect-timeout": "60s",
-            "consistency": "QUORUM",
-            "async-objects-stabilization-backoff": "250ms",
-            "async-objects-stabilization-attempts": 10,
-            "max-mutation-retries-backoff": "1s",
-            "max-mutation-retries": 10,
-            "dataset-size": "large",
-            "oracle-host-selection-policy": "token-aware",
-            "test-host-selection-policy": "token-aware",
-            "drop-schema": "true",
-            "cql-features": "normal",
-            "materialized-views": "false",
-            "use-server-timestamps": "false",
-            "use-lwt": "false",
-            "use-counters": "false",
-            "max-tables": 1,
-            "max-columns": 16,
-            "min-columns": 8,
-            "max-partition-keys": 6,
-            "min-partition-keys": 2,
-            "max-clustering-keys": 4,
-            "min-clustering-keys": 2,
-            "partition-key-distribution": "uniform",  # Distribution for hitting the partition
-            "partition-count": 5_000_000,
-            "max-deleted-heap-size": 3_000_000,
-            "max-errors-to-store": 30,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
-        }
 
-        self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
-        self.gemini_test_statements_file = f"gemini_test_statements_{self.unique_id}.log"
-        self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
-        self.gemini_summary_file = f"gemini-summary-{self.unique_id}.txt"
         self.gemini_schema_file = f"gemini_schema_{self.unique_id}.json"
 
-    def generate_gemini_command(self, schema_path=None):
+    def worker_files(self, loader_idx: int, cpu_idx: int) -> GeminiWorkerFiles:
+        """Return the output files of the worker on CPU *cpu_idx* of loader *loader_idx*.
+
+        Every worker writes its own files, because the workers of one loader share its home.
+        """
+        return GeminiWorkerFiles.for_worker(f"{self.unique_id}-l{loader_idx}-c{cpu_idx}")
+
+    def generate_gemini_command(self, files: GeminiWorkerFiles, schema_path=None, cpu_idx: int = 0):
+        """Return the gemini command of the worker on CPU *cpu_idx*.
+
+        The containers of one loader share the host network, and gemini exits when it cannot bind
+        a port. So each worker listens on the base metrics and profiling ports plus *cpu_idx*.
+        """
         seed = self.params.get("gemini_seed")
         if seed is None:
             seed = random.randint(1, 100)
@@ -144,10 +145,10 @@ class GeminiStressThread(DockerBasedStressThread):
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
-                --profiling-port=6060 \
-                --bind=0.0.0.0:2112 \
-                --outfile=/{self.gemini_result_file} \
-                --summary-file=/{self.gemini_summary_file} \
+                --profiling-port={GEMINI_PROFILING_PORT + cpu_idx} \
+                --bind=0.0.0.0:{GEMINI_METRICS_PORT + cpu_idx} \
+                --outfile=/{files.result} \
+                --summary-file=/{files.summary} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
 
@@ -160,8 +161,8 @@ class GeminiStressThread(DockerBasedStressThread):
             cmd += f'--schema="{schema_path}" '
 
         if log_statements:
-            cmd += f"--test-statement-log-file=/{self.gemini_test_statements_file} \
-                    --oracle-statement-log-file=/{self.gemini_oracle_statements_file} "
+            cmd += f"--test-statement-log-file=/{files.test_statements} \
+                    --oracle-statement-log-file=/{files.oracle_statements} "
 
         credentials = self.loader_set.get_db_auth()
 
@@ -174,14 +175,7 @@ class GeminiStressThread(DockerBasedStressThread):
         if table_options:
             cmd += " ".join([f'--table-options="{table_opt}"' for table_opt in table_options])
 
-        stress_cmd = self.stress_cmd.replace("\n", " ").strip()
-
-        cmd += (
-            " "
-            + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if key not in stress_cmd)
-            + " "
-            + stress_cmd
-        )
+        cmd += " " + self.stress_cmd.replace("\n", " ").strip()
 
         self.gemini_commands.append(cmd)
         return cmd
@@ -212,29 +206,22 @@ class GeminiStressThread(DockerBasedStressThread):
             schema_path = f"/{self.gemini_schema_file}"
             schema_mount = f"-v $HOME/{self.gemini_schema_file}:/{self.gemini_schema_file}:z "
 
-        for file_name in [
-            self.gemini_result_file,
-            self.gemini_test_statements_file,
-            self.gemini_oracle_statements_file,
-            self.gemini_summary_file,
-        ]:
+        files = self.worker_files(loader_idx, cpu_idx)
+        for file_name in files:
             loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
 
         docker = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
-            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}" '
-            if self.stress_num > 1
-            else ""
-            "--network=host "
-            "--security-opt seccomp=unconfined "
-            '--entrypoint="" '
-            f"--label shell_marker={self.shell_marker} "
-            f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file}:z "
-            f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file}:z "
-            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file}:z "
-            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file}:z "
-            f"{schema_mount}",
+            extra_docker_opts=(f'--cpuset-cpus="{cpu_idx}" ' if self.stress_num > 1 else "")
+            + (
+                "--network=host "
+                "--security-opt seccomp=unconfined "
+                '--entrypoint="" '
+                f"--label shell_marker={self.shell_marker} "
+            )
+            + "".join(f"-v $HOME/{file_name}:/{file_name}:z " for file_name in files)
+            + schema_mount,
         )
 
         if not os.path.exists(loader.logdir):
@@ -242,7 +229,7 @@ class GeminiStressThread(DockerBasedStressThread):
         log_file_name = os.path.join(loader.logdir, "gemini-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug("gemini local log: %s", log_file_name)
 
-        gemini_cmd = self.generate_gemini_command(schema_path=schema_path)
+        gemini_cmd = self.generate_gemini_command(files, schema_path=schema_path, cpu_idx=cpu_idx)
         try:
             prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
             reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
@@ -286,23 +273,14 @@ class GeminiStressThread(DockerBasedStressThread):
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
 
-            local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_result_file))
-            assert docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file), (
+            local_files = GeminiWorkerFiles(*(os.path.join(docker.node.logdir, file_name) for file_name in files))
+            assert docker.receive_files(src=files.result, dst=local_files.result), (
                 "gemini results aren't available, did gemini even run ?"
             )
+            for src, dst in zip(files[1:], local_files[1:]):
+                docker.receive_files(src=src, dst=dst)
 
-            local_gemini_test_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_test_statements_file)
-            )
-            local_gemini_oracle_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file)
-            )
-            local_gemini_summary_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_summary_file))
-            docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
-            docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
-            docker.receive_files(src=self.gemini_summary_file, dst=local_gemini_summary_file)
-
-        return docker, result, local_gemini_result_file
+        return docker, result, local_files.result
 
     def get_gemini_results(self):
         parsed_results = []
