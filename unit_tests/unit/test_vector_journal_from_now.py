@@ -21,15 +21,20 @@ import yaml
 from sdcm.cluster import BaseNode
 from sdcm.cluster_baremetal import PhysicalMachineNode
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.remote import shell_script_cmd
 
 CHECKPOINT = "/var/lib/vector/journald/checkpoint.txt"
 
 
 def vector_journald_source(script: str) -> dict:
+    """Return the journald source of the vector config embedded in the logging script heredoc."""
     return yaml.safe_load(re.search(r"<<'EOF'\n(.*?)\nEOF", script, re.S).group(1))["sources"]["journald"]
 
 
-@pytest.mark.parametrize("journal_from_now", [False, True])
+@pytest.mark.parametrize(
+    "journal_from_now",
+    [pytest.param(False, id="default"), pytest.param(True, id="from-now")],
+)
 def test_vector_reads_the_journal_from_now_only_when_asked(journal_from_now):
     """Asked to, vector drops its checkpoint while stopped and starts at the present; by default nothing changes."""
     script = ConfigurationScriptBuilder(
@@ -72,4 +77,4 @@ def test_only_a_host_that_outlives_the_run_reads_vector_journal_from_now(node_cl
         node.configure_remote_logging()
 
     assert builder.call_args.kwargs["vector_journal_from_now"] is expected
-    node.remoter.sudo.assert_called_once()
+    node.remoter.sudo.assert_called_once_with(shell_script_cmd(builder.return_value.to_string.return_value, quote="'"))

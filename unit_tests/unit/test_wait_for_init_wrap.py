@@ -40,22 +40,23 @@ class HangingSetupCluster:
         self.release = threading.Event()
 
     def node_setup(self, node, **kwargs):
+        """Block until released or `NODE_SETUP_BLOCK_SEC` passes, simulating a hung node setup."""
         self.release.wait(NODE_SETUP_BLOCK_SEC)
 
     def node_startup(self, node, **kwargs):
-        pass
+        """No-op node startup."""
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
-        pass
+        """Production-decorated wait_for_init; the wrapper enforces `timeout`."""
 
 
-@pytest.fixture(name="cluster")
-def cluster_fixture():
+@pytest.fixture
+def cluster():
     """Cluster with a hung node setup, released on teardown so no thread outlives the test."""
-    cluster = HangingSetupCluster()
-    yield cluster
-    cluster.release.set()
+    hanging_cluster = HangingSetupCluster()
+    yield hanging_cluster
+    hanging_cluster.release.set()
 
 
 def test_wait_for_init_timeout_is_in_seconds(cluster, events_function_scope):

@@ -29,199 +29,186 @@ from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRe
 logging.basicConfig(level=logging.DEBUG)
 
 
-class TestUtils:
-    def test_scylla_bench_metrics_conversion(self):
-        metrics = {
-            "4ms": 4.0,
-            "950µs": 0.95,
-            "30ms": 30.0,
-            "8.592961906s": 8592.961905999999,
-            "18.120703ms": 18.120703,
-            "5.963775µs": 0.005963775,
-            "9h0m0.024080491s": 32400024.080491,
-            "1m0.024080491s": 60024.080491,
-            "546431": 546431.0,
+@pytest.fixture()
+def load_node(tmp_path, test_data_dir):
+    """DummyNode whose system_log is a per-test copy of load_and_stream.log."""
+    source = test_data_dir / "load_and_stream.log"
+    target = tmp_path / "load_and_stream.log"
+    shutil.copy(source, target)
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=None,
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster([node])
+    node.init()
+    node.system_log = str(target)
+    return node
+
+
+def test_scylla_bench_metrics_conversion():
+    """convert_metric_to_ms converts scylla-bench duration strings to milliseconds."""
+    metrics = {
+        "4ms": 4.0,
+        "950µs": 0.95,
+        "30ms": 30.0,
+        "8.592961906s": 8592.961905999999,
+        "18.120703ms": 18.120703,
+        "5.963775µs": 0.005963775,
+        "9h0m0.024080491s": 32400024.080491,
+        "1m0.024080491s": 60024.080491,
+        "546431": 546431.0,
+    }
+    for metric, converted in metrics.items():
+        actual = convert_metric_to_ms(metric)
+        assert actual == converted, f"Expected {converted}, got {actual}"
+
+
+def test_update_db_packages_s3(tmp_path):
+    """download_dir_from_cloud fetches an S3 prefix into the destination directory."""
+    sct_update_db_packages = "s3://downloads.scylladb.com/rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/"
+
+    dst_dir = str(tmp_path / "s3_download")
+
+    def touch_file(client, bucket, key, local_file_path):
+        Path(local_file_path).touch()
+
+    with (
+        unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file),
+        unittest.mock.patch("sdcm.utils.common.boto3.client") as mock_s3_client,
+    ):
+        mock_s3_client.return_value.list_objects_v2.return_value = {
+            "Contents": [{"Key": "rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/repomd.xml"}]
         }
-        for metric, converted in metrics.items():
-            actual = convert_metric_to_ms(metric)
-            assert actual == converted, f"Expected {converted}, got {actual}"
+        update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
+
+    assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
 
 
-class TestDownloadDir:
-    def test_update_db_packages_s3(self, tmp_path):
-        sct_update_db_packages = "s3://downloads.scylladb.com/rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/"
+def test_update_db_packages_gce(tmp_path):
+    """download_dir_from_cloud fetches a GCS prefix into the destination directory."""
+    sct_update_db_packages = "gs://scratch.scylladb.com/sct_test/"
 
-        dst_dir = str(tmp_path / "s3_download")
+    class FakeObject:
+        def __init__(self, name):
+            self.name = name
 
-        def touch_file(client, bucket, key, local_file_path):
-            Path(local_file_path).touch()
+        @staticmethod
+        def download_to_filename(filename, *_, **__):
+            Path(filename).touch(exist_ok=True)
 
-        with (
-            unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file),
-            unittest.mock.patch("sdcm.utils.common.boto3.client") as mock_s3_client,
-        ):
-            mock_s3_client.return_value.list_objects_v2.return_value = {
-                "Contents": [{"Key": "rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/repomd.xml"}]
-            }
-            update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
-
-        assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
-
-    def test_update_db_packages_gce(self, tmp_path):
-        sct_update_db_packages = "gs://scratch.scylladb.com/sct_test/"
-
-        class FakeObject:
-            def __init__(self, name):
-                self.name = name
-
-            @staticmethod
-            def download_to_filename(filename, *_, **__):
-                Path(filename).touch(exist_ok=True)
-
-        dst_dir = str(tmp_path / "gce_download")
-        test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
-        fake_client = unittest.mock.MagicMock()
-        fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
-        with unittest.mock.patch(
-            "sdcm.utils.common.get_gce_storage_client",
-            return_value=(fake_client, {}),
-        ):
-            update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
-        for fname in test_file_names:
-            assert (Path(update_db_packages) / os.path.basename(fname)).exists()
-
-    @staticmethod
-    def test_update_db_packages_none():
-        sct_update_db_packages = None
-        update_db_packages = download_dir_from_cloud(sct_update_db_packages)
-        assert update_db_packages is None
+    dst_dir = str(tmp_path / "gce_download")
+    test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
+    fake_client = unittest.mock.MagicMock()
+    fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
+    with unittest.mock.patch(
+        "sdcm.utils.common.get_gce_storage_client",
+        return_value=(fake_client, {}),
+    ):
+        update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
+    for fname in test_file_names:
+        assert (Path(update_db_packages) / os.path.basename(fname)).exists()
 
 
-class TestSstableLoadUtils:
-    node = None
-    temp_dir = None
+def test_update_db_packages_none():
+    """download_dir_from_cloud returns None when no source is given."""
+    sct_update_db_packages = None
+    update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+    assert update_db_packages is None
 
-    @classmethod
-    def setup_class(cls):
-        cls.node = DummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=cls.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+
+def test_load_column_1_data_inventory():
+    """get_load_test_data_inventory returns the column-1 inventory for small and big sstables."""
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=1, big_sstable=False, load_and_stream=False)
+    assert test_data == load_inventory.COLUMN_1_DATA, f"Expected {load_inventory.COLUMN_1_DATA}, got {test_data}"
+
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=1, big_sstable=True, load_and_stream=False)
+    assert test_data == load_inventory.BIG_SSTABLE_COLUMN_1_DATA, (
+        f"Expected {load_inventory.BIG_SSTABLE_COLUMN_1_DATA}, got {test_data}"
+    )
+
+
+def test_load_multi_column_data_inventory():
+    """get_load_test_data_inventory returns the multi-column inventory for columns 5 and 6."""
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=False, load_and_stream=False)
+    assert test_data == load_inventory.MULTI_COLUMNS_DATA, (
+        f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
+    )
+
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=True, load_and_stream=False)
+    assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, (
+        f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
+    )
+
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=6, big_sstable=False, load_and_stream=False)
+    assert test_data == load_inventory.MULTI_COLUMNS_DATA, (
+        f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
+    )
+
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=6, big_sstable=True, load_and_stream=False)
+    assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, (
+        f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
+    )
+
+
+def test_load_not_supported_data_inventory():
+    """get_load_test_data_inventory returns an empty inventory for an unsupported column count."""
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=2, big_sstable=False, load_and_stream=False)
+    assert not test_data, f"Expected empty test data, got {test_data}"
+
+
+def test_load_load_and_stream_data_inventory():
+    """get_load_test_data_inventory returns the multi-node inventory for load-and-stream."""
+    test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=False, load_and_stream=True)
+    assert test_data == load_inventory.MULTI_NODE_DATA, f"Expected {load_inventory.MULTI_NODE_DATA}, got {test_data}"
+
+
+def test_run_refresh_has_timeout_and_no_retry():
+    """A load-and-stream refresh on tablets can wait forever for the topology to quiesce, so the nodetool
+    call must use the adaptive timeout, and must not be retried, since the first refresh still runs in Scylla.
+    """
+    node = unittest.mock.MagicMock()
+    test_data = load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA[0]
+
+    with unittest.mock.patch("sdcm.utils.sstable.load_utils.adaptive_timeout") as adaptive_timeout_mock:
+        adaptive_timeout_mock.return_value.__enter__.return_value = 7200
+        SstableLoadUtils.run_refresh(node, test_data=test_data, timeout=120)
+
+    adaptive_timeout_mock.assert_called_once_with(Operations.REFRESH, node, timeout=120)
+    node.run_nodetool.assert_called_once_with(
+        sub_cmd="refresh", args="-- keyspace_refresh standard1", timeout=7200, retry=0
+    )
+
+
+def test_distribute_test_files_to_cluster_nodes():
+    """distribute_test_files_to_cluster_nodes maps the load-and-stream files for every node layout."""
+    test_cases = [
+        {"nodes": ["node1", "node2", "node3"], "expected_result": 5},
+        {"nodes": ["node1", "node2"], "expected_result": 5},
+        {"nodes": ["node1", "node2", "node3", "node4"], "expected_result": 5},
+        {"nodes": ["node1", "node2", "node3", "node4", "node5"], "expected_result": 5},
+        {"nodes": ["node1", "node2", "node3", "node5", "node6"], "expected_result": 5},
+    ]
+
+    for case in test_cases:
+        test_data = SstableLoadUtils.get_load_test_data_inventory(5, big_sstable=False, load_and_stream=True)
+        map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(
+            nodes=case["nodes"], test_data=test_data
         )
-        cls.node.parent_cluster = DummyDbCluster([cls.node])
-        cls.node.init()
-
-    @pytest.fixture(autouse=True)
-    def fixture_setup(self, tmp_path, test_data_dir):
-        source = test_data_dir / "load_and_stream.log"
-        target = tmp_path / "load_and_stream.log"
-        shutil.copy(source, target)
-        self.node.system_log = str(target)
-
-    @staticmethod
-    def test_load_column_1_data_inventory():
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=1, big_sstable=False, load_and_stream=False
-        )
-        assert test_data == load_inventory.COLUMN_1_DATA, f"Expected {load_inventory.COLUMN_1_DATA}, got {test_data}"
-
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=1, big_sstable=True, load_and_stream=False
-        )
-        assert test_data == load_inventory.BIG_SSTABLE_COLUMN_1_DATA, (
-            f"Expected {load_inventory.BIG_SSTABLE_COLUMN_1_DATA}, got {test_data}"
-        )
-
-    @staticmethod
-    def test_load_multi_column_data_inventory():
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=5, big_sstable=False, load_and_stream=False
-        )
-        assert test_data == load_inventory.MULTI_COLUMNS_DATA, (
-            f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
-        )
-
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=5, big_sstable=True, load_and_stream=False
-        )
-        assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, (
-            f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
-        )
-
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=6, big_sstable=False, load_and_stream=False
-        )
-        assert test_data == load_inventory.MULTI_COLUMNS_DATA, (
-            f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
-        )
-
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=6, big_sstable=True, load_and_stream=False
-        )
-        assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, (
-            f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
+        assert len(map_files_to_node) == case["expected_result"], (
+            f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
         )
 
-    @staticmethod
-    def test_load_not_supported_data_inventory():
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=2, big_sstable=False, load_and_stream=False
-        )
-        assert not test_data, f"Expected empty test data, got {test_data}"
 
-    @staticmethod
-    def test_load_load_and_stream_data_inventory():
-        test_data = SstableLoadUtils.get_load_test_data_inventory(
-            column_number=5, big_sstable=False, load_and_stream=True
-        )
-        assert test_data == load_inventory.MULTI_NODE_DATA, (
-            f"Expected {load_inventory.MULTI_NODE_DATA}, got {test_data}"
-        )
-
-    @staticmethod
-    def test_run_refresh_has_timeout_and_no_retry():
-        """A load-and-stream refresh on tablets can wait forever for the topology to quiesce, so the nodetool
-        call must use the adaptive timeout, and must not be retried, since the first refresh still runs in Scylla.
-        """
-        node = unittest.mock.MagicMock()
-        test_data = load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA[0]
-
-        with unittest.mock.patch("sdcm.utils.sstable.load_utils.adaptive_timeout") as adaptive_timeout_mock:
-            adaptive_timeout_mock.return_value.__enter__.return_value = 7200
-            SstableLoadUtils.run_refresh(node, test_data=test_data, timeout=120)
-
-        adaptive_timeout_mock.assert_called_once_with(Operations.REFRESH, node, timeout=120)
-        node.run_nodetool.assert_called_once_with(
-            sub_cmd="refresh", args="-- keyspace_refresh standard1", timeout=7200, retry=0
-        )
-
-    @staticmethod
-    def test_distribute_test_files_to_cluster_nodes():
-        test_cases = [
-            {"nodes": ["node1", "node2", "node3"], "expected_result": 5},
-            {"nodes": ["node1", "node2"], "expected_result": 5},
-            {"nodes": ["node1", "node2", "node3", "node4"], "expected_result": 5},
-            {"nodes": ["node1", "node2", "node3", "node4", "node5"], "expected_result": 5},
-            {"nodes": ["node1", "node2", "node3", "node5", "node6"], "expected_result": 5},
-        ]
-
-        for case in test_cases:
-            test_data = SstableLoadUtils.get_load_test_data_inventory(5, big_sstable=False, load_and_stream=True)
-            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(
-                nodes=case["nodes"], test_data=test_data
-            )
-            assert len(map_files_to_node) == case["expected_result"], (
-                f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
-            )
-
-    def test_load_and_stream_waits_for_log_lines(self):
-        self.node.remoter = FakeSstableRemoter(self.node.system_log)
-        SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
+def test_load_and_stream_waits_for_log_lines(load_node):
+    """run_load_and_stream returns once the system log shows the load-and-stream completion lines."""
+    load_node.remoter = FakeSstableRemoter(load_node.system_log)
+    SstableLoadUtils.run_load_and_stream(load_node, start_timeout=1, end_timeout=2)
 
 
 def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
-    """Test that get_testrun_dir returns the newest directory when multiple directories contain the same test_id."""
+    """get_testrun_dir picks the most recently modified directory when several hold the same test_id."""
     # Create a test_id
     test_id = "12345678-1234-1234-1234-123456789abc"
 
@@ -249,7 +236,7 @@ def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
 
 
 def test_get_testrun_dir_returns_none_when_not_found(tmp_path):
-    """Test that get_testrun_dir returns None when test_id is not found."""
+    """get_testrun_dir returns None when no directory holds the test_id."""
     # Create a directory without any test_id file
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
@@ -261,7 +248,7 @@ def test_get_testrun_dir_returns_none_when_not_found(tmp_path):
 
 
 def test_get_testrun_dir_returns_single_match(tmp_path):
-    """Test that get_testrun_dir returns the directory when only one match is found."""
+    """get_testrun_dir returns the directory when exactly one holds the test_id."""
     test_id = "single-match-test-id"
 
     # Create a single test run directory
@@ -279,24 +266,46 @@ def test_get_testrun_dir_returns_single_match(tmp_path):
 @pytest.mark.parametrize(
     "cmd,expected_redacted_substring,expected_preserved_substring",
     [
-        # scylla-bench style
-        (
+        pytest.param(
             "scylla-bench -workload=uniform -username cassandra -password hunter2 -nodes 1.2.3.4",
             "-password ****",
             "-nodes 1.2.3.4",
+            id="scylla-bench",
         ),
-        # --password=value
-        ("cassandra-stress --password=secret --user admin", "--password=****", "--user admin"),
-        # YCSB -p key=value
-        ("ycsb load cassandra-cql -p password=supersecret -p hosts=node1", "password=****", "hosts=node1"),
-        # Env-var export style
-        ("PASSWORD=secret ./run.sh --hosts=x", "PASSWORD=****", "--hosts=x"),
-        # token / api-key variants
-        ("curl -H 'Auth: x' --token=abc123 https://api", "--token=****", "https://api"),
-        ("invoke --api-key deadbeef --endpoint x", "--api-key ****", "--endpoint x"),
+        pytest.param(
+            "cassandra-stress --password=secret --user admin",
+            "--password=****",
+            "--user admin",
+            id="password-equals",
+        ),
+        pytest.param(
+            "ycsb load cassandra-cql -p password=supersecret -p hosts=node1",
+            "password=****",
+            "hosts=node1",
+            id="ycsb-p-key",
+        ),
+        pytest.param(
+            "PASSWORD=secret ./run.sh --hosts=x",
+            "PASSWORD=****",
+            "--hosts=x",
+            id="env-var-export",
+        ),
+        pytest.param(
+            "curl -H 'Auth: x' --token=abc123 https://api",
+            "--token=****",
+            "https://api",
+            id="token-equals",
+        ),
+        pytest.param(
+            "invoke --api-key deadbeef --endpoint x",
+            "--api-key ****",
+            "--endpoint x",
+            id="api-key-flag",
+        ),
     ],
 )
 def test_redact_cli_secrets_masks_known_patterns(cmd, expected_redacted_substring, expected_preserved_substring):
+    """redact_cli_secrets masks the secret value for each known CLI flag style and keeps the rest."""
     redacted = redact_cli_secrets(cmd)
     assert expected_redacted_substring in redacted
     assert expected_preserved_substring in redacted
@@ -307,16 +316,19 @@ def test_redact_cli_secrets_masks_known_patterns(cmd, expected_redacted_substrin
 
 
 def test_redact_cli_secrets_handles_empty_and_none():
+    """redact_cli_secrets passes empty and None input through unchanged."""
     assert redact_cli_secrets("") == ""
     assert redact_cli_secrets(None) is None
 
 
 def test_redact_cli_secrets_does_not_touch_benign_text():
+    """redact_cli_secrets leaves a command without secret flags unchanged."""
     cmd = "ls -la /tmp && echo hello"
     assert redact_cli_secrets(cmd) == cmd
 
 
 def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
+    """redact_cli_secrets pins current behaviour for --api-key-rotation: the --api-key prefix stays visible."""
     # --api-key-rotation should NOT be mistaken for --api-key
     # (word-boundary anchoring means the value 'enabled' stays visible)
     cmd = "tool --api-key-rotation enabled"

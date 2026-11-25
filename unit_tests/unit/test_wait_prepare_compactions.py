@@ -19,8 +19,12 @@ class FakeLoaderMixin(LoaderUtilsMixin):
         self.wait_no_compactions_running = MagicMock(return_value=(120.0, None))
 
 
-@pytest.mark.parametrize("major", [False, True])
+@pytest.mark.parametrize(
+    "major",
+    [pytest.param(False, id="no-major"), pytest.param(True, id="major")],
+)
 def test_no_timeout_skips_waiting(major):
+    """Without a timeout, wait_prepare_compactions neither waits nor runs nodetool, with or without major compaction."""
     tester = FakeLoaderMixin({"prepare_wait_no_compactions_trigger_major": major})
 
     tester.wait_prepare_compactions()
@@ -31,6 +35,7 @@ def test_no_timeout_skips_waiting(major):
 
 
 def test_major_compaction_runs_on_every_node_before_waiting():
+    """With major compaction enabled, every node gets nodetool compact, then the wait uses the configured timeout."""
     tester = FakeLoaderMixin(
         {"prepare_wait_no_compactions_timeout": 60, "prepare_wait_no_compactions_trigger_major": True}
     )
@@ -43,6 +48,7 @@ def test_major_compaction_runs_on_every_node_before_waiting():
 
 
 def test_without_major_compaction_only_waits():
+    """Without major compaction, no node runs nodetool and the wait uses the configured timeout."""
     tester = FakeLoaderMixin(
         {"prepare_wait_no_compactions_timeout": 90, "prepare_wait_no_compactions_trigger_major": False}
     )

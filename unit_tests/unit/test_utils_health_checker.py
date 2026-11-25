@@ -42,11 +42,13 @@ def raft_node():
 
 @pytest.fixture
 def non_voter_group0():
+    """Group0 with one voter and one non-voter member."""
     return [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=False)]
 
 
 @pytest.fixture
 def non_voter_token_ring():
+    """Token ring with the two hosts of non_voter_group0."""
     return [
         TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
         TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
@@ -54,6 +56,8 @@ def non_voter_token_ring():
 
 
 class Node:
+    """Fake cluster node that serves the gossip and peers info the health checks read."""
+
     GOSSIP_STATUSES_FILTER_OUT = [
         "FILTERED",
     ]
@@ -66,28 +70,34 @@ class Node:
 
     @staticmethod
     def print_node_running_nemesis(_):
+        """Return no running nemesis info."""
         return ""
 
     @staticmethod
     def run_cqlsh(cmd, split, verbose):
-        pass
+        """No-op CQL runner."""
 
     @staticmethod
     def get_gossip_info():
+        """Return the healthy GOSSIP_INFO."""
         return GOSSIP_INFO
 
     @staticmethod
     def get_peers_info():
+        """Return the healthy PEERS_INFO."""
         return PEERS_INFO
 
 
 class ProblematicNode(Node):
+    """Node whose gossip info is inconsistent for the first num_of_failed_attempts reads."""
+
     def __init__(self, ip_address, name, num_of_failed_attempts=0):
         super().__init__(ip_address=ip_address, name=name)
         self.get_gossip_info_call_counter = 0
         self.num_of_failed_attempts = num_of_failed_attempts
 
     def get_gossip_info(self):
+        """Return inconsistent gossip until the failed attempts are used up, then the healthy info."""
         self.get_gossip_info_call_counter += 1
         if self.get_gossip_info_call_counter > self.num_of_failed_attempts:
             return super().get_gossip_info()
@@ -144,180 +154,6 @@ GOSSIP_INFO = {
     node3: {"schema": "cbe15453-33f3-3387-aaf1-4120548f41e8", "status": "NORMAL", "dc": "datacenter1"},
 }
 
-
-class TestHealthChecker:
-    def test_check_nodes_status_no_removed(self):
-        event = next(check_nodes_status(NODES_STATUS, node1), None)
-        assert event is not None
-        assert event.type == "NodeStatus"
-        assert event.severity == Severity.CRITICAL
-        assert event.node == "node-0"
-        assert event.message == ""
-        assert event.error != ""
-
-    def test_check_nodes_status_removed(self):
-        event = next(
-            check_nodes_status(
-                NODES_STATUS,
-                node1,
-                [
-                    node1,
-                ],
-            ),
-            None,
-        )
-        assert event is not None
-        assert event.type == "NodeStatus"
-        assert event.severity == Severity.CRITICAL
-        assert event.node == "node-0"
-        assert event.message == ""
-        assert event.error != ""
-
-    def test_check_nulls_in_peers_no_nulls(self):
-        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        assert event is None
-
-    def test_check_nulls_in_peers(self):
-        # Due to commit
-        # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
-        # node object is used as key instead of string. "deepcopy" change the object and we can't use it
-        data_center = PEERS_INFO[node2]["data_center"]
-        PEERS_INFO[node2]["data_center"] = "null"
-        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        assert event.type == "NodePeersNulls"
-        assert event.severity == Severity.ERROR
-        assert event.node == "node-0"
-        assert event.message == ""
-        assert event.error != ""
-
-        PEERS_INFO[node2]["data_center"] = data_center
-
-    def test_check_nulls_in_peers_filtered_status(self):
-        # Due to commit
-        # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
-        # node object is used as key instead of string. "deepcopy" change the object and we can't use it
-        data_center = PEERS_INFO[node2]["data_center"]
-        PEERS_INFO[node2]["data_center"] = "null"
-
-        gossip_status = GOSSIP_INFO[node2]["status"]
-        GOSSIP_INFO[node2]["status"] = "FILTERED"
-
-        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        assert event is None
-
-        PEERS_INFO[node2]["data_center"] = data_center
-        GOSSIP_INFO[node2]["status"] = gossip_status
-
-    def test_check_nulls_in_peers_not_in_gossip(self):
-        PEERS_INFO[node4] = {
-            "data_center": "null",
-        }
-        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        assert event is None
-        PEERS_INFO.pop(node4)
-
-    def test_check_node_status_in_gossip_and_nodetool_status_all_ok(self):
-        event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, node1), None)
-        assert event is None
-
-    def test_check_schema_version_all_ok(self):
-        event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
-        assert event is None
-
-    def test_check_schema_agreement_in_gossip_and_peers(self):
-        attempts = 3
-
-        with unittest.mock.patch("time.sleep") as mocked_sleep:
-            err = check_schema_agreement_in_gossip_and_peers(node1, attempts)
-
-        assert mocked_sleep.call_count == 0, "Looks like redundant retries were executed"
-        assert isinstance(err, str)
-        assert not err
-
-    def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt(self):
-        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=1)
-        attempts = 3
-
-        with unittest.mock.patch("time.sleep") as mocked_sleep:
-            err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
-
-        assert mocked_sleep.call_count == 1, "Unexpected number of retries applied"
-        assert isinstance(err, str)
-        assert not err
-
-    def test_check_schema_agreement_in_gossip_and_peers_constant_error(self):
-        attempts = 3
-        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=attempts)
-
-        with unittest.mock.patch("time.sleep") as mocked_sleep:
-            err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
-
-        assert mocked_sleep.call_count == attempts - 1, "Unexpected number of retries applied"
-        assert isinstance(err, str)
-        assert err
-
-    def test_check_schema_agreement_default_budget_backs_off(self):
-        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=100)
-
-        with unittest.mock.patch("time.sleep") as mocked_sleep:
-            err = check_schema_agreement_in_gossip_and_peers(problem_node)
-
-        assert [call.args[0] for call in mocked_sleep.call_args_list] == [1, 2, 4, 8] + [15] * 7
-        assert err
-
-    def test_check_group0_tokenring_consistency_with_none_values(self):
-        """Test that check_group0_tokenring_consistency handles None values gracefully"""
-        # Create a mock node with raft
-        mock_node = MagicMock()
-        mock_node.name = "test-node"
-        mock_node.host_id = "test-host-id"
-
-        raft = RaftFeature(mock_node)
-        raft.search_inconsistent_host_ids = MagicMock(return_value=[])
-
-        # Create test data with None values
-        group0_members = [
-            Group0Member(host_id="host-1", voter=True),
-            Group0Member(host_id="host-2", voter=True),
-        ]
-        tokenring_members = [
-            TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
-            TokenRingMember(host_id=None, ip_address="127.0.0.2"),  # This should be filtered
-            TokenRingMember(host_id="host-2", ip_address=None),  # This should be filtered
-        ]
-
-        # Run the check - should not raise exceptions
-        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
-
-        # Should generate a warning event for filtered members
-        assert any(event.severity == Severity.WARNING for event in events)
-
-    def test_check_group0_tokenring_consistency_with_exception(self):
-        """Test that check_group0_tokenring_consistency converts exceptions to events"""
-        # Create a mock node with raft
-        mock_node = MagicMock()
-        mock_node.name = "test-node"
-        mock_node.host_id = "test-host-id"
-
-        raft = RaftFeature(mock_node)
-        # Make search_inconsistent_host_ids raise an exception
-        raft.search_inconsistent_host_ids = MagicMock(side_effect=Exception("Test exception"))
-
-        # Create test data; a member missing from the token ring makes the check take the
-        # search_inconsistent_host_ids path
-        group0_members = [Group0Member(host_id="host-2", voter=True)]
-        tokenring_members = [TokenRingMember(host_id="host-1", ip_address="127.0.0.1")]
-
-        # Run the check - should not raise exceptions
-        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
-
-        # Should generate exactly one error event instead of raising
-        assert len(events) == 1
-        error_event = events[0]
-        assert error_event.severity == Severity.ERROR
-        assert "Test exception" in error_event.error
-
-
 # the initial (empty) schema version a bootstrapping node advertises before it catches up with group0 schema;
 # SYSTEM.PEERS may keep it until the next schema change (SCYLLADB-4037)
 EMPTY_SCHEMA_VERSION = "59adb24e-f3cd-3e02-97f0-5b395827453f"
@@ -325,7 +161,8 @@ AGREED_SCHEMA_VERSION = "cbe15453-33f3-3387-aaf1-4120548f41e8"
 OTHER_SCHEMA_VERSION = "657aac4c-63fd-11f1-aca2-12efe961f2b9"
 
 
-def _peers_entry(schema_version: str) -> dict:
+def peers_entry(schema_version: str) -> dict:
+    """SYSTEM.PEERS row of a datacenter1 peer advertising schema_version."""
     return {
         "data_center": "datacenter1",
         "host_id": UUID("b231fe54-8093-4d5c-9a35-b5e34dc81500"),
@@ -336,7 +173,7 @@ def _peers_entry(schema_version: str) -> dict:
     }
 
 
-def _normal_gossip(*schema_versions: str) -> dict:
+def normal_gossip(*schema_versions: str) -> dict:
     """Gossip info for node1/node2/node3, all in NORMAL status."""
     return {
         node: {"schema": schema_version, "status": "NORMAL", "dc": "datacenter1"}
@@ -344,11 +181,209 @@ def _normal_gossip(*schema_versions: str) -> dict:
     }
 
 
+def test_check_nodes_status_no_removed():
+    """check_nodes_status raises a CRITICAL NodeStatus event for a DN node when no node was removed."""
+    event = next(check_nodes_status(NODES_STATUS, node1), None)
+    assert event is not None
+    assert event.type == "NodeStatus"
+    assert event.severity == Severity.CRITICAL
+    assert event.node == "node-0"
+    assert event.message == ""
+    assert event.error != ""
+
+
+def test_check_nodes_status_removed():
+    """check_nodes_status still raises a CRITICAL NodeStatus event for a DN node when removed_nodes_list is given."""
+    event = next(
+        check_nodes_status(
+            NODES_STATUS,
+            node1,
+            [
+                node1,
+            ],
+        ),
+        None,
+    )
+    assert event is not None
+    assert event.type == "NodeStatus"
+    assert event.severity == Severity.CRITICAL
+    assert event.node == "node-0"
+    assert event.message == ""
+    assert event.error != ""
+
+
+def test_check_nulls_in_peers_no_nulls():
+    """check_nulls_in_peers reports nothing when no SYSTEM.PEERS value is null."""
+    event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
+    assert event is None
+
+
+def test_check_nulls_in_peers():
+    """check_nulls_in_peers raises an ERROR NodePeersNulls event for a null SYSTEM.PEERS value."""
+    # Due to commit
+    # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
+    # node object is used as key instead of string. "deepcopy" change the object and we can't use it
+    data_center = PEERS_INFO[node2]["data_center"]
+    PEERS_INFO[node2]["data_center"] = "null"
+    event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
+    assert event.type == "NodePeersNulls"
+    assert event.severity == Severity.ERROR
+    assert event.node == "node-0"
+    assert event.message == ""
+    assert event.error != ""
+
+    PEERS_INFO[node2]["data_center"] = data_center
+
+
+def test_check_nulls_in_peers_filtered_status():
+    """check_nulls_in_peers ignores a null peer whose gossip status is FILTERED."""
+    # Due to commit
+    # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
+    # node object is used as key instead of string. "deepcopy" change the object and we can't use it
+    data_center = PEERS_INFO[node2]["data_center"]
+    PEERS_INFO[node2]["data_center"] = "null"
+
+    gossip_status = GOSSIP_INFO[node2]["status"]
+    GOSSIP_INFO[node2]["status"] = "FILTERED"
+
+    event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
+    assert event is None
+
+    PEERS_INFO[node2]["data_center"] = data_center
+    GOSSIP_INFO[node2]["status"] = gossip_status
+
+
+def test_check_nulls_in_peers_not_in_gossip():
+    """check_nulls_in_peers ignores a peers row for a node that is absent from gossip."""
+    PEERS_INFO[node4] = {
+        "data_center": "null",
+    }
+    event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
+    assert event is None
+    PEERS_INFO.pop(node4)
+
+
+def test_check_node_status_in_gossip_and_nodetool_status_all_ok():
+    """check_node_status_in_gossip_and_nodetool_status reports nothing when gossip and nodetool agree."""
+    event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, node1), None)
+    assert event is None
+
+
+def test_check_schema_version_all_ok():
+    """check_schema_version reports nothing when all schema versions agree."""
+    event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
+    assert event is None
+
+
+def test_check_schema_agreement_in_gossip_and_peers():
+    """check_schema_agreement_in_gossip_and_peers returns no error and does not retry when schemas agree."""
+    attempts = 3
+
+    with unittest.mock.patch("time.sleep") as mocked_sleep:
+        err = check_schema_agreement_in_gossip_and_peers(node1, attempts)
+
+    assert mocked_sleep.call_count == 0, "Looks like redundant retries were executed"
+    assert isinstance(err, str)
+    assert not err
+
+
+def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt():
+    """check_schema_agreement_in_gossip_and_peers retries once and returns no error when the second attempt agrees."""
+    problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=1)
+    attempts = 3
+
+    with unittest.mock.patch("time.sleep") as mocked_sleep:
+        err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
+
+    assert mocked_sleep.call_count == 1, "Unexpected number of retries applied"
+    assert isinstance(err, str)
+    assert not err
+
+
+def test_check_schema_agreement_in_gossip_and_peers_constant_error():
+    """check_schema_agreement_in_gossip_and_peers retries attempts - 1 times and returns an error when schemas never agree."""
+    attempts = 3
+    problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=attempts)
+
+    with unittest.mock.patch("time.sleep") as mocked_sleep:
+        err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
+
+    assert mocked_sleep.call_count == attempts - 1, "Unexpected number of retries applied"
+    assert isinstance(err, str)
+    assert err
+
+
+def test_check_schema_agreement_default_budget_backs_off():
+    """check_schema_agreement_in_gossip_and_peers backs off 1, 2, 4, 8 then 15 seconds and returns an error."""
+    problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=100)
+
+    with unittest.mock.patch("time.sleep") as mocked_sleep:
+        err = check_schema_agreement_in_gossip_and_peers(problem_node)
+
+    assert [call.args[0] for call in mocked_sleep.call_args_list] == [1, 2, 4, 8] + [15] * 7
+    assert err
+
+
+def test_check_group0_tokenring_consistency_with_none_values():
+    """check_group0_tokenring_consistency filters None token ring members and warns instead of raising."""
+    # Create a mock node with raft
+    mock_node = MagicMock()
+    mock_node.name = "test-node"
+    mock_node.host_id = "test-host-id"
+
+    raft = RaftFeature(mock_node)
+    raft.search_inconsistent_host_ids = MagicMock(return_value=[])
+
+    # Create test data with None values
+    group0_members = [
+        Group0Member(host_id="host-1", voter=True),
+        Group0Member(host_id="host-2", voter=True),
+    ]
+    tokenring_members = [
+        TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+        TokenRingMember(host_id=None, ip_address="127.0.0.2"),  # This should be filtered
+        TokenRingMember(host_id="host-2", ip_address=None),  # This should be filtered
+    ]
+
+    # Run the check - should not raise exceptions
+    events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+
+    # Should generate a warning event for filtered members
+    assert any(event.severity == Severity.WARNING for event in events)
+
+
+def test_check_group0_tokenring_consistency_with_exception():
+    """check_group0_tokenring_consistency converts an exception from the search into exactly one ERROR event."""
+    # Create a mock node with raft
+    mock_node = MagicMock()
+    mock_node.name = "test-node"
+    mock_node.host_id = "test-host-id"
+
+    raft = RaftFeature(mock_node)
+    # Make search_inconsistent_host_ids raise an exception
+    raft.search_inconsistent_host_ids = MagicMock(side_effect=Exception("Test exception"))
+
+    # Create test data; a member missing from the token ring makes the check take the
+    # search_inconsistent_host_ids path
+    group0_members = [Group0Member(host_id="host-2", voter=True)]
+    tokenring_members = [TokenRingMember(host_id="host-1", ip_address="127.0.0.1")]
+
+    # Run the check - should not raise exceptions
+    events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+
+    # Should generate exactly one error event instead of raising
+    assert len(events) == 1
+    error_event = events[0]
+    assert error_event.severity == Severity.ERROR
+    assert "Test exception" in error_event.error
+
+
 def test_check_schema_version_peers_lag_demoted_to_warning_when_gossip_agrees():
-    gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
+    """A lagging SYSTEM.PEERS schema version is a WARNING, not an ERROR, when gossip agrees."""
+    gossip_info = normal_gossip(AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
     peers_info = {
-        node2: _peers_entry(AGREED_SCHEMA_VERSION),
-        node3: _peers_entry(EMPTY_SCHEMA_VERSION),
+        node2: peers_entry(AGREED_SCHEMA_VERSION),
+        node3: peers_entry(EMPTY_SCHEMA_VERSION),
     }
 
     events = list(check_schema_version(gossip_info, peers_info, NODES_STATUS, node1))
@@ -360,10 +395,11 @@ def test_check_schema_version_peers_lag_demoted_to_warning_when_gossip_agrees():
 
 
 def test_check_schema_version_peers_mismatch_stays_error_when_gossip_disagrees():
-    gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, OTHER_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
+    """A SYSTEM.PEERS schema mismatch stays an ERROR when gossip itself disagrees."""
+    gossip_info = normal_gossip(AGREED_SCHEMA_VERSION, OTHER_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
     peers_info = {
-        node2: _peers_entry(AGREED_SCHEMA_VERSION),
-        node3: _peers_entry(AGREED_SCHEMA_VERSION),
+        node2: peers_entry(AGREED_SCHEMA_VERSION),
+        node3: peers_entry(AGREED_SCHEMA_VERSION),
     }
 
     events = list(check_schema_version(gossip_info, peers_info, NODES_STATUS, node1))
@@ -373,12 +409,14 @@ def test_check_schema_version_peers_mismatch_stays_error_when_gossip_disagrees()
 
 
 def test_check_schema_agreement_in_gossip_and_peers_tolerates_peers_lag():
+    """A lagging SYSTEM.PEERS schema version neither retries nor errors when gossip agrees."""
+
     class PeersLagNode(Node):
         @staticmethod
         def get_peers_info():
             return {
-                node2: _peers_entry(AGREED_SCHEMA_VERSION),
-                node3: _peers_entry(EMPTY_SCHEMA_VERSION),
+                node2: peers_entry(AGREED_SCHEMA_VERSION),
+                node3: peers_entry(EMPTY_SCHEMA_VERSION),
             }
 
     with unittest.mock.patch("time.sleep") as mocked_sleep:
@@ -422,7 +460,7 @@ def test_check_group0_tokenring_consistency_member_missing_from_token_ring_repor
     ):
         events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
 
-    raft_node.get_token_ring_members.assert_called_once()
+    raft_node.get_token_ring_members.assert_called_once_with()
     assert len(events) == 1
     assert events[0].severity == Severity.ERROR
     assert events[0].error == (
@@ -470,6 +508,7 @@ def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cl
     """
     other_node = MagicMock()
     other_node.parent_cluster = raft_node.parent_cluster
+    session = raft_node.parent_cluster.cql_connection_patient_exclusive.return_value.__enter__.return_value
 
     with (
         patch("sdcm.utils.raft.is_group0_limited_voters_enabled", return_value=True) as flag_read,
@@ -479,8 +518,8 @@ def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cl
             events = list(RaftFeature(node).check_group0_tokenring_consistency(non_voter_group0, non_voter_token_ring))
             assert events == []
 
-    flag_read.assert_called_once()
-    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_called_once()
+    flag_read.assert_called_once_with(session)
+    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_called_once_with(node=raft_node)
     search.assert_not_called()
     raft_node.get_token_ring_members.assert_not_called()
 
@@ -498,7 +537,7 @@ def test_check_group0_tokenring_consistency_no_limited_voters_non_voter_reports_
     ):
         events = list(raft.check_group0_tokenring_consistency(non_voter_group0, non_voter_token_ring))
 
-    raft_node.get_token_ring_members.assert_called_once()
+    raft_node.get_token_ring_members.assert_called_once_with()
     assert raft_node.parent_cluster.group0_limited_voters_enabled is False
     assert len(events) == 1
     assert events[0].severity == Severity.ERROR

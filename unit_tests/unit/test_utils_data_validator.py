@@ -20,11 +20,14 @@ from sdcm.utils.data_validator import LongevityDataValidator
 
 @dataclass
 class MockLongevityTest:
+    """Stand-in for the longevity test object, exposing only ``params``."""
+
     params: sct_config.SCTConfiguration
 
 
 @pytest.mark.sct_config(files="unit_tests/test_data/test_data_validator/lwt-basic-3h.yaml")
 def test_view_names_for_updated_data(params):
+    """list_of_view_names_for_update_test returns the LWT view triples when the views were updated."""
     data_validator = LongevityDataValidator(
         longevity_self_object=MockLongevityTest(params=params),
         user_profile_name="c-s_lwt",
@@ -50,6 +53,7 @@ def test_view_names_for_updated_data(params):
 
 @pytest.mark.sct_config(files="unit_tests/test_data/test_data_validator/no-validation-views-lwt-basic-3h.yaml")
 def test_view_names_for_updated_data_not_found(params):
+    """list_of_view_names_for_update_test returns an empty list when the config defines no validation views."""
     data_validator = LongevityDataValidator(
         longevity_self_object=MockLongevityTest(params=params),
         user_profile_name="c-s_lwt",

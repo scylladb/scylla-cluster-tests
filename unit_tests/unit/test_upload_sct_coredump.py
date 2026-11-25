@@ -42,7 +42,8 @@ exec "$@"
 """
 
 
-def _write_executable(path: Path, body: str) -> None:
+def write_executable(path: Path, body: str) -> None:
+    """Write body to path and set its executable bit."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body)
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
@@ -54,7 +55,7 @@ def test_host_script_collects_new_coredumps_in_one_hydra_run(tmp_path):
     On the runner path every hydra call re-syncs the checkout with rsync --delete, so an archive
     left in the checkout by one call would be gone before a second call could upload it.
     """
-    _write_executable(tmp_path / "docker" / "env" / "hydra.sh", FAKE_HYDRA)
+    write_executable(tmp_path / "docker" / "env" / "hydra.sh", FAKE_HYDRA)
     (tmp_path / "sct_runner_ip").write_text("10.0.0.5")
     hydra_log = tmp_path / "hydra.calls"
 
@@ -88,8 +89,8 @@ def test_host_script_collects_new_coredumps_in_one_hydra_run(tmp_path):
 def test_helper_removes_the_archive_after_the_upload(tmp_path, upload_rc):
     """The raw coredumps stay on the host, so the archive is removed whether or not the upload worked."""
     checkout = tmp_path / "checkout"
-    _write_executable(checkout / "sct.py", FAKE_SCT_PY)
-    _write_executable(tmp_path / "bin" / "sudo", FAKE_SUDO)
+    write_executable(checkout / "sct.py", FAKE_SCT_PY)
+    write_executable(tmp_path / "bin" / "sudo", FAKE_SUDO)
     coredump_dir = tmp_path / "coredump"
     coredump_dir.mkdir()
     (coredump_dir / "core.1234").write_bytes(b"\x7fELF")

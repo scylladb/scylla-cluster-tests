@@ -22,104 +22,28 @@ BASE_HELM_VALUES = {
 }
 
 
-def test_helm_values_init_with_dict_arg():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    assert helm_values.as_dict() == BASE_HELM_VALUES
-
-
-def test_helm_values_init_with_kwargs():
-    helm_values = HelmValues(**BASE_HELM_VALUES)
-    assert helm_values.as_dict() == BASE_HELM_VALUES
-
-
-def test_helm_values_get():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    assert helm_values.get("no_nesting_key") == "no_nesting_value"
-
-
-def test_helm_values_get_nonexistent():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    assert helm_values.get("fake_key") is None
-
-
-def test_helm_values_set_new():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    helm_values.set("new_key", "new_value")
-    assert helm_values.get("new_key") == "new_value"
-
-
-def test_helm_values_set_nested_new():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    helm_values.set("nested_dict.third_nested_dict_key", "third_nested_dict_value")
-    data = helm_values.as_dict()
-    assert "nested_dict" in data
-    assert "third_nested_dict_key" in data["nested_dict"]
-    assert data["nested_dict"]["third_nested_dict_key"] == "third_nested_dict_value"
-
-    assert "first_nested_dict_key" in data["nested_dict"]
-    assert data["nested_dict"]["first_nested_dict_key"] == "first_nested_dict_value"
-
-    assert "second_nested_dict_key" in data["nested_dict"]
-    assert data["nested_dict"]["second_nested_dict_key"] == "second_nested_dict_value"
-
-
-def test_helm_values_set_override():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    helm_values.set("no_nesting_key", "custom_value")
-    assert helm_values.get("no_nesting_key") == "custom_value"
-
-
-def test_helm_values_set_nested_override():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    helm_values.set("nested_dict.first_nested_dict_key", "new_value")
-    data = helm_values.as_dict()
-    assert "nested_dict" in data
-    assert "first_nested_dict_key" in data["nested_dict"]
-    assert data["nested_dict"]["first_nested_dict_key"] == "new_value"
-
-
-def test_helm_values_get_list():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    assert helm_values.get("nested_list") == [1, 2, 3]
-
-
-def test_helm_values_get_by_list_index():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    assert helm_values.get("nested_list.[0]") == 1
-
-
-def test_helm_delete_from_list():
-    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
-    match = deepcopy(BASE_HELM_VALUES)
-    del match["nested_list"][0]
-    helm_values.delete("nested_list.[0]")
-    assert helm_values == match
-
-
-def test_helm_delete_from_dict():
-    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
-    match = deepcopy(BASE_HELM_VALUES)
-    del match["nested_dict"]["first_nested_dict_key"]
-    helm_values.delete("nested_dict.first_nested_dict_key")
-    assert helm_values == match
-
-
-def test_helm_values_try_set_by_list_index():
-    helm_values = HelmValues(BASE_HELM_VALUES)
-    try:
-        helm_values.set("nested_list[0]", 4)
-    except ValueError:
-        return
-    assert False, "expected 'ValueError' exception was not raised"
+ns1_p1_callbacks_as_list = [
+    [mock.Mock(__name__="ns1_p1_callbacks_as_list[0]"), [mock.Mock()], {"fake_kwarg": mock.Mock()}],
+    mock.Mock(__name__="ns1_p1_callbacks_as_list[1]"),
+]
+ns1_p2_callbacks_as_callable = mock.Mock(__name__="ns1_p2_callbacks_as_callable")
+ns1_eachpod_callbacks_as_callable = mock.Mock(__name__="ns1_eachpod_callbacks_as_callable")
+ns2_eachpod_callbacks_as_list = [
+    mock.Mock(__name__="ns2_eachpod_callbacks_as_list[0]"),
+    mock.Mock(__name__="ns2_eachpod_callbacks_as_list[1]"),
+]
 
 
 class FakeK8SKluster:
+    """Minimal kluster stub exposing a mocked API client and a region name."""
+
     def __init__(self):
         self.get_api_client = mock.MagicMock()
         self.region_name = "fake-region-1"
 
 
 def get_k8s_endpoint_update(namespace, pod_name, ip, required_labels_in_place=True, as_str=True):
+    """Build the str form of a k8s Endpoints watch event for pod_name at ip."""
     labels = {}
     if required_labels_in_place:
         labels = {k: "fake_value" for k in (ScyllaPodsIPChangeTrackerThread.SCYLLA_PODS_EXPECTED_LABEL_KEYS)}
@@ -161,19 +85,119 @@ def get_k8s_endpoint_update(namespace, pod_name, ip, required_labels_in_place=Tr
     return as_str
 
 
-ns1_p1_callbacks_as_list = [
-    [mock.Mock(__name__="ns1_p1_callbacks_as_list[0]"), [mock.Mock()], {"fake_kwarg": mock.Mock()}],
-    mock.Mock(__name__="ns1_p1_callbacks_as_list[1]"),
-]
-ns1_p2_callbacks_as_callable = mock.Mock(__name__="ns1_p2_callbacks_as_callable")
-ns1_eachpod_callbacks_as_callable = mock.Mock(__name__="ns1_eachpod_callbacks_as_callable")
-ns2_eachpod_callbacks_as_list = [
-    mock.Mock(__name__="ns2_eachpod_callbacks_as_list[0]"),
-    mock.Mock(__name__="ns2_eachpod_callbacks_as_list[1]"),
-]
+def tar_missing_error():
+    """UnexpectedExit mimicking a container without the tar binary."""
+    return invoke.exceptions.UnexpectedExit(
+        mock.Mock(stderr='exec: "tar": executable file not found in $PATH', return_code=1)
+    )
+
+
+def test_helm_values_init_with_dict_arg():
+    """HelmValues built from a dict exposes the same data through as_dict."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    assert helm_values.as_dict() == BASE_HELM_VALUES
+
+
+def test_helm_values_init_with_kwargs():
+    """HelmValues built from kwargs exposes the same data through as_dict."""
+    helm_values = HelmValues(**BASE_HELM_VALUES)
+    assert helm_values.as_dict() == BASE_HELM_VALUES
+
+
+def test_helm_values_get():
+    """Get returns the value of a top-level key."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    assert helm_values.get("no_nesting_key") == "no_nesting_value"
+
+
+def test_helm_values_get_nonexistent():
+    """Get returns None for a missing key."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    assert helm_values.get("fake_key") is None
+
+
+def test_helm_values_set_new():
+    """Set adds a new top-level key."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    helm_values.set("new_key", "new_value")
+    assert helm_values.get("new_key") == "new_value"
+
+
+def test_helm_values_set_nested_new():
+    """Set creates a missing nested key and keeps its sibling keys."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    helm_values.set("nested_dict.third_nested_dict_key", "third_nested_dict_value")
+    data = helm_values.as_dict()
+    assert "nested_dict" in data
+    assert "third_nested_dict_key" in data["nested_dict"]
+    assert data["nested_dict"]["third_nested_dict_key"] == "third_nested_dict_value"
+
+    assert "first_nested_dict_key" in data["nested_dict"]
+    assert data["nested_dict"]["first_nested_dict_key"] == "first_nested_dict_value"
+
+    assert "second_nested_dict_key" in data["nested_dict"]
+    assert data["nested_dict"]["second_nested_dict_key"] == "second_nested_dict_value"
+
+
+def test_helm_values_set_override():
+    """Set replaces the value of an existing top-level key."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    helm_values.set("no_nesting_key", "custom_value")
+    assert helm_values.get("no_nesting_key") == "custom_value"
+
+
+def test_helm_values_set_nested_override():
+    """Set replaces a nested value and keeps its sibling keys."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    helm_values.set("nested_dict.first_nested_dict_key", "new_value")
+    data = helm_values.as_dict()
+    assert "nested_dict" in data
+    assert "first_nested_dict_key" in data["nested_dict"]
+    assert data["nested_dict"]["first_nested_dict_key"] == "new_value"
+
+
+def test_helm_values_get_list():
+    """Get returns a list value unchanged."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    assert helm_values.get("nested_list") == [1, 2, 3]
+
+
+def test_helm_values_get_by_list_index():
+    """Get resolves a list element by the [index] path syntax."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    assert helm_values.get("nested_list.[0]") == 1
+
+
+def test_helm_delete_from_list():
+    """Delete removes a list element by the [index] path syntax."""
+    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    match = deepcopy(BASE_HELM_VALUES)
+    del match["nested_list"][0]
+    helm_values.delete("nested_list.[0]")
+    assert helm_values == match
+
+
+def test_helm_delete_from_dict():
+    """Delete removes a nested dict key."""
+    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    match = deepcopy(BASE_HELM_VALUES)
+    del match["nested_dict"]["first_nested_dict_key"]
+    helm_values.delete("nested_dict.first_nested_dict_key")
+    assert helm_values == match
+
+
+def test_helm_values_try_set_by_list_index():
+    """Set rejects the bracket list index syntax with ValueError."""
+    helm_values = HelmValues(BASE_HELM_VALUES)
+    try:
+        helm_values.set("nested_list[0]", 4)
+    except ValueError:
+        return
+    assert False, "expected 'ValueError' exception was not raised"
 
 
 def test_scylla_pods_ip_change_tracker_01_positive_scenario():
+    """Tracker registers callbacks and runs them when a pod IP changes."""
     # Init objects
     core_v1_api_mock, k8s_kluster, ip_mapper = mock.Mock(), FakeK8SKluster(), {}
     namespace1, pod_names1 = "scylla", ("pod-name-1", "pod-name-2", "pod-name-3")
@@ -188,8 +212,8 @@ def test_scylla_pods_ip_change_tracker_01_positive_scenario():
 
     with mock.patch.object(KubernetesOps, "core_v1_api", side_effect=core_v1_api_mock):
         ip_tracker = ScyllaPodsIPChangeTrackerThread(k8s_kluster, ip_mapper)
-        k8s_kluster.get_api_client.assert_called_once()
-        core_v1_api_mock.assert_called_once()
+        k8s_kluster.get_api_client.assert_called_once_with()
+        core_v1_api_mock.assert_called_once_with(k8s_kluster.get_api_client.return_value)
 
     assert not ip_mapper, ip_mapper
 
@@ -294,12 +318,13 @@ def test_scylla_pods_ip_change_tracker_01_positive_scenario():
 
 
 def test_scylla_pods_ip_change_tracker_02_negative():
+    """Tracker ignores unparsable input and endpoint updates without a namespace."""
     core_v1_api_mock, k8s_kluster, ip_mapper = mock.Mock(), FakeK8SKluster(), {}
 
     with mock.patch.object(KubernetesOps, "core_v1_api", side_effect=core_v1_api_mock):
         ip_tracker = ScyllaPodsIPChangeTrackerThread(k8s_kluster, ip_mapper)
-        k8s_kluster.get_api_client.assert_called_once()
-        core_v1_api_mock.assert_called_once()
+        k8s_kluster.get_api_client.assert_called_once_with()
+        core_v1_api_mock.assert_called_once_with(k8s_kluster.get_api_client.return_value)
 
     ip_tracker._process_line(1)
 
@@ -320,15 +345,10 @@ def test_scylla_pods_ip_change_tracker_02_negative():
 
 
 def test_manifest_loader_keeps_bare_equals_sign_as_string():
+    """_ManifestLoader parses a bare '=' enum value as a plain string."""
     # NOTE: prometheus-operator CRDs have '=' in enums, which plain SafeLoader can't construct
     manifest = "enum: [=, '!=', =~]"
     assert yaml.load(manifest, Loader=_ManifestLoader) == {"enum": ["=", "!=", "=~"]}  # noqa: S506
-
-
-def _tar_missing_error():
-    return invoke.exceptions.UnexpectedExit(
-        mock.Mock(stderr='exec: "tar": executable file not found in $PATH', return_code=1)
-    )
 
 
 @pytest.mark.parametrize(
@@ -349,13 +369,15 @@ def _tar_missing_error():
     ],
 )
 def test_copy_file_without_tar_in_container_streams_through_cat(src, dst, expected_cmd):
-    with mock.patch.object(KubernetesOps, "kubectl", side_effect=[_tar_missing_error(), None]) as kubectl:
+    """copy_file falls back to streaming through cat when tar is missing in the container."""
+    with mock.patch.object(KubernetesOps, "kubectl", side_effect=[tar_missing_error(), None]) as kubectl:
         KubernetesOps.copy_file(kluster=None, src=src, dst=dst, container="scylla")
     assert kubectl.call_args.args == (None, expected_cmd)
     assert kubectl.call_args.kwargs["namespace"] == "scylla"
 
 
 def test_copy_file_reraises_other_errors():
+    """copy_file re-raises kubectl errors that are not a missing tar binary."""
     error = invoke.exceptions.UnexpectedExit(mock.Mock(stderr="pod not found", return_code=1))
     with (
         mock.patch.object(KubernetesOps, "kubectl", side_effect=error),

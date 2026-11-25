@@ -37,10 +37,12 @@ Scylla options:
 
 @pytest.fixture
 def parser():
+    """ScyllaArgParser built from SCYLLA_HELP_EXAMPLE."""
     return ScyllaArgParser.from_scylla_help(SCYLLA_HELP_EXAMPLE)
 
 
 def test_double_args():
+    """from_scylla_help reports options defined twice in the help text as duplicates."""
     captured_dups = []
     ScyllaArgParser.from_scylla_help(
         SCYLLA_HELP_EXAMPLE + "\n" + SCYLLA_HELP_EXAMPLE,
@@ -50,6 +52,7 @@ def test_double_args():
 
 
 def test_filter_args(parser):
+    """filter_args keeps known options and reports unknown ones through unknown_args_cb."""
     captured_args = []
     result = parser.filter_args(
         "--arg1 arg --version -W arg --arg2 -h --options-file arg",
@@ -60,11 +63,13 @@ def test_filter_args(parser):
 
 
 def test_filter_args_unchanged(parser):
+    """filter_args returns the input string unchanged when all options are known."""
     args = "--version --workdir arg --help --options-file arg"
     assert parser.filter_args(args) == args
 
 
 def test_wrong_known_arg(parser):
+    """filter_args raises ScyllaArgError when a known option is given without its argument."""
     with pytest.raises(ScyllaArgError):
         parser.filter_args("-W --arg arg --arg2")
 

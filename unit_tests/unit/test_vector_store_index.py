@@ -41,54 +41,63 @@ DOCKER_SCAN_LINES = (
 )
 
 
-def _write_log(tmp_path, content):
+def write_scan_log(tmp_path, content):
+    """Write content to system.log under tmp_path and return its path."""
     path = tmp_path / "system.log"
     path.write_text(content, encoding="utf-8")
     return str(path)
 
 
 def test_parse_full_scan_seconds_aws_shipper_format(tmp_path):
-    log = _write_log(tmp_path, AWS_SCAN_LINES)
+    """parse_full_scan_seconds reads the duration from the log-shipper-prefixed format."""
+    log = write_scan_log(tmp_path, AWS_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_10m_20tok_0") == pytest.approx(66.00668)
 
 
 def test_parse_full_scan_seconds_docker_raw_format(tmp_path):
-    log = _write_log(tmp_path, DOCKER_SCAN_LINES)
+    """parse_full_scan_seconds reads the duration from the raw docker tracing format."""
+    log = write_scan_log(tmp_path, DOCKER_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") == pytest.approx(2.561197)
 
 
 def test_parse_full_scan_seconds_matches_case_insensitively(tmp_path):
     """Scylla folds the index name, so the caller's un-folded name must still match."""
-    log = _write_log(tmp_path, AWS_SCAN_LINES)
+    log = write_scan_log(tmp_path, AWS_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_10M_20tok_0") == pytest.approx(66.00668)
 
 
 def test_parse_full_scan_seconds_ignores_other_indexes(tmp_path):
-    log = _write_log(tmp_path, DOCKER_SCAN_LINES + AWS_SCAN_LINES)
+    """parse_full_scan_seconds measures only the requested index when several are logged."""
+    log = write_scan_log(tmp_path, DOCKER_SCAN_LINES + AWS_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") == pytest.approx(2.561197)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_10m_20tok_0") == pytest.approx(66.00668)
 
 
 def test_parse_full_scan_seconds_none_without_a_finish(tmp_path):
-    log = _write_log(tmp_path, DOCKER_SCAN_LINES.splitlines(keepends=True)[0])
+    """parse_full_scan_seconds returns None when the scan never logged a finish."""
+    log = write_scan_log(tmp_path, DOCKER_SCAN_LINES.splitlines(keepends=True)[0])
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") is None
 
 
 def test_parse_full_scan_seconds_none_for_unknown_index(tmp_path):
-    log = _write_log(tmp_path, DOCKER_SCAN_LINES)
+    """parse_full_scan_seconds returns None for an index absent from the log."""
+    log = write_scan_log(tmp_path, DOCKER_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.nope") is None
 
 
 def test_parse_full_scan_seconds_none_when_log_missing(tmp_path):
+    """parse_full_scan_seconds returns None when the log file does not exist."""
     assert parse_full_scan_seconds(str(tmp_path / "absent.log"), "fts_bench.idx") is None
 
 
 def test_index_key_folds_case():
+    """index_key lowercases the index name and prefixes it with the keyspace."""
     assert index_key("fts_bench", "fts_idx_10M_20tok_0") == "fts_bench.fts_idx_10m_20tok_0"
 
 
 def test_wait_for_index_build_seconds_returns_the_measurement(tmp_path):
-    log = _write_log(tmp_path, DOCKER_SCAN_LINES)
+    """wait_for_index_build_seconds returns the build time when the log already has it."""
+    log = write_scan_log(tmp_path, DOCKER_SCAN_LINES)
     assert wait_for_index_build_seconds(log, "fts_bench", "fts_idx_local_tiny_0") == pytest.approx(2.561197)
 
 
@@ -96,13 +105,13 @@ def test_wait_for_index_build_seconds_retries_until_the_lines_are_shipped(tmp_pa
     """The lines are written on the node and forwarded asynchronously, so an empty log means
     'not yet', not 'never'.
     """
-    log = _write_log(tmp_path, "")
-    monkeypatch.setattr(vector_store_index.time, "sleep", lambda _seconds: _write_log(tmp_path, DOCKER_SCAN_LINES))
+    log = write_scan_log(tmp_path, "")
+    monkeypatch.setattr(vector_store_index.time, "sleep", lambda _seconds: write_scan_log(tmp_path, DOCKER_SCAN_LINES))
 
     assert wait_for_index_build_seconds(log, "fts_bench", "fts_idx_local_tiny_0", timeout=10) == pytest.approx(2.561197)
 
 
 def test_wait_for_index_build_seconds_gives_up_and_returns_none(tmp_path):
     """A missing measurement, not a failed build: the index is queryable either way."""
-    log = _write_log(tmp_path, "")
+    log = write_scan_log(tmp_path, "")
     assert wait_for_index_build_seconds(log, "fts_bench", "idx", timeout=0) is None

@@ -66,14 +66,12 @@ exit 0
 # systemd-coredump's xescape() escapes '.', ' ' and '/' out of comm as \xNN before building the
 # filename, so e.g. a "python3.14" process never leaves a literal dot in the comm field - it
 # shows up as "python3\x2e14".
-_XESCAPE_TABLE = str.maketrans({".": "\\x2e", " ": "\\x20", "/": "\\x2f"})
+XESCAPE_TABLE = str.maketrans({".": "\\x2e", " ": "\\x20", "/": "\\x2f"})
 
 
-def _make_core(core_dir, comm, age_seconds, uid=1000):
-    """Create a fake `core.<escaped comm>.<uid>.<bootid>.<pid>.<ts>.zst` file with a controlled
-    mtime; comm is escaped the way systemd-coredump escapes it before building the real filename.
-    """
-    escaped_comm = comm.translate(_XESCAPE_TABLE)
+def make_core(core_dir, comm, age_seconds, uid=1000):
+    """Create a core file for comm, escaped as systemd-coredump does, with its mtime age_seconds back."""
+    escaped_comm = comm.translate(XESCAPE_TABLE)
     name = f"core.{escaped_comm}.{uid}.deadbeefcafebabedeadbeefcafebabe.4242.{int(time.time())}.zst"
     path = core_dir / name
     path.write_text("not a real coredump, just bytes for the tarball\n")
@@ -109,6 +107,7 @@ def work_dir(tmp_path):
 
 @pytest.fixture()
 def core_dir(tmp_path):
+    """Empty coredumps directory that the script scans."""
     path = tmp_path / "coredumps"
     path.mkdir()
     return path
@@ -116,6 +115,7 @@ def core_dir(tmp_path):
 
 @pytest.fixture(scope="module")
 def bin_dir(tmp_path_factory):
+    """Directory holding the sudo pass-through stub, meant to be prepended to PATH."""
     bindir = tmp_path_factory.mktemp("bin")
     sudo_path = bindir / "sudo"
     sudo_path.write_text(SUDO_STUB)
@@ -125,10 +125,12 @@ def bin_dir(tmp_path_factory):
 
 @pytest.fixture()
 def sct_test_id():
+    """Random SCT test id, unique per test."""
     return uuid.uuid4().hex
 
 
 def run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm=None, use_runner=False):
+    """Run the host script in work_dir and return its result and the hydra calls it logged."""
     log_path = work_dir / "hydra_calls.log"
     log_path.write_text("")
 
@@ -157,7 +159,8 @@ def run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_co
     return result, calls
 
 
-def _tarball(work_dir, sct_test_id):
+def tarball_path(work_dir, sct_test_id):
+    """Archive path that upload_sct_coredump_inside_hydra.sh builds for sct_test_id."""
     # Matches upload_sct_coredump_inside_hydra.sh's `$(pwd)/sct-coredumps-${SCT_TEST_ID:0:8}.tar.zst`,
     # where pwd is work_dir (the host script's cwd, inherited by the hydra stub and the helper
     # script it execs). The helper always removes it on exit, so tests only use this path to
@@ -167,20 +170,26 @@ def _tarball(work_dir, sct_test_id):
 
 @pytest.mark.parametrize(
     "comm",
-    ["python3.14", "python3", "scylla", "scylla-server", "java"],
-    ids=["escaped-dotted-version", "python3", "scylla", "scylla-server", "java-exact"],
+    [
+        pytest.param("python3.14", id="escaped-dotted-version"),
+        pytest.param("python3", id="python3"),
+        pytest.param("scylla", id="scylla"),
+        pytest.param("scylla-server", id="scylla-server"),
+        pytest.param("java", id="java-exact"),
+    ],
 )
 def test_allowed_comm_is_uploaded(work_dir, bin_dir, core_dir, sct_test_id, comm):
-    # "python3.14" is a realistic comm: _make_core escapes it to "python3\x2e14" (core.<comm> has
+    """A core whose comm is on the allow-list is uploaded once and its archive removed."""
+    # "python3.14" is a realistic comm: make_core escapes it to "python3\x2e14" (core.<comm> has
     # no literal dot), which "python*" (-> "python[^.]*") still matches and keeps.
-    _make_core(core_dir, comm, age_seconds=60)
+    make_core(core_dir, comm, age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch)
 
     assert result.returncode == 0, result.stderr
     assert "skipping" not in result.stdout
-    tarball = _tarball(work_dir, sct_test_id)
+    tarball = tarball_path(work_dir, sct_test_id)
     upload_calls = [call for call in calls if call.startswith("upload ")]
     assert len(upload_calls) == 1
     assert str(tarball) in upload_calls[0]
@@ -189,9 +198,17 @@ def test_allowed_comm_is_uploaded(work_dir, bin_dir, core_dir, sct_test_id, comm
     assert not tarball.exists(), result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("comm", ["s1-agent", "sshd", "mypython"], ids=["s1-agent", "sshd", "mypython"])
+@pytest.mark.parametrize(
+    "comm",
+    [
+        pytest.param("s1-agent", id="s1-agent"),
+        pytest.param("sshd", id="sshd"),
+        pytest.param("mypython", id="mypython"),
+    ],
+)
 def test_foreign_comm_is_skipped_and_reported(work_dir, bin_dir, core_dir, sct_test_id, comm):
-    core = _make_core(core_dir, comm, age_seconds=60)
+    """A core whose comm is not on the allow-list is skipped, named in the output, and not uploaded."""
+    core = make_core(core_dir, comm, age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch)
@@ -200,12 +217,13 @@ def test_foreign_comm_is_skipped_and_reported(work_dir, bin_dir, core_dir, sct_t
     assert "skipping 1 coredump(s)" in result.stdout
     assert core.name in result.stdout
     assert not any(call.startswith("upload ") for call in calls)
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_all_skipped_means_no_upload_and_no_tarball(work_dir, bin_dir, core_dir, sct_test_id):
-    _make_core(core_dir, "sshd", age_seconds=60)
-    _make_core(core_dir, "s1-agent", age_seconds=60)
+    """When every core is skipped, nothing is uploaded and no archive is built."""
+    make_core(core_dir, "sshd", age_seconds=60)
+    make_core(core_dir, "s1-agent", age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch)
@@ -215,10 +233,11 @@ def test_all_skipped_means_no_upload_and_no_tarball(work_dir, bin_dir, core_dir,
     assert "were filtered out by COREDUMPS_INCLUDE_COMM" in result.stdout
     assert not any(call.startswith("upload ") for call in calls)
     assert not any("upload_sct_coredump_inside_hydra.sh" in call for call in calls)
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_no_new_cores_means_nothing_to_upload(work_dir, bin_dir, core_dir, sct_test_id):
+    """With no cores newer than the cutoff, the script reports none and uploads nothing."""
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch)
@@ -227,13 +246,14 @@ def test_no_new_cores_means_nothing_to_upload(work_dir, bin_dir, core_dir, sct_t
     assert "no coredumps newer than" in result.stdout
     assert "skipping" not in result.stdout
     assert not any(call.startswith("upload ") for call in calls)
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_old_allowed_core_is_ignored_and_not_reported_as_skipped(work_dir, bin_dir, core_dir, sct_test_id):
+    """A core older than the cutoff is ignored and not counted as skipped."""
     # Older than SINCE_EPOCH: must drop out before the allow-list split even runs, so it's not
     # counted or printed as "skipped" - it was never a candidate in the first place.
-    _make_core(core_dir, "python3", age_seconds=7200)
+    make_core(core_dir, "python3", age_seconds=7200)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch)
@@ -242,7 +262,7 @@ def test_old_allowed_core_is_ignored_and_not_reported_as_skipped(work_dir, bin_d
     assert "no coredumps newer than" in result.stdout
     assert "skipping" not in result.stdout
     assert not any(call.startswith("upload ") for call in calls)
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 @pytest.mark.parametrize(
@@ -255,8 +275,9 @@ def test_old_allowed_core_is_ignored_and_not_reported_as_skipped(work_dir, bin_d
 def test_coredumps_include_comm_override_widens_the_allow_list(
     work_dir, bin_dir, core_dir, sct_test_id, include_comm, comms
 ):
+    """COREDUMPS_INCLUDE_COMM adds its comms to the allow-list, so their cores are uploaded."""
     for comm in comms:
-        _make_core(core_dir, comm, age_seconds=60)
+        make_core(core_dir, comm, age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm=include_comm)
@@ -265,12 +286,13 @@ def test_coredumps_include_comm_override_widens_the_allow_list(
     assert "skipping" not in result.stdout
     upload_calls = [call for call in calls if call.startswith("upload ")]
     assert len(upload_calls) == 1
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_execute_on_runner_path_gives_the_same_split(work_dir, bin_dir, core_dir, sct_test_id):
-    allowed = _make_core(core_dir, "scylla-server", age_seconds=60)
-    foreign = _make_core(core_dir, "sshd", age_seconds=60)
+    """Runner mode splits allowed and foreign cores the same way as local mode."""
+    allowed = make_core(core_dir, "scylla-server", age_seconds=60)
+    foreign = make_core(core_dir, "sshd", age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, use_runner=True)
@@ -284,12 +306,12 @@ def test_execute_on_runner_path_gives_the_same_split(work_dir, bin_dir, core_dir
     assert all(call == "execute-on-runner 203.0.113.5" for call in runner_calls)
     upload_calls = [call for call in calls if call.startswith("upload ")]
     assert len(upload_calls) == 1
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_empty_include_comm_falls_back_to_default(work_dir, bin_dir, core_dir, sct_test_id):
     """An explicitly empty COREDUMPS_INCLUDE_COMM is `${VAR:-default}`-equivalent to unset."""
-    _make_core(core_dir, "scylla-server", age_seconds=60)
+    make_core(core_dir, "scylla-server", age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="")
@@ -298,7 +320,7 @@ def test_empty_include_comm_falls_back_to_default(work_dir, bin_dir, core_dir, s
     assert "skipping" not in result.stdout
     upload_calls = [call for call in calls if call.startswith("upload ")]
     assert len(upload_calls) == 1
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_dir, sct_test_id):
@@ -309,7 +331,7 @@ def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_
     "core.sshd.0.<bootid>...": ".*" happily consumes the literal "." before uid "0", so a core
     whose comm is just "sshd" (uid 0) is wrongly treated as allow-listed and uploaded.
     """
-    core = _make_core(core_dir, "sshd", age_seconds=60, uid=0)
+    core = make_core(core_dir, "sshd", age_seconds=60, uid=0)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="sshd*0")
@@ -318,7 +340,7 @@ def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_
     assert "skipping 1 coredump(s)" in result.stdout
     assert core.name in result.stdout
     assert not any(call.startswith("upload ") for call in calls)
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
 
 
 @pytest.mark.parametrize(
@@ -334,7 +356,8 @@ def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_
     ],
 )
 def test_invalid_include_comm_fails_fast_without_any_hydra_call(work_dir, bin_dir, core_dir, sct_test_id, include_comm):
-    _make_core(core_dir, "scylla-server", age_seconds=60)
+    """A malformed COREDUMPS_INCLUDE_COMM fails with an error before any hydra call."""
+    make_core(core_dir, "scylla-server", age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
     result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm=include_comm)
@@ -343,4 +366,4 @@ def test_invalid_include_comm_fails_fast_without_any_hydra_call(work_dir, bin_di
     assert "ERROR" in result.stderr
     assert "COREDUMPS_INCLUDE_COMM" in result.stderr
     assert not calls, calls
-    assert not _tarball(work_dir, sct_test_id).exists()
+    assert not tarball_path(work_dir, sct_test_id).exists()
