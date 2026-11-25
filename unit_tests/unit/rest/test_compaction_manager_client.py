@@ -18,6 +18,7 @@ from sdcm.rest.compaction_manager_client import CompactionManagerClient
 
 
 def test_compaction_manager_stop_compaction(fake_node):
+    """stop_compaction POSTs the upper-cased compaction type to the stop_compaction endpoint."""
     client = CompactionManagerClient(fake_node)
     result = partial(client.stop_compaction, compaction_type="reshape")()
 
