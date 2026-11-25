@@ -13,6 +13,7 @@
 
 import logging
 import random
+import re
 import time
 
 from cassandra.query import SimpleStatement
@@ -26,6 +27,9 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 
 LOGGER = logging.getLogger(__name__)
+
+# A type name in a CQL type string: a quoted identifier or a plain word.
+CQL_TYPE_NAME = re.compile(r'"(?:[^"]|"")*"|\w+')
 
 
 def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
@@ -60,14 +64,42 @@ def get_column_names(
         f" AND {filter_kind}"
         f" ALLOW FILTERING"
     )
-    res_list = list(res)
+    rows = list(res)
 
-    filter_out = [*filter_out_column_types] if filter_out_column_types else []
     if filter_out_collections:
-        filter_out += ["list", "set", "map"]
+        rows = [row for row in rows if not str(row.type).startswith(("list", "set", "map"))]
+    if filter_out_column_types:
+        user_types = get_user_type_field_types(session, ks)
+        rows = [row for row in rows if not cql_type_references(str(row.type), set(filter_out_column_types), user_types)]
+    return [row.column_name for row in rows]
 
-    column_names = [row.column_name for row in res_list if not str(row.type).startswith(tuple(filter_out))]
-    return column_names
+
+def get_user_type_field_types(session, ks) -> dict[str, list[str]]:
+    """Return the field types of each user-defined type in `ks`, keyed by the type name."""
+    rows = session.execute(f"SELECT type_name, field_types FROM system_schema.types WHERE keyspace_name = '{ks}'")
+    return {row.type_name: list(row.field_types) for row in rows}
+
+
+def cql_type_references(cql_type: str, type_names: set[str], user_types: dict[str, list[str]]) -> bool:
+    """Return True when `cql_type` is one of `type_names`, or contains one of them at any depth.
+
+    The search goes into tuples, frozen collections and the fields of user-defined types.
+    Scylla applies the same rule to the primary key of a materialized view: it rejects
+    `frozen<tuple<int, duration>>` and a frozen UDT with a duration field, not only `duration`.
+
+    :param user_types: the field types of each user-defined type, from `get_user_type_field_types`.
+    """
+    pending = [cql_type]
+    seen_user_types = set()
+    while pending:
+        for token in CQL_TYPE_NAME.findall(pending.pop()):
+            name = cql_unquote_if_needed(token)
+            if name in type_names:
+                return True
+            if name in user_types and name not in seen_user_types:
+                seen_user_types.add(name)
+                pending.extend(user_types[name])
+    return False
 
 
 def get_random_column_name(
@@ -238,7 +270,8 @@ def create_materialized_view_for_random_column(
     Creates a materialized view for a randomly selected column in the specified base table.
 
     This function selects a random column from the base table that is not a collection type,
-    static column, or of an unsupported type (e.g., 'duration', 'counter') and uses it to
+    static column, or of an unsupported type (e.g., 'duration', 'counter'), also when nested in a
+    tuple, a frozen collection or a user-defined type, and uses it to
     create a materialized view. The primary key columns of the base table are also included
     in the materialized view.
 
