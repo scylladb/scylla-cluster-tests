@@ -18,6 +18,7 @@ class FakeSession:
         self.executed: list[str] = []
 
     def execute(self, query: str):
+        """Record the query, raise RuntimeError for failing queries, else return canned rows."""
         self.executed.append(query)
         if query in self.fail_queries:
             raise RuntimeError(f"query failed: {query}")
