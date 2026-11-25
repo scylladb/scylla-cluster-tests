@@ -1,16 +1,26 @@
 """Unit tests for utils.staging_trigger package."""
 
 import json
+import re
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import click
+import jenkins
 import pytest
 import yaml
+from click.shell_completion import CompletionItem
 from click.testing import CliRunner
 
 import utils.staging_trigger.constants as constants_mod
 from utils.staging_trigger.cache import _load_cache, _save_cache, lookup_pr
+<<<<<<< HEAD
 from utils.staging_trigger.cli import cli
+||||||| parent of e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
+from utils.staging_trigger.cli import _show_trigger_examples, cli
+=======
+from utils.staging_trigger.cli import _JobNameType, _show_trigger_examples, cli
+>>>>>>> e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
     DTEST_TOPOLOGY_FLAGS,
@@ -32,8 +42,14 @@ from utils.staging_trigger.interactive import (
     generate_yaml_config,
     maybe_set_docker_image,
 )
-from utils.staging_trigger.jenkins_client import JenkinsJobTrigger, parse_parameter_definitions
-from utils.staging_trigger.job_generation import _collect_folder_tree
+from utils.staging_trigger.jenkins_client import (
+    JenkinsJobTrigger,
+    _login,
+    _run_secret_command,
+    iter_jenkins_credentials,
+    parse_parameter_definitions,
+)
+from utils.staging_trigger.job_generation import _collect_folder_tree, generate_job, generate_jobs
 from utils.staging_trigger.trigger import (
     StagingTrigger,
     _auto_set_docker_image,
@@ -1270,4 +1286,334 @@ class TestJenkinsJobTriggerTrigger:
 
         client.trigger("folder/job", params)
 
+<<<<<<< HEAD
         client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters=params)
+||||||| parent of e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={**params, "requested_by_user": "someone"}
+        )
+
+    @pytest.mark.parametrize("params", [{}, {"requested_by_user": ""}], ids=["missing", "empty"])
+    def test_fills_requested_by_user(self, params):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"backend": "aws", **params})
+
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={"backend": "aws", "requested_by_user": "someone"}
+        )
+
+    def test_keeps_explicit_requested_by_user(self):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"requested_by_user": "other"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"requested_by_user": "other"})
+
+    def test_drops_requested_by_user_when_job_lacks_it(self):
+        client = self._client(JOB_CONFIG_XML.replace("requested_by_user", "other_param"))
+
+        client.trigger("folder/job", {"backend": "aws"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"backend": "aws"})
+=======
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={**params, "requested_by_user": "someone"}
+        )
+
+    @pytest.mark.parametrize("params", [{}, {"requested_by_user": ""}], ids=["missing", "empty"])
+    def test_fills_requested_by_user(self, params):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"backend": "aws", **params})
+
+        client.jenkins.build_job.assert_called_once_with(
+            name="folder/job", parameters={"backend": "aws", "requested_by_user": "someone"}
+        )
+
+    def test_keeps_explicit_requested_by_user(self):
+        client = self._client(JOB_CONFIG_XML)
+
+        client.trigger("folder/job", {"requested_by_user": "other"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"requested_by_user": "other"})
+
+    def test_drops_requested_by_user_when_job_lacks_it(self):
+        client = self._client(JOB_CONFIG_XML.replace("requested_by_user", "other_param"))
+
+        client.trigger("folder/job", {"backend": "aws"})
+
+        client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"backend": "aws"})
+
+
+def test_jenkins_job_trigger_uses_caller_credentials_from_env(monkeypatch):
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com/")
+    monkeypatch.setenv("JENKINS_USERNAME", "alice")
+    monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
+    with patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls:
+        client = JenkinsJobTrigger()
+
+    jenkins_cls.assert_called_once_with("https://jenkins.example.com", username="alice", password="alice-token")
+    assert client.url == "https://jenkins.example.com"
+
+
+# `secret-tool search` prints the secret on stdout and the rest on stderr
+KEYRING_SEARCH_OUTPUT = (
+    "secret = keyring-token\n",
+    "[/16]\nlabel = Jenkins API token\nattribute.user = bob@example.com\nattribute.service = jenkins.scylladb.com\n",
+)
+
+ONEPASSWORD_OUTPUT = (
+    json.dumps(
+        [
+            {"id": "username", "label": "username", "value": "carol"},
+            {"id": "credential", "label": "credential", "value": "op-token"},
+        ]
+    ),
+    "[WARN] a warning that is not JSON\n",
+)
+
+NOTHING = ("", "")
+
+
+def _fake_secret_stores(keyring=NOTHING, onepassword=NOTHING):
+    def run(cmd):
+        return {"secret-tool": keyring, "op": onepassword}[cmd[0]]
+
+    return patch("utils.staging_trigger.jenkins_client._run_secret_command", side_effect=run)
+
+
+@pytest.fixture()
+def no_jenkins_env(monkeypatch):
+    monkeypatch.delenv("JENKINS_USERNAME", raising=False)
+    monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def fresh_jenkins_login(monkeypatch):
+    """The login is cached per process; each test resolves its own, from all sources unless it limits them."""
+    monkeypatch.delenv("JENKINS_CREDENTIALS_SOURCE", raising=False)
+    _login.cache_clear()
+    yield
+    _login.cache_clear()
+
+
+def test_jenkins_job_trigger_looks_up_credentials_once_per_process(capsys, no_jenkins_env):
+    with (
+        _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run,
+        patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls,
+    ):
+        first, second = JenkinsJobTrigger(), JenkinsJobTrigger()
+
+    assert first.jenkins is second.jenkins
+    run.assert_called_once()
+    jenkins_cls.return_value.get_whoami.assert_called_once()
+    assert capsys.readouterr().err.count("Jenkins: calling") == 1
+
+
+def test_job_name_completion_keeps_credential_messages_off_the_prompt(capsys, monkeypatch):
+    monkeypatch.setenv("JENKINS_USERNAME", "alice")
+    monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
+    ctx = MagicMock(parent=None)
+    with patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls:
+        jenkins_cls.return_value.get_job_info.return_value = {"jobs": [{"name": "longevity-a"}, {"name": "other"}]}
+        items = _JobNameType().shell_complete(ctx, None, "long")
+
+    assert [(type(item), item.value) for item in items] == [(CompletionItem, "longevity-a")]
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.usefixtures("no_jenkins_env")
+@pytest.mark.parametrize(
+    ("keyring", "onepassword", "expected"),
+    [
+        pytest.param(
+            KEYRING_SEARCH_OUTPUT,
+            ONEPASSWORD_OUTPUT,
+            [("carol", "op-token", "1Password"), ("bob@example.com", "keyring-token", "OS keyring")],
+            id="1password-then-keyring",
+        ),
+        pytest.param(NOTHING, ONEPASSWORD_OUTPUT, [("carol", "op-token", "1Password")], id="1password-only"),
+        pytest.param(
+            KEYRING_SEARCH_OUTPUT, NOTHING, [("bob@example.com", "keyring-token", "OS keyring")], id="keyring-only"
+        ),
+        pytest.param(
+            NOTHING,
+            (json.dumps({"id": "credential", "label": "credential", "value": "op-token"}), ""),
+            [],
+            id="1password-token-without-user-is-skipped",
+        ),
+        pytest.param(NOTHING, ("not json", ""), [], id="1password-garbage"),
+        pytest.param(NOTHING, NOTHING, [], id="nothing-stored"),
+    ],
+)
+def test_iter_jenkins_credentials_reads_secret_stores(keyring, onepassword, expected):
+    with _fake_secret_stores(keyring, onepassword):
+        assert list(iter_jenkins_credentials()) == expected
+
+
+def test_iter_jenkins_credentials_env_comes_first_and_overrides_stored_user(monkeypatch):
+    monkeypatch.setenv("JENKINS_USERNAME", "alice")
+    monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
+    with _fake_secret_stores(KEYRING_SEARCH_OUTPUT):
+        assert list(iter_jenkins_credentials()) == [
+            ("alice", "alice-token", "environment"),
+            ("alice", "keyring-token", "OS keyring"),
+        ]
+
+
+def test_iter_jenkins_credentials_skips_keyring_when_1password_is_enough(no_jenkins_env):
+    with _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run:
+        assert next(iter_jenkins_credentials())[2] == "1Password"
+
+    run.assert_called_once()
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_jenkins_job_trigger_falls_back_when_a_store_is_rejected(capsys, no_jenkins_env, status):
+    def make_client(url, username, password):
+        client = MagicMock()
+        if password == "op-token":
+            # python-jenkins' message for a 401 or 403
+            client.get_whoami.side_effect = jenkins.JenkinsException(
+                f"Error in request. Possibly authentication failed [{status}]: Forbidden"
+            )
+        return client
+
+    with (
+        _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT),
+        patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins", side_effect=make_client),
+    ):
+        JenkinsJobTrigger()
+
+    err = capsys.readouterr().err
+    assert "carol from 1Password was rejected" in err
+    assert "as bob@example.com, token from OS keyring" in err
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(jenkins.TimeoutException("Error in request: read timed out"), id="timeout"),
+        pytest.param(jenkins.JenkinsException("Possibly authentication failed [500]: Server Error"), id="server-error"),
+        # get_whoami turns a 503 (or any status python-jenkins doesn't map) into BadHTTPException
+        pytest.param(
+            jenkins.BadHTTPException("Error communicating with server[https://jenkins.example.com/]"), id="503"
+        ),
+    ],
+)
+def test_jenkins_job_trigger_stops_when_jenkins_fails_for_another_reason(capsys, no_jenkins_env, error):
+    with (
+        _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run,
+        patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls,
+        pytest.raises(click.ClickException, match=f"did not answer whoAmI: {re.escape(str(error))}"),
+    ):
+        jenkins_cls.return_value.get_whoami.side_effect = error
+        JenkinsJobTrigger()
+
+    run.assert_called_once()  # the keyring is not asked after 1Password's token hit a Jenkins failure
+    assert "was rejected" not in capsys.readouterr().err
+
+
+LATTE_PRELOAD_JENKINSFILE = "cassandra-preload-1tb-latte"  # jenkins-pipelines/oss/longevity/
+LATTE_PRELOAD_JOB = "scylla-staging/alice/oss/longevity/cassandra-preload-1tb-latte-test"
+
+
+@pytest.fixture()
+def fake_job_creation():
+    """Fake the caller's Jenkins login and JenkinsPipelines; yield (login client, JenkinsPipelines class)."""
+    with (
+        patch("utils.staging_trigger.job_generation.JenkinsJobTrigger") as trigger_cls,
+        patch("utils.build_system.create_test_release_jobs.JenkinsPipelines") as pipelines_cls,
+    ):
+        pipelines_cls.return_value.jenkins.job_exists.return_value = True
+        yield trigger_cls.return_value.jenkins, pipelines_cls
+
+
+def _generate_one(how):
+    if how == "generate_job":
+        return [generate_job(LATTE_PRELOAD_JENKINSFILE, folder="scylla-staging/alice")]
+    return generate_jobs([find_jenkinsfile(LATTE_PRELOAD_JENKINSFILE)], folder="scylla-staging/alice")
+
+
+@pytest.mark.parametrize("how", ["generate_job", "generate_jobs"])
+def test_generate_creates_jobs_with_the_callers_login(fake_job_creation, how):
+    login, pipelines_cls = fake_job_creation
+
+    assert _generate_one(how) == [LATTE_PRELOAD_JOB]
+
+    assert pipelines_cls.call_args.kwargs["client"] is login
+    pipelines_cls.return_value.jenkins.job_exists.assert_any_call(LATTE_PRELOAD_JOB)
+
+
+@pytest.mark.parametrize("how", ["generate_job", "generate_jobs"])
+def test_generate_stops_when_jenkins_did_not_create_the_job(capsys, fake_job_creation, how):
+    _, pipelines_cls = fake_job_creation
+    # JenkinsPipelines logs a refused create (e.g. 403) and returns; the job just isn't there
+    pipelines_cls.return_value.jenkins.job_exists.return_value = False
+
+    with pytest.raises(click.ClickException, match=f"did not create 1 job\\(s\\): {LATTE_PRELOAD_JOB}"):
+        _generate_one(how)
+
+    assert "Successfully created" not in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("no_jenkins_env")
+@pytest.mark.parametrize(
+    ("keyring", "onepassword"),
+    [
+        pytest.param(NOTHING, NOTHING, id="nothing-stored"),
+        pytest.param(KEYRING_SEARCH_OUTPUT, NOTHING, id="all-rejected"),
+    ],
+)
+def test_jenkins_job_trigger_refuses_to_run_without_working_credentials(keyring, onepassword):
+    rejected = MagicMock()
+    rejected.get_whoami.side_effect = jenkins.JenkinsException("Possibly authentication failed [401]")
+    with (
+        _fake_secret_stores(keyring, onepassword),
+        patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins", return_value=rejected),
+        pytest.raises(click.ClickException, match="JENKINS_USERNAME and JENKINS_API_TOKEN"),
+    ):
+        JenkinsJobTrigger()
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        pytest.param(
+            subprocess.CalledProcessError(1, ["op"], stderr="[ERROR] 2026/11/18 account is locked\n"),
+            "Jenkins: op failed: [ERROR] 2026/11/18 account is locked",
+            id="cli-error",
+        ),
+        pytest.param(subprocess.TimeoutExpired(["op"], 60), "Jenkins: op failed: Command", id="timeout"),
+        pytest.param(FileNotFoundError("op"), "", id="cli-not-installed-is-quiet"),
+    ],
+)
+def test_run_secret_command_says_why_a_store_failed(capsys, error, expected):
+    with patch("utils.staging_trigger.jenkins_client.subprocess.run", side_effect=error):
+        assert _run_secret_command(["op", "item", "get"]) == ("", "")
+
+    err = capsys.readouterr().err
+    assert err.startswith(expected) if expected else err == ""
+
+
+@pytest.mark.usefixtures("no_jenkins_env")
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        pytest.param("1password", [("carol", "op-token", "1Password")], id="1password"),
+        pytest.param("KEYRING", [("bob@example.com", "keyring-token", "OS keyring")], id="keyring-any-case"),
+        pytest.param("env", [], id="env-not-set"),
+    ],
+)
+def test_jenkins_credentials_source_limits_lookup_to_one_source(monkeypatch, wanted, expected):
+    monkeypatch.setenv("JENKINS_CREDENTIALS_SOURCE", wanted)
+    with _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT):
+        assert list(iter_jenkins_credentials()) == expected
+
+
+def test_jenkins_credentials_source_rejects_unknown_value(monkeypatch):
+    monkeypatch.setenv("JENKINS_CREDENTIALS_SOURCE", "vault")
+    with pytest.raises(click.ClickException, match="not one of: env, 1password, keyring"):
+        list(iter_jenkins_credentials())
+>>>>>>> e00d91e30 (fix(staging_trigger): call Jenkins with the caller's own API token)
