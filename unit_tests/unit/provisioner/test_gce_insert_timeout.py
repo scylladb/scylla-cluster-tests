@@ -35,7 +35,8 @@ FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", privat
 WAIT = "sdcm.provision.gce.instance_provider.wait_for_extended_operation"
 
 
-def _definition(name: str) -> InstanceDefinition:
+def make_definition(name: str) -> InstanceDefinition:
+    """InstanceDefinition for an n2-standard-2 node called ``name``."""
     return InstanceDefinition(
         name=name,
         image_id="projects/scylla-images/global/images/test-image",
@@ -64,17 +65,19 @@ def vm_provider():
 
 
 @pytest.fixture(autouse=True)
-def _no_retry_sleep():
+def no_retry_sleep():
+    """Skip the retry sleeps so the abandoned-instance delete retries run instantly."""
     with patch("sdcm.utils.decorators.time.sleep"):
         yield
 
 
 def test_insert_is_given_more_than_the_generic_operation_timeout(vm_provider):
+    """The insert wait uses INSTANCE_CREATION_TIMEOUT, which is longer than the generic operation timeout."""
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()),
         patch(WAIT) as waited,
     ):
-        vm_provider.get_or_create(definitions=[_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
+        vm_provider.get_or_create(definitions=[make_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
 
     assert waited.call_args.kwargs["timeout"] == INSTANCE_CREATION_TIMEOUT
     assert INSTANCE_CREATION_TIMEOUT > 300
@@ -85,9 +88,9 @@ def test_timed_out_insert_is_deleted_and_reported_as_retryable(vm_provider):
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()),
         patch(WAIT, side_effect=[TimeoutError("insert timed out"), None]),
+        pytest.raises(ProvisionError, match="node-1 was not created"),
     ):
-        with pytest.raises(ProvisionError, match="node-1 was not created"):
-            vm_provider.get_or_create(definitions=[_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
+        vm_provider.get_or_create(definitions=[make_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
 
     vm_provider._instances_client.delete.assert_called_once_with(
         project="test-project", zone="us-east1-b", instance="node-1"
@@ -97,7 +100,7 @@ def test_timed_out_insert_is_deleted_and_reported_as_retryable(vm_provider):
 
 def test_timeout_mid_batch_drains_the_operations_still_in_flight(vm_provider):
     """The other inserts of the batch are already running on GCE; abandoning them would orphan them too."""
-    definitions = [_definition(f"node-{index}") for index in range(1, 4)]
+    definitions = [make_definition(f"node-{index}") for index in range(1, 4)]
     operations = [MagicMock() for _ in definitions]
 
     def wait(operation, description, **_):
@@ -108,9 +111,9 @@ def test_timeout_mid_batch_drains_the_operations_still_in_flight(vm_provider):
         patch.object(vm_provider, "_build_and_insert_instance", side_effect=operations),
         patch(WAIT, side_effect=wait),
         patch.object(vm_provider, "_release_instance_name") as released,
+        pytest.raises(ProvisionError),
     ):
-        with pytest.raises(ProvisionError):
-            vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
+        vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
 
     released.assert_called_once_with("node-2", operations[1])
     # node-3 was submitted before the abort and came up, so the retry reuses it instead of re-inserting.
@@ -119,7 +122,7 @@ def test_timeout_mid_batch_drains_the_operations_still_in_flight(vm_provider):
 
 def test_timeout_on_the_single_node_retry_drains_the_rest_of_the_batch(vm_provider):
     """A generic insert failure is retried via `_create_instance_with_retry`; its timeout must abort the same way."""
-    definitions = [_definition(f"node-{index}") for index in range(1, 4)]
+    definitions = [make_definition(f"node-{index}") for index in range(1, 4)]
     operations = [MagicMock() for _ in definitions]
     retry_operation = MagicMock()
 
@@ -133,15 +136,16 @@ def test_timeout_on_the_single_node_retry_drains_the_rest_of_the_batch(vm_provid
         patch.object(vm_provider, "_build_and_insert_instance", side_effect=[*operations, retry_operation]),
         patch(WAIT, side_effect=wait),
         patch.object(vm_provider, "_release_instance_name") as released,
+        pytest.raises(ProvisionError, match="node-2 was not created"),
     ):
-        with pytest.raises(ProvisionError, match="node-2 was not created"):
-            vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
+        vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
 
     released.assert_called_once_with("node-2", retry_operation)
     assert sorted(vm_provider._cache) == ["node-1", "node-3"]
 
 
 def test_delete_is_retried_while_gce_still_holds_the_insert(vm_provider):
+    """_release_instance_name retries the delete while GCE rejects it as not ready."""
     not_ready = google.api_core.exceptions.BadRequest("The resource 'node-1' is not ready")
     vm_provider._instances_client.delete.side_effect = [not_ready, not_ready, MagicMock()]
 
@@ -152,21 +156,25 @@ def test_delete_is_retried_while_gce_still_holds_the_insert(vm_provider):
 
 
 def test_delete_of_an_insert_that_never_produced_a_vm_is_not_an_error(vm_provider):
+    """A NotFound delete after a finished insert means the name is free: no error, no retry."""
     vm_provider._instances_client.delete.side_effect = google.api_core.exceptions.NotFound("node-1")
     insert_operation = MagicMock()
     insert_operation.done.return_value = True
 
     vm_provider._release_instance_name("node-1", insert_operation)
 
-    vm_provider._instances_client.delete.assert_called_once()
+    vm_provider._instances_client.delete.assert_called_once_with(
+        project="test-project", zone="us-east1-b", instance="node-1"
+    )
 
 
 def test_delete_is_retried_while_the_insert_has_not_created_the_vm_yet(vm_provider):
     """A pending insert has no instance to delete yet, but it can still create one and take the name."""
+    delete_operation = MagicMock()
     vm_provider._instances_client.delete.side_effect = [
         google.api_core.exceptions.NotFound("node-1"),
         google.api_core.exceptions.NotFound("node-1"),
-        MagicMock(),
+        delete_operation,
     ]
     insert_operation = MagicMock()
     insert_operation.done.return_value = False
@@ -175,7 +183,7 @@ def test_delete_is_retried_while_the_insert_has_not_created_the_vm_yet(vm_provid
         vm_provider._release_instance_name("node-1", insert_operation)
 
     assert vm_provider._instances_client.delete.call_count == 3
-    waited.assert_called_once()
+    waited.assert_called_once_with(delete_operation, "deletion of abandoned instance node-1")
 
 
 def test_delete_that_times_out_is_not_repeated(vm_provider):
@@ -183,17 +191,20 @@ def test_delete_that_times_out_is_not_repeated(vm_provider):
     with patch(WAIT, side_effect=TimeoutError("delete timed out")):
         vm_provider._release_instance_name("node-1", MagicMock())
 
-    vm_provider._instances_client.delete.assert_called_once()
+    vm_provider._instances_client.delete.assert_called_once_with(
+        project="test-project", zone="us-east1-b", instance="node-1"
+    )
 
 
 def test_failure_to_free_the_name_does_not_mask_the_timeout(vm_provider):
+    """A failing delete is logged, and the ProvisionError for the insert timeout still reaches the caller."""
     vm_provider._instances_client.delete.side_effect = google.api_core.exceptions.BadRequest("not ready")
 
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()),
         patch(WAIT, side_effect=TimeoutError("insert timed out")),
+        pytest.raises(ProvisionError, match="node-1 was not created"),
     ):
-        with pytest.raises(ProvisionError, match="node-1 was not created"):
-            vm_provider.get_or_create(definitions=[_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
+        vm_provider.get_or_create(definitions=[make_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
 
     assert vm_provider._instances_client.delete.call_count == ABANDONED_INSTANCE_DELETE_ATTEMPTS

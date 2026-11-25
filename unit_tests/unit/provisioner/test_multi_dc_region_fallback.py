@@ -34,30 +34,34 @@ from sdcm.sct_provision.aws.cluster import DBCluster
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 
 
-class _BaseParams(dict):
+class BaseParams(dict):
+    """SCTConfiguration stand-in exposing the region names of the test params."""
+
     @property
     def region_names(self):
+        """Region names split from the space-separated region_name param."""
         return (self.get("region_name") or "").split()
 
 
-class _LayoutParams(_BaseParams):
+class LayoutParams(BaseParams):
     """SCTConfiguration stand-in accepted by SCTProvisionAWSLayout for the multi-DC fallback path."""
 
     ami_id_params = ["ami_id_db_scylla"]
 
 
-class _AmiParams(_BaseParams):
+class AmiParams(BaseParams):
     """Stand-in for SCTConfiguration covering the bits remap/switch touch."""
 
     ami_id_params = ["ami_id_db_scylla", "ami_id_loader", "ami_id_monitor"]
 
 
-class _StubParams(_BaseParams):
+class StubParams(BaseParams):
     """Minimal SCTConfiguration stand-in for DBCluster tests."""
 
 
-def _make_multi_dc_layout_params(**overrides):
-    return _LayoutParams(
+def make_multi_dc_layout_params(**overrides):
+    """Two-DC AWS layout params (us-east-1 + eu-west-1, 3 DB nodes each) with fallback enabled."""
+    return LayoutParams(
         {
             "cluster_backend": "aws",
             "region_name": "us-east-1 eu-west-1",
@@ -72,7 +76,7 @@ def _make_multi_dc_layout_params(**overrides):
     )
 
 
-def _instance_in(region: str) -> SimpleNamespace:
+def instance_in(region: str) -> SimpleNamespace:
     """boto3 Instance-shaped stub whose region is resolvable by the layout's _instance_region."""
     return SimpleNamespace(
         instance_id=f"i-{region}",
@@ -80,35 +84,49 @@ def _instance_in(region: str) -> SimpleNamespace:
     )
 
 
-def _tagged_capacity_error(region: str) -> ProvisioningCapacityExhausted:
+def tagged_capacity_error(region: str) -> ProvisioningCapacityExhausted:
+    """ProvisioningCapacityExhausted tagged with the region that ran out of capacity."""
     exc = ProvisioningCapacityExhausted("no capacity")
     attach_failed_region(exc, region)
     return exc
 
 
-def _fake_find_equivalent_ami(ami_id, source_region, target_regions):  # noqa: ARG001
+def fake_find_equivalent_ami(ami_id, source_region, target_regions):  # noqa: ARG001
+    """find_equivalent_ami stub: returns the AMI id suffixed with the first target region."""
     return [{"ami_id": f"{ami_id}@{target_regions[0]}"}]
 
 
-def _fake_convert_name_to_ami_if_needed(name, regions):
+def fake_convert_name_to_ami_if_needed(name, regions):
+    """convert_name_to_ami_if_needed stub: resolves an AMI name to an id in the first region, requires a tuple."""
     # the real helper is @lru_cache-decorated, so the regions arg must be hashable (a tuple, not a list)
     assert isinstance(regions, tuple), f"regions must be a hashable tuple for lru_cache, got {type(regions).__name__}"
     return f"ami-{name}@{regions[0]}"
 
 
-@pytest.fixture(name="restore_region_env")
-def restore_region_env_fixture():
-    saved = os.environ.get("SCT_REGION_NAME")
-    yield
-    if saved is None:
-        os.environ.pop("SCT_REGION_NAME", None)
-    else:
-        os.environ["SCT_REGION_NAME"] = saved
+def capacity_client_error() -> ClientError:
+    """Botocore ClientError for InsufficientInstanceCapacity on RunInstances."""
+    return ClientError({"Error": {"Code": "InsufficientInstanceCapacity", "Message": "x"}}, "RunInstances")
 
 
-def _db_cluster(**param_overrides) -> DBCluster:
+def plan_factory(fail_region_id: int, *, raise_client_error: bool):
+    """provision_plan side_effect: succeed everywhere except `fail_region_id`, which signals exhaustion."""
+
+    def factory(region_id, _az):
+        plan = MagicMock()
+        if region_id != fail_region_id:
+            plan.provision_instances.return_value = [object()]
+        elif raise_client_error:
+            plan.provision_instances.side_effect = capacity_client_error()  # on-demand path
+        else:
+            plan.provision_instances.return_value = []  # spot/empty path -> ProvisioningCapacityExhausted
+        return plan
+
+    return factory
+
+
+def make_db_cluster(**param_overrides) -> DBCluster:
     """Build a DBCluster without pydantic validation so a stub params is enough for region/node mapping."""
-    params = _StubParams(
+    params = StubParams(
         {
             "region_name": "us-east-1 eu-west-1 us-west-2",
             "n_db_nodes": [3, 0, 3],
@@ -123,7 +141,8 @@ def _db_cluster(**param_overrides) -> DBCluster:
     return DBCluster.model_construct(params=params, test_id="testid123", common_tags={})
 
 
-def _patch_cluster_internals():
+def patch_cluster_internals():
+    """Patches for the DBCluster helpers that would otherwise reach the cloud."""
     return (
         patch.object(DBCluster, "_instance_parameters", return_value=MagicMock()),
         patch.object(DBCluster, "_node_tags", return_value=[]),
@@ -131,45 +150,31 @@ def _patch_cluster_internals():
     )
 
 
+@pytest.fixture
+def restore_region_env(monkeypatch):
+    """Save SCT_REGION_NAME so writes the test makes to it are undone afterwards."""
+    monkeypatch.setenv("SCT_REGION_NAME", os.environ.get("SCT_REGION_NAME", ""))
+
+
 def test_nodes_map_to_absolute_region_ids_when_a_middle_dc_has_zero_nodes():
     """A zero-node middle DC must not shift later DCs: n_db_nodes=[3, 0, 3] -> regions 0 and 2, not 0 and 1."""
-    cluster = _db_cluster(n_db_nodes=[3, 0, 3])
+    cluster = make_db_cluster(n_db_nodes=[3, 0, 3])
     assert [node.region_id for node in cluster.nodes] == [0, 0, 0, 2, 2, 2]
 
 
 def test_db_cluster_provision_skips_given_region_ids():
     """skip_region_ids lets the multi-DC loop re-provision only a relocated DC, not the healthy ones."""
-    cluster = _db_cluster(n_db_nodes=[3, 3, 3])
+    cluster = make_db_cluster(n_db_nodes=[3, 3, 3])
     plan = MagicMock()
     plan.provision_instances.return_value = [object()]
 
     with ExitStack() as stack:
         mock_plan = stack.enter_context(patch.object(DBCluster, "provision_plan", return_value=plan))
-        for ctx in _patch_cluster_internals():
+        for ctx in patch_cluster_internals():
             stack.enter_context(ctx)
         cluster.provision(skip_region_ids={0, 1})
 
     assert sorted({call.args[0] for call in mock_plan.call_args_list}) == [2]
-
-
-def _capacity_client_error() -> ClientError:
-    return ClientError({"Error": {"Code": "InsufficientInstanceCapacity", "Message": "x"}}, "RunInstances")
-
-
-def _plan_factory(fail_region_id: int, *, raise_client_error: bool):
-    """provision_plan side_effect: succeed everywhere except `fail_region_id`, which signals exhaustion."""
-
-    def factory(region_id, _az):
-        plan = MagicMock()
-        if region_id != fail_region_id:
-            plan.provision_instances.return_value = [object()]
-        elif raise_client_error:
-            plan.provision_instances.side_effect = _capacity_client_error()  # on-demand path
-        else:
-            plan.provision_instances.return_value = []  # spot/empty path -> ProvisioningCapacityExhausted
-        return plan
-
-    return factory
 
 
 @pytest.mark.parametrize(
@@ -181,17 +186,17 @@ def _plan_factory(fail_region_id: int, *, raise_client_error: bool):
 )
 def test_provision_tags_capacity_error_with_failing_region(raise_client_error, expected_exc):
     """The exhausted DC's region must be recoverable from the propagated capacity error, for both shapes."""
-    cluster = _db_cluster(n_db_nodes=[3, 0, 3])
+    cluster = make_db_cluster(n_db_nodes=[3, 0, 3])
 
     with ExitStack() as stack:
         stack.enter_context(
             patch.object(
                 DBCluster,
                 "provision_plan",
-                side_effect=_plan_factory(2, raise_client_error=raise_client_error),
+                side_effect=plan_factory(2, raise_client_error=raise_client_error),
             )
         )
-        for ctx in _patch_cluster_internals():
+        for ctx in patch_cluster_internals():
             stack.enter_context(ctx)
 
         with pytest.raises(expected_exc) as exc_info:
@@ -202,7 +207,7 @@ def test_provision_tags_capacity_error_with_failing_region(raise_client_error, e
 
 def test_remap_dc_ami_remaps_only_the_relocated_index():
     """Relocating DC 0 remaps element[0] of every per-region AMI list, leaving other DCs untouched."""
-    params = _AmiParams(
+    params = AmiParams(
         {
             "region_name": "us-east-1 eu-west-1",
             "ami_id_db_scylla": "ami-EAST ami-WEST",
@@ -210,7 +215,7 @@ def test_remap_dc_ami_remaps_only_the_relocated_index():
             "ami_id_monitor": "ami-MON",
         }
     )
-    with patch("sdcm.provision.aws.region_fallback.find_equivalent_ami", side_effect=_fake_find_equivalent_ami):
+    with patch("sdcm.provision.aws.region_fallback.find_equivalent_ami", side_effect=fake_find_equivalent_ami):
         remap_dc_ami(params, dc_index=0, source_region="us-east-1", target_region="us-west-2")
 
     assert params["ami_id_db_scylla"] == "ami-EAST@us-west-2 ami-WEST"
@@ -220,7 +225,7 @@ def test_remap_dc_ami_remaps_only_the_relocated_index():
 
 def test_remap_dc_ami_reresolves_named_param_by_name_not_tags():
     """Named AMI intents must be re-resolved by name in the target region, not via find_equivalent_ami."""
-    params = _AmiParams(
+    params = AmiParams(
         {
             "region_name": "us-east-1 eu-west-1",
             "ami_id_db_scylla": "ami-DBE ami-DBW",
@@ -238,7 +243,7 @@ def test_remap_dc_ami_reresolves_named_param_by_name_not_tags():
     with (
         patch(
             "sdcm.provision.aws.region_fallback.convert_name_to_ami_if_needed",
-            side_effect=_fake_convert_name_to_ami_if_needed,
+            side_effect=fake_convert_name_to_ami_if_needed,
         ),
         patch(
             "sdcm.provision.aws.region_fallback.find_equivalent_ami",
@@ -253,7 +258,7 @@ def test_remap_dc_ami_reresolves_named_param_by_name_not_tags():
 
 def test_switch_dc_region_splices_index_keeps_global_az_and_invalidates(restore_region_env):  # noqa: ARG001
     """Switching DC 0 rewrites only region_names[0] + its AMI, leaves availability_zone global/unchanged."""
-    params = _AmiParams(
+    params = AmiParams(
         {
             "region_name": "us-east-1 eu-west-1",
             "availability_zone": "a,b",
@@ -261,7 +266,7 @@ def test_switch_dc_region_splices_index_keeps_global_az_and_invalidates(restore_
         }
     )
     invalidate = MagicMock()
-    with patch("sdcm.provision.aws.region_fallback.find_equivalent_ami", side_effect=_fake_find_equivalent_ami):
+    with patch("sdcm.provision.aws.region_fallback.find_equivalent_ami", side_effect=fake_find_equivalent_ami):
         switch_dc_region(
             params, dc_index=0, region="us-west-2", source_region="us-east-1", invalidate_caches=invalidate
         )
@@ -282,14 +287,14 @@ def test_switch_dc_region_splices_index_keeps_global_az_and_invalidates(restore_
 )
 def test_enforce_multi_dc_fallback_supported_rejects_region_scoped_reservations(feature):
     """Multi-DC fallback + region-scoped CR/DH is refused (fail fast) in v1."""
-    params = _AmiParams({"region_name": "us-east-1 eu-west-1", feature: True})
+    params = AmiParams({"region_name": "us-east-1 eu-west-1", feature: True})
     with pytest.raises(ValueError, match="region-scoped"):
         enforce_multi_dc_fallback_supported(params)
 
 
 def test_multi_dc_fallback_relocates_failed_db_dc_then_provisions_support_clusters(restore_region_env):  # noqa: ARG001
     """One DB DC exhausts -> relocate only it (skip the healthy DC on retry), then provision monitor/loader once."""
-    params = _make_multi_dc_layout_params()
+    params = make_multi_dc_layout_params()
     layout = SCTProvisionAWSLayout(params)
 
     class _FakeDB:
@@ -300,9 +305,9 @@ def test_multi_dc_fallback_relocates_failed_db_dc_then_provisions_support_cluste
         def provision(self, skip_region_ids=None):
             self.skips.append(set(skip_region_ids or set()))
             if len(self.skips) == 1:
-                self._provisioned_instances.append(_instance_in("us-east-1"))  # DC0 ok
-                raise _tagged_capacity_error("eu-west-1")  # DC1 exhausts
-            self._provisioned_instances.append(_instance_in("us-west-2"))  # relocated DC1 ok
+                self._provisioned_instances.append(instance_in("us-east-1"))  # DC0 ok
+                raise tagged_capacity_error("eu-west-1")  # DC1 exhausts
+            self._provisioned_instances.append(instance_in("us-west-2"))  # relocated DC1 ok
 
     db = _FakeDB()
     monitor, loader = MagicMock(), MagicMock()
@@ -332,6 +337,6 @@ def test_multi_dc_fallback_relocates_failed_db_dc_then_provisions_support_cluste
 
     assert db.skips == [set(), {0}]  # first attempt all DCs; retry skips the healthy DC0
     cleanup.assert_called_once_with("eu-west-1")
-    monitor.provision.assert_called_once()
-    loader.provision.assert_called_once()
+    monitor.provision.assert_called_once_with()
+    loader.provision.assert_called_once_with()
     assert params["region_name"] == "us-east-1 us-west-2"

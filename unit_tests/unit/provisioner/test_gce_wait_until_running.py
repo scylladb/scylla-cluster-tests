@@ -30,7 +30,8 @@ from sdcm.provision.provisioner import InstanceDefinition, OperationPreemptedErr
 FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", private_key=b"fake-private\n")
 
 
-def _definition(name: str = "node-1") -> InstanceDefinition:
+def make_definition(name: str = "node-1") -> InstanceDefinition:
+    """InstanceDefinition with a fixed image, machine type and SSH key."""
     return InstanceDefinition(
         name=name,
         image_id="projects/scylla-images/global/images/test-image",
@@ -42,7 +43,8 @@ def _definition(name: str = "node-1") -> InstanceDefinition:
     )
 
 
-def _instance(status: str) -> MagicMock:
+def make_instance(status: str) -> MagicMock:
+    """GCE instance mock reporting the given status."""
     instance = MagicMock()
     instance.status = status
     return instance
@@ -56,23 +58,27 @@ class FakeClock:
         self.sleeps = []
 
     def monotonic(self) -> float:
+        """Return the simulated time."""
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        """Record the sleep and advance the simulated time by it."""
         self.sleeps.append(seconds)
         self.now += seconds
 
 
-@pytest.fixture(name="clock")
-def fixture_clock(monkeypatch):
+@pytest.fixture
+def clock(monkeypatch):
+    """FakeClock patched in as time.monotonic and time.sleep of instance_provider."""
     clock = FakeClock()
     monkeypatch.setattr(instance_provider.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(instance_provider.time, "sleep", clock.sleep)
     return clock
 
 
-@pytest.fixture(name="vm_provider")
-def fixture_vm_provider():
+@pytest.fixture
+def vm_provider():
+    """VirtualMachineProvider with the GCE client, the insert and the extended-operation wait patched out."""
     with patch("sdcm.provision.gce.instance_provider.get_gce_compute_instances_client") as client:
         client.return_value = (MagicMock(), {"project_id": "test-project"})
         provider = VirtualMachineProvider(
@@ -89,44 +95,53 @@ def fixture_vm_provider():
         yield provider
 
 
-def _create(provider: VirtualMachineProvider, pricing_model: PricingModel = PricingModel.ON_DEMAND):
-    return provider.get_or_create(definitions=[_definition()], pricing_model=pricing_model)
+def create_node(provider: VirtualMachineProvider, pricing_model: PricingModel = PricingModel.ON_DEMAND):
+    """Call get_or_create for a single node-1 definition."""
+    return provider.get_or_create(definitions=[make_definition()], pricing_model=pricing_model)
 
 
 def test_running_instance_is_returned_without_waiting(vm_provider, clock):
     """Real GCE: the instance is RUNNING by the time the insert operation completes."""
-    running = _instance("RUNNING")
+    running = make_instance("RUNNING")
     vm_provider._instances_client.get.return_value = running
 
-    assert _create(vm_provider) == [running]
+    assert create_node(vm_provider) == [running]
     assert not clock.sleeps
     assert vm_provider._cache["node-1"] is running
 
 
 def test_staging_instance_is_waited_for_until_running(vm_provider, clock):
     """Minicloud with a cold image cache: STAGING for the whole download, then RUNNING."""
-    running = _instance("RUNNING")
+    running = make_instance("RUNNING")
     vm_provider._instances_client.get.side_effect = [
-        _instance("PROVISIONING"),
-        *[_instance("STAGING") for _ in range(65)],  # ~11 minutes, what the monitor image took
+        make_instance("PROVISIONING"),
+        *[make_instance("STAGING") for _ in range(65)],  # ~11 minutes, what the monitor image took
         running,
     ]
 
-    assert _create(vm_provider) == [running]
+    assert create_node(vm_provider) == [running]
     assert len(clock.sleeps) == 66
     # The instance that is cached and handed on is the RUNNING one, not an early STAGING snapshot.
     assert vm_provider._cache["node-1"] is running
 
 
-@pytest.mark.parametrize("status", ["TERMINATED", "STOPPING", "SUSPENDED"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param("TERMINATED", id="terminated"),
+        pytest.param("STOPPING", id="stopping"),
+        pytest.param("SUSPENDED", id="suspended"),
+    ],
+)
 def test_instance_that_cannot_start_fails_without_waiting_and_is_deleted(vm_provider, clock, status):
-    vm_provider._instances_client.get.return_value = _instance(status)
+    """A VM in a status it cannot start from raises ProvisionError at once and is deleted for the retry."""
+    vm_provider._instances_client.get.return_value = make_instance(status)
 
     with (
         patch.object(vm_provider, "delete") as delete,
         pytest.raises(ProvisionError, match=f"node-1 did not start: its status is {status}"),
     ):
-        _create(vm_provider)
+        create_node(vm_provider)
 
     assert not clock.sleeps
     # Deleted, so the ProvisionError retry can create the name again instead of hitting AlreadyExists.
@@ -135,13 +150,14 @@ def test_instance_that_cannot_start_fails_without_waiting_and_is_deleted(vm_prov
 
 
 def test_instance_that_never_leaves_staging_times_out_and_is_deleted(vm_provider, clock):
-    vm_provider._instances_client.get.return_value = _instance("STAGING")
+    """A VM stuck in STAGING past INSTANCE_RUNNING_TIMEOUT raises ProvisionError and is deleted."""
+    vm_provider._instances_client.get.return_value = make_instance("STAGING")
 
     with (
         patch.object(vm_provider, "delete") as delete,
         pytest.raises(ProvisionError, match=r"node-1 did not start: still STAGING after 1200s"),
     ):
-        _create(vm_provider)
+        create_node(vm_provider)
 
     assert clock.now >= instance_provider.INSTANCE_RUNNING_TIMEOUT
     assert (
@@ -153,33 +169,40 @@ def test_instance_that_never_leaves_staging_times_out_and_is_deleted(vm_provider
 
 def test_retry_path_waits_for_running_too(vm_provider, clock):
     """`_create_instance_with_retry` re-creates a failed VM; the one it hands back must be RUNNING as well."""
-    running = _instance("RUNNING")
-    vm_provider._instances_client.get.side_effect = [_instance("STAGING"), running]
+    running = make_instance("RUNNING")
+    vm_provider._instances_client.get.side_effect = [make_instance("STAGING"), running]
 
-    assert vm_provider._create_instance_with_retry(_definition(), PricingModel.ON_DEMAND) is running
+    assert vm_provider._create_instance_with_retry(make_definition(), PricingModel.ON_DEMAND) is running
     assert len(clock.sleeps) == 1
 
 
-@pytest.mark.parametrize("status", ["TERMINATED", "STOPPING"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param("TERMINATED", id="terminated"),
+        pytest.param("STOPPING", id="stopping"),
+    ],
+)
 def test_spot_instance_preempted_while_booting_raises_preempted(vm_provider, clock, status):
     """A preempted spot VM must reach the on-demand fallback, which only reacts to OperationPreemptedError."""
-    vm_provider._instances_client.get.return_value = _instance(status)
+    vm_provider._instances_client.get.return_value = make_instance(status)
 
     with (
         patch.object(vm_provider, "delete") as delete,
         pytest.raises(OperationPreemptedError, match=f"node-1 preempted before it started: its status is {status}"),
     ):
-        _create(vm_provider, PricingModel.SPOT)
+        create_node(vm_provider, PricingModel.SPOT)
 
     assert not clock.sleeps
     delete.assert_called_once_with("node-1", wait=True)
 
 
 def test_spot_instance_that_never_leaves_staging_is_not_treated_as_preempted(vm_provider, clock):
-    vm_provider._instances_client.get.return_value = _instance("STAGING")
+    """A spot VM stuck in STAGING times out as ProvisionError, not as a preemption."""
+    vm_provider._instances_client.get.return_value = make_instance("STAGING")
 
     with patch.object(vm_provider, "delete"), pytest.raises(ProvisionError, match="still STAGING"):
-        _create(vm_provider, PricingModel.SPOT)
+        create_node(vm_provider, PricingModel.SPOT)
 
 
 def test_failed_start_drains_the_rest_of_the_batch(vm_provider, clock):
@@ -188,13 +211,13 @@ def test_failed_start_drains_the_rest_of_the_batch(vm_provider, clock):
     The sibling is waited out until RUNNING and cached, so the ProvisionError retry reuses it
     instead of re-issuing an insert for a name GCE already holds (AlreadyExists).
     """
-    running = _instance("RUNNING")
-    statuses = {"node-1": iter([_instance("TERMINATED")]), "node-2": iter([_instance("STAGING"), running])}
+    running = make_instance("RUNNING")
+    statuses = {"node-1": iter([make_instance("TERMINATED")]), "node-2": iter([make_instance("STAGING"), running])}
     vm_provider._instances_client.get.side_effect = lambda project, zone, instance: next(statuses[instance])
 
     with patch.object(vm_provider, "delete") as delete, pytest.raises(ProvisionError, match="node-1 did not start"):
         vm_provider.get_or_create(
-            definitions=[_definition("node-1"), _definition("node-2")], pricing_model=PricingModel.ON_DEMAND
+            definitions=[make_definition("node-1"), make_definition("node-2")], pricing_model=PricingModel.ON_DEMAND
         )
 
     delete.assert_called_once_with("node-1", wait=True)
@@ -204,12 +227,16 @@ def test_failed_start_drains_the_rest_of_the_batch(vm_provider, clock):
 
 
 def test_drained_instance_that_does_not_start_is_not_cached(vm_provider, clock):
-    statuses = {"node-1": iter([_instance("TERMINATED")]), "node-2": iter([_instance("SUSPENDED")])}
+    """A sibling that does not start while the batch drains is deleted once and never cached."""
+    statuses = {
+        "node-1": iter([make_instance("TERMINATED")]),
+        "node-2": iter([make_instance("SUSPENDED")]),
+    }
     vm_provider._instances_client.get.side_effect = lambda project, zone, instance: next(statuses[instance])
 
     with patch.object(vm_provider, "delete") as delete, pytest.raises(ProvisionError, match="node-1 did not start"):
         vm_provider.get_or_create(
-            definitions=[_definition("node-1"), _definition("node-2")], pricing_model=PricingModel.ON_DEMAND
+            definitions=[make_definition("node-1"), make_definition("node-2")], pricing_model=PricingModel.ON_DEMAND
         )
 
     # Each VM is deleted exactly once, by _wait_until_running; the drain does not delete it again.

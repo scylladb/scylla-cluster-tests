@@ -22,11 +22,13 @@ from unit_tests.lib.dot_dict import DotDict
 
 @pytest.fixture(autouse=True)
 def reset_reservations():
+    """Clear the class-level reservation registry before each test."""
     SCTCapacityReservation.reservations = {}
 
 
-@pytest.fixture(name="params")
-def params_fixture():
+@pytest.fixture
+def params():
+    """SCT params for a single-node DB, loader and monitor on AWS us-east-1, availability zone d."""
     return DotDict(
         {
             "test_id": "example-test-id",
@@ -48,8 +50,9 @@ def params_fixture():
     )
 
 
-@pytest.fixture(name="mock_ec2")
-def mock_ec2_fixture():
+@pytest.fixture
+def mock_ec2():
+    """Patched boto3 EC2 client offering i4i.large and t3.small in us-east-1a/b/d."""
     with patch("boto3.client") as mock_boto3_client:
         mock_ec2 = MagicMock()
         mock_boto3_client.return_value = mock_ec2
@@ -67,6 +70,7 @@ def mock_ec2_fixture():
 
 
 def test_reserve_success(mock_ec2, params):
+    """reserve() stores one capacity reservation id per instance type under the initial availability zone."""
     mock_ec2.create_capacity_reservation.side_effect = [
         {"CapacityReservation": {"CapacityReservationId": "cr-0e2dec33c962ffa7d"}},
         {"CapacityReservation": {"CapacityReservationId": "cr-0e2dec33c962ffa7e"}},
@@ -81,6 +85,7 @@ def test_reserve_success(mock_ec2, params):
 
 
 def test_reserve_failure(mock_ec2, params):
+    """reserve() raises CapacityReservationError when AWS rejects the reservation."""
     mock_ec2.create_capacity_reservation.side_effect = Exception("Failed to create capacity reservation")
 
     with pytest.raises(CapacityReservationError):
@@ -88,6 +93,7 @@ def test_reserve_failure(mock_ec2, params):
 
 
 def test_reserve_fallback(mock_ec2, params):
+    """reserve() retries in the next availability zone after a failed reservation and keeps the zone that succeeded."""
     mock_ec2.create_capacity_reservation.side_effect = [
         Exception("Failed to create capacity reservation"),
         {"CapacityReservation": {"CapacityReservationId": "cr-0e2dec33c962ffa7d"}},
@@ -101,6 +107,7 @@ def test_reserve_fallback(mock_ec2, params):
 
 
 def test_reservation_cancelled_when_one_reservation_fails(mock_ec2, params):
+    """A failed reservation in one zone is retried in the next zone, and cancel() then releases the kept reservations."""
     mock_ec2.create_capacity_reservation.side_effect = [
         {"CapacityReservation": {"CapacityReservationId": "cr-0e2dec33c962ffa7d"}},
         Exception("Failed to create capacity reservation"),
@@ -135,9 +142,9 @@ def test_request_includes_instance_type_db_target(params):
 @pytest.mark.parametrize(
     "db_type, expected_present",
     [
-        ("mixed_scylla", True),
-        ("mixed_cassandra", True),
-        ("scylla", False),
+        pytest.param("mixed_scylla", True, id="mixed-scylla"),
+        pytest.param("mixed_cassandra", True, id="mixed-cassandra"),
+        pytest.param("scylla", False, id="scylla"),
     ],
 )
 def test_oracle_reservation_gated_by_db_type(params, db_type, expected_present):
@@ -157,6 +164,7 @@ def test_oracle_reservation_gated_by_db_type(params, db_type, expected_present):
 
 
 def test_can_cancel_reservation(mock_ec2, params):
+    """cancel() cancels the capacity reservation found in AWS for the test's availability zone."""
     mock_ec2.describe_capacity_reservations.return_value = {
         "CapacityReservations": [
             {

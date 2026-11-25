@@ -33,17 +33,18 @@ LEGACY_STATUS_VERSION = Result(stdout="cloud-init 19.4-45.amzn2", stderr="", exi
 CLOUD_INIT_PRESENT = Result(stdout="/usr/bin/cloud-init", exited=0)
 
 
-def _instance(name: str = "test-node"):
-    """A minimal stand-in for VmInstance: wait_cloud_init_completes only needs `.name`."""
+def make_instance(name: str = "test-node"):
+    """Return a minimal stand-in for VmInstance: wait_cloud_init_completes only needs `.name`."""
     return SimpleNamespace(name=name)
 
 
-def _remoter() -> FakeRemoter:
-    # user != "root" so RemoteCmdRunnerBase.sudo() actually prefixes commands with "sudo ".
+def make_remoter() -> FakeRemoter:
+    """Return a FakeRemoter for a non-root user, so sudo() prefixes commands with 'sudo '."""
     return FakeRemoter(hostname="1.2.3.4", user="scyllaadm")
 
 
-def _status_call_count(sudo_spy) -> int:
+def count_status_calls(sudo_spy) -> int:
+    """Return how many sudo calls ran `cloud-init status`."""
     return sum(1 for call in sudo_spy.call_args_list if "cloud-init status" in call.args[0])
 
 
@@ -51,7 +52,7 @@ def test_wait_cloud_init_completes_raises_timeout_error_on_json_branch():
     """On the json-capable branch (cloud-init >= 23.4), a timed-out wait raises TimeoutError
     with an actionable message: node identifier, timeout bound, log path, and its tail.
     """
-    remoter = _remoter()
+    remoter = make_remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
         r"cloud-init --version 2>&1": JSON_STATUS_VERSION,
@@ -60,7 +61,7 @@ def test_wait_cloud_init_completes_raises_timeout_error_on_json_branch():
         ),
         r"sudo tail -n \d+ /var/log/cloud-init-output\.log": Result(stdout=TAIL_LOG_CONTENT, exited=0),
     }
-    instance = _instance("json-branch-node")
+    instance = make_instance("json-branch-node")
 
     with pytest.raises(TimeoutError) as exc_info:
         wait_cloud_init_completes(remoter, instance)
@@ -76,7 +77,7 @@ def test_wait_cloud_init_completes_timeout_is_not_retried_20x():
     """Core regression guard: a timeout must not be silently retried by the @retrying(n=20) wrapper -
     the status/wait command is issued exactly once.
     """
-    remoter = _remoter()
+    remoter = make_remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
         r"cloud-init --version 2>&1": JSON_STATUS_VERSION,
@@ -85,18 +86,17 @@ def test_wait_cloud_init_completes_timeout_is_not_retried_20x():
         ),
         r"sudo tail -n \d+ /var/log/cloud-init-output\.log": Result(stdout=TAIL_LOG_CONTENT, exited=0),
     }
-    instance = _instance("json-branch-node")
+    instance = make_instance("json-branch-node")
 
-    with patch.object(remoter, "sudo", wraps=remoter.sudo) as sudo_spy:
-        with pytest.raises(TimeoutError):
-            wait_cloud_init_completes(remoter, instance)
+    with patch.object(remoter, "sudo", wraps=remoter.sudo) as sudo_spy, pytest.raises(TimeoutError):
+        wait_cloud_init_completes(remoter, instance)
 
-    assert _status_call_count(sudo_spy) == 1
+    assert count_status_calls(sudo_spy) == 1
 
 
 def test_wait_cloud_init_completes_raises_timeout_error_on_legacy_branch():
     """Same timeout behavior applies on the legacy (pre-23.4, non-json) status --wait branch."""
-    remoter = _remoter()
+    remoter = make_remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
         r"cloud-init --version 2>&1": LEGACY_STATUS_VERSION,
@@ -105,25 +105,24 @@ def test_wait_cloud_init_completes_raises_timeout_error_on_legacy_branch():
         ),
         r"sudo tail -n \d+ /var/log/cloud-init-output\.log": Result(stdout=TAIL_LOG_CONTENT, exited=0),
     }
-    instance = _instance("legacy-branch-node")
+    instance = make_instance("legacy-branch-node")
 
-    with patch.object(remoter, "sudo", wraps=remoter.sudo) as sudo_spy:
-        with pytest.raises(TimeoutError) as exc_info:
-            wait_cloud_init_completes(remoter, instance)
+    with patch.object(remoter, "sudo", wraps=remoter.sudo) as sudo_spy, pytest.raises(TimeoutError) as exc_info:
+        wait_cloud_init_completes(remoter, instance)
 
     message = str(exc_info.value)
     assert "legacy-branch-node" in message
     assert str(CLOUD_INIT_WAIT_TIMEOUT) in message
     assert CLOUD_INIT_OUTPUT_LOG in message
     assert TAIL_LOG_CONTENT in message
-    assert _status_call_count(sudo_spy) == 1
+    assert count_status_calls(sudo_spy) == 1
 
 
 def test_wait_cloud_init_completes_happy_path_applies_timeout_bound():
     """On success, behavior is unchanged (no exception), but the command actually sent to the node
     is wrapped in `timeout N`, proving the bound is applied even when cloud-init completes fine.
     """
-    remoter = _remoter()
+    remoter = make_remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
         r"cloud-init --version 2>&1": JSON_STATUS_VERSION,
@@ -132,7 +131,7 @@ def test_wait_cloud_init_completes_happy_path_applies_timeout_bound():
         ),
         r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0),
     }
-    instance = _instance("healthy-node")
+    instance = make_instance("healthy-node")
 
     with patch.object(remoter, "sudo", wraps=remoter.sudo) as sudo_spy:
         wait_cloud_init_completes(remoter, instance)

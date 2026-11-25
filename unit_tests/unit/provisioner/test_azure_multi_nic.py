@@ -28,7 +28,7 @@ REGION = "eastus"
 
 
 @pytest.fixture(autouse=True)
-def _no_nic_propagation_sleep():
+def no_nic_propagation_sleep():
     """Skip the NIC propagation wait: every test here provisions, and it is 5 seconds each."""
     with patch("sdcm.provision.azure.network_interface_provider.time.sleep"):
         yield
@@ -47,8 +47,10 @@ def nic_specs(count: int) -> list[dict]:
     ]
 
 
-@pytest.fixture(name="make_provisioner")
-def fixture_make_provisioner(azure_service):
+@pytest.fixture()
+def make_provisioner(azure_service):
+    """Factory for an Azure provisioner over ``azure_service``, with ``nic_count`` IPv4 NICs unless ``specs`` is given."""
+
     def _make(nic_count: int, specs: list[dict] = None):
         return provisioner_factory.create_provisioner(
             backend="azure",
@@ -63,6 +65,7 @@ def fixture_make_provisioner(azure_service):
 
 
 def definition(name: str, instance_type: str = "Standard_L8s_v3", node_type: str = "scylla-db") -> InstanceDefinition:
+    """InstanceDefinition of an Azure VM named ``name``, with the test SSH key and a NodeType tag."""
     return InstanceDefinition(
         name=name,
         image_id="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers"
@@ -77,11 +80,24 @@ def definition(name: str, instance_type: str = "Standard_L8s_v3", node_type: str
 
 
 def nic_names(provisioner, name: str) -> list[str]:
+    """Names of the NICs the provisioner holds for the VM ``name``, as the provider lists them."""
     return [nic.name for nic in provisioner._nic_provider.get_all(name)]  # noqa: SLF001
 
 
-@pytest.mark.parametrize("nic_count", [1, 2, 3])
+def ipv6_specs(public_ipv6: bool = True) -> list[dict]:
+    """NIC specs with IPv6 on both NICs; the primary one gets a public IPv6 only when ``public_ipv6`` is set."""
+    return [
+        {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": public_ipv6},
+        {"subnet": "nic1", "public_ip": False, "ipv6": True, "public_ipv6": False},
+    ]
+
+
+@pytest.mark.parametrize(
+    "nic_count",
+    [pytest.param(1, id="one-nic"), pytest.param(2, id="two-nics"), pytest.param(3, id="three-nics")],
+)
 def test_provisions_the_requested_number_of_nics(make_provisioner, nic_count):
+    """A VM gets exactly one NIC per requested network interface."""
     provisioner = make_provisioner(nic_count)
     instance = provisioner.get_or_create_instance(definition("multi-nic-vm"), PricingModel.ON_DEMAND)
 
@@ -98,6 +114,7 @@ def test_primary_nic_keeps_its_historical_name(make_provisioner):
 
 
 def test_secondary_nics_are_named_and_ordered_by_device_index(make_provisioner):
+    """Secondary NICs are named '-nic<N>' after the primary '-nic', in device-index order."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("ordered-vm"), PricingModel.ON_DEMAND)
 
@@ -120,6 +137,7 @@ def test_a_vm_named_after_another_vms_nic_keeps_its_own_interfaces(make_provisio
 
 
 def test_each_nic_lands_in_its_own_subnet(make_provisioner):
+    """Each NIC is attached to its own subnet: 'default' for the primary, 'nic<N>' for the others."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("subnet-vm"), PricingModel.ON_DEMAND)
 
@@ -141,6 +159,7 @@ def test_subnets_keep_default_outbound_access(make_provisioner, azure_service):
 
 
 def test_public_ip_is_attached_to_the_primary_nic_only(make_provisioner):
+    """Only the primary NIC gets a public IP; secondary NICs stay private."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(definition("public-ip-vm"), PricingModel.ON_DEMAND)
 
@@ -150,6 +169,7 @@ def test_public_ip_is_attached_to_the_primary_nic_only(make_provisioner):
 
 
 def test_private_address_of_the_instance_comes_from_the_primary_nic(make_provisioner):
+    """The instance's private address is the one on the primary NIC."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(definition("primary-addr-vm"), PricingModel.ON_DEMAND)
 
@@ -157,6 +177,7 @@ def test_private_address_of_the_instance_comes_from_the_primary_nic(make_provisi
 
 
 def test_vm_is_created_with_every_nic_and_a_single_primary(make_provisioner, azure_service):
+    """The Azure VM references every NIC, and only the first one is marked primary."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("profile-vm"), PricingModel.ON_DEMAND)
 
@@ -225,6 +246,7 @@ def test_more_nics_than_the_vm_size_allows_is_rejected(make_provisioner):
 
 
 def test_nic_count_at_the_vm_size_limit_is_accepted(make_provisioner):
+    """A NIC count equal to the VM size's limit (Standard_D2_v4: 2) is accepted."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(
         definition("at-limit-vm", instance_type="Standard_D2_v4"), PricingModel.ON_DEMAND
@@ -233,31 +255,32 @@ def test_nic_count_at_the_vm_size_limit_is_accepted(make_provisioner):
     assert len(nic_names(provisioner, instance.name)) == 2
 
 
-class TestMaxNetworkInterfaces:
-    """Reading the per-VM-size NIC limit out of the Azure SKU listing."""
+def test_reads_the_capability_of_the_requested_size(azure_service):
+    """max_network_interfaces reads MaxNetworkInterfaces of the requested size from the SKU listing."""
+    assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
 
-    def test_reads_the_capability_of_the_requested_size(self, azure_service):
+
+def test_returns_none_for_a_size_absent_from_the_location(azure_service):
+    """max_network_interfaces returns None for a size the location does not list."""
+    assert max_network_interfaces("Standard_NotAThing_v9", REGION, azure_service) is None
+
+
+def test_the_listing_is_cached_per_size_and_location(azure_service, monkeypatch):
+    """Listing a region's SKUs is a slow call, so it must happen once per size and location."""
+    max_network_interfaces.cache_clear()
+    calls = []
+    original = FakeResourceSkus.list
+    # patched on the class: FakeAzureService.compute hands out a new Compute object every access
+    monkeypatch.setattr(
+        FakeResourceSkus,
+        "list",
+        lambda self, *args, **kwargs: calls.append(1) or original(self, *args, **kwargs),
+    )
+
+    for _ in range(3):
         assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
 
-    def test_returns_none_for_a_size_absent_from_the_location(self, azure_service):
-        assert max_network_interfaces("Standard_NotAThing_v9", REGION, azure_service) is None
-
-    def test_the_listing_is_cached_per_size_and_location(self, azure_service, monkeypatch):
-        """Listing a region's SKUs is a slow call, so it must happen once per size and location."""
-        max_network_interfaces.cache_clear()
-        calls = []
-        original = FakeResourceSkus.list
-        # patched on the class: FakeAzureService.compute hands out a new Compute object every access
-        monkeypatch.setattr(
-            FakeResourceSkus,
-            "list",
-            lambda self, *args, **kwargs: calls.append(1) or original(self, *args, **kwargs),
-        )
-
-        for _ in range(3):
-            assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
-
-        assert len(calls) == 1
+    assert len(calls) == 1
 
 
 def test_more_nics_than_sct_supports_is_rejected(make_provisioner):
@@ -278,72 +301,81 @@ def test_unknown_vm_size_does_not_block_provisioning(make_provisioner, caplog):
     assert "does not report 'MaxNetworkInterfaces'" in caplog.text
 
 
-class TestIpv6:
-    """IPv6 is opt-in: an Azure IPv6 Public IP is billed, so nothing IPv6 may appear by default."""
+def test_ipv6_interface_gets_a_second_ip_configuration(make_provisioner):
+    """IPv6 is opt-in (billed on Azure): an IPv6 NIC gets an IPv6 configuration after its IPv4 one."""
+    provisioner = make_provisioner(2, specs=ipv6_specs())
+    instance = provisioner.get_or_create_instance(definition("ipv6-vm"), PricingModel.ON_DEMAND)
 
-    @staticmethod
-    def ipv6_specs(public_ipv6: bool = True) -> list[dict]:
-        return [
-            {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": public_ipv6},
-            {"subnet": "nic1", "public_ip": False, "ipv6": True, "public_ipv6": False},
-        ]
-
-    def test_ipv6_interface_gets_a_second_ip_configuration(self, make_provisioner):
-        provisioner = make_provisioner(2, specs=self.ipv6_specs())
-        instance = provisioner.get_or_create_instance(definition("ipv6-vm"), PricingModel.ON_DEMAND)
-
-        for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
-            versions = [config.private_ip_address_version for config in nic.ip_configurations]
-            assert versions == ["IPv4", "IPv6"], "an IPv4 configuration must stay primary on Azure"
-            assert nic.ip_configurations[0].primary is True
-
-    def test_routable_ipv6_is_only_created_where_asked_for(self, make_provisioner):
-        provisioner = make_provisioner(2, specs=self.ipv6_specs())
-        instance = provisioner.get_or_create_instance(definition("ipv6-public-vm"), PricingModel.ON_DEMAND)
-
-        primary, secondary = provisioner._nic_provider.get_all(instance.name)  # noqa: SLF001
-        assert primary.ip_configurations[1].public_ip_address is not None
-        assert secondary.ip_configurations[1].public_ip_address is None
-
-    def test_vnet_local_ipv6_needs_no_public_ip_resource(self, make_provisioner):
-        provisioner = make_provisioner(2, specs=self.ipv6_specs(public_ipv6=False))
-        instance = provisioner.get_or_create_instance(definition("ula-only-vm"), PricingModel.ON_DEMAND)
-
-        for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
-            assert nic.ip_configurations[1].private_ip_address_version == "IPv6"
-            assert nic.ip_configurations[1].public_ip_address is None
-
-    def test_subnets_are_dual_stack_only_for_ipv6_interfaces(self, make_provisioner, azure_service):
-        specs = [
-            {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": True},
-            {"subnet": "nic1", "public_ip": False, "ipv6": False, "public_ipv6": False},
-        ]
-        provisioner = make_provisioner(2, specs=specs)
-        provisioner.get_or_create_instance(definition("mixed-vm"), PricingModel.ON_DEMAND)
-        resource_group = provisioner.resource_group_name
-
-        dual_stack = azure_service.network.subnets.get(resource_group, "default", "default")
-        ipv4_only = azure_service.network.subnets.get(resource_group, "default", "nic1")
-        assert dual_stack.address_prefixes == ["10.0.0.0/24", "fd00:db8:5c7:0::/64"]
-        assert ipv4_only.address_prefix == "10.0.1.0/24"
-        assert not ipv4_only.address_prefixes
-
-    def test_vnet_carries_ipv6_space_only_when_requested(self, make_provisioner, azure_service):
-        provisioner = make_provisioner(2, specs=self.ipv6_specs())
-        provisioner.get_or_create_instance(definition("ipv6-vnet-vm"), PricingModel.ON_DEMAND)
-
-        vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
-        assert vnet.address_space.address_prefixes == ["10.0.0.0/16", "fd00:db8:5c7::/48"]
-
-    def test_ipv4_only_run_leaves_the_vnet_single_stack(self, make_provisioner, azure_service):
-        provisioner = make_provisioner(2)
-        provisioner.get_or_create_instance(definition("ipv4-vnet-vm"), PricingModel.ON_DEMAND)
-
-        vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
-        assert vnet.address_space.address_prefixes == ["10.0.0.0/16"]
+    for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
+        versions = [config.private_ip_address_version for config in nic.ip_configurations]
+        assert versions == ["IPv4", "IPv6"], "an IPv4 configuration must stay primary on Azure"
+        assert nic.ip_configurations[0].primary is True
 
 
-@pytest.mark.parametrize("node_type", ["scylla-db", "oracle-db", "loader", "monitor"])
+def test_routable_ipv6_is_only_created_where_asked_for(make_provisioner):
+    """A public IPv6 address is attached to the primary NIC only."""
+    provisioner = make_provisioner(2, specs=ipv6_specs())
+    instance = provisioner.get_or_create_instance(definition("ipv6-public-vm"), PricingModel.ON_DEMAND)
+
+    primary, secondary = provisioner._nic_provider.get_all(instance.name)  # noqa: SLF001
+    assert primary.ip_configurations[1].public_ip_address is not None
+    assert secondary.ip_configurations[1].public_ip_address is None
+
+
+def test_vnet_local_ipv6_needs_no_public_ip_resource(make_provisioner):
+    """VNet-local IPv6 needs no public IP resource."""
+    provisioner = make_provisioner(2, specs=ipv6_specs(public_ipv6=False))
+    instance = provisioner.get_or_create_instance(definition("ula-only-vm"), PricingModel.ON_DEMAND)
+
+    for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
+        assert nic.ip_configurations[1].private_ip_address_version == "IPv6"
+        assert nic.ip_configurations[1].public_ip_address is None
+
+
+def test_subnets_are_dual_stack_only_for_ipv6_interfaces(make_provisioner, azure_service):
+    """Only the subnet of an IPv6 NIC gets an IPv6 prefix; the IPv4-only subnet stays single-stack."""
+    specs = [
+        {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": True},
+        {"subnet": "nic1", "public_ip": False, "ipv6": False, "public_ipv6": False},
+    ]
+    provisioner = make_provisioner(2, specs=specs)
+    provisioner.get_or_create_instance(definition("mixed-vm"), PricingModel.ON_DEMAND)
+    resource_group = provisioner.resource_group_name
+
+    dual_stack = azure_service.network.subnets.get(resource_group, "default", "default")
+    ipv4_only = azure_service.network.subnets.get(resource_group, "default", "nic1")
+    assert dual_stack.address_prefixes == ["10.0.0.0/24", "fd00:db8:5c7:0::/64"]
+    assert ipv4_only.address_prefix == "10.0.1.0/24"
+    assert not ipv4_only.address_prefixes
+
+
+def test_vnet_carries_ipv6_space_only_when_requested(make_provisioner, azure_service):
+    """The VNet carries IPv6 address space when an IPv6 NIC is requested."""
+    provisioner = make_provisioner(2, specs=ipv6_specs())
+    provisioner.get_or_create_instance(definition("ipv6-vnet-vm"), PricingModel.ON_DEMAND)
+
+    vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
+    assert vnet.address_space.address_prefixes == ["10.0.0.0/16", "fd00:db8:5c7::/48"]
+
+
+def test_ipv4_only_run_leaves_the_vnet_single_stack(make_provisioner, azure_service):
+    """An IPv4-only run leaves the VNet single-stack."""
+    provisioner = make_provisioner(2)
+    provisioner.get_or_create_instance(definition("ipv4-vnet-vm"), PricingModel.ON_DEMAND)
+
+    vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
+    assert vnet.address_space.address_prefixes == ["10.0.0.0/16"]
+
+
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        pytest.param("scylla-db", id="scylla-db"),
+        pytest.param("oracle-db", id="oracle-db"),
+        pytest.param("loader", id="loader"),
+        pytest.param("monitor", id="monitor"),
+    ],
+)
 def test_every_node_type_takes_the_full_layout(make_provisioner, node_type):
     """The layout is a property of the test's network topology, not of what a node runs.
 
@@ -359,40 +391,39 @@ def test_every_node_type_takes_the_full_layout(make_provisioner, node_type):
     assert len(nic_names(provisioner, instance.name)) == 3
 
 
-class TestMonitoringConnectivity:
-    """What monitoring needs to reach a node on any of its interfaces."""
+def test_every_subnet_carries_the_scylla_security_group(make_provisioner, azure_service):
+    """Prometheus scrapes a DB node on the address scylla_network_config picks, which may be on
+    a secondary subnet - so the open-ports rules must apply there too, not only on 'default'.
+    """
+    provisioner = make_provisioner(3)
+    provisioner.get_or_create_instance(definition("nsg-vm"), PricingModel.ON_DEMAND)
+    resource_group = provisioner.resource_group_name
 
-    def test_every_subnet_carries_the_scylla_security_group(self, make_provisioner, azure_service):
-        """Prometheus scrapes a DB node on the address scylla_network_config picks, which may be on
-        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'.
-        """
-        provisioner = make_provisioner(3)
-        provisioner.get_or_create_instance(definition("nsg-vm"), PricingModel.ON_DEMAND)
-        resource_group = provisioner.resource_group_name
+    security_group_ids = {
+        azure_service.network.subnets.get(resource_group, "default", subnet_name).network_security_group.id
+        for subnet_name in ("default", "nic1", "nic2")
+    }
+    assert len(security_group_ids) == 1, "all subnets must share the one SCT security group"
+    assert None not in security_group_ids
 
-        security_group_ids = {
-            azure_service.network.subnets.get(resource_group, "default", subnet_name).network_security_group.id
-            for subnet_name in ("default", "nic1", "nic2")
-        }
-        assert len(security_group_ids) == 1, "all subnets must share the one SCT security group"
-        assert None not in security_group_ids
 
-    def test_monitor_and_db_nodes_share_the_vnet(self, make_provisioner, azure_service):
-        """One VNet is what lets a monitor reach a DB node on any of the subnets the layout uses."""
-        provisioner = make_provisioner(2)
-        db_node = provisioner.get_or_create_instance(definition("conn-db-vm"), PricingModel.ON_DEMAND)
-        monitor = provisioner.get_or_create_instance(
-            definition("conn-monitor-vm", node_type="monitor"), PricingModel.ON_DEMAND
-        )
+def test_monitor_and_db_nodes_share_the_vnet(make_provisioner, azure_service):
+    """One VNet is what lets a monitor reach a DB node on any of the subnets the layout uses."""
+    provisioner = make_provisioner(2)
+    db_node = provisioner.get_or_create_instance(definition("conn-db-vm"), PricingModel.ON_DEMAND)
+    monitor = provisioner.get_or_create_instance(
+        definition("conn-monitor-vm", node_type="monitor"), PricingModel.ON_DEMAND
+    )
 
-        def vnet_of(name):
-            nic = provisioner._nic_provider.get_all(name)[0]  # noqa: SLF001
-            return nic.ip_configurations[0].subnet.id.split("/subnets/")[0]
+    def vnet_of(name):
+        nic = provisioner._nic_provider.get_all(name)[0]  # noqa: SLF001
+        return nic.ip_configurations[0].subnet.id.split("/subnets/")[0]
 
-        assert vnet_of(db_node.name) == vnet_of(monitor.name)
+    assert vnet_of(db_node.name) == vnet_of(monitor.name)
 
 
 def test_minicloud_vnet_subnets_are_carved_from_the_emulated_range(make_provisioner, azure_service, monkeypatch):
+    """With a minicloud endpoint, the VNet subnet is carved from the emulated 10.180.0.0/24 range."""
     monkeypatch.setattr(azure_service, "minicloud_endpoint", "https://localhost:5443")
     provisioner = make_provisioner(1)
     provisioner.get_or_create_instances([definition("node-1")])

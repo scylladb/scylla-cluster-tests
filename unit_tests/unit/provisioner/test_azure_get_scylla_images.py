@@ -30,76 +30,12 @@ from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
 @pytest.fixture
 def azure_service(test_data_dir):
+    """FakeAzureService serving the recorded Azure image data from test_data_dir."""
     return FakeAzureService(test_data_dir)
 
 
-def test_can_get_scylla_images_based_on_branch(azure_service):
-    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
-    assert images[0].name == "2026.0108.151759"
-    assert len(images) == 1
-
-
-@pytest.mark.parametrize("sha, expected_names", [("abc1234", ["2026.0108.151759"]), ("0000000", [])])
-def test_can_get_scylla_images_based_on_branch_scylla_sha(azure_service, sha, expected_names):
-    images = get_scylla_images(f"master:{sha}", "eastus", azure_service=azure_service)
-    assert [image.name for image in images] == expected_names
-
-
-def test_can_get_scylla_images_based_on_branch_arm64(azure_service):
-    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service, arch=VmArch.ARM)
-    assert images[0].name == "2026.0108.145545"
-    assert len(images) == 1
-
-
-def test_private_gallery_falls_back_to_old_naming(azure_service):
-    images = get_scylla_images_private_galleries("2024.2:latest", "eastus", azure_service=azure_service)
-    assert len(images) == 1
-    assert images[0].name == "2024.1201.120000"
-
-
-def test_private_gallery_fallback_returns_empty_for_nonexistent_branch(azure_service):
-    images = get_scylla_images_private_galleries("nonexistent:latest", "eastus", azure_service=azure_service)
-    assert images == []
-
-
-def test_can_get_scylla_images_based_on_scylla_version(azure_service):
-    images = get_scylla_images("4.6.4", "eastus", azure_service=azure_service)
-    assert images[0].name == "ScyllaDB-4.6.4-0.20220718.b60f14601-1-build-28"
-    assert len(images) == 2
-
-
-def test_can_get_scylla_images_based_on_revision_id(azure_service):
-    images = get_scylla_images("11f008e8f<ignored>", "eastus", azure_service=azure_service)
-    assert len(images) == 1
-    assert images[0].name == "ScyllaDB-4.6.4-0.20220516.11f008e8f-1-build-27"
-
-
-def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
-    with caplog.at_level(logging.WARNING):
-        get_scylla_images("unparsable:latest", "eastus", azure_service=azure_service)
-    assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
-
-
-@pytest.mark.parametrize(
-    "instance_type,expected_arch",
-    [
-        ("Standard_D8ps_v5", VmArch.ARM),
-        ("Standard_D4ps_v5", VmArch.ARM),
-        ("Standard_E8ps_v5", VmArch.ARM),
-        ("Standard_D2pds_v5", VmArch.ARM),
-        ("Standard_L8s_v3", VmArch.X86),
-        ("Standard_D2_v4", VmArch.X86),
-        ("Standard_F4s_v2", VmArch.X86),
-        ("", VmArch.X86),
-        (None, VmArch.X86),
-    ],
-)
-def test_get_arch_from_azure_instance_type(instance_type, expected_arch):
-    assert get_arch_from_azure_instance_type(instance_type) == expected_arch
-
-
 def generate_images_json_file(test_data_dir):
-    """Generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    """Regenerate the SCYLLA-IMAGES azure_images_list.json test data from the live Azure image list."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.images.list_by_resource_group(
         resource_group_name=resource_group,
@@ -110,7 +46,7 @@ def generate_images_json_file(test_data_dir):
 
 
 def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev", image_name="master-x64"):
-    """Generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    """Regenerate the SCYLLA-IMAGES gallery image versions test data from the live Azure gallery."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
         resource_group_name=resource_group,
@@ -126,6 +62,87 @@ def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev"
         images_file.write(json.dumps(serialized_images, indent=2))
 
 
+def test_can_get_scylla_images_based_on_branch(azure_service):
+    """get_scylla_images on a branch:latest spec returns the single latest image of that branch."""
+    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
+    assert images[0].name == "2026.0108.151759"
+    assert len(images) == 1
+
+
+@pytest.mark.parametrize(
+    "sha, expected_names",
+    [
+        pytest.param("abc1234", ["2026.0108.151759"], id="known-sha"),
+        pytest.param("0000000", [], id="unknown-sha"),
+    ],
+)
+def test_can_get_scylla_images_based_on_branch_scylla_sha(azure_service, sha, expected_names):
+    """get_scylla_images on branch:sha returns only the images built from that sha."""
+    images = get_scylla_images(f"master:{sha}", "eastus", azure_service=azure_service)
+    assert [image.name for image in images] == expected_names
+
+
+def test_can_get_scylla_images_based_on_branch_arm64(azure_service):
+    """get_scylla_images with arch=ARM returns the arm64 image of the branch."""
+    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service, arch=VmArch.ARM)
+    assert images[0].name == "2026.0108.145545"
+    assert len(images) == 1
+
+
+def test_private_gallery_falls_back_to_old_naming(azure_service):
+    """get_scylla_images_private_galleries finds an image under the old naming scheme."""
+    images = get_scylla_images_private_galleries("2024.2:latest", "eastus", azure_service=azure_service)
+    assert len(images) == 1
+    assert images[0].name == "2024.1201.120000"
+
+
+def test_private_gallery_fallback_returns_empty_for_nonexistent_branch(azure_service):
+    """get_scylla_images_private_galleries returns an empty list for a branch with no images."""
+    images = get_scylla_images_private_galleries("nonexistent:latest", "eastus", azure_service=azure_service)
+    assert images == []
+
+
+def test_can_get_scylla_images_based_on_scylla_version(azure_service):
+    """get_scylla_images on a plain version returns every image of that version."""
+    images = get_scylla_images("4.6.4", "eastus", azure_service=azure_service)
+    assert images[0].name == "ScyllaDB-4.6.4-0.20220718.b60f14601-1-build-28"
+    assert len(images) == 2
+
+
+def test_can_get_scylla_images_based_on_revision_id(azure_service):
+    """get_scylla_images on a revision id prefix returns the image built from that revision."""
+    images = get_scylla_images("11f008e8f<ignored>", "eastus", azure_service=azure_service)
+    assert len(images) == 1
+    assert images[0].name == "ScyllaDB-4.6.4-0.20220516.11f008e8f-1-build-27"
+
+
+def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
+    """get_scylla_images logs a warning listing the image names whose scylla version can't be parsed."""
+    with caplog.at_level(logging.WARNING):
+        get_scylla_images("unparsable:latest", "eastus", azure_service=azure_service)
+    assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "instance_type,expected_arch",
+    [
+        pytest.param("Standard_D8ps_v5", VmArch.ARM, id="arm-d8ps-v5"),
+        pytest.param("Standard_D4ps_v5", VmArch.ARM, id="arm-d4ps-v5"),
+        pytest.param("Standard_E8ps_v5", VmArch.ARM, id="arm-e8ps-v5"),
+        pytest.param("Standard_D2pds_v5", VmArch.ARM, id="arm-d2pds-v5"),
+        pytest.param("Standard_L8s_v3", VmArch.X86, id="x86-l8s-v3"),
+        pytest.param("Standard_D2_v4", VmArch.X86, id="x86-d2-v4"),
+        pytest.param("Standard_F4s_v2", VmArch.X86, id="x86-f4s-v2"),
+        pytest.param("", VmArch.X86, id="empty-string"),
+        pytest.param(None, VmArch.X86, id="none"),
+    ],
+)
+def test_get_arch_from_azure_instance_type(instance_type, expected_arch):
+    """get_arch_from_azure_instance_type maps the sizes with the p (ARM) suffix to ARM and everything else to X86."""
+    assert get_arch_from_azure_instance_type(instance_type) == expected_arch
+
+
 def test_get_image_tags_from_marketplace_urn():
+    """get_image_tags parses scylla_version and user_data_format_version from a marketplace URN."""
     tags = get_image_tags("scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.2.5")
     assert tags == {"scylla_version": "2026.2.5", "user_data_format_version": "3"}

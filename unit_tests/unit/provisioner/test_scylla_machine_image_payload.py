@@ -5,6 +5,7 @@ from sdcm.test_config import TestConfig
 
 
 def test_can_generate_valid_scylla_machine_image_payload():
+    """ScyllaUserDataObject emits the machine image JSON with attached data disks and the test-id cluster name."""
     test_config = TestConfig()
     test_config.set_test_id("12345678-87654321")
     test_id_short = test_config.test_id()[:8]
@@ -26,6 +27,7 @@ def test_can_generate_valid_scylla_machine_image_payload():
 
 
 def test_can_generate_valid_scylla_machine_image_payload_with_minimum_params():
+    """Without data_volume_disk_num, ScyllaUserDataObject falls back to instance store and the user-prefix cluster name."""
     test_config = TestConfig()
     test_config.set_test_id("12345678-87654321")
     test_id_short = test_config.test_id()[:8]
