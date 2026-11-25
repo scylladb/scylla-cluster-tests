@@ -27,7 +27,7 @@ from sdcm.utils.cloud_catalog.catalog_generator import (
 )
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
-_FAKE_OCI_PRICING = {
+FAKE_OCI_PRICING = {
     "E4": {"ocpu_hr": 0.025, "mem_gb_hr": 0.0015},
     "E5": {"ocpu_hr": 0.026, "mem_gb_hr": 0.0016},
     "DenseIO.E4": {"ocpu_hr": 0.025, "mem_gb_hr": 0.0015, "nvme_tb_hr": 0.026},
@@ -36,15 +36,17 @@ _FAKE_OCI_PRICING = {
 
 
 @pytest.fixture(autouse=True)
-def _mock_oci_pricing(monkeypatch):
+def mock_oci_pricing(monkeypatch):
+    """Replace the OCI pricing fetch with FAKE_OCI_PRICING so no test calls OCI."""
     monkeypatch.setattr(
         "sdcm.utils.cloud_catalog.catalog_generator._oci_get_pricing",
-        lambda: _FAKE_OCI_PRICING,
+        lambda: FAKE_OCI_PRICING,
     )
 
 
 @pytest.fixture()
 def sample_instances() -> list[InstanceTypeInfo]:
+    """Two i8g instances: one with a price per hour and one with price None."""
     return [
         InstanceTypeInfo(
             instance_type="i8g.2xlarge",
@@ -71,7 +73,35 @@ def sample_instances() -> list[InstanceTypeInfo]:
     ]
 
 
+def sku(description: str, unit: str, nanos: int) -> dict:
+    """Build a Cloud Billing SKU dict with one tiered unit price, Preemptible for "Spot " descriptions."""
+    return {
+        "description": description,
+        "category": {"usageType": "Preemptible" if description.startswith("Spot ") else "OnDemand"},
+        "serviceRegions": ["us-central1"],
+        "pricingInfo": [
+            {"pricingExpression": {"usageUnit": unit, "tieredRates": [{"unitPrice": {"units": "0", "nanos": nanos}}]}}
+        ],
+    }
+
+
+def pricing_row(machine_type: str, price: str) -> str:
+    """Build one AF_initDataCallback pricing row for machine_type at price per hour."""
+    return f'[[[1,1,null,[null,[null,"\\u003cp\\u003e{machine_type}\\u003c/p\\u003e"]]],[1,1,null,[null,[null,"{price} / 1 hour"]],1]]]'
+
+
+# Recorded from the Cloud Billing Catalog API (2026-10-19).
+SKUS = [
+    sku("Spot Preemptible C4 Instance Core running in Americas", "h", 20740000),
+    sku("Spot Preemptible C4 Instance Ram running in Americas", "GiBy.h", 2357000),
+    sku("Spot Preemptible C4 Instance Local SSD running in Americas", "GiBy.mo", 95800000),
+    sku("Spot Preemptible C4D Instance Ram running in Americas", "GBy.h", 1480000),
+    sku("C4 Instance Core running in Americas", "h", 34650000),
+]
+
+
 def test_write_catalog_file_round_trip(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """write_catalog_file output loads back as an InstanceCatalog with every instance."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -85,6 +115,7 @@ def test_write_catalog_file_round_trip(tmp_path: Path, sample_instances: list[In
 
 
 def test_write_catalog_file_instance_fields_preserved(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """write_catalog_file keeps every InstanceTypeInfo field through a load."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -103,6 +134,7 @@ def test_write_catalog_file_instance_fields_preserved(tmp_path: Path, sample_ins
 
 
 def test_write_catalog_file_none_price_preserved(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """A None price_per_hour is written and loaded back as None."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -116,6 +148,7 @@ def test_write_catalog_file_none_price_preserved(tmp_path: Path, sample_instance
 
 
 def test_write_catalog_file_creates_parent_dirs(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """write_catalog_file creates the missing parent directories of output_path."""
     output = tmp_path / "nested" / "deep" / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -126,6 +159,7 @@ def test_write_catalog_file_creates_parent_dirs(tmp_path: Path, sample_instances
 
 
 def test_write_catalog_file_empty_instances(tmp_path: Path):
+    """write_catalog_file with no instances writes a catalog that loads empty."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=[],
@@ -137,6 +171,7 @@ def test_write_catalog_file_empty_instances(tmp_path: Path):
 
 
 def test_generate_oci_catalog_fallback_to_known_shapes():
+    """generate_oci_catalog falls back to known shapes and returns cloud-tagged entries with vcpus and local disk."""
     result = generate_oci_catalog(["BM.DenseIO", "VM.DenseIO"])
     assert len(result) > 0
     assert all(r.cloud == "oci" for r in result)
@@ -145,6 +180,7 @@ def test_generate_oci_catalog_fallback_to_known_shapes():
 
 
 def test_generate_oci_catalog_family_filter():
+    """generate_oci_catalog returns only entries of the requested family."""
     result = generate_oci_catalog(["BM.DenseIO"])
     assert all(r.family == "BM.DenseIO" for r in result)
 
@@ -152,51 +188,34 @@ def test_generate_oci_catalog_family_filter():
 @pytest.mark.parametrize(
     "instance_type,expected_vcpus",
     [
-        ("VM.Standard.A1.Flex:16", 16),
-        ("VM.Standard.A4.Flex:8", 16),
-        ("VM.Standard3.Flex:8", 16),
-        ("VM.DenseIO.E5.Flex:8", 16),
+        pytest.param("VM.Standard.A1.Flex:16", 16, id="a1-flex-16"),
+        pytest.param("VM.Standard.A4.Flex:8", 16, id="a4-flex-8"),
+        pytest.param("VM.Standard3.Flex:8", 16, id="standard3-flex-8"),
+        pytest.param("VM.DenseIO.E5.Flex:8", 16, id="denseio-e5-flex-8"),
     ],
 )
 def test_generate_oci_catalog_vcpus_per_ocpu(instance_type, expected_vcpus):
+    """generate_oci_catalog reports vcpus as the per-OCPU multiple for each flex shape."""
     result = {r.instance_type: r for r in generate_oci_catalog(["VM.Standard", "VM.DenseIO"])}
     assert result[instance_type].vcpus == expected_vcpus
 
 
 def test_generate_oci_catalog_unknown_family_returns_empty():
+    """generate_oci_catalog returns an empty list for a family it does not know."""
     result = generate_oci_catalog(["NonExistentFamily99"])
     assert result == []
 
 
 def test_gce_spot_price_is_vcpu_plus_ram_per_region():
+    """_gce_price_for sums vCPU and RAM rates per region and skips regions without a RAM rate."""
     rates = {"n2": {"us-central1": {"core": 0.01, "ram": 0.002}, "us-east1": {"core": 0.01}}}
     assert _gce_price_for(rates, "n2-highmem", 8, 64.0) == {"us-central1": pytest.approx(8 * 0.01 + 64 * 0.002)}
 
 
-def _sku(description: str, unit: str, nanos: int) -> dict:
-    return {
-        "description": description,
-        "category": {"usageType": "Preemptible" if description.startswith("Spot ") else "OnDemand"},
-        "serviceRegions": ["us-central1"],
-        "pricingInfo": [
-            {"pricingExpression": {"usageUnit": unit, "tieredRates": [{"unitPrice": {"units": "0", "nanos": nanos}}]}}
-        ],
-    }
-
-
-# Recorded from the Cloud Billing Catalog API (2026-10-19).
-_SKUS = [
-    _sku("Spot Preemptible C4 Instance Core running in Americas", "h", 20740000),
-    _sku("Spot Preemptible C4 Instance Ram running in Americas", "GiBy.h", 2357000),
-    _sku("Spot Preemptible C4 Instance Local SSD running in Americas", "GiBy.mo", 95800000),
-    _sku("Spot Preemptible C4D Instance Ram running in Americas", "GBy.h", 1480000),
-    _sku("C4 Instance Core running in Americas", "h", 34650000),
-]
-
-
 def test_gce_resource_rates_parse_local_ssd_and_per_gb_ram(monkeypatch):
+    """_fetch_gce_resource_rates parses core, RAM and local SSD rates from the SKUs, with per-GB RAM for c4d."""
     session = SimpleNamespace(
-        get=lambda *_, **__: SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"skus": _SKUS})
+        get=lambda *_, **__: SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"skus": SKUS})
     )
     monkeypatch.setattr(catalog_generator, "KeyStore", lambda: SimpleNamespace(get_gcp_credentials=dict))
     monkeypatch.setattr(catalog_generator.sa_module.Credentials, "from_service_account_info", lambda *_, **__: None)
@@ -214,6 +233,8 @@ def test_gce_resource_rates_parse_local_ssd_and_per_gb_ram(monkeypatch):
 
 
 def test_gce_catalog_lssd_machine_types(monkeypatch):
+    """generate_gce_catalog lists LSSD machine types with their local disk count and size, priced with the bundled SSD."""
+
     def machine_type(name, vcpus, memory_gb, partitions=0):
         return SimpleNamespace(
             name=name,
@@ -327,14 +348,10 @@ def test_gce_catalog_z4d_machine_types(monkeypatch):
     assert (metal.local_disk_count, metal.local_disk_gb) == (12, 84000.0)
 
 
-def _pricing_row(machine_type: str, price: str) -> str:
-    return f'[[[1,1,null,[null,[null,"\\u003cp\\u003e{machine_type}\\u003c/p\\u003e"]]],[1,1,null,[null,[null,"{price} / 1 hour"]],1]]]'
-
-
 def test_parse_storage_optimized_prices_keeps_metal_apart():
     """z4d-highmem-384-standardlssd is a prefix of its -metal type, which must not take its price."""
     rows = "".join(
-        _pricing_row(machine_type, price)
+        pricing_row(machine_type, price)
         for machine_type, price in [
             ("z4d-highmem-16-standardlssd", "$2.1"),
             # The pricing page's order: the -metal row after the prefix one, so it would take its price.

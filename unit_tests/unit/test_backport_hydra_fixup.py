@@ -25,29 +25,20 @@ import pytest
 
 SCRIPT_PATH = Path(__file__).parents[2] / ".github" / "scripts" / "backport_hydra_fixup.py"
 
-_spec = importlib.util.spec_from_file_location("backport_hydra_fixup", SCRIPT_PATH)
-fixup = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(fixup)
+fixup_spec = importlib.util.spec_from_file_location("backport_hydra_fixup", SCRIPT_PATH)
+fixup = importlib.util.module_from_spec(fixup_spec)
+fixup_spec.loader.exec_module(fixup)
 
 
 def lock(**packages):
+    """Build a uv.lock text with one [[package]] entry per keyword, name=version."""
     return "version = 1\n" + "".join(
         f'\n[[package]]\nname = "{name}"\nversion = "{version}"\n' for name, version in packages.items()
     )
 
 
-def test_lock_bumps_lists_changed_and_added_packages():
-    old = lock(boto3="1.43.0", awscli="1.45.0", attrs="25.1.0")
-    new = lock(boto3="1.43.28", awscli="1.45.28", attrs="25.1.0", s3transfer="0.18.0")
-
-    assert fixup.lock_bumps(old, new) == ["awscli==1.45.28", "boto3==1.43.28", "s3transfer==0.18.0"]
-
-
-def test_lock_bumps_ignores_removed_packages():
-    assert fixup.lock_bumps(lock(a="1", b="2"), lock(a="1")) == []
-
-
 def pr(number=1, head="backport/100/to-2026.1", files=("uv.lock",), labels=(), comments=()):
+    """Build a PR dict in the shape of ``gh pr list --json``."""
     return {
         "number": number,
         "headRefName": head,
@@ -55,6 +46,34 @@ def pr(number=1, head="backport/100/to-2026.1", files=("uv.lock",), labels=(), c
         "labels": [{"name": n} for n in labels],
         "comments": [{"body": b} for b in comments],
     }
+
+
+def git(repo, *args):
+    """Run git in repo and return its stdout."""
+    return subprocess.run(["git", *args], cwd=repo, check=True, text=True, capture_output=True).stdout
+
+
+def commit(repo, message, **files):
+    """Write the given files into repo and commit them with message."""
+    for name, content in files.items():
+        path = repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", message)
+
+
+def test_lock_bumps_lists_changed_and_added_packages():
+    """lock_bumps lists the packages whose version changed or that were added."""
+    old = lock(boto3="1.43.0", awscli="1.45.0", attrs="25.1.0")
+    new = lock(boto3="1.43.28", awscli="1.45.28", attrs="25.1.0", s3transfer="0.18.0")
+
+    assert fixup.lock_bumps(old, new) == ["awscli==1.45.28", "boto3==1.43.28", "s3transfer==0.18.0"]
+
+
+def test_lock_bumps_ignores_removed_packages():
+    """lock_bumps skips packages that only exist in the old lock."""
+    assert fixup.lock_bumps(lock(a="1", b="2"), lock(a="1")) == []
 
 
 @pytest.mark.parametrize(
@@ -68,10 +87,12 @@ def pr(number=1, head="backport/100/to-2026.1", files=("uv.lock",), labels=(), c
     ids=["not-a-backport", "no-image-input", "already-labeled", "already-handled"],
 )
 def test_candidates_skips(skipped):
+    """Candidates drops PRs that are not backports, have no image input, or were already handled."""
     assert fixup.candidates([skipped]) == []
 
 
 def test_candidates_picks_unhandled_backport_and_only_pr_reruns_handled_ones():
+    """Candidates picks unhandled backports; --pr re-runs only the given handled one."""
     fresh = pr(number=1, files=("pyproject.toml", "uv.lock"))
     handled = pr(number=2, labels=("New Hydra Version",))
 
@@ -80,6 +101,7 @@ def test_candidates_picks_unhandled_backport_and_only_pr_reruns_handled_ones():
 
 
 def test_scan_keeps_going_after_a_failed_pr_and_fails_at_the_end(monkeypatch):
+    """Scan processes the remaining PRs after one fails, then exits non-zero listing it."""
     prs = [pr(number=1), pr(number=2)]
     seen = []
 
@@ -100,6 +122,7 @@ def test_scan_keeps_going_after_a_failed_pr_and_fails_at_the_end(monkeypatch):
 
 
 def test_edit_todo_drops_chosen_commits_and_relocks_after_each_other(tmp_path, monkeypatch):
+    """edit_todo drops the chosen commits and adds a relock after each other pick."""
     monkeypatch.setenv(fixup.DROP_ENV, "2222222abcdef")
     todo = tmp_path / "git-rebase-todo"
     todo.write_text(
@@ -114,19 +137,6 @@ def test_edit_todo_drops_chosen_commits_and_relocks_after_each_other(tmp_path, m
     assert lines[0] == "pick 1111111 fix(deps): update awscli"
     assert lines[1].endswith("/x/fixup.py relock")
     assert len(lines) == 2
-
-
-def git(repo, *args):
-    return subprocess.run(["git", *args], cwd=repo, check=True, text=True, capture_output=True).stdout
-
-
-def commit(repo, message, **files):
-    for name, content in files.items():
-        path = repo / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", message)
 
 
 def test_fix_branch_drops_conflicted_hydra_commit(tmp_path, monkeypatch):

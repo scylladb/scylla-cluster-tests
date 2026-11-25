@@ -59,21 +59,29 @@ def mock_gke_cleaner():
 @pytest.mark.parametrize(
     "cluster_age_hours,metadata_items,dry_run,should_destroy",
     [
-        # Recent cluster should be kept
-        (0, [{"key": "TestId", "value": "test-123"}, {"key": "CreatedBy", "value": "SCT"}], False, False),
-        # Old cluster should be destroyed
-        (20, [{"key": "TestId", "value": "test-456"}, {"key": "CreatedBy", "value": "SCT"}], False, True),
-        # Old cluster with dry run should not be destroyed
-        (20, [{"key": "CreatedBy", "value": "SCT"}], True, False),
-        # Old cluster with keep:alive should not be destroyed
-        (
+        pytest.param(
+            0,
+            [{"key": "TestId", "value": "test-123"}, {"key": "CreatedBy", "value": "SCT"}],
+            False,
+            False,
+            id="recent_cluster",
+        ),
+        pytest.param(
+            20,
+            [{"key": "TestId", "value": "test-456"}, {"key": "CreatedBy", "value": "SCT"}],
+            False,
+            True,
+            id="old_cluster",
+        ),
+        pytest.param(20, [{"key": "CreatedBy", "value": "SCT"}], True, False, id="dry_run"),
+        pytest.param(
             20,
             [{"key": "keep", "value": "alive"}, {"key": "CreatedBy", "value": "SCT"}],
             False,
             False,
+            id="keep_alive",
         ),
     ],
-    ids=["recent_cluster", "old_cluster", "dry_run", "keep_alive"],
 )
 def test_clean_eks_clusters(
     mock_eks_client, mock_eks_cluster, cluster_age_hours, metadata_items, dry_run, should_destroy
@@ -91,7 +99,7 @@ def test_clean_eks_clusters(
 
     # Verify destroy was called or not based on expected behavior
     if should_destroy:
-        mock_eks_cluster.destroy.assert_called_once()
+        mock_eks_cluster.destroy.assert_called_once_with()
     else:
         mock_eks_cluster.destroy.assert_not_called()
 
@@ -99,16 +107,11 @@ def test_clean_eks_clusters(
 @pytest.mark.parametrize(
     "cluster_age_hours,resource_labels,dry_run,should_destroy",
     [
-        # Recent cluster should be kept
-        (0, {"testid": "test-123", "createdby": "SCT"}, False, False),
-        # Old cluster should be destroyed
-        (20, {"testid": "test-456", "createdby": "SCT"}, False, True),
-        # Old cluster with dry run should not be destroyed
-        (20, {"createdby": "SCT"}, True, False),
-        # Old cluster with keep:alive should not be destroyed
-        (20, {"keep": "alive", "createdby": "SCT"}, False, False),
+        pytest.param(0, {"testid": "test-123", "createdby": "SCT"}, False, False, id="recent_cluster"),
+        pytest.param(20, {"testid": "test-456", "createdby": "SCT"}, False, True, id="old_cluster"),
+        pytest.param(20, {"createdby": "SCT"}, True, False, id="dry_run"),
+        pytest.param(20, {"keep": "alive", "createdby": "SCT"}, False, False, id="keep_alive"),
     ],
-    ids=["recent_cluster", "old_cluster", "dry_run", "keep_alive"],
 )
 def test_clean_gke_clusters(mock_gke_cleaner, cluster_age_hours, resource_labels, dry_run, should_destroy):
     """Test GKE cluster cleanup with various scenarios."""
@@ -129,6 +132,6 @@ def test_clean_gke_clusters(mock_gke_cleaner, cluster_age_hours, resource_labels
 
     # Verify destroy was called or not based on expected behavior
     if should_destroy:
-        mock_cluster.destroy.assert_called_once()
+        mock_cluster.destroy.assert_called_once_with()
     else:
         mock_cluster.destroy.assert_not_called()

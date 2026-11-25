@@ -41,6 +41,7 @@ def embedded_python() -> str:
 
 
 def imds_interface(mac: str, private_ip: str, subnet: str, prefix: str = "24") -> dict:
+    """IMDS interface entry with one IPv4 address on a subnet and no IPv6 address."""
     return {
         "ipv4": {
             "ipAddress": [{"privateIpAddress": private_ip, "publicIpAddress": ""}],
@@ -51,8 +52,18 @@ def imds_interface(mac: str, private_ip: str, subnet: str, prefix: str = "24") -
     }
 
 
-@pytest.fixture(name="run_script")
-def fixture_run_script(tmp_path):
+def imds_dual_stack_interface(mac: str, private_ip: str, subnet: str, ipv6_address: str, ipv6_subnet: str) -> dict:
+    """IMDS interface entry with one IPv4 and one IPv6 address, each on its subnet."""
+    interface = imds_interface(mac, private_ip, subnet)
+    interface["ipv6"] = {
+        "ipAddress": [{"privateIpAddress": ipv6_address}],
+        "subnet": [{"address": ipv6_subnet, "prefix": "64"}],
+    }
+    return interface
+
+
+@pytest.fixture
+def run_script(tmp_path):
     """Run the embedded program against a stub 'ip' binary, returning the commands it issued."""
     log = tmp_path / "ip.log"
     stub_dir = tmp_path / "bin"
@@ -76,7 +87,7 @@ def fixture_run_script(tmp_path):
     )
     stub.chmod(0o755)
 
-    def _run(interfaces: list[dict], expected_nics: int):
+    def run(interfaces: list[dict], expected_nics: int):
         env = dict(os.environ, PATH=f"{stub_dir}:{os.environ['PATH']}")
         result = subprocess.run(
             [sys.executable, "-c", embedded_python(), str(expected_nics)],
@@ -89,7 +100,7 @@ def fixture_run_script(tmp_path):
         commands = log.read_text().splitlines() if log.exists() else []
         return result, [command for command in commands if command != "-o link"]
 
-    return _run
+    return run
 
 
 def test_primary_nic_is_left_untouched(run_script):
@@ -101,6 +112,7 @@ def test_primary_nic_is_left_untouched(run_script):
 
 
 def test_secondary_nic_gets_address_rule_and_routes(run_script):
+    """A secondary NIC gets its address, policy rule, subnet route and default gateway in table 101."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -119,6 +131,7 @@ def test_secondary_nic_gets_address_rule_and_routes(run_script):
 
 
 def test_each_secondary_nic_gets_its_own_routing_table(run_script):
+    """A NIC with no OS device fails the script, while the NICs before it still get their rule."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -159,16 +172,8 @@ def test_rerunning_does_not_stack_duplicate_rules(run_script):
     assert "rule del from 10.0.1.4 lookup 101" in commands
 
 
-def imds_dual_stack_interface(mac: str, private_ip: str, subnet: str, ipv6_address: str, ipv6_subnet: str) -> dict:
-    interface = imds_interface(mac, private_ip, subnet)
-    interface["ipv6"] = {
-        "ipAddress": [{"privateIpAddress": ipv6_address}],
-        "subnet": [{"address": ipv6_subnet, "prefix": "64"}],
-    }
-    return interface
-
-
 def test_dual_stack_secondary_nic_gets_ipv6_address_rule_and_routes(run_script):
+    """A dual-stack secondary NIC gets its IPv6 address, policy rule, subnet route and derived gateway."""
     result, commands = run_script(
         [
             imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),
@@ -186,6 +191,7 @@ def test_dual_stack_secondary_nic_gets_ipv6_address_rule_and_routes(run_script):
 
 
 def test_ipv4_only_nic_issues_no_ipv6_command(run_script):
+    """An IPv4-only secondary NIC issues no IPv6 (-6) command."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -199,6 +205,7 @@ def test_ipv4_only_nic_issues_no_ipv6_command(run_script):
 
 
 def test_ipv4_routing_is_unaffected_by_the_ipv6_configuration(run_script):
+    """IPv4 rule and gateway commands are unchanged when the NICs also carry IPv6."""
     result, commands = run_script(
         [
             imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),

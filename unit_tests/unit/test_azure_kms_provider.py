@@ -193,6 +193,7 @@ def test_access_policies_include_tenant_id(mock_logger, kms_provider, azure_serv
 
 
 def test_get_vault_uri_asks_arm_on_minicloud_only(kms_provider, azure_service_mock):
+    """get_vault_uri queries the ARM vault only on minicloud; on Azure it builds the URI without an API call."""
     azure_service_mock.minicloud_endpoint = "https://localhost:5443"
     azure_service_mock.keyvault.vaults.get.return_value.properties.vault_uri = (
         "https://localhost:5443/keyvault/test-vault-eastus/"
@@ -205,7 +206,9 @@ def test_get_vault_uri_asks_arm_on_minicloud_only(kms_provider, azure_service_mo
     )
     azure_service_mock.minicloud_endpoint = None
     assert kms_provider.get_vault_uri("eastus", azure_service_mock) == "https://test-vault-eastus.vault.azure.net/"
-    azure_service_mock.keyvault.vaults.get.assert_called_once()
+    azure_service_mock.keyvault.vaults.get.assert_called_once_with(
+        resource_group_name="test-rg", vault_name="test-vault-eastus"
+    )
 
 
 def test_vm_creation_fails_when_kms_returns_none(vm_provider, mock_ssh_key):

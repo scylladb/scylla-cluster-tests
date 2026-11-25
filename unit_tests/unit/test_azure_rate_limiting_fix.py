@@ -45,9 +45,9 @@ def test_static_ips_azure_failure_continues_with_other_clouds():
 
         # Verify that Azure is empty but others were attempted
         assert static_ips["azure"] == []
-        mock_aws_list.assert_called_once()
-        mock_gce_list.assert_called_once()
-        mock_azure_service.assert_called_once()
+        mock_aws_list.assert_called_once_with(group_as_region=True, verbose=True)
+        mock_gce_list.assert_called_once_with(verbose=True)
+        mock_azure_service.assert_called_once_with()
 
 
 def test_cloud_instances_azure_failure_continues_with_other_clouds():
@@ -75,15 +75,15 @@ def test_cloud_instances_azure_failure_continues_with_other_clouds():
 
         # Verify that Azure is empty but others were attempted
         assert cloud_instances["azure"] == []
-        mock_aws_list.assert_called_once()
-        mock_gce_list.assert_called_once()
-        mock_azure_service.assert_called_once()
+        mock_aws_list.assert_called_once_with(verbose=True)
+        mock_gce_list.assert_called_once_with(verbose=True)
+        mock_azure_service.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
     "side_effect, expected_call_count, expected_sleep_calls",
     [
-        (
+        pytest.param(
             [
                 HttpResponseError("RateLimiting - Client application has been throttled"),
                 HttpResponseError("RateLimiting - Client application has been throttled"),
@@ -91,9 +91,15 @@ def test_cloud_instances_azure_failure_continues_with_other_clouds():
             ],
             3,
             2,
+            id="throttled-twice-then-succeeds",
         ),
-        (HttpResponseError("RateLimiting - Client application has been throttled"), 6, 5),
-        (HttpResponseError("Some other error"), 1, 0),
+        pytest.param(
+            HttpResponseError("RateLimiting - Client application has been throttled"),
+            6,
+            5,
+            id="always-throttled",
+        ),
+        pytest.param(HttpResponseError("Some other error"), 1, 0, id="non-rate-limit-error"),
     ],
 )
 def test_azure_resource_graph_query_rate_limiting_retry(side_effect, expected_call_count, expected_sleep_calls):
