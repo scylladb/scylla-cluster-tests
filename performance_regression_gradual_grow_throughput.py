@@ -7,11 +7,21 @@ from enum import Enum
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.argus_results import submit_results_to_argus
+from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import analyze_hdr_percentiles, calculate_latency
+from sdcm.utils.perf_step_metrics import (
+    PROMETHEUS_REQUEST_TIMEOUT_SEC,
+    StepResourceUsage,
+    collect_step_metrics,
+    roles_by_address,
+    step_resource_usage_table,
+    step_window,
+)
 
 
 class CSPopulateDistribution(Enum):
@@ -449,6 +459,47 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
 
+    def report_step_resource_usage(self, workload_type: str, step: str, start: float, end: float) -> None:
+        """Send the step's DB and loader CPU and reactor utilization, from the monitor's Prometheus, to Argus.
+
+        The table is sent again with the rows of all the steps so far: Argus shows it below the
+        steps' tables, and a test that fails in a later step still has the rows of the earlier ones.
+        Never fails the test: a step without these results is still a valid step.
+        """
+        if not (self.monitors and self.monitors.nodes):
+            self.log.debug("Step %s: no monitor, no resource usage to report", step)
+            return
+        try:
+            window = step_window(start=start, end=end, warmup_sec=self.params.get("perf_steps_metrics_warmup_sec") or 0)
+            # A silent monitor must not hold the next step
+            prometheus = PrometheusDBStats(
+                host=self.monitors.nodes[0].external_address, request_timeout=PROMETHEUS_REQUEST_TIMEOUT_SEC
+            )
+            roles = roles_by_address(db_nodes=self.db_cluster.nodes, loader_nodes=self.loaders.nodes)
+            metrics, failed_queries = collect_step_metrics(prometheus=prometheus, window=window, roles=roles)
+            for column, exc in failed_queries.items():
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method="report_step_resource_usage",
+                    message=f"Step {step}: the '{column}' query failed, the step's row has no '{column}' columns",
+                    exception=exc,
+                    severity=Severity.WARNING,
+                ).publish_or_dump(default_logger=self.log)
+            self.log.info("Step %s resource usage (window %s, trimmed: %s): %s", step, window, window.trimmed, metrics)
+            self._steps_resource_usage.append(StepResourceUsage(step=step, window=window, metrics=metrics))
+            submit_results_to_argus(
+                argus_client=self.test_config.argus_client(),
+                result_table=step_resource_usage_table(workload=workload_type, steps=self._steps_resource_usage),
+            )
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method="report_step_resource_usage",
+                message=f"Failed to collect/report the resource usage of step {step}",
+                exception=exc,
+                severity=Severity.WARNING,
+            ).publish_or_dump(default_logger=self.log)
+
     def run_step(self, stress_cmds, step_params, step_duration):
         """
         Run a single stress step with parameters from step_params dict.
@@ -463,26 +514,32 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         """
         results = []
         stress_queue = []
-        for stress_cmd in stress_cmds:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd
+        # The load's own time, also of a load that failed, for report_step_resource_usage: the decorator
+        # around this method adds minutes of HDR parsing and Grafana screenshots after it
+        self._step_load_start, self._step_load_end = time.time(), None
+        try:
+            for stress_cmd in stress_cmds:
+                params = {"round_robin": True, "stats_aggregate_cmds": False}
+                stress_cmd_to_run = stress_cmd
 
-            # Replace placeholders from step_params dict
-            for param_name, param_value in sorted(step_params.items(), key=lambda item: len(item[0]), reverse=True):
-                stress_cmd_to_run = stress_cmd_to_run.replace(f"${param_name}", str(param_value))
-            if step_duration is not None:
-                # For latte, --duration accepts an integer iteration count (number of cycles to run)
-                # rather than a time string like cassandra-stress
-                stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
+                # Replace placeholders from step_params dict
+                for param_name, param_value in sorted(step_params.items(), key=lambda item: len(item[0]), reverse=True):
+                    stress_cmd_to_run = stress_cmd_to_run.replace(f"${param_name}", str(param_value))
+                if step_duration is not None:
+                    # For latte, --duration accepts an integer iteration count (number of cycles to run)
+                    # rather than a time string like cassandra-stress
+                    stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
 
-            params.update({"stress_cmd": stress_cmd_to_run})
-            # Run all stress commands
-            self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
-            stress_queue.append(self.run_stress_thread(**params))
+                params.update({"stress_cmd": stress_cmd_to_run})
+                # Run all stress commands
+                self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
+                stress_queue.append(self.run_stress_thread(**params))
 
-        for stress in stress_queue:
-            results.extend(self.get_stress_results(queue=stress, store_results=False))
-            self.log.debug("One c-s command results: %s", results[-1])
+            for stress in stress_queue:
+                results.extend(self.get_stress_results(queue=stress, store_results=False))
+                self.log.debug("One c-s command results: %s", results[-1])
+        finally:
+            self._step_load_end = time.time()
         # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
         # Every stress thread derives its own tags from the command it actually runs, which is the
         # only place the tags of a step can come from: they are tool specific (cassandra-stress
@@ -612,6 +669,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             time.sleep(240)
 
         total_summary = {}
+        self._steps_resource_usage = []
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
         for throttle_step_dict, num_threads, current_throttle_step in zip(
@@ -644,11 +702,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                     legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
                 )
             )(self.run_step)
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl,
-                step_params=step_params,
-                step_duration=step_duration,
-            )
+            self._step_load_start = self._step_load_end = None
+            try:
+                results, _ = run_step(
+                    stress_cmds=workload.cs_cmd_tmpl,
+                    step_params=step_params,
+                    step_duration=step_duration,
+                )
+            finally:
+                # Also for a step that failed: its resource usage helps tell why
+                if self._step_load_start:
+                    self.report_step_resource_usage(
+                        workload_type=workload.workload_type,
+                        step=current_throttle_step,
+                        start=self._step_load_start,
+                        end=self._step_load_end or time.time(),
+                    )
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             summary_result = self.check_latency_during_steps(step=current_throttle_step)

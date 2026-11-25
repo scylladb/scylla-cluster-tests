@@ -99,6 +99,45 @@ issues two query families:
 > This whole block is **best-effort** — skipped entirely when there is no monitoring set. It
 > feeds the local JSON and the Argus screenshots, not the pass/fail decision.
 
+### 2.3 Per-step resource usage — `sdcm/utils/perf_step_metrics.py`
+
+The perf steps tests (`performance_regression_gradual_grow_throughput.py`, cassandra-stress and
+latte alike) send one more Argus table per run, `<workload> - Step resource usage`, with one row
+per step, below the steps' tables. After every step the table is sent again with the rows of all the
+steps so far: Argus shows a run's tables in the order their cells were written, and a test that fails
+in a later step keeps the rows of the earlier ones. It tells a step capped by the loaders from one
+capped by Scylla:
+
+| Columns | Query, per node |
+|---|---|
+| `DB CPU avg` / `max` | `100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[<window>s])))` on the DB nodes |
+| `DB reactor utilization avg` / `max` | `avg by (instance) (avg_over_time(scylla_reactor_utilization[<window>s]))` |
+| `Loader CPU avg` / `max` | the CPU query on the loaders (the monitor scrapes their node_exporter) |
+| `window start`, `window duration` | the part of the step the values come from |
+
+- Every query is evaluated once, at the end of the step's window, over the whole window, so it
+  gives each node's exact average whatever the scrape interval. A fixed short range would not
+  work: scylla-monitoring scrapes node_exporter only every minute, and `rate(...[1m])` is empty.
+- `avg` is the mean of the node averages, `max`
+  is the hottest node's average, not a single-sample spike. Nodes get their role from their
+  addresses, so the monitor's own node_exporter is not counted.
+- The window leaves out the first `perf_steps_metrics_warmup_sec` (180 by default) of the step,
+  counted from its start, before the loaders launch, and its last 60 seconds, where the loaders
+  end at different moments. A step no longer than twice the warm-up plus 60 seconds is used
+  whole; 0 disables the cut.
+- `report_step_resource_usage` runs after every step, also after a failed one. It is
+  best-effort: a query with no data leaves its columns out, and any failure, a failed query
+  included, is a WARNING `TestFrameworkEvent`, never a failed test. Each Prometheus request
+  times out after 30 seconds, so a silent monitor does not hold the next step. A window shorter
+  than two node_exporter scrapes (about two minutes) has no CPU columns. Values are sent with
+  `Status.UNSET` and have no validation rules.
+- Reading it: loader CPU near 100% with DB reactor utilization well below it means the step
+  measured the loaders. Reactor utilization near 100% means Scylla is the cap; more loaders
+  will not raise the throughput.
+- DB CPU is not a measure of Scylla's load: Seastar busy-polls on its idle shards, so the DB
+  nodes' CPU stays near 100% at any rate under load (97% on both steps of a write run, with
+  reactor utilization 70% and 94%). Use DB reactor utilization for Scylla's load.
+
 ---
 
 ## 3. The collection engine — `latency_calculator_decorator`
