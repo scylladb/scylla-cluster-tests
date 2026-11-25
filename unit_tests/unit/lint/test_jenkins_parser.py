@@ -19,6 +19,7 @@ def create_jenkinsfile(tmp_path):
     """Helper to create a temporary jenkinsfile with given content."""
 
     def _create(content: str, name: str = "test.jenkinsfile") -> Path:
+        """Write content to a jenkinsfile under tmp_path and return its path."""
         path = tmp_path / name
         path.write_text(content)
         return path
@@ -60,6 +61,7 @@ def create_jenkinsfile(tmp_path):
     ],
 )
 def test_parse_test_config(raw, expected):
+    """_parse_test_config returns the test-config paths for each raw format."""
     assert _parse_test_config(raw) == expected
 
 
@@ -67,6 +69,7 @@ def test_parse_test_config(raw, expected):
 
 
 def test_longevity_pipeline_single_config(create_jenkinsfile):
+    """parse_jenkinsfile extracts function, backend, region and a single test config."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -86,6 +89,7 @@ def test_longevity_pipeline_single_config(create_jenkinsfile):
 
 
 def test_longevity_pipeline_triple_quoted_array(create_jenkinsfile):
+    """parse_jenkinsfile unpacks a triple-quoted JSON array test_config."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -102,6 +106,7 @@ def test_longevity_pipeline_triple_quoted_array(create_jenkinsfile):
 
 
 def test_multi_region_pipeline(create_jenkinsfile):
+    """parse_jenkinsfile keeps a triple-quoted multi-region array as a raw string."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -118,6 +123,7 @@ def test_multi_region_pipeline(create_jenkinsfile):
 
 
 def test_manager_pipeline(create_jenkinsfile):
+    """parse_jenkinsfile reads the function and backend of a managerPipeline."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -135,6 +141,7 @@ def test_manager_pipeline(create_jenkinsfile):
 
 
 def test_artifacts_pipeline_with_timeout(create_jenkinsfile):
+    """parse_jenkinsfile reads provision and post-behavior params past a timeout map."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -154,6 +161,7 @@ def test_artifacts_pipeline_with_timeout(create_jenkinsfile):
 
 
 def test_k8s_eks_pipeline(create_jenkinsfile):
+    """parse_jenkinsfile reads backend and k8s_version of a k8s-eks pipeline."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -175,6 +183,7 @@ def test_k8s_eks_pipeline(create_jenkinsfile):
 
 
 def test_perf_pipeline_with_sub_tests(create_jenkinsfile):
+    """parse_jenkinsfile accepts double-quoted params and a sub_tests list."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -193,6 +202,7 @@ def test_perf_pipeline_with_sub_tests(create_jenkinsfile):
 
 
 def test_pipeline_with_extra_env_vars(create_jenkinsfile):
+    """parse_jenkinsfile reads extra_environment_variables as a string param."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -210,6 +220,7 @@ def test_pipeline_with_extra_env_vars(create_jenkinsfile):
 
 
 def test_rolling_upgrade_gce(create_jenkinsfile):
+    """parse_jenkinsfile reads the GCE image and distro params of a rollingUpgradePipeline."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -231,6 +242,7 @@ def test_rolling_upgrade_gce(create_jenkinsfile):
 
 
 def test_byo_pipeline_returns_none(create_jenkinsfile):
+    """parse_jenkinsfile returns None for a byo pipeline."""
     path = create_jenkinsfile(
         "#!groovy\ndef lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\nbyoLongevityPipeline( )\n"
     )
@@ -238,6 +250,7 @@ def test_byo_pipeline_returns_none(create_jenkinsfile):
 
 
 def test_create_test_job_returns_none(create_jenkinsfile):
+    """parse_jenkinsfile returns None for a createTestJobPipeline call."""
     path = create_jenkinsfile(
         "#!groovy\ndef lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\ncreateTestJobPipeline()\n"
     )
@@ -245,6 +258,7 @@ def test_create_test_job_returns_none(create_jenkinsfile):
 
 
 def test_raw_pipeline_block_returns_none(create_jenkinsfile):
+    """parse_jenkinsfile returns None for a raw pipeline {} block."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -261,6 +275,7 @@ def test_raw_pipeline_block_returns_none(create_jenkinsfile):
 
 
 def test_boolean_parameter(create_jenkinsfile):
+    """parse_jenkinsfile stores a boolean literal parameter as a string."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -280,6 +295,7 @@ def test_boolean_parameter(create_jenkinsfile):
 
 
 def test_double_quoted_triple_string(create_jenkinsfile):
+    """parse_jenkinsfile unpacks a double-quoted triple-quoted test_config array."""
     path = create_jenkinsfile(
         "#!groovy\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -297,6 +313,7 @@ def test_double_quoted_triple_string(create_jenkinsfile):
 
 
 def test_jepsen_pipeline_single_string_config(create_jenkinsfile):
+    """parse_jenkinsfile wraps a single string test_config in a list."""
     path = create_jenkinsfile(
         "#! groovy\n\n"
         "def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)\n\n"
@@ -319,6 +336,7 @@ def test_jepsen_pipeline_single_string_config(create_jenkinsfile):
 
 
 def test_discovers_jenkinsfiles(tmp_path):
+    """discover_pipeline_files finds .jenkinsfile files recursively and skips others."""
     (tmp_path / "a.jenkinsfile").touch()
     (tmp_path / "subdir").mkdir()
     (tmp_path / "subdir" / "b.jenkinsfile").touch()
@@ -329,6 +347,7 @@ def test_discovers_jenkinsfiles(tmp_path):
 
 
 def test_discover_raises_for_missing_dir():
+    """discover_pipeline_files raises FileNotFoundError for a missing directory."""
     with pytest.raises(FileNotFoundError):
         discover_pipeline_files(Path("/nonexistent/directory"))
 
@@ -346,6 +365,7 @@ def test_discovers_real_pipeline_files():
 
 
 def test_pipeline_config_backend_property():
+    """PipelineConfig.backend returns the backend param."""
     config = PipelineConfig(
         file_path="test.jenkinsfile",
         pipeline_function="longevityPipeline",
@@ -356,6 +376,7 @@ def test_pipeline_config_backend_property():
 
 
 def test_pipeline_config_backend_none():
+    """PipelineConfig.backend is None when no backend param is set."""
     config = PipelineConfig(
         file_path="test.jenkinsfile",
         pipeline_function="longevityPipeline",
@@ -366,6 +387,7 @@ def test_pipeline_config_backend_none():
 
 
 def test_pipeline_config_region_property():
+    """PipelineConfig.region returns the region param."""
     config = PipelineConfig(
         file_path="test.jenkinsfile",
         pipeline_function="longevityPipeline",
@@ -376,6 +398,7 @@ def test_pipeline_config_region_property():
 
 
 def test_pipeline_config_gce_datacenter_property():
+    """PipelineConfig.gce_datacenter returns the gce_datacenter param."""
     config = PipelineConfig(
         file_path="test.jenkinsfile",
         pipeline_function="longevityPipeline",

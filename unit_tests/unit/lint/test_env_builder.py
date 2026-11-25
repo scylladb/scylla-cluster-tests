@@ -12,8 +12,8 @@ from sdcm.utils.lint.env_builder import (
 from sdcm.utils.lint.jenkins_parser import PipelineConfig
 
 
-def _make_config(params=None, test_config=None, pipeline_function="longevityPipeline"):
-    """Helper to create a PipelineConfig with defaults."""
+def make_config(params=None, test_config=None, pipeline_function="longevityPipeline"):
+    """Build a PipelineConfig with defaults for the given params and test config."""
     params = params or {}
     test_config = test_config or ["test-cases/test.yaml"]
     return PipelineConfig(
@@ -24,7 +24,7 @@ def _make_config(params=None, test_config=None, pipeline_function="longevityPipe
     )
 
 
-# --- Tests for _count_regions ---
+# --- Tests for count_regions ---
 
 
 @pytest.mark.parametrize(
@@ -50,11 +50,12 @@ def _make_config(params=None, test_config=None, pipeline_function="longevityPipe
     ],
 )
 def test_count_regions(params, expected):
-    config = _make_config(params=params)
+    """count_regions counts the regions in region or gce_datacenter, defaulting to one."""
+    config = make_config(params=params)
     assert count_regions(config) == expected
 
 
-# --- Tests for _parse_extra_env_vars ---
+# --- Tests for parse_extra_env_vars ---
 
 
 @pytest.mark.parametrize(
@@ -68,6 +69,7 @@ def test_count_regions(params, expected):
     ],
 )
 def test_parse_extra_env_vars(raw, expected):
+    """parse_extra_env_vars adds each KEY=VALUE pair from the raw string to the env dict."""
     env = {}
     parse_extra_env_vars(raw, env)
     assert env == expected
@@ -77,7 +79,8 @@ def test_parse_extra_env_vars(raw, expected):
 
 
 def test_build_env_basic_aws():
-    config = _make_config(
+    """build_env maps backend, region and the JSON-encoded test config for AWS."""
+    config = make_config(
         params={
             "backend": "aws",
             "region": "eu-west-1",
@@ -91,7 +94,8 @@ def test_build_env_basic_aws():
 
 
 def test_build_env_gce_backend():
-    config = _make_config(
+    """build_env maps the GCE backend and its datacenter."""
+    config = make_config(
         params={
             "backend": "gce",
             "gce_datacenter": "us-east1",
@@ -103,7 +107,8 @@ def test_build_env_gce_backend():
 
 
 def test_build_env_azure_backend():
-    config = _make_config(
+    """build_env maps the Azure backend and its region name."""
+    config = make_config(
         params={
             "backend": "azure",
             "azure_region_name": "eastus",
@@ -115,7 +120,8 @@ def test_build_env_azure_backend():
 
 
 def test_build_env_docker_backend():
-    config = _make_config(
+    """build_env sets the docker backend and omits the cloud image placeholders."""
+    config = make_config(
         params={
             "backend": "docker",
         }
@@ -128,7 +134,8 @@ def test_build_env_docker_backend():
 
 
 def test_build_env_k8s_version_maps_to_both():
-    config = _make_config(
+    """build_env sets the k8s_version as both the EKS and GKE cluster version."""
+    config = make_config(
         params={
             "backend": "k8s-eks",
             "k8s_version": "1.32",
@@ -140,7 +147,8 @@ def test_build_env_k8s_version_maps_to_both():
 
 
 def test_build_env_provision_type_mapping():
-    config = _make_config(
+    """build_env maps provision_type to SCT_INSTANCE_PROVISION."""
+    config = make_config(
         params={
             "backend": "aws",
             "provision_type": "spot",
@@ -151,7 +159,8 @@ def test_build_env_provision_type_mapping():
 
 
 def test_build_env_linux_distro_mapping():
-    config = _make_config(
+    """build_env maps linux_distro to SCT_SCYLLA_LINUX_DISTRO."""
+    config = make_config(
         params={
             "backend": "gce",
             "linux_distro": "ubuntu-jammy",
@@ -162,7 +171,8 @@ def test_build_env_linux_distro_mapping():
 
 
 def test_build_env_test_email_title_mapping():
-    config = _make_config(
+    """build_env maps test_email_title to the email subject postfix."""
+    config = make_config(
         params={
             "backend": "aws",
             "test_email_title": "My Test",
@@ -173,7 +183,8 @@ def test_build_env_test_email_title_mapping():
 
 
 def test_build_env_scylla_ami_id_mapping():
-    config = _make_config(
+    """build_env maps scylla_ami_id to SCT_AMI_ID_DB_SCYLLA."""
+    config = make_config(
         params={
             "backend": "aws",
             "scylla_ami_id": "ami-abc123",
@@ -184,7 +195,8 @@ def test_build_env_scylla_ami_id_mapping():
 
 
 def test_build_env_extra_environment_variables():
-    config = _make_config(
+    """build_env merges extra_environment_variables into the env."""
+    config = make_config(
         params={
             "backend": "docker",
             "extra_environment_variables": "SCT_USE_MGMT=false",
@@ -195,7 +207,8 @@ def test_build_env_extra_environment_variables():
 
 
 def test_build_env_baremetal_placeholder_ips():
-    config = _make_config(
+    """build_env fills SCT_DB_NODES_PUBLIC_IP with placeholder IPs for baremetal lint runs."""
+    config = make_config(
         params={
             "backend": "baremetal",
         }
@@ -207,7 +220,8 @@ def test_build_env_baremetal_placeholder_ips():
 
 
 def test_build_env_baremetal_scylla_repo_placeholder():
-    config = _make_config(
+    """build_env sets a non-empty SCT_SCYLLA_REPO placeholder for baremetal."""
+    config = make_config(
         params={
             "backend": "baremetal",
         }
@@ -217,7 +231,8 @@ def test_build_env_baremetal_scylla_repo_placeholder():
 
 
 def test_build_env_baremetal_keeps_pipeline_scylla_version():
-    config = _make_config(
+    """build_env keeps the pipeline scylla_version on baremetal and skips the repo placeholder."""
+    config = make_config(
         params={
             "backend": "baremetal",
             "scylla_version": "2026.1.0",
@@ -229,7 +244,8 @@ def test_build_env_baremetal_keeps_pipeline_scylla_version():
 
 
 def test_build_env_test_config_json_encoded():
-    config = _make_config(
+    """build_env JSON-encodes every test config file into SCT_CONFIG_FILES."""
+    config = make_config(
         params={"backend": "aws"},
         test_config=["test-cases/a.yaml", "configurations/b.yaml"],
     )
@@ -242,7 +258,7 @@ def test_build_env_test_config_json_encoded():
 
 def test_build_env_non_env_params_skipped():
     """Parameters like test_name, timeout, sub_tests should not become env vars."""
-    config = _make_config(
+    config = make_config(
         params={
             "backend": "aws",
             "test_name": "longevity_test.LongevityTest.test_custom_time",
@@ -257,7 +273,8 @@ def test_build_env_non_env_params_skipped():
 
 
 def test_build_env_post_behavior_params():
-    config = _make_config(
+    """build_env maps the post_behavior_* params for each node group."""
+    config = make_config(
         params={
             "backend": "aws",
             "post_behavior_db_nodes": "destroy",
@@ -272,7 +289,8 @@ def test_build_env_post_behavior_params():
 
 
 def test_build_env_k8s_operator_params():
-    config = _make_config(
+    """build_env maps the k8s scylla-operator helm and TLS params."""
+    config = make_config(
         params={
             "backend": "k8s-eks",
             "k8s_scylla_operator_helm_repo": "https://charts.example.com/stable",
@@ -287,7 +305,8 @@ def test_build_env_k8s_operator_params():
 
 
 def test_build_env_xcloud_params():
-    config = _make_config(
+    """build_env maps the xcloud provider and env and fills a scylla_version placeholder."""
+    config = make_config(
         params={
             "backend": "xcloud",
             "xcloud_provider": "aws",
@@ -313,35 +332,42 @@ def test_build_env_xcloud_params():
 )
 def test_build_env_injects_scylla_version_placeholder(backend):
     """Backends that require scylla_version get a working placeholder for linting."""
-    config = _make_config(params={"backend": backend})
+    config = make_config(params={"backend": backend})
     env = build_env(config)
     assert env["SCT_SCYLLA_VERSION"] == "2026.1.0-lint-placeholder"
 
 
-@pytest.mark.parametrize("backend", ["k8s-eks", "k8s-gke"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("k8s-eks", id="k8s-eks"),
+        pytest.param("k8s-gke", id="k8s-gke"),
+    ],
+)
 def test_build_env_no_operator_docker_image_placeholder(backend):
     """K8S backends require a helm repo, not the operator docker image (empty = chart's image)."""
-    config = _make_config(params={"backend": backend})
+    config = make_config(params={"backend": backend})
     env = build_env(config)
     assert "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE" not in env
 
 
 def test_build_env_keeps_pipeline_scylla_version():
     """An explicit scylla_version in the pipeline is not overwritten by the placeholder."""
-    config = _make_config(params={"backend": "docker", "scylla_version": "2024.2.0"})
+    config = make_config(params={"backend": "docker", "scylla_version": "2024.2.0"})
     env = build_env(config)
     assert env["SCT_SCYLLA_VERSION"] == "2024.2.0"
 
 
 def test_build_env_no_scylla_version_placeholder_for_aws():
     """AWS resolves scylla from an AMI/repo, so no scylla_version placeholder is injected."""
-    config = _make_config(params={"backend": "aws", "region": "eu-west-1"})
+    config = make_config(params={"backend": "aws", "region": "eu-west-1"})
     env = build_env(config)
     assert "SCT_SCYLLA_VERSION" not in env
 
 
 def test_build_env_pytest_addopts():
-    config = _make_config(
+    """build_env maps pytest_addopts to PYTEST_ADDOPTS."""
+    config = make_config(
         params={
             "backend": "aws",
             "pytest_addopts": "-k test_something",
