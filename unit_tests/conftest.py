@@ -15,7 +15,9 @@ import os
 import logging
 import collections
 import shutil
+import socket
 import subprocess
+import time
 import uuid
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
@@ -46,6 +48,7 @@ from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
@@ -123,6 +126,49 @@ def prom_address():
 def test_data_dir() -> Path:
     """Return the path to unit_tests/test_data/."""
     return UNIT_TESTS_DIR / "test_data"
+
+
+@pytest.fixture(scope="module")
+def ssh_server_container(test_data_dir):
+    """Start a Docker container with SSH server configured for 'none' authentication."""
+    exposed_port = 22
+    docker_dir = test_data_dir / "auth_none_ssh_docker"
+    image_tag = "ssh_server_none_auth_test:latest"
+
+    subprocess.run(["docker", "build", "-t", image_tag, docker_dir], check=True)
+    container_name = f"ssh_server_none_auth_test_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    container_id = (
+        subprocess.check_output(["docker", "run", "-d", "--name", container_name, image_tag]).decode().strip()
+    )
+
+    # get container IP
+    inspect_cmd = ["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container_id]
+    for _ in range(10):
+        ip = subprocess.check_output(inspect_cmd).decode().strip()
+        if ip:
+            break
+        time.sleep(0.5)
+    else:
+        subprocess.run(["docker", "rm", "-f", container_id], check=True)
+        raise RuntimeError("Could not get container IP address")
+
+    @retrying(n=20, sleep_time=0.5)
+    def wait_for_ssh_ready():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            s.connect((ip, exposed_port))
+
+    try:
+        wait_for_ssh_ready()
+        yield {
+            "hostname": ip,
+            "user": "test",
+            "port": exposed_port,
+            "key_file": None,
+            "password": None,
+        }
+    finally:
+        subprocess.run(["docker", "rm", "-f", container_id], check=True)
 
 
 @contextmanager
