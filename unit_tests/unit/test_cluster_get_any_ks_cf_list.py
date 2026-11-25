@@ -18,8 +18,10 @@ from types import SimpleNamespace
 
 import pytest
 from invoke import Result
+from invoke.exceptions import Failure, UnexpectedExit
 
 from sdcm.cluster import BaseCluster
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from unit_tests.lib.fake_cluster import DummyScyllaCluster
 
 # trimmed 'nodetool cfstats' output of Scylla 2026.2 (Java nodetool of 5.4/2024.1 prints the same lines)
@@ -92,19 +94,8 @@ CFSTATS_TABLES += [("ks2", "t2"), ("ks2", "empty_t2")]
 CFSTATS_ALL = CFSTATS_HEADER + CFSTATS_BY_KEYSPACE["ks1"] + CFSTATS_BY_KEYSPACE["ks2"]
 
 
-def test_parse_cfstats_partitions():
-    assert BaseCluster._parse_cfstats_partitions(CFSTATS_ALL) == {
-        "ks1.t1_v_idx_index": 2,
-        "ks1.MixedCase": 1,
-        "ks1.t1": 2,
-        "ks1.mv1": 2,
-        "ks1.empty_t": 0,
-        "ks2.t2": 1,
-        "ks2.empty_t2": 0,
-    }
-
-
-def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
+def run_get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
+    """Run get_any_ks_cf_list on a fake cluster whose system_schema query returns the given tables."""
     # system_schema.columns returns a row per column, MVs and index views included
     rows = [
         SimpleNamespace(keyspace_name=ks, table_name=table, type=col_type)
@@ -118,14 +109,39 @@ def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
         return sorted(db_cluster.get_any_ks_cf_list(db_node))
 
 
+def test_parse_cfstats_partitions():
+    """_parse_cfstats_partitions maps each table to its partition estimate, empty tables included."""
+    assert BaseCluster._parse_cfstats_partitions(CFSTATS_ALL) == {
+        "ks1.t1_v_idx_index": 2,
+        "ks1.MixedCase": 1,
+        "ks1.t1": 2,
+        "ks1.mv1": 2,
+        "ks1.empty_t": 0,
+        "ks2.t2": 1,
+        "ks2.empty_t2": 0,
+    }
+
+
 def test_get_any_ks_cf_list_runs_cfstats_once():
+    """get_any_ks_cf_list runs one cfstats for the whole node, not one per keyspace."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.return_value = Result(stdout=CFSTATS_ALL)
 
-    assert _get_any_ks_cf_list(db_node) == ['ks1."MixedCase"', "ks1.mv1", "ks1.t1", "ks1.t1_v_idx_index", "ks2.t2"]
-    db_node.run_nodetool.assert_called_once()
-    assert db_node.run_nodetool.call_args.kwargs["sub_cmd"] == "cfstats"
-    assert "args" not in db_node.run_nodetool.call_args.kwargs
+    assert run_get_any_ks_cf_list(db_node) == [
+        'ks1."MixedCase"',
+        "ks1.mv1",
+        "ks1.t1",
+        "ks1.t1_v_idx_index",
+        "ks2.t2",
+    ]
+    db_node.run_nodetool.assert_called_once_with(
+        sub_cmd="cfstats",
+        timeout=300,
+        warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit),
+        publish_event=False,
+        retry=3,
+        verbose=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -136,10 +152,11 @@ def test_get_any_ks_cf_list_runs_cfstats_once():
     ],
 )
 def test_get_any_ks_cf_list_keeps_all_tables_when_cfstats_failed(run_nodetool):
+    """get_any_ks_cf_list keeps every table when cfstats fails or prints no partition estimates."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.configure_mock(**run_nodetool)
 
-    assert _get_any_ks_cf_list(db_node) == [
+    assert run_get_any_ks_cf_list(db_node) == [
         'ks1."MixedCase"',
         "ks1.empty_t",
         "ks1.mv1",
@@ -151,11 +168,12 @@ def test_get_any_ks_cf_list_keeps_all_tables_when_cfstats_failed(run_nodetool):
 
 
 def test_get_any_ks_cf_list_cfstats_timeout_scales_with_tables():
+    """The cfstats timeout is 300 s for a small node and grows with the table count."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.return_value = Result(stdout=CFSTATS_ALL)
 
-    _get_any_ks_cf_list(db_node)
+    run_get_any_ks_cf_list(db_node)
     assert db_node.run_nodetool.call_args.kwargs["timeout"] == 300
 
-    _get_any_ks_cf_list(db_node, [(f"ks{i}", "t") for i in range(5000)])
+    run_get_any_ks_cf_list(db_node, [(f"ks{i}", "t") for i in range(5000)])
     assert db_node.run_nodetool.call_args.kwargs["timeout"] == 500

@@ -3,7 +3,7 @@
 import json
 import stat
 import threading
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 
@@ -14,6 +14,7 @@ from sdcm.cluster_oci import (
     OciCluster,
     OciNode,
 )
+from sdcm.provision.helpers.certificate import CA_CERT_FILE, CA_KEY_FILE
 from sdcm.remote.remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
 from sdcm.utils.oci_utils import SECONDARY_VNICS_SCRIPT_PATH
 from unit_tests.lib.oci_test_helpers import (
@@ -23,11 +24,100 @@ from unit_tests.lib.oci_test_helpers import (
     make_cloud_instance,
 )
 
+RUNNING_METADATA = json.dumps({"id": "ocid1.instance.oc1.iad.node", "state": "Running", "metadata": {"user_data": "x"}})
+
+# Sentinel values — distinctive enough that accidental interpolation into any
+# command string would be caught immediately by the leak-assertion test.
+SENTINEL_ACCESS_KEY = "SENTINEL_OCI_ACCESS_KEY_ID"
+SENTINEL_SECRET_KEY = "SENTINEL_OCI_SECRET_ACCESS_KEY"
+DROP_IN_PATH = "/etc/systemd/system/scylla-server.service.d/oci-s3-creds.conf"
+
+OBJECT_STORAGE_PARAMS = {
+    "cluster_backend": "oci",
+    "simulated_regions": 0,
+    "append_scylla_yaml": {"object_storage_endpoints": [{"name": "https://oci.example", "aws_region": "us-phoenix-1"}]},
+}
+
+
+@pytest.fixture()
+def oci_cluster_for_rack_tests():
+    """Real OciCluster instance with patched init and mocked external dependencies."""
+    with patch.object(OciCluster, "__init__", lambda self: None):
+        cluster = OciCluster()
+    cluster._node_index = 0
+    cluster.racks_count = 3
+    cluster.nodes = []
+    cluster.log = Mock()
+    cluster.params = Mock()
+    cluster.params.get = Mock(return_value=0)  # simulated_regions=0
+    cluster.instance_provision = "on_demand"
+    # needed by @mark_new_nodes_as_running_nemesis decorator
+    cluster.test_config = Mock()
+    cluster.test_config.tester_obj = Mock(return_value=Mock(spec=[]))
+    # mock external boundaries (provisioning and node creation)
+    cluster._create_instances = Mock(
+        side_effect=lambda count, *args, **kwargs: [make_cloud_instance() for _ in range(count)]
+    )
+    cluster._create_node = Mock(
+        side_effect=lambda instance, node_index, dc_idx, rack, after_config: Mock(
+            name=f"node-{node_index}",
+            rack=rack,
+            enable_auto_bootstrap=False,
+        )
+    )
+    return cluster
+
+
+@pytest.fixture()
+def oci_node_for_systemd(monkeypatch):
+    """OciNode with a mocked remoter, object storage configured and sentinel OCI credentials.
+
+    BaseNode.__init__ is patched away for construction; BaseNode's own
+    fix_scylla_server_systemd_config is monkeypatched so its remoter calls
+    don't interfere with assertions on the OCI-specific behaviour.
+    """
+    parent_cluster = Mock(params=dict(OBJECT_STORAGE_PARAMS))
+    with patch("sdcm.cluster.BaseNode.__init__", new=base_node_init):
+        node = OciNode(make_cloud_instance(), MOCK_CREDENTIALS, parent_cluster)
+    node.remoter = Mock()
+    node.is_docker = Mock(return_value=False)
+    node.test_config.backup_oci_credentials = {
+        "access_key_id": SENTINEL_ACCESS_KEY,
+        "secret_access_key": SENTINEL_SECRET_KEY,
+    }
+    mock_base_fix = Mock()
+    monkeypatch.setattr("sdcm.cluster.BaseNode.fix_scylla_server_systemd_config", mock_base_fix)
+    return node, mock_base_fix
+
+
+def oci_node_with_dns_names(dns_names, use_dns_names=True):
+    """OciNode whose scylla network configuration holds one interface per DNS private name."""
+    node = OciNode(make_cloud_instance(private_ip="10.1.5.22"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+    node.__dict__["use_dns_names"] = use_dns_names
+    node.scylla_network_configuration = Mock(
+        network_interfaces=[Mock(dns_private_name=dns_name) for dns_name in dns_names]
+    )
+    node.check_dns_ready = Mock(return_value=True)
+    return node
+
+
+def spot_oci_node(lifecycle_state="RUNNING", instance_metadata=RUNNING_METADATA, ssh_up=True):
+    """OciNode whose OCI API returns `lifecycle_state` and whose instance metadata returns `instance_metadata`."""
+    vm_provider = Mock()
+    vm_provider._resolve_instance.return_value = Mock(lifecycle_state=lifecycle_state)
+    parent_cluster = Mock(params={"simulated_regions": 0}, provisioners=[Mock(_vm_provider=vm_provider)])
+    node = OciNode(make_cloud_instance(), MOCK_CREDENTIALS, parent_cluster)
+    node.termination_event = threading.Event()
+    node.remoter = Mock(**{"is_up.return_value": ssh_up})
+    node.query_oci_metadata = Mock(return_value=instance_metadata)
+    node._get_oci_instance_id = Mock(return_value="ocid1.instance.oc1.iad.node")
+    return node, vm_provider
+
 
 @patch("sdcm.cluster_oci.resolve_ip_to_dns", return_value="node.internal")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_private_dns_name_uses_metadata_hostname_when_available(mock_resolver) -> None:
-    """Test that FQDN from OCI metadata is used directly without reverse DNS lookup."""
+    """FQDN from OCI metadata is used directly, without reverse DNS lookup."""
     oci_node = OciNode(make_cloud_instance(private_ip="10.0.4.4"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(return_value="node.private.subnet.vcn.oraclevcn.com")
 
@@ -40,20 +130,24 @@ def test_private_dns_name_uses_metadata_hostname_when_available(mock_resolver) -
 @patch("sdcm.cluster_oci.resolve_ip_to_dns", return_value="node.internal")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_private_dns_name_falls_back_to_reverse_dns_when_metadata_query_fails(mock_resolver) -> None:
-    """Test that reverse DNS lookup is used when OCI metadata query raises an exception."""
+    """Reverse DNS is used when the OCI metadata query raises."""
     oci_node = OciNode(make_cloud_instance(private_ip="10.0.4.4"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(side_effect=RuntimeError("metadata unavailable"))
 
     assert oci_node.private_dns_name == "node.internal"
 
     mock_resolver.assert_called_once_with("10.0.4.4")
-    oci_node.log.warning.assert_called_once()
+    oci_node.log.warning.assert_called_once_with(
+        "Failed to query OCI metadata hostname for node %s (%s). Falling back.",
+        oci_node.name,
+        oci_node.query_oci_metadata.side_effect,
+    )
 
 
 @patch("sdcm.cluster_oci.resolve_ip_to_dns", return_value="db-node-short.subnet.vcn.oraclevcn.com")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_private_dns_name_prefers_reverse_dns_fqdn_when_metadata_returns_short_label(mock_resolver) -> None:
-    """Test that reverse DNS FQDN is preferred over a short hostname label from metadata."""
+    """Reverse DNS FQDN wins over a short hostname label from metadata."""
     oci_node = OciNode(make_cloud_instance(private_ip="10.0.4.4"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(return_value="db-node-short")
 
@@ -68,7 +162,7 @@ def test_private_dns_name_prefers_reverse_dns_fqdn_when_metadata_returns_short_l
 )
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_private_dns_name_falls_back_to_private_ip_when_reverse_dns_missing(mock_resolver) -> None:
-    """Test that private IP is returned when both metadata and reverse DNS fail."""
+    """Private IP is returned when both metadata and reverse DNS fail."""
     oci_node = OciNode(make_cloud_instance(private_ip="10.0.4.4"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(side_effect=RuntimeError("metadata unavailable"))
 
@@ -80,7 +174,7 @@ def test_private_dns_name_falls_back_to_private_ip_when_reverse_dns_missing(mock
 
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_private_dns_name_falls_back_to_node_name_when_private_ip_missing() -> None:
-    """Test that node name is returned as last resort when private IP is also unavailable."""
+    """Node name is the last resort when the private IP is also unavailable."""
     oci_node = OciNode(make_cloud_instance(private_ip=None), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(side_effect=RuntimeError("metadata unavailable"))
 
@@ -104,16 +198,22 @@ def test_private_dns_name_falls_back_to_node_name_when_private_ip_missing() -> N
 @patch("sdcm.cluster_oci.create_certificate")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_create_node_certificate_includes_short_and_fqdn_dns_names(mock_create_cert, mock_resolver) -> None:
-    """Test that node certificate includes both short hostname and FQDN as DNS names."""
+    """Node certificate SANs include both the short hostname and the FQDN."""
     oci_node = OciNode(make_cloud_instance(private_ip="10.0.3.13"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
     oci_node.query_oci_metadata = Mock(return_value="db-node-short")
 
     oci_node.create_node_certificate("cert.pem", "key.pem")
 
-    mock_create_cert.assert_called_once()
-    dns_names = mock_create_cert.call_args.kwargs["dns_names"]
-    assert "db-node-short" in dns_names
-    assert "db-node-short.subnet.vcn.oraclevcn.com" in dns_names
+    mock_create_cert.assert_called_once_with(
+        "cert.pem",
+        "key.pem",
+        oci_node.name,
+        ca_cert_file=CA_CERT_FILE,
+        ca_key_file=CA_KEY_FILE,
+        server_csr_file=None,
+        ip_addresses=["10.0.3.13", None],
+        dns_names=["db-node-short", "db-node-short.subnet.vcn.oraclevcn.com", oci_node.name],
+    )
 
 
 # --- OciNode.restart() / kernel panic checker suppression tests (SCT-459 / SCT-658) ---
@@ -158,7 +258,7 @@ def test_restart_suspends_kernel_panic_checker_around_soft_reboot() -> None:
     oci_node.restart()
 
     assert call_order == ["suspend", "reboot", "resume"]
-    checker.suspended.assert_called_once()
+    checker.suspended.assert_called_once_with()
     instance.reboot.assert_called_once_with(wait=True, hard=False)
 
 
@@ -174,7 +274,7 @@ def test_restart_resumes_kernel_panic_checker_even_if_reboot_fails() -> None:
     oci_node.kernel_panic_checker = checker
     instance.reboot = Mock(side_effect=RuntimeError("OCI API error"))
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="OCI API error"):
         oci_node.restart()
 
     assert resumed == [True]
@@ -193,35 +293,6 @@ def test_restart_without_kernel_panic_checker_still_reboots() -> None:
 
 
 # --- OciCluster.add_nodes rack assignment tests ---
-
-
-@pytest.fixture()
-def oci_cluster_for_rack_tests():
-    """Real OciCluster instance with patched init and mocked external dependencies."""
-    with patch.object(OciCluster, "__init__", lambda self: None):
-        cluster = OciCluster()
-    cluster._node_index = 0
-    cluster.racks_count = 3
-    cluster.nodes = []
-    cluster.log = Mock()
-    cluster.params = Mock()
-    cluster.params.get = Mock(return_value=0)  # simulated_regions=0
-    cluster.instance_provision = "on_demand"
-    # needed by @mark_new_nodes_as_running_nemesis decorator
-    cluster.test_config = Mock()
-    cluster.test_config.tester_obj = Mock(return_value=Mock(spec=[]))
-    # mock external boundaries (provisioning and node creation)
-    cluster._create_instances = Mock(
-        side_effect=lambda count, *args, **kwargs: [make_cloud_instance() for _ in range(count)]
-    )
-    cluster._create_node = Mock(
-        side_effect=lambda instance, node_index, dc_idx, rack, after_config: Mock(
-            name=f"node-{node_index}",
-            rack=rack,
-            enable_auto_bootstrap=False,
-        )
-    )
-    return cluster
 
 
 def test_add_nodes_rack_none_assigns_zero_based_indices(oci_cluster_for_rack_tests):
@@ -363,7 +434,7 @@ def test_network_interfaces_caches_result():
     second = oci_node.network_interfaces
 
     assert first is second
-    oci_node._build_network_interfaces.assert_called_once()
+    oci_node._build_network_interfaces.assert_called_once_with()
 
 
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
@@ -400,7 +471,7 @@ def test_refresh_network_interfaces_info_invalidates_cache_before_super():
         mock_super.side_effect = check_cache_cleared
         oci_node.refresh_network_interfaces_info()
 
-    mock_super.assert_called_once()
+    mock_super.assert_called_once_with()
 
 
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
@@ -510,16 +581,6 @@ def test_configure_secondary_vnics_os_passes_vnic_count_and_primary_ip(mock_nic_
     assert f"ExecStart={SECONDARY_VNICS_SCRIPT_PATH} 3 10.0.1.10" in unit_command
 
 
-def _oci_node_with_dns_names(dns_names, use_dns_names=True):
-    node = OciNode(make_cloud_instance(private_ip="10.1.5.22"), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
-    node.__dict__["use_dns_names"] = use_dns_names
-    node.scylla_network_configuration = Mock(
-        network_interfaces=[Mock(dns_private_name=dns_name) for dns_name in dns_names]
-    )
-    node.check_dns_ready = Mock(return_value=True)
-    return node
-
-
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_wait_for_private_dns_records_checks_every_interface():
     """Both the primary and the secondary VNIC records must be waited for.
@@ -528,7 +589,7 @@ def test_wait_for_private_dns_records_checks_every_interface():
     topology, and that record is published later than the primary one because SCT attaches
     the secondary VNIC only once the instance is already running.
     """
-    node = _oci_node_with_dns_names(
+    node = oci_node_with_dns_names(
         ["node-primary.private45ba196.sct2vcn.oraclevcn.com", "node-nic1.private805e3f9.sct2vcn.oraclevcn.com"]
     )
 
@@ -545,7 +606,7 @@ def test_wait_for_private_dns_records_checks_every_interface():
 def test_wait_for_private_dns_records_raises_on_unresolvable_record():
     """An unresolvable record must fail node creation, not leave Scylla to crash on startup."""
     unresolvable = "node-nic1.private805e3f9.sct2vcn.oraclevcn.com"
-    node = _oci_node_with_dns_names([unresolvable])
+    node = oci_node_with_dns_names([unresolvable])
     node.check_dns_ready = Mock(return_value=False)
 
     with pytest.raises(CreateOciNodeError, match=f"Private DNS record '{unresolvable}'"):
@@ -555,7 +616,7 @@ def test_wait_for_private_dns_records_raises_on_unresolvable_record():
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_wait_for_private_dns_records_skipped_without_dns_names():
     """With 'use_dns_names' off, Scylla is configured with IPs, so there is nothing to wait for."""
-    node = _oci_node_with_dns_names(["node-nic1.private805e3f9.sct2vcn.oraclevcn.com"], use_dns_names=False)
+    node = oci_node_with_dns_names(["node-nic1.private805e3f9.sct2vcn.oraclevcn.com"], use_dns_names=False)
 
     node._wait_for_private_dns_records(timeout=5, interval=1)
 
@@ -564,82 +625,56 @@ def test_wait_for_private_dns_records_skipped_without_dns_names():
 
 # --- fix_scylla_server_systemd_config tests ---
 
-# Sentinel values — distinctive enough that accidental interpolation into any
-# command string would be caught immediately by the leak-assertion test.
-_SENTINEL_ACCESS_KEY = "SENTINEL_OCI_ACCESS_KEY_ID"
-_SENTINEL_SECRET_KEY = "SENTINEL_OCI_SECRET_ACCESS_KEY"
-_DROP_IN_PATH = "/etc/systemd/system/scylla-server.service.d/oci-s3-creds.conf"
 
-
-_OBJECT_STORAGE_PARAMS = {
-    "cluster_backend": "oci",
-    "simulated_regions": 0,
-    "append_scylla_yaml": {"object_storage_endpoints": [{"name": "https://oci.example", "aws_region": "us-phoenix-1"}]},
-}
-
-
-@pytest.fixture()
-def _oci_node_for_systemd(monkeypatch):
-    """OciNode with a mocked remoter, object storage configured and sentinel OCI credentials.
-
-    BaseNode.__init__ is patched away for construction; BaseNode's own
-    fix_scylla_server_systemd_config is monkeypatched so its remoter calls
-    don't interfere with assertions on the OCI-specific behaviour.
-    """
-    parent_cluster = Mock(params=dict(_OBJECT_STORAGE_PARAMS))
-    with patch("sdcm.cluster.BaseNode.__init__", new=base_node_init):
-        node = OciNode(make_cloud_instance(), MOCK_CREDENTIALS, parent_cluster)
-    node.remoter = Mock()
-    node.is_docker = Mock(return_value=False)
-    node.test_config.backup_oci_credentials = {
-        "access_key_id": _SENTINEL_ACCESS_KEY,
-        "secret_access_key": _SENTINEL_SECRET_KEY,
-    }
-    mock_base_fix = Mock()
-    monkeypatch.setattr("sdcm.cluster.BaseNode.fix_scylla_server_systemd_config", mock_base_fix)
-    return node, mock_base_fix
-
-
-def test_fix_scylla_server_systemd_config_calls_super(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_calls_super(oci_node_for_systemd):
     """super().fix_scylla_server_systemd_config() must be called unconditionally."""
-    node, mock_base_fix = _oci_node_for_systemd
+    node, mock_base_fix = oci_node_for_systemd
     node.fix_scylla_server_systemd_config()
-    mock_base_fix.assert_called_once()
+    mock_base_fix.assert_called_once_with()
 
 
-def test_fix_scylla_server_systemd_config_skips_on_docker(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_skips_on_docker(oci_node_for_systemd):
     """Docker nodes must be skipped — no file transfer or sudo call."""
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     node.is_docker.return_value = True
     node.fix_scylla_server_systemd_config()
     node.remoter.send_files.assert_not_called()
     node.remoter.sudo.assert_not_called()
 
 
-@pytest.mark.parametrize("append_scylla_yaml", [None, {}, {"object_storage_endpoints": []}])
-def test_fix_scylla_server_systemd_config_skips_without_object_storage(_oci_node_for_systemd, append_scylla_yaml):
+@pytest.mark.parametrize(
+    "append_scylla_yaml",
+    [
+        pytest.param(None, id="no-append-yaml"),
+        pytest.param({}, id="no-storage-key"),
+        pytest.param({"object_storage_endpoints": []}, id="empty-endpoints"),
+    ],
+)
+def test_fix_scylla_server_systemd_config_skips_without_object_storage(oci_node_for_systemd, append_scylla_yaml):
     """No object_storage_endpoints configured — credentials must not be installed."""
-    node, mock_base_fix = _oci_node_for_systemd
+    node, mock_base_fix = oci_node_for_systemd
     node.parent_cluster.params["append_scylla_yaml"] = append_scylla_yaml
     node.fix_scylla_server_systemd_config()
-    mock_base_fix.assert_called_once()
+    mock_base_fix.assert_called_once_with()
     node.remoter.send_files.assert_not_called()
     node.remoter.sudo.assert_not_called()
 
 
-def test_fix_scylla_server_systemd_config_skips_without_credentials(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_skips_without_credentials(oci_node_for_systemd):
     """Object storage configured but no OCI credentials loaded — skip with a warning."""
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     node.test_config.backup_oci_credentials = {}
     node.fix_scylla_server_systemd_config()
-    node.log.warning.assert_called_once()
+    node.log.warning.assert_called_once_with(
+        "object_storage_endpoints set, but no OCI backup credentials loaded; skipping"
+    )
     node.remoter.send_files.assert_not_called()
     node.remoter.sudo.assert_not_called()
 
 
-def test_fix_scylla_server_systemd_config_removes_local_temp_file_on_failure(_oci_node_for_systemd, tmp_path):
+def test_fix_scylla_server_systemd_config_removes_local_temp_file_on_failure(oci_node_for_systemd, tmp_path):
     """Local temp file holding credentials must be removed even if writing it fails."""
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     with (
         patch("sdcm.remote.remote_file.tempfile.tempdir", str(tmp_path)),
         patch("sdcm.remote.remote_file.os.chmod", side_effect=OSError("chmod failed")),
@@ -650,30 +685,30 @@ def test_fix_scylla_server_systemd_config_removes_local_temp_file_on_failure(_oc
     node.remoter.send_files.assert_not_called()
 
 
-def test_fix_scylla_server_systemd_config_credentials_not_on_command_line(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_credentials_not_on_command_line(oci_node_for_systemd):
     """Credentials must travel only inside the transferred file, never on any sudo command line.
 
     This is a regression guard: if a future change embeds credentials in a
     shell command (which remoter logs verbatim), this test will catch it.
     """
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     node.fix_scylla_server_systemd_config()
 
-    node.remoter.send_files.assert_called_once()
+    node.remoter.send_files.assert_called_once_with(src=ANY, dst=ANY)
     dst = node.remoter.send_files.call_args.kwargs["dst"]
     assert dst.startswith("/tmp/"), f"credentials should be staged under /tmp/, got {dst!r}"
 
     for sudo_call in node.remoter.sudo.call_args_list:
         cmd = sudo_call.args[0]
-        assert _SENTINEL_ACCESS_KEY not in cmd, "access_key_id must not appear in sudo command"
-        assert _SENTINEL_SECRET_KEY not in cmd, "secret_access_key must not appear in sudo command"
+        assert SENTINEL_ACCESS_KEY not in cmd, "access_key_id must not appear in sudo command"
+        assert SENTINEL_SECRET_KEY not in cmd, "secret_access_key must not appear in sudo command"
 
 
-def test_fix_scylla_server_systemd_config_installs_dropin_with_mode_0600(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_installs_dropin_with_mode_0600(oci_node_for_systemd):
     """Drop-in must be installed with mode 0600 on the remote host, and the local temp file
     must also be protected before transfer.
     """
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     with patch("sdcm.remote.remote_file.os.chmod") as mock_chmod:
         node.fix_scylla_server_systemd_config()
 
@@ -681,17 +716,15 @@ def test_fix_scylla_server_systemd_config_installs_dropin_with_mode_0600(_oci_no
     sudo_cmd = node.remoter.sudo.call_args_list[0].args[0]
     assert "install" in sudo_cmd
     assert "0600" in sudo_cmd
-    assert _DROP_IN_PATH in sudo_cmd
+    assert DROP_IN_PATH in sudo_cmd
 
     # Local: temp file must be restricted before transfer
-    mock_chmod.assert_called_once()
-    _, mode = mock_chmod.call_args.args
-    assert mode == stat.S_IRUSR | stat.S_IWUSR
+    mock_chmod.assert_called_once_with(ANY, stat.S_IRUSR | stat.S_IWUSR)
 
 
-def test_fix_scylla_server_systemd_config_reloads_systemd_daemon(_oci_node_for_systemd):
+def test_fix_scylla_server_systemd_config_reloads_systemd_daemon(oci_node_for_systemd):
     """Systemctl daemon-reload must be issued so the new drop-in takes effect immediately."""
-    node, _ = _oci_node_for_systemd
+    node, _ = oci_node_for_systemd
     node.fix_scylla_server_systemd_config()
     sudo_cmd = node.remoter.sudo.call_args.args[0]
     assert "daemon-reload" in sudo_cmd
@@ -699,26 +732,12 @@ def test_fix_scylla_server_systemd_config_reloads_systemd_daemon(_oci_node_for_s
 
 # --- OciNode.check_spot_termination() ---
 
-RUNNING_METADATA = json.dumps({"id": "ocid1.instance.oc1.iad.node", "state": "Running", "metadata": {"user_data": "x"}})
-
-
-def _spot_oci_node(lifecycle_state="RUNNING", instance_metadata=RUNNING_METADATA, ssh_up=True):
-    """OciNode whose OCI API returns `lifecycle_state` and whose instance metadata returns `instance_metadata`."""
-    vm_provider = Mock()
-    vm_provider._resolve_instance.return_value = Mock(lifecycle_state=lifecycle_state)
-    parent_cluster = Mock(params={"simulated_regions": 0}, provisioners=[Mock(_vm_provider=vm_provider)])
-    node = OciNode(make_cloud_instance(), MOCK_CREDENTIALS, parent_cluster)
-    node.termination_event = threading.Event()
-    node.remoter = Mock(**{"is_up.return_value": ssh_up})
-    node.query_oci_metadata = Mock(return_value=instance_metadata)
-    node._get_oci_instance_id = Mock(return_value="ocid1.instance.oc1.iad.node")
-    return node, vm_provider
-
 
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_nothing_while_running(mock_event):
-    node, vm_provider = _spot_oci_node()
+    """check_spot_termination reports nothing while the instance runs, and reads its state by OCID."""
+    node, vm_provider = spot_oci_node()
 
     assert node.check_spot_termination() == SPOT_TERMINATION_CHECK_DELAY
 
@@ -728,31 +747,42 @@ def test_check_spot_termination_reports_nothing_while_running(mock_event):
     vm_provider._resolve_instance.assert_called_once_with("ocid1.instance.oc1.iad.node")
 
 
-@pytest.mark.parametrize("lifecycle_state", ["TERMINATING", "TERMINATED"])
+@pytest.mark.parametrize(
+    "lifecycle_state",
+    [
+        pytest.param("TERMINATING", id="terminating"),
+        pytest.param("TERMINATED", id="terminated"),
+    ],
+)
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_preemption_seen_in_oci_api(mock_event, lifecycle_state):
     """A preempted instance goes to TERMINATING minutes before the VM stops (seen in PR-15584 build 22)."""
-    node, _ = _spot_oci_node(lifecycle_state=lifecycle_state)
+    node, _ = spot_oci_node(lifecycle_state=lifecycle_state)
 
     node.check_spot_termination()
 
-    mock_event.assert_called_once()
-    assert lifecycle_state in mock_event.call_args.kwargs["message"]
-    mock_event.return_value.publish.assert_called_once()
+    mock_event.assert_called_once_with(
+        node=node,
+        message=f"Instance is {lifecycle_state}, but the test did not terminate it. Most likely an OCI preemption",
+    )
+    mock_event.return_value.publish.assert_called_once_with()
 
 
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_uses_oci_api_without_ssh(mock_event):
     """A preempted VM may already be unreachable, so the API check must not wait for SSH."""
-    node, _ = _spot_oci_node(lifecycle_state="TERMINATING", ssh_up=False)
+    node, _ = spot_oci_node(lifecycle_state="TERMINATING", ssh_up=False)
 
     node.check_spot_termination()
 
     node.remoter.is_up.assert_called_once_with(timeout=SSH_CHECK_TIMEOUT)
     node.query_oci_metadata.assert_not_called()
-    mock_event.assert_called_once()
+    mock_event.assert_called_once_with(
+        node=node,
+        message="Instance is TERMINATING, but the test did not terminate it. Most likely an OCI preemption",
+    )
 
 
 def test_ssh_check_timeout_checks_the_libssh2_connection():
@@ -768,11 +798,12 @@ def test_ssh_check_timeout_checks_the_libssh2_connection():
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_preemption_notice_from_metadata(mock_event):
+    """A preemption notice in the instance metadata is reported, and the OCI API is not queried."""
     preemption_action = {"type": "TERMINATE", "timeCreated": "2026-11-10T16:28:24Z"}
     instance_metadata = json.dumps(
         {"state": "Running", "instancePreemptionAction": preemption_action, "metadata": {"user_data": "secret"}}
     )
-    node, vm_provider = _spot_oci_node(instance_metadata=instance_metadata)
+    node, vm_provider = spot_oci_node(instance_metadata=instance_metadata)
 
     node.check_spot_termination()
 
@@ -788,7 +819,7 @@ def test_check_spot_termination_reports_preemption_notice_from_metadata(mock_eve
 def test_check_spot_termination_logs_metadata_not_running_without_notice(mock_event):
     """A not-running metadata state is logged to show how OCI reports a preemption, but only the API state decides."""
     instance_metadata = json.dumps({"state": "Terminating", "metadata": {"user_data": "secret"}})
-    node, _ = _spot_oci_node(instance_metadata=instance_metadata)
+    node, _ = spot_oci_node(instance_metadata=instance_metadata)
 
     node.check_spot_termination()
 
@@ -800,19 +831,22 @@ def test_check_spot_termination_logs_metadata_not_running_without_notice(mock_ev
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_falls_back_to_oci_api_on_unreadable_metadata(mock_event):
-    node, _ = _spot_oci_node(lifecycle_state="TERMINATING", instance_metadata="<html>404 Not Found</html>")
+    """Unreadable metadata makes check_spot_termination fall back to the OCI lifecycle state."""
+    node, _ = spot_oci_node(lifecycle_state="TERMINATING", instance_metadata="<html>404 Not Found</html>")
 
     node.check_spot_termination()
 
-    mock_event.assert_called_once()
-    assert "TERMINATING" in mock_event.call_args.kwargs["message"]
+    mock_event.assert_called_once_with(
+        node=node,
+        message="Instance is TERMINATING, but the test did not terminate it. Most likely an OCI preemption",
+    )
 
 
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_ignores_termination_by_the_test(mock_event):
     """`destroy` sets termination_event before the test terminates the instance."""
-    node, vm_provider = _spot_oci_node(lifecycle_state="TERMINATING")
+    node, vm_provider = spot_oci_node(lifecycle_state="TERMINATING")
     node.termination_event.set()
 
     node.check_spot_termination()
@@ -824,21 +858,28 @@ def test_check_spot_termination_ignores_termination_by_the_test(mock_event):
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_once(mock_event):
-    node, _ = _spot_oci_node(lifecycle_state="TERMINATING")
+    """A preemption is reported once, even when the check runs again."""
+    node, _ = spot_oci_node(lifecycle_state="TERMINATING")
 
     node.check_spot_termination()
     node.check_spot_termination()
 
-    mock_event.assert_called_once()
+    mock_event.assert_called_once_with(
+        node=node,
+        message="Instance is TERMINATING, but the test did not terminate it. Most likely an OCI preemption",
+    )
 
 
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_survives_oci_api_errors(mock_event):
-    node, vm_provider = _spot_oci_node()
+    """An OCI API error is logged and does not stop the spot check or report a termination."""
+    node, vm_provider = spot_oci_node()
     vm_provider._resolve_instance.side_effect = RuntimeError("OCI API unavailable")
 
     assert node.check_spot_termination() == SPOT_TERMINATION_CHECK_DELAY
 
     mock_event.assert_not_called()
-    node.log.warning.assert_called_once()
+    node.log.warning.assert_called_once_with(
+        "Failed to get the OCI lifecycle state: %s", vm_provider._resolve_instance.side_effect
+    )

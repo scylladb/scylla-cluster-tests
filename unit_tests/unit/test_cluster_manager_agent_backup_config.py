@@ -13,13 +13,13 @@ OCI_ENDPOINTS_YAML = {"object_storage_endpoints": [{"name": OCI_ENDPOINT, "aws_r
 
 
 @pytest.fixture(autouse=True)
-def _node_region(monkeypatch):
-    """BaseNode.region goes through vm_region, which is abstract on BaseNode."""
+def node_region(monkeypatch):
+    """Pin BaseNode.region to us-east-1, since the real property goes through the abstract vm_region."""
     monkeypatch.setattr(BaseNode, "region", property(lambda self: "us-east-1"))
 
 
-def _node(params: dict) -> tuple[BaseNode, dict]:
-    """BaseNode with the manager agent yaml captured in a plain dict."""
+def make_node(params: dict) -> tuple[BaseNode, dict]:
+    """Return a BaseNode whose manager agent yaml is captured in a plain dict."""
     node = BaseNode.__new__(BaseNode)
     node.log = Mock()
     node.parent_cluster = Mock(params=params)
@@ -30,7 +30,8 @@ def _node(params: dict) -> tuple[BaseNode, dict]:
 
 
 def test_oci_configures_s3_section_from_object_storage_endpoints():
-    node, agent_yaml = _node(
+    """OCI s3 section gets the endpoint, region and credentials from object_storage_endpoints."""
+    node, agent_yaml = make_node(
         {"backup_bucket_backend": "s3", "cluster_backend": "oci", "append_scylla_yaml": OCI_ENDPOINTS_YAML}
     )
 
@@ -46,23 +47,32 @@ def test_oci_configures_s3_section_from_object_storage_endpoints():
     node.log.warning.assert_not_called()
 
 
-@pytest.mark.parametrize("append_scylla_yaml", [None, {}, {"auto_snapshot": False}])
+@pytest.mark.parametrize(
+    "append_scylla_yaml",
+    [
+        pytest.param(None, id="no-yaml"),
+        pytest.param({}, id="empty-yaml"),
+        pytest.param({"auto_snapshot": False}, id="no-endpoints-key"),
+    ],
+)
 def test_oci_without_object_storage_endpoints_warns_instead_of_failing(append_scylla_yaml):
     """OCI tests that install the manager agent but never back up must not crash on setup."""
-    node, agent_yaml = _node(
+    node, agent_yaml = make_node(
         {"backup_bucket_backend": "s3", "cluster_backend": "oci", "append_scylla_yaml": append_scylla_yaml}
     )
 
     node.update_manager_agent_backup_config(region="us-phoenix-1")
 
     assert agent_yaml["s3"] == {}
-    node.log.warning.assert_called_once()
-    assert "object_storage_endpoints" in node.log.warning.call_args.args[0]
+    node.log.warning.assert_called_once_with(
+        "No object_storage_endpoints in append_scylla_yaml; "
+        "manager agent s3 backend is left unconfigured for OCI, backup will not work"
+    )
 
 
 def test_non_oci_s3_keeps_region_override():
     """The OCI branch must not swallow the generic s3 path used by aws / aws-siren."""
-    node, agent_yaml = _node({"backup_bucket_backend": "s3", "cluster_backend": "aws", "append_scylla_yaml": None})
+    node, agent_yaml = make_node({"backup_bucket_backend": "s3", "cluster_backend": "aws", "append_scylla_yaml": None})
 
     node.update_manager_agent_backup_config(region="eu-west-1")
 
@@ -70,7 +80,8 @@ def test_non_oci_s3_keeps_region_override():
 
 
 def test_non_oci_s3_same_region_leaves_section_empty():
-    node, agent_yaml = _node({"backup_bucket_backend": "s3", "cluster_backend": "aws", "append_scylla_yaml": None})
+    """A non-OCI s3 region equal to the node region adds no region override."""
+    node, agent_yaml = make_node({"backup_bucket_backend": "s3", "cluster_backend": "aws", "append_scylla_yaml": None})
 
     node.update_manager_agent_backup_config(region="us-east-1")
 
@@ -78,7 +89,8 @@ def test_non_oci_s3_same_region_leaves_section_empty():
 
 
 def test_general_config_is_written_to_rclone_section():
-    node, agent_yaml = _node(
+    """general_config is written as-is to the rclone section of the agent yaml."""
+    node, agent_yaml = make_node(
         {"backup_bucket_backend": "s3", "cluster_backend": "oci", "append_scylla_yaml": OCI_ENDPOINTS_YAML}
     )
     rclone = {"transfers": 4, "checkers": 8}
@@ -89,7 +101,8 @@ def test_general_config_is_written_to_rclone_section():
 
 
 def test_oci_fills_region_placeholder_from_oci_region_name():
-    node, agent_yaml = _node(
+    """The {region} placeholders in object_storage_endpoints are filled from oci_region_name."""
+    node, agent_yaml = make_node(
         {
             "backup_bucket_backend": "s3",
             "cluster_backend": "oci",

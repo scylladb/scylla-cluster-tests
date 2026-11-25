@@ -34,7 +34,7 @@ RAW_TOPOLOGY_BARRIER_STALL_BACKTRACES = [
 ]
 
 
-def _service_response(success=True, stdout=DECODED_BY_SERVICE, stderr=""):
+def service_response(success=True, stdout=DECODED_BY_SERVICE, stderr=""):
     """Build a fake requests.Response for the backtrace service."""
     response = MagicMock()
     response.json.return_value = {"success": success, "stdout": stdout, "stderr": stderr}
@@ -42,9 +42,9 @@ def _service_response(success=True, stdout=DECODED_BY_SERVICE, stderr=""):
     return response
 
 
-@pytest.fixture(name="test_config")
-def test_config_fixture():
-    """Fixture to create TestConfig with decoding queue."""
+@pytest.fixture
+def test_config():
+    """TestConfig with backtrace decoding enabled and a decoding queue."""
     config = TestConfig()
     config.set_decoding_queue()
     config.BACKTRACE_DECODING = True
@@ -54,36 +54,37 @@ def test_config_fixture():
     TestConfig.DECODING_QUEUE = None
 
 
-@pytest.fixture(name="dummy_node")
-def dummy_node_fixture(tmp_path):
-    """Fixture to create a dummy node for testing."""
-    dummy_node = DummyNode(
+@pytest.fixture
+def dummy_node(tmp_path):
+    """DummyNode with a DummyRemote, the node whose system log is decoded."""
+    node = DummyNode(
         name="test_node",
         parent_cluster=None,
         base_logdir=tmp_path,
     )
-    dummy_node.remoter = DummyRemote()
-    return dummy_node
+    node.remoter = DummyRemote()
+    return node
 
 
-@pytest.fixture(name="monitor_node")
-def monitor_node_fixture(tmp_path):
-    """Fixture to create a monitor node for testing."""
-    monitor_node = DummyNode(
+@pytest.fixture
+def monitor_node(tmp_path):
+    """DummyNode acting as the monitor; its decode thread is stopped on teardown."""
+    node = DummyNode(
         name="test_monitor_node",
         parent_cluster=None,
         base_logdir=tmp_path,
     )
-    monitor_node.remoter = DummyRemote()
-    yield monitor_node
+    node.remoter = DummyRemote()
+    yield node
 
     # Cleanup
-    monitor_node.termination_event.set()
-    monitor_node.stop_task_threads()
-    monitor_node.wait_till_tasks_threads_are_stopped()
+    node.termination_event.set()
+    node.stop_task_threads()
+    node.wait_till_tasks_threads_are_stopped()
 
 
-def _make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable_regex=None):
+def make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable_regex=None):
+    """DbLogReader for dummy_node that publishes to decoding_queue."""
     db_log_reader = DbLogReader(
         system_log=dummy_node.system_log,
         node_name=str(dummy_node),
@@ -98,12 +99,37 @@ def _make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable
     return db_log_reader
 
 
-def _run_decode_thread_over_log(monitor_node, db_log_reader):
+def run_decode_thread_over_log(monitor_node, db_log_reader):
+    """Read the log through db_log_reader while monitor_node runs its decode thread, then stop it."""
     monitor_node.start_decode_on_monitor_node_thread()
     db_log_reader._read_and_publish_events()
     monitor_node.termination_event.set()
     monitor_node.stop_task_threads()
     monitor_node.wait_till_tasks_threads_are_stopped()
+
+
+def run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
+    """Helper: enqueue one fake event, run decode_backtrace(), return the event mock."""
+    config = TestConfig()
+    config.DECODING_QUEUE = queue.Queue()
+
+    event = MagicMock()
+    event.raw_backtrace = raw_backtrace
+    event.backtrace = None
+    event.severity = MagicMock()
+    event.severity.value = 0
+    event.type = "REACTOR_STALLED"
+    event.event_id = "test-event-id"
+
+    config.DECODING_QUEUE.put({"event": event, "node": "test_node", "build_id": build_id})
+    config.DECODING_QUEUE.put(None)
+
+    monitor_node.test_config = config
+
+    # retries must not slow the unit tests down
+    with patch("time.sleep"):
+        monitor_node.decode_backtrace()
+    return event
 
 
 def test_reactor_stall_not_decoded_when_no_decoding_queue(
@@ -150,10 +176,10 @@ def test_backtraces_decoded_when_enabled(
 ):
     """Backtraces flow from the db log reader through the decode thread to the published event."""
     dummy_node.system_log = str(test_data_dir / log_file)
-    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE)
+    db_log_reader = make_db_log_reader(dummy_node, test_config.DECODING_QUEUE)
 
-    with patch("sdcm.cluster.requests.post", return_value=_service_response()):
-        _run_decode_thread_over_log(monitor_node, db_log_reader)
+    with patch("sdcm.cluster.requests.post", return_value=service_response()):
+        run_decode_thread_over_log(monitor_node, db_log_reader)
 
     events = events_function_scope.published_events
 
@@ -209,10 +235,10 @@ def test_backtrace_decoding_configuration(
         should_decode: Whether the filtered events should have decoded backtraces
     """
     dummy_node.system_log = str(test_data_dir / "system.log")
-    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding, disable_regex)
+    db_log_reader = make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding, disable_regex)
 
-    with patch("sdcm.cluster.requests.post", return_value=_service_response()):
-        _run_decode_thread_over_log(monitor_node, db_log_reader)
+    with patch("sdcm.cluster.requests.post", return_value=service_response()):
+        run_decode_thread_over_log(monitor_node, db_log_reader)
 
     events = events_function_scope.published_events
 
@@ -242,10 +268,10 @@ def test_topology_barrier_stall_decoding_follows_stall_decoding_option(
 ):
     """backtrace_stall_decoding governs topology barrier stalls as it does reactor stalls."""
     dummy_node.system_log = str(test_data_dir / "system_topology_barrier_stall.log")
-    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding)
+    db_log_reader = make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding)
 
-    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
-        _run_decode_thread_over_log(monitor_node, db_log_reader)
+    with patch("sdcm.cluster.requests.post", return_value=service_response()) as mock_post:
+        run_decode_thread_over_log(monitor_node, db_log_reader)
 
     stalls = [e for e in events_function_scope.published_events if e["type"] == "TOPOLOGY_BARRIER_STALL"]
     assert [e["raw_backtrace"] for e in stalls] == RAW_TOPOLOGY_BARRIER_STALL_BACKTRACES
@@ -254,47 +280,27 @@ def test_topology_barrier_stall_decoding_follows_stall_decoding_option(
     assert mock_post.call_count == (2 if stall_decoding else 0)
 
 
-def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
-    """Helper: enqueue one fake event, run decode_backtrace(), return the event mock."""
-    config = TestConfig()
-    config.DECODING_QUEUE = queue.Queue()
-
-    event = MagicMock()
-    event.raw_backtrace = raw_backtrace
-    event.backtrace = None
-    event.severity = MagicMock()
-    event.severity.value = 0
-    event.type = "REACTOR_STALLED"
-    event.event_id = "test-event-id"
-
-    config.DECODING_QUEUE.put({"event": event, "node": "test_node", "build_id": build_id})
-    config.DECODING_QUEUE.put(None)
-
-    monitor_node.test_config = config
-
-    # retries must not slow the unit tests down
-    with patch("time.sleep"):
-        monitor_node.decode_backtrace()
-    return event
-
-
 def test_external_service_success_sets_decoded_backtrace(monitor_node):
     """A successful service reply becomes the decoded backtrace; nothing is run on the monitor node."""
     monitor_node.remoter = MagicMock()
 
-    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
-        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
+    with patch("sdcm.cluster.requests.post", return_value=service_response()) as mock_post:
+        event = run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
 
     assert event.backtrace == DECODED_BY_SERVICE
     assert event.build_id == BUILD_ID
-    mock_post.assert_called_once()
+    mock_post.assert_called_once_with(
+        "https://backtrace.scylladb.com/api/backtrace",
+        json={"build_id": BUILD_ID, "input": "Backtrace:\n0x1234\n0x5678"},
+        timeout=120,
+    )
     monitor_node.remoter.run.assert_not_called()
 
 
 def test_external_service_post_request_payload(monitor_node):
     """Verify the POST request sends correct URL, build_id and input format."""
-    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
-        _run_decode_with_queue_item(monitor_node, "abc123def", "0x1234\n0x5678")
+    with patch("sdcm.cluster.requests.post", return_value=service_response()) as mock_post:
+        run_decode_with_queue_item(monitor_node, "abc123def", "0x1234\n0x5678")
 
     mock_post.assert_called_once_with(
         "https://backtrace.scylladb.com/api/backtrace",
@@ -308,7 +314,7 @@ def test_external_service_post_request_payload(monitor_node):
     [
         pytest.param(requests.HTTPError(response=MagicMock(status_code=404)), 3, id="http_404"),
         pytest.param(
-            _service_response(success=False, stdout="", stderr="OSError: [Errno 28] No space left on device"),
+            service_response(success=False, stdout="", stderr="OSError: [Errno 28] No space left on device"),
             1,
             id="service_side_error_is_final",
         ),
@@ -319,7 +325,7 @@ def test_external_service_failure_publishes_raw_backtrace(monitor_node, side_eff
     monitor_node.remoter = MagicMock()
 
     with patch("sdcm.cluster.requests.post", side_effect=[side_effect] * expected_calls) as mock_post:
-        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
+        event = run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
 
     assert event.backtrace is None
     assert event.raw_backtrace == "0x1234\n0x5678"
@@ -332,9 +338,9 @@ def test_external_service_retries_transient_errors(monitor_node):
     """Transient HTTP errors are retried and a later success is used."""
     with patch(
         "sdcm.cluster.requests.post",
-        side_effect=[requests.Timeout("timed out"), requests.ConnectionError("refused"), _service_response()],
+        side_effect=[requests.Timeout("timed out"), requests.ConnectionError("refused"), service_response()],
     ) as mock_post:
-        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
+        event = run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
 
     assert event.backtrace == DECODED_BY_SERVICE
     assert mock_post.call_count == 3
@@ -342,10 +348,10 @@ def test_external_service_retries_transient_errors(monitor_node):
 
 def test_external_service_cooldown_skips_build_after_failure(monitor_node):
     """After a final failure the service is not asked about the same build again while the cooldown lasts."""
-    with patch("sdcm.cluster.requests.post", return_value=_service_response(success=False)) as mock_post:
-        first = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1111")
-        second = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x2222")
-        other_build = _run_decode_with_queue_item(monitor_node, "def456", "0x3333")
+    with patch("sdcm.cluster.requests.post", return_value=service_response(success=False)) as mock_post:
+        first = run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1111")
+        second = run_decode_with_queue_item(monitor_node, BUILD_ID, "0x2222")
+        other_build = run_decode_with_queue_item(monitor_node, "def456", "0x3333")
 
     assert first.backtrace is None
     assert second.backtrace is None
@@ -358,7 +364,7 @@ def test_no_build_id_publishes_raw_backtrace(monitor_node):
     monitor_node.remoter = MagicMock()
 
     with patch("sdcm.cluster.requests.post") as mock_post:
-        event = _run_decode_with_queue_item(monitor_node, None, "0x1234\n0x5678")
+        event = run_decode_with_queue_item(monitor_node, None, "0x1234\n0x5678")
 
     mock_post.assert_not_called()
     monitor_node.remoter.run.assert_not_called()

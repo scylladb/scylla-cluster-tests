@@ -13,7 +13,7 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 
 
-def _make_config(explicit: set[str] | None = None, **values):
+def make_config(explicit: set[str] | None = None, **values):
     """Build a bare SCTConfiguration without running the full __init__ merge.
 
     `__init__` loads YAML defaults, resolves AMIs and talks to AWS; the policy under test only reads a handful
@@ -32,77 +32,107 @@ def _make_config(explicit: set[str] | None = None, **values):
     return config
 
 
+@pytest.fixture()
+def load_config(monkeypatch):
+    """Factory loading a real SCTConfiguration from the minimal test case, with SCT_* env vars set from `env`."""
+
+    def load(**env):
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+        # a placement file left by an earlier run must not rewrite region/AZ under the test
+        monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        return SCTConfiguration()
+
+    return load
+
+
 @pytest.mark.parametrize(
     "duration, expected",
     [
-        (60, "spot"),
-        (719, "spot"),
-        (720, "spot"),  # threshold is inclusive
-        (721, "on_demand"),
-        (7200, "on_demand"),
+        pytest.param(60, "spot", id="short-spot"),
+        pytest.param(719, "spot", id="just-below-threshold"),
+        pytest.param(720, "spot", id="at-threshold-inclusive"),
+        pytest.param(721, "on_demand", id="just-above-threshold"),
+        pytest.param(7200, "on_demand", id="long-on-demand"),
     ],
 )
 def test_duration_selects_provision_type(duration, expected):
-    config = _make_config(test_duration=duration)
+    """The policy picks spot up to spot_max_test_duration (inclusive) and on_demand above it."""
+    config = make_config(test_duration=duration)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == expected
 
 
 def test_explicit_on_demand_is_never_overridden():
     """A short perf job pinning on_demand must stay on_demand, or its latency numbers become meaningless."""
-    config = _make_config(explicit={"instance_provision"}, instance_provision="on_demand", test_duration=90)
+    config = make_config(explicit={"instance_provision"}, instance_provision="on_demand", test_duration=90)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
 
 
 def test_explicit_spot_is_never_overridden_for_long_tests():
-    config = _make_config(explicit={"instance_provision"}, instance_provision="spot", test_duration=7200)
+    """An explicitly pinned spot stays spot even when the test is long."""
+    config = make_config(explicit={"instance_provision"}, instance_provision="spot", test_duration=7200)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot"
 
 
 def test_spot_fleet_is_not_flattened_to_spot():
     """spot_fleet is a spot variant; a short test must not lose the fleet request shape."""
-    config = _make_config(instance_provision="spot_fleet", test_duration=120)
+    config = make_config(instance_provision="spot_fleet", test_duration=120)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot_fleet"
 
 
 def test_spot_fleet_still_moves_to_on_demand_for_long_tests():
-    config = _make_config(instance_provision="spot_fleet", test_duration=7200)
+    """A long test moves spot_fleet to on_demand, as it does for plain spot."""
+    config = make_config(instance_provision="spot_fleet", test_duration=7200)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
 
 
-@pytest.mark.parametrize("backend", ["docker", "k8s-eks", "oci", "xcloud"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("docker", id="docker"),
+        pytest.param("k8s-eks", id="k8s-eks"),
+        pytest.param("oci", id="oci"),
+        pytest.param("xcloud", id="xcloud"),
+    ],
+)
 def test_policy_skipped_for_unsupported_backends(backend):
     """OCI DenseIO shapes cannot be spot at all, and docker/k8s have no spot concept here."""
-    config = _make_config(cluster_backend=backend, instance_provision="on_demand", test_duration=60)
+    config = make_config(cluster_backend=backend, instance_provision="on_demand", test_duration=60)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
 
 
 def test_policy_disabled_when_threshold_is_zero():
-    config = _make_config(spot_max_test_duration=0, instance_provision="spot", test_duration=99999)
+    """A spot_max_test_duration of 0 turns the policy off, leaving spot untouched for a very long test."""
+    config = make_config(spot_max_test_duration=0, instance_provision="spot", test_duration=99999)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot"
 
 
 def test_policy_noop_without_test_duration():
     """`test_duration` is typed `int`, so 0 is the only falsy value it can hold."""
-    config = _make_config(test_duration=0, instance_provision="spot")
+    config = make_config(test_duration=0, instance_provision="spot")
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot"
 
 
 def test_custom_threshold_is_respected():
-    config = _make_config(spot_max_test_duration=120, test_duration=180)
+    """A custom spot_max_test_duration replaces the default threshold."""
+    config = make_config(spot_max_test_duration=120, test_duration=180)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
 
 
 def test_is_explicitly_set_reads_captured_provenance():
-    config = _make_config(explicit={"instance_provision", "region_name"})
+    """is_explicitly_set reports only the params recorded as explicitly set."""
+    config = make_config(explicit={"instance_provision", "region_name"})
     assert config.is_explicitly_set("instance_provision") is True
     assert config.is_explicitly_set("region_name") is True
     assert config.is_explicitly_set("availability_zone") is False
@@ -114,158 +144,177 @@ def test_is_explicitly_set_defaults_to_false_when_unset():
     assert config.is_explicitly_set("instance_provision") is False
 
 
-class TestProvenanceCapture:
-    """Provenance must be captured from real config loading, not inferred from merged values.
+# Provenance must be captured from real config loading, not inferred from merged values. This is the risky half
+# of the policy: if a value inherited from `defaults/` were mistaken for an explicit one (or the reverse), jobs
+# would silently get the wrong provision type.
 
-    This is the risky half of the policy: if a value inherited from `defaults/` were mistaken for an explicit
-    one (or the reverse), jobs would silently get the wrong provision type.
+
+def test_defaults_are_not_explicit(load_config):
+    """`instance_provision: spot` comes from defaults/aws_config.yaml, so the policy may override it."""
+    config = load_config()
+    assert config.is_explicitly_set("instance_provision") is False
+
+
+def test_env_var_marks_param_explicit(load_config):
+    """An SCT_* env var counts as an explicit choice and its value is kept."""
+    config = load_config(SCT_INSTANCE_PROVISION="on_demand")
+    assert config.is_explicitly_set("instance_provision") is True
+    assert config.get("instance_provision") == "on_demand"
+
+
+def test_user_config_file_marks_param_explicit(load_config):
+    """A test case listing instance_provision is an explicit choice; minimal_test_case.yaml does not."""
+    config = load_config(SCT_CONFIG_FILES="test-cases/artifacts/ami.yaml")
+    assert config.is_explicitly_set("instance_provision") is True
+    # sanity: a param the file really does set, and one it does not
+    assert config.is_explicitly_set("n_db_nodes") is True
+    assert config.is_explicitly_set("fallback_to_next_region") is False
+
+
+def test_short_test_gets_spot_from_policy(load_config):
+    """A short test loaded from the default config gets spot from the policy."""
+    config = load_config()
+    assert config.get("test_duration") <= config.get("spot_max_test_duration")
+    assert config.get("instance_provision") == "spot"
+
+
+def test_long_test_gets_on_demand_from_policy(load_config):
+    """A long test loaded from the default config gets on_demand from the policy."""
+    config = load_config(SCT_TEST_DURATION="7200")
+    assert config.get("instance_provision") == "on_demand"
+
+
+def test_explicit_pin_survives_full_config_load(load_config):
+    """End-to-end guard for the perf-job case: long test, explicitly pinned spot, must stay spot."""
+    config = load_config(SCT_TEST_DURATION="7200", SCT_INSTANCE_PROVISION="spot")
+    assert config.get("instance_provision") == "spot"
+
+
+# `stress_duration`, not `test_duration`, drives real runtime when set (see tester._init_test_duration).
+
+
+def test_uses_test_duration_when_no_stress_duration():
+    """Without a stress_duration the effective duration is test_duration."""
+    config = make_config(test_duration=240, stress_duration=0, prepare_stress_duration=300)
+    assert config.effective_test_duration() == 240
+
+
+def test_stress_duration_dominates():
+    """With a stress_duration the effective duration is prepare + stress + 60 minutes."""
+    config = make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
+    assert config.effective_test_duration() == 300 + 2880 + 60
+
+
+def test_long_stress_run_is_not_classified_as_spot():
+    """The bug this guards: test_duration=5 with stress_duration=2880 is a ~54h run that read as 'spot'."""
+    config = make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
+
+
+# 'auto' is the opt-in that makes the policy reachable under Jenkins. Every pipeline defaults the `provision_type`
+# job param to a concrete value, and runSctTest.groovy exports SCT_INSTANCE_PROVISION whenever it is non-empty -
+# so without 'auto' the value is always "explicitly set" in CI and the policy would never fire there.
+
+
+def test_auto_resolves_to_spot_for_short_test():
+    """'auto' resolves to spot for a short test."""
+    config = make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=90)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "spot"
+
+
+def test_auto_resolves_to_on_demand_for_long_test():
+    """'auto' resolves to on_demand for a long test."""
+    config = make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=7200)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
+
+
+def test_auto_wins_over_explicitness():
+    """'auto' arriving via SCT_INSTANCE_PROVISION is explicit, but explicitly means 'you decide'."""
+    config = make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=60)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") != "auto"
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("oci", id="oci"),
+        pytest.param("docker", id="docker"),
+        pytest.param("k8s-eks", id="k8s-eks"),
+    ],
+)
+def test_auto_resolves_on_backends_without_spot(backend):
+    """'auto' must never survive to the step-11 validation, which rejects it."""
+    config = make_config(
+        explicit={"instance_provision"}, instance_provision="auto", cluster_backend=backend, test_duration=60
+    )
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
+
+
+def test_auto_without_a_duration_falls_back_to_on_demand():
+    """An unknown duration is not evidence of a short test, and the two wrong guesses are not equal:
+    guessing spot can lose a multi-day run to a reclamation, guessing on_demand only costs money.
     """
-
-    @staticmethod
-    def _load(monkeypatch, **env):
-        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-        # a placement file left by an earlier run must not rewrite region/AZ under the test
-        monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
-        for key, value in env.items():
-            monkeypatch.setenv(key, value)
-        return SCTConfiguration()
-
-    def test_defaults_are_not_explicit(self, monkeypatch):
-        """`instance_provision: spot` comes from defaults/aws_config.yaml, so the policy may override it."""
-        config = self._load(monkeypatch)
-        assert config.is_explicitly_set("instance_provision") is False
-
-    def test_env_var_marks_param_explicit(self, monkeypatch):
-        config = self._load(monkeypatch, SCT_INSTANCE_PROVISION="on_demand")
-        assert config.is_explicitly_set("instance_provision") is True
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_user_config_file_marks_param_explicit(self, monkeypatch):
-        """A test case listing instance_provision is an explicit choice; minimal_test_case.yaml does not."""
-        config = self._load(monkeypatch, SCT_CONFIG_FILES="test-cases/artifacts/ami.yaml")
-        assert config.is_explicitly_set("instance_provision") is True
-        # sanity: a param the file really does set, and one it does not
-        assert config.is_explicitly_set("n_db_nodes") is True
-        assert config.is_explicitly_set("fallback_to_next_region") is False
-
-    def test_short_test_gets_spot_from_policy(self, monkeypatch):
-        config = self._load(monkeypatch)
-        assert config.get("test_duration") <= config.get("spot_max_test_duration")
-        assert config.get("instance_provision") == "spot"
-
-    def test_long_test_gets_on_demand_from_policy(self, monkeypatch):
-        config = self._load(monkeypatch, SCT_TEST_DURATION="7200")
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_explicit_pin_survives_full_config_load(self, monkeypatch):
-        """End-to-end guard for the perf-job case: long test, explicitly pinned spot, must stay spot."""
-        config = self._load(monkeypatch, SCT_TEST_DURATION="7200", SCT_INSTANCE_PROVISION="spot")
-        assert config.get("instance_provision") == "spot"
+    config = make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
 
 
-class TestEffectiveDuration:
-    """`stress_duration`, not `test_duration`, drives real runtime when set (see tester._init_test_duration)."""
+def test_auto_without_a_threshold_falls_back_to_on_demand():
+    """'auto' with no spot threshold falls back to on_demand."""
+    config = make_config(
+        explicit={"instance_provision"}, instance_provision="auto", spot_max_test_duration=0, test_duration=60
+    )
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
 
-    def test_uses_test_duration_when_no_stress_duration(self):
-        config = _make_config(test_duration=240, stress_duration=0, prepare_stress_duration=300)
-        assert config.effective_test_duration() == 240
 
-    def test_stress_duration_dominates(self):
-        config = _make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
-        assert config.effective_test_duration() == 300 + 2880 + 60
-
-    def test_long_stress_run_is_not_classified_as_spot(self):
-        """The bug this guards: test_duration=5 with stress_duration=2880 is a ~54h run that read as 'spot'."""
-        config = _make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
+def test_missing_duration_says_what_to_fix(caplog):
+    """The warning is the only thing pointing at the test case that needs a duration, so it must name it."""
+    config = make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
+    with caplog.at_level(logging.WARNING):
         config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
+    assert "test_duration" in caplog.text
 
 
-class TestAutoProvisionType:
-    """'auto' is the opt-in that makes the policy reachable under Jenkins.
-
-    Every pipeline defaults the `provision_type` job param to a concrete value, and runSctTest.groovy exports
-    SCT_INSTANCE_PROVISION whenever it is non-empty - so without 'auto' the value is always "explicitly set"
-    in CI and the policy would never fire there.
-    """
-
-    def test_auto_resolves_to_spot_for_short_test(self):
-        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=90)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "spot"
-
-    def test_auto_resolves_to_on_demand_for_long_test(self):
-        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=7200)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_auto_wins_over_explicitness(self):
-        """'auto' arriving via SCT_INSTANCE_PROVISION is explicit, but explicitly means 'you decide'."""
-        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=60)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") != "auto"
-
-    @pytest.mark.parametrize("backend", ["oci", "docker", "k8s-eks"])
-    def test_auto_resolves_on_backends_without_spot(self, backend):
-        """'auto' must never survive to the step-11 validation, which rejects it."""
-        config = _make_config(
-            explicit={"instance_provision"}, instance_provision="auto", cluster_backend=backend, test_duration=60
-        )
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_auto_without_a_duration_falls_back_to_on_demand(self):
-        """An unknown duration is not evidence of a short test, and the two wrong guesses are not equal:
-        guessing spot can lose a multi-day run to a reclamation, guessing on_demand only costs money.
-        """
-        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_auto_without_a_threshold_falls_back_to_on_demand(self):
-        config = _make_config(
-            explicit={"instance_provision"}, instance_provision="auto", spot_max_test_duration=0, test_duration=60
-        )
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
-
-    def test_missing_duration_says_what_to_fix(self, caplog):
-        """The warning is the only thing pointing at the test case that needs a duration, so it must name it."""
-        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
-        with caplog.at_level(logging.WARNING):
-            config._apply_duration_based_provision_policy()
-        assert "test_duration" in caplog.text
-
-    def test_non_auto_without_a_duration_is_left_alone(self):
-        """Only 'auto' asks to be decided; an inherited default with no duration keeps whatever it had."""
-        config = _make_config(instance_provision="spot", test_duration=0)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "spot"
+def test_non_auto_without_a_duration_is_left_alone():
+    """Only 'auto' asks to be decided; an inherited default with no duration keeps whatever it had."""
+    config = make_config(instance_provision="spot", test_duration=0)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "spot"
 
 
-class TestNegativeDurationNormalization:
-    """`abs()` mirrors step 13 of SCTConfiguration.__init__, which normalizes durations AFTER the policy runs.
+# `abs()` mirrors step 13 of SCTConfiguration.__init__, which normalizes durations AFTER the policy runs.
+# Reading the raw value would decide on a duration the run never has: stress=-421 + prepare=300 reads as -61
+# (spot) but the run is actually 781 min, which must be on_demand.
 
-    Reading the raw value would decide on a duration the run never has: stress=-421 + prepare=300 reads as
-    -61 (spot) but the run is actually 781 min, which must be on_demand.
-    """
 
-    def test_negative_stress_duration_uses_magnitude(self):
-        config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
-        assert config.effective_test_duration() == 781
+def test_negative_stress_duration_uses_magnitude():
+    """A negative stress_duration counts by its magnitude in the effective duration."""
+    config = make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
+    assert config.effective_test_duration() == 781
 
-    def test_negative_stress_duration_selects_on_demand(self):
-        config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
 
-    def test_negative_prepare_duration_uses_magnitude(self):
-        config = _make_config(test_duration=5, stress_duration=421, prepare_stress_duration=-300)
-        assert config.effective_test_duration() == 781
+def test_negative_stress_duration_selects_on_demand():
+    """A negative stress_duration is classified by its magnitude, so the run goes to on_demand."""
+    config = make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"
 
-    def test_negative_test_duration_uses_magnitude(self):
-        config = _make_config(test_duration=-900, stress_duration=0)
-        assert config.effective_test_duration() == 900
-        config._apply_duration_based_provision_policy()
-        assert config.get("instance_provision") == "on_demand"
+
+def test_negative_prepare_duration_uses_magnitude():
+    """A negative prepare_stress_duration counts by its magnitude in the effective duration."""
+    config = make_config(test_duration=5, stress_duration=421, prepare_stress_duration=-300)
+    assert config.effective_test_duration() == 781
+
+
+def test_negative_test_duration_uses_magnitude():
+    """A negative test_duration counts by its magnitude, so a 900 min run selects on_demand."""
+    config = make_config(test_duration=-900, stress_duration=0)
+    assert config.effective_test_duration() == 900
+    config._apply_duration_based_provision_policy()
+    assert config.get("instance_provision") == "on_demand"

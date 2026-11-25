@@ -24,14 +24,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 from detect_cyclic_imports import extract_imports, find_cycles, load_allowlist  # noqa: E402
 
 
-def _make_project(tmp_path: Path) -> Path:
+def make_project(tmp_path: Path) -> Path:
     """Create a fake project root with a sdcm/ package. Returns the project root (tmp_path)."""
     sdcm_dir = tmp_path / "sdcm"
     sdcm_dir.mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
-def _graph(tmp_path: Path) -> dict[str, set[str]]:
+def extract_graph(tmp_path: Path) -> dict[str, set[str]]:
     """Extract imports and return just the graph dict."""
     graph, _edges, _parse_errors = extract_imports(tmp_path)
     return graph
@@ -44,12 +44,12 @@ def _graph(tmp_path: Path) -> dict[str, set[str]]:
 
 def test_extract_imports_basic(tmp_path):
     """extract_imports returns edge sdcm.foo -> sdcm.bar for a simple import."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text("from sdcm.bar import X\n", encoding="utf-8")
     (sdcm / "bar.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.foo" in graph
     assert "sdcm.bar" in graph["sdcm.foo"]
@@ -62,7 +62,7 @@ def test_extract_imports_basic(tmp_path):
 
 def test_type_checking_imports_excluded(tmp_path):
     """Imports inside 'if TYPE_CHECKING:' must NOT appear as graph edges."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text(
         "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from sdcm.bar import Baz\n",
@@ -70,7 +70,7 @@ def test_type_checking_imports_excluded(tmp_path):
     )
     (sdcm / "bar.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.foo" in graph
     assert "sdcm.bar" not in graph.get("sdcm.foo", set())
@@ -83,7 +83,7 @@ def test_type_checking_imports_excluded(tmp_path):
 
 def test_relative_import_resolution(tmp_path):
     """'from .base import Foo' in sdcm.pkg.sub resolves to sdcm.pkg.base."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     pkg_dir = sdcm / "pkg"
     pkg_dir.mkdir()
@@ -91,7 +91,7 @@ def test_relative_import_resolution(tmp_path):
     (pkg_dir / "sub.py").write_text("from .base import Foo\n", encoding="utf-8")
     (pkg_dir / "base.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.pkg.sub" in graph
     assert "sdcm.pkg.base" in graph["sdcm.pkg.sub"]
@@ -186,14 +186,14 @@ def test_allowlist_reports_unlisted_edge(tmp_path):
 
 def test_init_py_treated_as_package(tmp_path):
     """__init__.py files appear as 'sdcm.pkg', never as 'sdcm.pkg.__init__'."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     pkg_dir = sdcm / "pkg"
     pkg_dir.mkdir()
     (pkg_dir / "__init__.py").write_text("from sdcm.other import X\n", encoding="utf-8")
     (sdcm / "other.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.pkg" in graph
     assert "sdcm.pkg.__init__" not in graph
@@ -207,11 +207,11 @@ def test_init_py_treated_as_package(tmp_path):
 
 def test_stdlib_imports_not_in_graph(tmp_path):
     """Standard-library imports must not create graph edges."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text("import os\nimport sys\n", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "os" not in graph
     assert "sys" not in graph
@@ -220,11 +220,11 @@ def test_stdlib_imports_not_in_graph(tmp_path):
 
 def test_third_party_imports_not_in_graph(tmp_path):
     """Third-party imports must not create graph edges."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text("import boto3\nimport yaml\n", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "boto3" not in graph
     assert "yaml" not in graph
@@ -233,7 +233,7 @@ def test_third_party_imports_not_in_graph(tmp_path):
 
 def test_syntax_error_file_skipped(tmp_path):
     """Files with SyntaxErrors are silently skipped; other files still processed."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "bad.py").write_text("def broken(:\n    pass\n", encoding="utf-8")
     (sdcm / "good.py").write_text("from sdcm.other import X\n", encoding="utf-8")
@@ -250,7 +250,7 @@ def test_syntax_error_file_skipped(tmp_path):
 
 def test_function_level_imports_excluded(tmp_path):
     """Imports inside function bodies are deferred and don't create import-time cycles."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text(
         "from sdcm.bar import top_level_thing\n"
@@ -263,7 +263,7 @@ def test_function_level_imports_excluded(tmp_path):
     (sdcm / "bar.py").write_text("", encoding="utf-8")
     (sdcm / "baz.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.bar" in graph["sdcm.foo"]
     assert "sdcm.baz" not in graph["sdcm.foo"]
@@ -271,7 +271,7 @@ def test_function_level_imports_excluded(tmp_path):
 
 def test_method_level_imports_excluded(tmp_path):
     """Imports inside class methods are also deferred and excluded."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text(
         "from sdcm.bar import X\n"
@@ -285,7 +285,7 @@ def test_method_level_imports_excluded(tmp_path):
     (sdcm / "bar.py").write_text("", encoding="utf-8")
     (sdcm / "baz.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.bar" in graph["sdcm.foo"]
     assert "sdcm.baz" not in graph["sdcm.foo"]
@@ -298,7 +298,7 @@ def test_method_level_imports_excluded(tmp_path):
 
 def test_package_style_import_creates_submodule_edge(tmp_path):
     """'from sdcm.pkg import mod' edges to sdcm.pkg.mod, not just to sdcm.pkg."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     pkg_dir = sdcm / "pkg"
     pkg_dir.mkdir()
@@ -306,7 +306,7 @@ def test_package_style_import_creates_submodule_edge(tmp_path):
     (pkg_dir / "mod.py").write_text("", encoding="utf-8")
     (sdcm / "foo.py").write_text("from sdcm.pkg import mod\n", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.pkg.mod" in graph["sdcm.foo"]
     assert "sdcm.pkg" in graph["sdcm.foo"]
@@ -314,26 +314,26 @@ def test_package_style_import_creates_submodule_edge(tmp_path):
 
 def test_relative_package_style_import_creates_submodule_edge(tmp_path):
     """'from . import sibling' edges to the sibling module, not to the package."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     pkg_dir = root / "sdcm" / "pkg"
     pkg_dir.mkdir(parents=True)
     (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
     (pkg_dir / "sub.py").write_text("from . import sibling\n", encoding="utf-8")
     (pkg_dir / "sibling.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.pkg.sibling" in graph["sdcm.pkg.sub"]
 
 
 def test_attribute_import_keeps_package_edge_only(tmp_path):
     """'from sdcm.bar import SomeClass' must not invent an sdcm.bar.SomeClass node."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     sdcm = root / "sdcm"
     (sdcm / "foo.py").write_text("from sdcm.bar import SomeClass\n", encoding="utf-8")
     (sdcm / "bar.py").write_text("SomeClass = object\n", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert graph["sdcm.foo"] == {"sdcm.bar"}
     assert "sdcm.bar.SomeClass" not in graph
@@ -341,14 +341,14 @@ def test_attribute_import_keeps_package_edge_only(tmp_path):
 
 def test_package_style_cycle_detected(tmp_path):
     """Two siblings importing each other package-style form a detectable cycle."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     pkg_dir = root / "sdcm" / "pkg"
     pkg_dir.mkdir(parents=True)
     (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
     (pkg_dir / "a.py").write_text("from sdcm.pkg import b\n", encoding="utf-8")
     (pkg_dir / "b.py").write_text("from sdcm.pkg import a\n", encoding="utf-8")
 
-    cyclic_edges = find_cycles(_graph(root))
+    cyclic_edges = find_cycles(extract_graph(root))
 
     assert ("sdcm.pkg.a", "sdcm.pkg.b") in cyclic_edges
     assert ("sdcm.pkg.b", "sdcm.pkg.a") in cyclic_edges
@@ -361,14 +361,14 @@ def test_package_style_cycle_detected(tmp_path):
 
 def test_ancestor_package_edge_excluded(tmp_path):
     """A submodule importing through its own package is structural, not a cycle."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     pkg_dir = root / "sdcm" / "pkg"
     pkg_dir.mkdir(parents=True)
     (pkg_dir / "__init__.py").write_text("from sdcm.pkg import api\n", encoding="utf-8")
     (pkg_dir / "api.py").write_text("from sdcm.pkg import consts\n", encoding="utf-8")
     (pkg_dir / "consts.py").write_text("", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert "sdcm.pkg" not in graph["sdcm.pkg.api"]
     assert "sdcm.pkg.consts" in graph["sdcm.pkg.api"]
@@ -377,13 +377,13 @@ def test_ancestor_package_edge_excluded(tmp_path):
 
 def test_import_of_own_ancestor_excluded(tmp_path):
     """'import sdcm.pkg' inside sdcm.pkg.sub does not create a self-referential edge."""
-    root = _make_project(tmp_path)
+    root = make_project(tmp_path)
     pkg_dir = root / "sdcm" / "pkg"
     pkg_dir.mkdir(parents=True)
     (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
     (pkg_dir / "sub.py").write_text("import sdcm.pkg\n", encoding="utf-8")
 
-    graph = _graph(root)
+    graph = extract_graph(root)
 
     assert graph["sdcm.pkg.sub"] == set()
 
