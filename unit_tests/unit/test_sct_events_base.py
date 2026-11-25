@@ -40,21 +40,40 @@ def sct_event_registry(tmp_path):
     SctEvent._sct_event_types_registry = registry_backup
 
 
+def create_test_event(subcontext=None):
+    """Return an SctEvent with a hardcoded event_id and severity, and the given subcontext if set."""
+
+    class Y(SctEvent):
+        pass
+
+    event = Y()
+    event.event_id = "test-event-id"
+    event.severity = Severity.ERROR
+    if subcontext is not None:
+        event.subcontext = subcontext
+    return event
+
+
 def test_sct_event_is_in_registry():
+    """SctEvent is registered in the event types registry under its own name."""
     assert "SctEvent" in SctEvent._sct_event_types_registry
 
 
 def test_create_instance():
+    """SctEvent refuses direct instantiation."""
     with pytest.raises(TypeError, match="may not be instantiated directly"):
         SctEvent()
 
 
 def test_subclass_no_max_severity():
+    """Subclassing SctEvent without a max severity raises ValueError."""
     with pytest.raises(ValueError, match="no max severity"):
         type("X", (SctEvent,), {})
 
 
 def test_subclass_abstract_no_max_severity():
+    """An abstract subclass has no type or subtype and refuses direct instantiation."""
+
     class X(SctEvent, abstract=True):
         pass
 
@@ -67,6 +86,8 @@ def test_subclass_abstract_no_max_severity():
 
 
 def test_subclass_with_max_severity():
+    """A concrete subclass is not abstract, has no type or subtype, and is an SctEventProtocol."""
+
     class Y(SctEvent):
         pass
 
@@ -82,6 +103,7 @@ def test_subclass_with_max_severity():
 
 
 def test_subclass_twice_with_same_name():
+    """Creating a second event type with an already used name raises TypeError."""
     _ = type("Y", (SctEvent,), {})
 
     with pytest.raises(TypeError, match="is already used"):
@@ -89,6 +111,8 @@ def test_subclass_twice_with_same_name():
 
 
 def test_default_str():
+    """str() of a new event shows base, severity, period type and event_id."""
+
     class Y(SctEvent):
         pass
 
@@ -98,6 +122,8 @@ def test_default_str():
 
 
 def test_equal():
+    """Events with the same timestamp and event_id are equal, including across subclasses."""
+
     class Y(SctEvent):
         pass
 
@@ -115,6 +141,8 @@ def test_equal():
 
 
 def test_equal_not_subclass():
+    """Events of unrelated classes are not equal, even with the same timestamp."""
+
     class Y(SctEvent):
         pass
 
@@ -128,6 +156,7 @@ def test_equal_not_subclass():
 
 
 def test_equal_pickle_unpickle():
+    """An event is equal to its pickle round-trip copy."""
     global Y  # noqa: PLW0603
 
     class Y(SctEvent):
@@ -139,6 +168,8 @@ def test_equal_pickle_unpickle():
 
 
 def test_to_json():
+    """to_json serializes the event fields in a fixed order."""
+
     class Y(SctEvent):
         pass
 
@@ -162,8 +193,8 @@ def test_publish():
     assert y._ready_to_publish
     with patch("sdcm.sct_events.events_device.get_events_main_device") as mock:
         y.publish()
-    mock.assert_called_once()
-    mock().publish_event.assert_called_once()
+    mock.assert_called_once_with(_registry=y._events_processes_registry)
+    mock().publish_event.assert_called_once_with(y)
 
     assert not y._ready_to_publish
     with patch("sdcm.sct_events.events_device.get_events_main_device") as mock:
@@ -182,8 +213,8 @@ def test_publish_or_dump():
     with patch("sdcm.sct_events.events_device.get_events_main_device") as mock:
         y.publish_or_dump()
     assert mock.call_count == 2
-    mock().is_alive.assert_called_once()
-    mock().publish_event.assert_called_once()
+    mock().is_alive.assert_called_once_with()
+    mock().publish_event.assert_called_once_with(y)
 
     assert not y._ready_to_publish
     with patch("sdcm.sct_events.events_device.get_events_main_device") as mock:
@@ -192,6 +223,8 @@ def test_publish_or_dump():
 
 
 def test_formatted_event_timestamp():
+    """formatted_event_timestamp renders epoch 0 as a date and a missing timestamp as a placeholder."""
+
     class Y(SctEvent):
         pass
 
@@ -203,6 +236,8 @@ def test_formatted_event_timestamp():
 
 
 def test_add_subevent_type_all_levels_not_abstract():
+    """add_subevent_type creates concrete nested subtypes with type and subtype set."""
+
     @runtime_checkable
     class YT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
@@ -227,6 +262,8 @@ def test_add_subevent_type_all_levels_not_abstract():
 
 
 def test_add_subevent_type_abstract_level_in_the_middle():
+    """An abstract intermediate subevent type can hold concrete subtypes."""
+
     @runtime_checkable
     class ZT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
@@ -253,6 +290,8 @@ def test_add_subevent_type_abstract_level_in_the_middle():
 
 
 def test_add_subevent_type_subtype_is_not_abstract_only():
+    """An abstract base event allows abstract type levels with concrete subtypes."""
+
     @runtime_checkable
     class WT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
@@ -279,6 +318,8 @@ def test_add_subevent_type_subtype_is_not_abstract_only():
 
 
 def test_add_subevent_type_assertions():
+    """add_subevent_type rejects invalid identifiers, existing attributes and levels past the max."""
+
     @runtime_checkable
     class YT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
@@ -305,6 +346,8 @@ def test_add_subevent_type_assertions():
 
 
 def test_add_subevent_type_mixin_with_init():
+    """Mixin attributes and init kwargs are applied to the generated subevent types."""
+
     @runtime_checkable
     class YT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
@@ -357,6 +400,8 @@ def test_add_subevent_type_mixin_with_init():
 
 
 def test_add_subevent_type_mixin_without_init():
+    """A mixin without __init__ keeps the severity set by the base class __init__."""
+
     @runtime_checkable
     class YT(SctEventProtocol, Protocol):
         attr1: str
@@ -380,6 +425,7 @@ def test_add_subevent_type_mixin_without_init():
 
 
 def test_add_subevent_type_pickle():
+    """A generated subevent type instance is equal to its pickle round-trip copy."""
     global Y  # noqa: PLW0603
 
     class Y(SctEvent):
@@ -397,6 +443,7 @@ def test_add_subevent_type_pickle():
 
 
 def test_base_filter_create_instance():
+    """BaseFilter refuses direct instantiation, and subclasses start with a uuid and no expiry."""
     with pytest.raises(TypeError, match="may not be instantiated directly"):
         BaseFilter()
 
@@ -410,6 +457,8 @@ def test_base_filter_create_instance():
 
 
 def test_base_filter_cancel():
+    """cancel_filter sets clear_filter and publishes the filter once."""
+
     class Y(BaseFilter):
         pass
 
@@ -417,23 +466,26 @@ def test_base_filter_cancel():
         y = Y()
         mock.assert_not_called()
         y.cancel_filter()
-        mock.assert_called_once()
+        mock.assert_called_once_with()
     assert y.clear_filter
 
 
 def test_base_filter_context_manager():
+    """Entering a BaseFilter publishes it, and exiting it cancels the filter."""
+
     class Y(BaseFilter):
         pass
 
-    with patch("sdcm.sct_events.base.SctEvent.publish") as mock:
-        with Y() as y:
-            mock.assert_called_once()
-            assert not y.clear_filter
-        assert mock.call_count == 2
-        assert y.clear_filter
+    with patch("sdcm.sct_events.base.SctEvent.publish") as mock, Y() as y:
+        mock.assert_called_once_with()
+        assert not y.clear_filter
+    assert mock.call_count == 2
+    assert y.clear_filter
 
 
 def test_base_filter_eq():
+    """Filters with the same uuid are equal, including across subclasses."""
+
     class Y(BaseFilter):
         pass
 
@@ -451,6 +503,8 @@ def test_base_filter_eq():
 
 
 def test_base_filter_not_eq():
+    """Filters of unrelated classes are not equal, even with the same uuid."""
+
     class Y(BaseFilter):
         pass
 
@@ -467,21 +521,9 @@ def test_base_filter_not_eq():
 # --- LogEvent tests ---
 
 
-def _create_test_event(subcontext=None):
-    """Helper to create a test event with hardcoded event_id and severity."""
-
-    class Y(SctEvent):
-        pass
-
-    event = Y()
-    event.event_id = "test-event-id"
-    event.severity = Severity.ERROR
-    if subcontext is not None:
-        event.subcontext = subcontext
-    return event
-
-
 def test_log_event_subclass():
+    """A LogEvent subclass is concrete, with default severity and no line info."""
+
     class Y(LogEvent):
         pass
 
@@ -506,6 +548,8 @@ def test_log_event_subclass():
 
 
 def test_log_event_add_info():
+    """add_info fills node, line and timestamp, and marks the event ready to publish."""
+
     class Y(LogEvent):
         pass
 
@@ -526,6 +570,7 @@ def test_log_event_add_info():
 
 
 def test_log_event_clone_fresh():
+    """Clone of a LogEvent without line info copies its fields and is not ready to publish."""
     global Y  # noqa: PLW0603
 
     class Y(LogEvent):
@@ -550,6 +595,7 @@ def test_log_event_clone_fresh():
 
 
 def test_log_event_clone_with_info():
+    """Clone copies line info and backtraces, and add_info on the clone leaves the original unchanged."""
     global Y  # noqa: PLW0603
 
     class Y(LogEvent):
@@ -591,6 +637,8 @@ def test_log_event_clone_with_info():
 
 
 def test_log_event_msgfmt():
+    """str() of a LogEvent subevent includes its type, regex, line info and backtraces as they are set."""
+
     class Y(LogEvent):
         T: Type[LogEventProtocol]
 
@@ -634,7 +682,7 @@ def test_subcontext_with_dict_and_event_objects():
         disruption,  # SctEvent object
         {"event_id": "dict-event-id", "base": "TestBase", "nemesis_name": "DictNemesis"},  # dict object
     ]
-    event = _create_test_event(subcontext=subcontext)
+    event = create_test_event(subcontext=subcontext)
 
     state = event.__getstate__()
 
@@ -652,7 +700,7 @@ def test_subcontext_with_dict_and_event_objects():
 def test_to_json_with_dict_in_subcontext():
     """Test that to_json() works when subcontext contains dict objects."""
     subcontext = [{"event_id": "dict-event-id", "base": "TestBase", "nemesis_name": "DictNemesis"}]
-    event = _create_test_event(subcontext=subcontext)
+    event = create_test_event(subcontext=subcontext)
 
     json_str = event.to_json()
 

@@ -27,6 +27,7 @@ TLS_KWARGS = {
 
 
 def test_config_yaml_with_tls_enabled():
+    """get_agent_config_yaml emits the TLS cert and key paths under security.tls when TLS is on."""
     parsed = yaml.safe_load(get_agent_config_yaml(api_keys=["test-key"], **TLS_KWARGS))
     assert parsed["security"]["tls"] == {
         "enabled": True,
@@ -36,6 +37,7 @@ def test_config_yaml_with_tls_enabled():
 
 
 def test_config_yaml_without_tls():
+    """get_agent_config_yaml omits the security.tls section when TLS is off."""
     parsed = yaml.safe_load(get_agent_config_yaml(api_keys=["test-key"]))
     assert "tls" not in parsed.get("security", {})
 
@@ -48,6 +50,7 @@ def test_config_yaml_without_tls():
     ],
 )
 def test_reconfigure_script_check_scheme(tls, expected_scheme, expected_curl):
+    """reconfigure_agent_script health-checks over https with curl -kf when TLS is on, else http with curl -f."""
     script = reconfigure_agent_script(
         api_keys=["test-key"],
         **(TLS_KWARGS if tls else {}),

@@ -24,25 +24,31 @@ from sdcm.sct_events.events_processes import (
 
 
 class FakeProcess:
+    """Stand-in events process that records whether it was started."""
+
     def __init__(self, _registry=None):
         self._registry = _registry
         self.started = False
 
     def start(self):
+        """Mark the process as started."""
         self.started = True
 
 
 @pytest.fixture
 def registry():
+    """EventsProcessesRegistry with an empty registry dict and log dir "some_path"."""
     return EventsProcessesRegistry("some_path")
 
 
 def test_fresh(registry):
+    """A new registry has no processes and keeps its log dir."""
     assert registry._registry_dict == {}
     assert registry.log_dir == Path("some_path")
 
 
 def test_start_events_process(registry):
+    """start_events_process registers the process under its name and starts it."""
     registry.start_events_process("test", FakeProcess)
     assert len(registry._registry_dict) == 1
     assert "test" in registry._registry_dict
@@ -51,6 +57,7 @@ def test_start_events_process(registry):
 
 
 def test_get_events_process(registry):
+    """get_events_process returns None for an unknown name and the started process otherwise."""
     process = registry.get_events_process("test")
     assert process is None
     registry.start_events_process("test", FakeProcess)
@@ -61,6 +68,7 @@ def test_get_events_process(registry):
 
 @patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", not None)
 def test_create_default_registry_exists():
+    """create_default_events_process_registry raises when a default registry already exists."""
     with pytest.raises(RuntimeError):
         create_default_events_process_registry(log_dir="some_path")
     assert get_default_events_process_registry() == (not None)
@@ -68,6 +76,7 @@ def test_create_default_registry_exists():
 
 @patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", None)
 def test_create_default_registry():
+    """get_default_events_process_registry raises until create_default_events_process_registry sets the default."""
     assert get_default_events_process_registry(not None) == (not None)
     with pytest.raises(RuntimeError):
         get_default_events_process_registry()

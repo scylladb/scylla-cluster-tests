@@ -21,6 +21,7 @@ import sct
 
 @pytest.fixture
 def okta():
+    """Patch Okta auth, the keystore and the docker login; yield the Okta auth mock."""
     with (
         patch("sct.try_auth_with_okta") as auth,
         patch("sct.KeyStore"),
@@ -30,9 +31,14 @@ def okta():
 
 
 @pytest.mark.parametrize(
-    "args", [["list-resources", "--help"], ["sizing", "preview", "--help"]], ids=["command", "nested-group"]
+    "args",
+    [
+        pytest.param(["list-resources", "--help"], id="command"),
+        pytest.param(["sizing", "preview", "--help"], id="nested-group"),
+    ],
 )
 def test_help_skips_okta(okta, args):
+    """--help on a command or nested group prints usage without authenticating with Okta."""
     result = CliRunner().invoke(sct.cli, args)
 
     assert result.exit_code == 0, result.output
@@ -41,15 +47,17 @@ def test_help_skips_okta(okta, args):
 
 
 def test_command_still_authenticates(okta):
+    """A real command invocation authenticates with Okta before its own option parsing fails."""
     result = CliRunner().invoke(sct.cli, ["list-resources", "--no-such-option"])
 
     assert result.exit_code == 2  # the subcommand rejects the option only after the group callback ran
-    okta.assert_called_once()
+    okta.assert_called_once_with()
 
 
 def test_help_after_double_dash_is_a_value_not_a_help_request(okta):
+    """--help after -- is passed to the remote command as a value, and Okta still authenticates."""
     with patch("sct_ssh.ssh_run_cmd") as run_command:
         CliRunner().invoke(sct.cli, ["ssh-cmd", "-t", "abc", "--", "nodetool", "--help"])
 
     assert run_command.call_args.args[1] == "nodetool --help"
-    okta.assert_called_once()
+    okta.assert_called_once_with()

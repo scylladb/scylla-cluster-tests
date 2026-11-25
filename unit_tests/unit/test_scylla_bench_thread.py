@@ -26,27 +26,28 @@ pytestmark = [
 @pytest.mark.parametrize(
     "extra_cmd,error_at_row_limit_exists",
     (
-        ("", True),
-        ("-error-limit=0", False),
-        ("-error-limit=1", False),
-        ("-error-limit=2", False),
-        ("-error-limit=10", False),
-        ("-error-limit 0", False),
-        ("-error-limit 10", False),
-        ("-retry-number=0", True),
-        ("-retry-number=1", True),
-        ("-retry-number=2", False),
-        ("-retry-number=10", False),
-        ("-retry-number= 10", False),
-        ("-retry-number 10", False),
-        ("-retry-number  10", False),
-        ("-retry-number 1", True),
-        ("-retry-number 2", False),
-        ("-error-at-row-limit=13", True),
-        ("-error-at-row-limit 15", True),
+        pytest.param("", True, id="no-limit-flags"),
+        pytest.param("-error-limit=0", False, id="error-limit-eq-0"),
+        pytest.param("-error-limit=1", False, id="error-limit-eq-1"),
+        pytest.param("-error-limit=2", False, id="error-limit-eq-2"),
+        pytest.param("-error-limit=10", False, id="error-limit-eq-10"),
+        pytest.param("-error-limit 0", False, id="error-limit-space-0"),
+        pytest.param("-error-limit 10", False, id="error-limit-space-10"),
+        pytest.param("-retry-number=0", True, id="retry-number-eq-0"),
+        pytest.param("-retry-number=1", True, id="retry-number-eq-1"),
+        pytest.param("-retry-number=2", False, id="retry-number-eq-2"),
+        pytest.param("-retry-number=10", False, id="retry-number-eq-10"),
+        pytest.param("-retry-number= 10", False, id="retry-number-eq-space-10"),
+        pytest.param("-retry-number 10", False, id="retry-number-space-10"),
+        pytest.param("-retry-number  10", False, id="retry-number-double-space-10"),
+        pytest.param("-retry-number 1", True, id="retry-number-space-1"),
+        pytest.param("-retry-number 2", False, id="retry-number-space-2"),
+        pytest.param("-error-at-row-limit=13", True, id="error-at-row-limit-eq-13"),
+        pytest.param("-error-at-row-limit 15", True, id="error-at-row-limit-space-15"),
     ),
 )
 def test_02_scylla_bench_check_error_at_row_limit_addition(params, extra_cmd, error_at_row_limit_exists):
+    """ScyllaBenchThread appends -error-at-row-limit unless an error limit or a retry count above 1 is set, keeping a user-given value."""
     loader_set = LocalLoaderSetDummy(nodes=[])
     cmd = (
         f"scylla-bench -workload=sequential {extra_cmd} -mode=write"

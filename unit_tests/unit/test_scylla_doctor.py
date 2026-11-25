@@ -22,6 +22,8 @@ from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException
 
 @dataclass
 class FakeParentCluster:
+    """Parent cluster stub exposing only the cluster backend."""
+
     cluster_backend: str = "aws"
 
 
@@ -42,7 +44,7 @@ class FakeNode:
         self.remoter.run.return_value = run_result
 
     def install_package(self, pkg):
-        pass
+        """No-op: package installs are not exercised here."""
 
 
 @dataclass
@@ -64,6 +66,7 @@ def mock_test_config():
 
 @pytest.fixture()
 def mock_node():
+    """Return a FakeNode whose remoter reports /home/testuser as the home dir."""
     return FakeNode()
 
 
@@ -72,6 +75,15 @@ def doctor(mock_node, mock_test_config):
     """Create a ScyllaDoctor instance with fake dependencies."""
     test_config, _params = mock_test_config
     return ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+
+
+def ls_side_effects(cwd_archive: str = "", tmp_archive: str = ""):
+    """Build remoter.run results for the vitals lookup followed by the log archive lookup."""
+    vitals = MagicMock()
+    vitals.stdout = "test-node.local.vitals.json\n"
+    archives = MagicMock()
+    archives.stdout = "\n".join(path for path in (cwd_archive, tmp_archive) if path)
+    return [vitals, archives]
 
 
 # --- configured_edition tests ---
@@ -352,6 +364,7 @@ def test_download_full_with_tarball_url_skips_version_lookup(
     ],
 )
 def test_parse_s3_url(url, expected):
+    """_parse_s3_url splits path-style, virtual-hosted, and bare URLs into (bucket, key)."""
     assert ScyllaDoctor._parse_s3_url(url, default_bucket="default-bkt") == expected
 
 
@@ -367,7 +380,7 @@ def test_download_dispatches_to_full_when_edition_is_full(mock_download_full, mo
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
     doc.download_scylla_doctor()
 
-    mock_download_full.assert_called_once()
+    mock_download_full.assert_called_once_with()
 
 
 @patch("utils.scylla_doctor.boto3.client")
@@ -383,7 +396,7 @@ def test_download_full_failure_propagates(mock_download_full, mock_boto_client, 
     with pytest.raises(ScyllaDoctorException, match="keystore unavailable"):
         doc.download_scylla_doctor()
 
-    mock_download_full.assert_called_once()
+    mock_download_full.assert_called_once_with()
 
 
 @patch("utils.scylla_doctor.boto3.client")
@@ -415,15 +428,18 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
 
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
-    with patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full:
-        with patch.object(doc, "_download_and_extract_tarball") as mock_extract:
-            doc.download_scylla_doctor()
-        mock_full.assert_not_called()
+    with (
+        patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full,
+        patch.object(doc, "_download_and_extract_tarball") as mock_extract,
+    ):
+        doc.download_scylla_doctor()
+    mock_full.assert_not_called()
 
-    # Basic path was used — _download_and_extract_tarball was called with the public URL
-    mock_extract.assert_called_once()
-    call_url = mock_extract.call_args[0][0]
-    assert "downloads.scylladb.com" in call_url
+    # Basic path: _download_and_extract_tarball gets the public downloads URL
+    mock_extract.assert_called_once_with(
+        "https://downloads.scylladb.com/downloads/scylla-doctor/tar/scylla-doctor-1.9.0.tar.gz",
+        description="scylla-doctor (scylla-doctor-1.9.0.tar.gz)",
+    )
 
 
 # --- _get_bucket_region tests ---
@@ -432,10 +448,10 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
 @pytest.mark.parametrize(
     "bucket_name,expected_region",
     [
-        ("fe-artifacts-297607762119-eu-central-1", "eu-central-1"),
-        ("my-bucket-us-west-2", "us-west-2"),
-        ("something-ap-southeast-1", "ap-southeast-1"),
-        ("bucket-sa-east-1", "sa-east-1"),
+        pytest.param("fe-artifacts-297607762119-eu-central-1", "eu-central-1", id="account-id-prefixed"),
+        pytest.param("my-bucket-us-west-2", "us-west-2", id="trailing-us-west-2"),
+        pytest.param("something-ap-southeast-1", "ap-southeast-1", id="trailing-ap-southeast-1"),
+        pytest.param("bucket-sa-east-1", "sa-east-1", id="trailing-sa-east-1"),
     ],
 )
 def test_get_bucket_region_from_name(bucket_name, expected_region):
@@ -809,15 +825,6 @@ def test_run_passes_run_timeout_to_the_remoter(doctor, is_nonroot_install, remot
 # --- run_scylla_doctor_and_collect_results: log archive location tests ---
 
 
-def _ls_side_effects(cwd_archive: str = "", tmp_archive: str = ""):
-    """Build remoter.run results for the vitals lookup followed by the log archive lookup."""
-    vitals = MagicMock()
-    vitals.stdout = "test-node.local.vitals.json\n"
-    archives = MagicMock()
-    archives.stdout = "\n".join(path for path in (cwd_archive, tmp_archive) if path)
-    return [vitals, archives]
-
-
 @pytest.mark.parametrize(
     "ethtool_present,expected_installs",
     [
@@ -857,7 +864,7 @@ def test_ensure_ethtool(doctor, ethtool_present, expected_installs):
 def test_collect_results_finds_log_archive_in_either_location(doctor, cwd_archive, tmp_archive, expected):
     """scylla-doctor 1.14 moved the log archive to the temp dir; both locations must be accepted."""
     doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
-    doctor.node.remoter.run.side_effect = _ls_side_effects(cwd_archive, tmp_archive)
+    doctor.node.remoter.run.side_effect = ls_side_effects(cwd_archive, tmp_archive)
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),
@@ -873,7 +880,7 @@ def test_collect_results_finds_log_archive_in_either_location(doctor, cwd_archiv
 def test_collect_results_fails_when_log_archive_is_missing_everywhere(doctor):
     """A genuinely missing log archive must still fail the test."""
     doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
-    doctor.node.remoter.run.side_effect = _ls_side_effects()
+    doctor.node.remoter.run.side_effect = ls_side_effects()
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),
@@ -889,7 +896,7 @@ def test_collect_results_skips_log_archive_lookup_on_docker(doctor):
     """Scylla Docker does not collect cluster logs - field-engineering#2288."""
     doctor.node.parent_cluster.cluster_backend = "docker"
     doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
-    doctor.node.remoter.run.side_effect = _ls_side_effects()
+    doctor.node.remoter.run.side_effect = ls_side_effects()
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),

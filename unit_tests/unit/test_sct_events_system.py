@@ -32,6 +32,7 @@ from sdcm.sct_events.system import (
 
 
 def test_startup_test_event():
+    """StartupTestEvent str() shows its fields and survives a pickle round-trip."""
     event = StartupTestEvent()
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -41,6 +42,7 @@ def test_startup_test_event():
 
 
 def test_test_framework_event():
+    """TestFrameworkEvent str() renders source, args, kwargs, message and exception, and survives pickling."""
     event = TestFrameworkEvent(
         source="s1",
         source_method="m1",
@@ -66,6 +68,7 @@ def test_test_framework_event():
 
 
 def test_spot_termination_event():
+    """SpotTerminationEvent str() shows node and message at CRITICAL severity and survives pickling."""
     event = SpotTerminationEvent(node="node1", message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -76,6 +79,7 @@ def test_spot_termination_event():
 
 
 def test_node_unreachable_event():
+    """NodeUnreachableEvent str() shows node and message at CRITICAL severity and survives pickling."""
     event = NodeUnreachableEvent(node="loader-1", message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -86,6 +90,7 @@ def test_node_unreachable_event():
 
 
 def test_scylla_repo_event():
+    """ScyllaRepoEvent str() shows url and error at WARNING severity and survives pickling."""
     event = ScyllaRepoEvent(url="u1", error="e1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -96,6 +101,7 @@ def test_scylla_repo_event():
 
 
 def test_info_event():
+    """InfoEvent str() shows its message at NORMAL severity and survives pickling."""
     event = InfoEvent(message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -105,6 +111,7 @@ def test_info_event():
 
 
 def test_thread_failed_event():
+    """ThreadFailedEvent str() shows message and traceback at ERROR severity and survives pickling."""
     event = ThreadFailedEvent(message="m1", traceback="t1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -115,6 +122,7 @@ def test_thread_failed_event():
 
 
 def test_coredump_event():
+    """CoreDumpEvent str() lists node, corefile URL, backtrace and download instructions, and survives pickling."""
     event = CoreDumpEvent(node="node1", corefile_url="url1", backtrace="b1", download_instructions="d1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -127,6 +135,7 @@ def test_coredump_event():
 
 
 def test_test_result_event_fail():
+    """A FAILED TestResultEvent renders the last event of each group and a FAILED footer."""
     event = TestResultEvent(
         test_status="FAILED",
         events={
@@ -157,6 +166,7 @@ def test_test_result_event_fail():
 
 
 def test_test_result_event_ok():
+    """A SUCCESS TestResultEvent renders the results banner with a SUCCESS footer."""
     event = TestResultEvent(
         test_status="SUCCESS",
         events={
@@ -181,12 +191,14 @@ def test_test_result_event_ok():
 
 
 def test_known_system_status_events():
+    """STARTUP, REBOOT and POWER_OFF are InstanceStatusEvent subclasses."""
     assert issubclass(InstanceStatusEvent.STARTUP, InstanceStatusEvent)
     assert issubclass(InstanceStatusEvent.REBOOT, InstanceStatusEvent)
     assert issubclass(InstanceStatusEvent.POWER_OFF, InstanceStatusEvent)
 
 
 def test_instance_startup_event():
+    """STARTUP event keeps WARNING severity and stores node, line and line number from add_info."""
     event1 = InstanceStatusEvent.STARTUP()
     assert event1.severity == Severity.WARNING
 
@@ -198,6 +210,7 @@ def test_instance_startup_event():
 
 
 def test_instance_reboot_event():
+    """REBOOT event keeps WARNING severity and stores node, line and line number from add_info."""
     event1 = InstanceStatusEvent.REBOOT()
     assert event1.severity == Severity.WARNING
 
@@ -209,6 +222,7 @@ def test_instance_reboot_event():
 
 
 def test_instance_poweroff_event():
+    """POWER_OFF event keeps WARNING severity and stores node, line and line number from add_info."""
     event1 = InstanceStatusEvent.POWER_OFF()
     assert event1.severity == Severity.WARNING
     assert event1 is event1.add_info(node="n1", line="Powering Off", line_number=0)
@@ -219,6 +233,7 @@ def test_instance_poweroff_event():
 
 
 def test_instance_status_events_patterns(test_data_dir):
+    """Log lines matching INSTANCE_STATUS_EVENTS_PATTERNS yield STARTUP, REBOOT and POWER_OFF events."""
     cloned_events = []
     with open(str(test_data_dir / "system_status_events.log"), encoding="utf-8") as sct_log:
         for index, line in enumerate(sct_log.readlines()):

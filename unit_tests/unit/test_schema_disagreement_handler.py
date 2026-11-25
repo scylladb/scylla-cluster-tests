@@ -24,6 +24,7 @@ SSH_LOGIN_INFO = {"hostname": "10.0.0.1", "user": "scylla-test", "key_file": "~/
 
 
 def make_node(name: str, is_docker: bool = False, ssh_login_info: dict | None = SSH_LOGIN_INFO) -> MagicMock:
+    """Returns a mock db node with the given name, docker flag and SSH login info."""
     node = MagicMock()
     node.name = name
     node.is_docker.return_value = is_docker
@@ -56,10 +57,11 @@ def test_uploads_only_from_the_nodes_with_ssh_access():
     assert [call.args[0] for call in upload_mock.call_args_list] == [ssh_node]
     assert links == [PROXIED_S3_LINK]
     # the gossip info works on those nodes, so the skipped ones must still be asked for it
-    docker_node.get_gossip_info.assert_called_once()
+    docker_node.get_gossip_info.assert_called_once_with()
 
 
 def test_records_no_link_when_the_upload_fails():
+    """A failed upload, which returns an empty link, adds no sstable link to the event."""
     _, links = handle([make_node("db-node-1")], link="")
 
     assert links == []
