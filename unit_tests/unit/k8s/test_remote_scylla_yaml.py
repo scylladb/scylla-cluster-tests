@@ -7,6 +7,8 @@ from sdcm.cluster_k8s import SCYLLA_NAMESPACE, KubernetesCluster
 
 
 class DummyCluster(KubernetesCluster):
+    """KubernetesCluster stub that keeps scylla.yaml in an in-memory config map and skips real deployment."""
+
     POOL_LABEL_NAME = "dummy-pool"
     config_map_store = None
 
@@ -16,25 +18,28 @@ class DummyCluster(KubernetesCluster):
 
     @contextlib.contextmanager
     def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE):
+        """Yield the in-memory config map dict, asserting it is requested from the Scylla namespace."""
         assert namespace == SCYLLA_NAMESPACE
         # Yield a real dict so context can mutate it
         yield self.config_map_store
 
     def deploy(self):
-        pass
+        """No-op: skip cluster deployment."""
 
     def create_kubectl_config(self):
-        pass
+        """No-op: skip kubectl config creation."""
 
     def create_token_update_thread(self):
+        """Return None: no token update thread."""
         return None
 
     def deploy_node_pool(self, pool, wait_till_ready=True):
-        pass
+        """No-op: skip node pool deployment."""
 
 
 @pytest.fixture()
 def dummy_cluster():
+    """DummyCluster on a local k8s backend, returned with its in-memory config map."""
     params = {
         "k8s_scylla_cluster_name": "test-cluster",
         "cluster_backend": "k8s-local",
@@ -45,7 +50,7 @@ def dummy_cluster():
 
 
 def test_remote_scylla_yaml_no_change_does_not_update(dummy_cluster, events):
-    """Test that accessing scylla.yaml without changes does not modify the stored config
+    """Reading scylla.yaml without changes leaves the stored config and restart flag untouched.
 
     Note: events fixture is required to handle ScyllaYamlUpdateEvent publishing.
     """
@@ -65,8 +70,7 @@ def test_remote_scylla_yaml_no_change_does_not_update(dummy_cluster, events):
 
 
 def test_remote_scylla_yaml_updates_and_sets_restart(dummy_cluster, events):
-    """
-    Test that modifying scylla.yaml via remote_scylla_yaml updates the config map
+    """Modifying scylla.yaml via remote_scylla_yaml writes the config map and sets restart required.
 
     Note: events fixture is required to handle ScyllaYamlUpdateEvent publishing.
     """
@@ -89,8 +93,7 @@ def test_remote_scylla_yaml_updates_and_sets_restart(dummy_cluster, events):
 
 
 def test_remote_scylla_yaml_doesnt_include_explicit_fields(dummy_cluster, events):
-    """
-    Test that explicit fields are not included in dumped scylla.yaml
+    """Explicit fields are left out of the dumped scylla.yaml unless set.
 
     Note: events fixture is required to handle ScyllaYamlUpdateEvent publishing.
     """

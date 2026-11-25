@@ -14,7 +14,8 @@ BUNDLE_URL = (
 )
 
 
-def _cluster(**attrs) -> mock.Mock:
+def make_cluster(**attrs) -> mock.Mock:
+    """Return a mock spec'd on KubernetesCluster with the given attributes."""
     return mock.Mock(spec=KubernetesCluster, **attrs)
 
 
@@ -26,10 +27,11 @@ def _cluster(**attrs) -> mock.Mock:
     ],
 )
 def test_prometheus_operator_config_from_operator_repo(tmp_path, chart_version, git_ref):
+    """_get_prometheus_operator_config fetches the bundle from the operator repo at the git ref of the chart version."""
     with mock.patch("sdcm.cluster_k8s.create_retry_session") as session:
         session.return_value.get.return_value = mock.Mock(text="kind: Bundle\n")
         path = KubernetesCluster._get_prometheus_operator_config(
-            _cluster(scylla_operator_chart_version=chart_version), str(tmp_path)
+            make_cluster(scylla_operator_chart_version=chart_version), str(tmp_path)
         )
     session.return_value.get.assert_called_once_with(BUNDLE_URL.format(git_ref), timeout=120)
     assert open(path, encoding="utf-8").read() == "kind: Bundle\n"
@@ -43,18 +45,26 @@ def test_prometheus_operator_config_from_operator_repo(tmp_path, chart_version, 
     ],
 )
 def test_prometheus_operator_config_falls_back_to_sct_bundle(tmp_path, error):
+    """_get_prometheus_operator_config returns the SCT bundle path when the repo download fails."""
     with mock.patch("sdcm.cluster_k8s.create_retry_session") as session:
         session.return_value.get.return_value.raise_for_status.side_effect = error
         session.return_value.get.side_effect = None if isinstance(error, requests.HTTPError) else error
         path = KubernetesCluster._get_prometheus_operator_config(
-            _cluster(scylla_operator_chart_version="v1.22.0"), str(tmp_path)
+            make_cluster(scylla_operator_chart_version="v1.22.0"), str(tmp_path)
         )
     assert path == PROMETHEUS_OPERATOR_CONFIG_PATH
 
 
-@pytest.mark.parametrize("crds_existed,restarted", [(False, True), (True, False)])
+@pytest.mark.parametrize(
+    "crds_existed,restarted",
+    [
+        pytest.param(False, True, id="new-crds"),
+        pytest.param(True, False, id="existing-crds"),
+    ],
+)
 def test_deploy_prometheus_operator_restarts_scylla_operator_only_for_new_crds(crds_existed, restarted):
-    cluster = _cluster()
+    """deploy_prometheus_operator restarts scylla-operator only when the CRDs were newly created."""
+    cluster = make_cluster()
     cluster.kubectl.side_effect = lambda cmd, **_: mock.Mock(ok=crds_existed if cmd.startswith("get crd") else True)
     with mock.patch("sdcm.cluster_k8s.time.sleep"):
         KubernetesCluster.deploy_prometheus_operator(cluster)
@@ -70,6 +80,7 @@ def test_deploy_prometheus_operator_restarts_scylla_operator_only_for_new_crds(c
     ],
 )
 def test_get_grafana_ip_takes_first(backend, stdout):
-    cluster = _cluster(cluster_backend=backend)
+    """get_grafana_ip returns the first address listed, so a rolling update still gives one IP."""
+    cluster = make_cluster(cluster_backend=backend)
     cluster.kubectl.return_value = mock.Mock(stdout=stdout)
     assert KubernetesCluster.get_grafana_ip(cluster, "sct-cluster", "scylla") == "10.4.0.1"
