@@ -25,6 +25,7 @@ from sdcm.utils.parallel_object import ParallelObjectException
 
 
 def definition(index: int, use_public_ip: bool = False) -> InstanceDefinition:
+    """Return the definition of node-<index>, reached over its public or private address."""
     return InstanceDefinition(
         name=f"node-{index}",
         image_id="image-1",
@@ -36,6 +37,7 @@ def definition(index: int, use_public_ip: bool = False) -> InstanceDefinition:
 
 
 def vm(index: int) -> MagicMock:
+    """Return a mocked provisioned VM node-<index> with public and private addresses."""
     instance = MagicMock(
         public_ip_address=f"1.2.3.{index}",
         private_ip_address=f"10.0.0.{index}",

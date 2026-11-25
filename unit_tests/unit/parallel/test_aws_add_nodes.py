@@ -38,6 +38,7 @@ def aws_cluster(cluster_of, monkeypatch):
 
 
 def create_node(instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None):
+    """Stand-in for `AWSCluster._create_node`: a MagicMock node carrying its index and rack."""
     node = MagicMock()
     node.node_index = node_index
     node.rack = rack
