@@ -29,7 +29,7 @@ from sdcm.sct_events.loaders import CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_P
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext, get_data_dir_path, time_period_str_to_seconds
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 
@@ -396,7 +396,7 @@ class CassandraStressThread(DockerBasedStressThread):
                 remote_safepoint_log_full_path = loader.remoter.run(
                     f"realpath $HOME/{safepoint_log_name}", ignore_status=False, verbose=False
                 ).stdout.strip()
-                safepoint_volume_opt = f" -v {remote_safepoint_log_full_path}:/{safepoint_log_name}:z"
+                safepoint_volume_opt = f" {bind_mount(remote_safepoint_log_full_path, f'/{safepoint_log_name}')}"
                 jvm_opts_value = f"{jvm_opts_value} {self._safepoint_jvm_opts(f'/{safepoint_log_name}')}".strip()
                 LOGGER.info("cassandra-stress safepoint log on %s: %s", loader.name, remote_safepoint_log_full_path)
 
@@ -423,7 +423,7 @@ class CassandraStressThread(DockerBasedStressThread):
                 f"--label shell_marker={self.shell_marker}"
                 f" --entrypoint /bin/bash"
                 f" -w /"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+                f" {bind_mount(remote_hdr_file_name_full_path, f'/{remote_hdr_file_name}')}"
                 f"{safepoint_volume_opt}"
                 f"{jvm_opts}",
             )

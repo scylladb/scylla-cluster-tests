@@ -27,7 +27,7 @@ from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStre
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
@@ -168,7 +168,7 @@ class CqlStressCassandraStressThread(CassandraStressThread):
             f"--label shell_marker={self.shell_marker}"
             f" --entrypoint /bin/bash"
             f" -w /"
-            f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z",
+            f" {bind_mount(remote_hdr_file_name_full_path, f'/{remote_hdr_file_name}')}",
         )
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
 
