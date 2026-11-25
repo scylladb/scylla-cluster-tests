@@ -16,7 +16,31 @@ from sdcm.mgmt.cli import (
 from sdcm.mgmt.common import ScyllaManagerError
 
 
+def make_manager_node(*, is_docker, is_kubernetes=False, container_name="sct-manager-server"):
+    """Mock manager node reporting the given Docker or Kubernetes backend and container name."""
+    node = mock.MagicMock()
+    node.is_docker.return_value = is_docker
+    node.is_kubernetes.return_value = is_kubernetes
+    node.parent_cluster.manager_container_name = container_name if is_docker else None
+    return node
+
+
+def backup_task_with_progress_statuses(statuses):
+    """BackupTask whose consecutive `sctool progress` calls report the given `Status:` values."""
+    task = BackupTask(
+        task_id="backup/2a4125d6-5d5a-45b9-9d8d-dec038b3732d", cluster_id="c1", manager_node=mock.MagicMock()
+    )
+    task.sctool.run = mock.Mock(
+        side_effect=[
+            mock.Mock(stdout=f"Run:\t\t{i}\nStatus:\t\t{status}\nSnapshot Tag:\tsm_x\n")
+            for i, status in enumerate(statuses)
+        ]
+    )
+    return task
+
+
 def test_01_get_task_info_dict():
+    """ManagerTask.get_task_info_dict parses `sctool task info` output into a dict with history rows."""
     manager_node_mock = mock.MagicMock()
     # This test stubs remoter.sudo, i.e. the host sctool runner; say so explicitly, or
     # create_sctool() sees a truthy MagicMock from is_docker() and picks SCToolDocker.
@@ -65,11 +89,11 @@ def test_01_get_task_info_dict():
     "version_string,expected",
     [
         # Plain PEP-440 version
-        ("3.8.1", Version("3.8.1")),
+        pytest.param("3.8.1", Version("3.8.1"), id="plain-pep440"),
         # Non-PEP-440 build-metadata suffix that real manager produces
-        ("3.9.0-dev-0.20260306.76e78d56e-SNAPSHOT", Version("3.9.0")),
+        pytest.param("3.9.0-dev-0.20260306.76e78d56e-SNAPSHOT", Version("3.9.0"), id="dev-build-suffix"),
         # Another real-world-style string with extra segments after the dash
-        ("3.8.0-0.20260213.3882815ee", Version("3.8.0")),
+        pytest.param("3.8.0-0.20260213.3882815ee", Version("3.8.0"), id="dash-segments"),
     ],
 )
 def test_parsed_client_version(version_string, expected):
@@ -81,18 +105,13 @@ def test_parsed_client_version(version_string, expected):
     assert result == expected
 
 
-def _manager_node_mock(*, is_docker, is_kubernetes=False, container_name="sct-manager-server"):
-    node = mock.MagicMock()
-    node.is_docker.return_value = is_docker
-    node.is_kubernetes.return_value = is_kubernetes
-    node.parent_cluster.manager_container_name = container_name if is_docker else None
-    return node
-
-
 @pytest.mark.parametrize(
     "is_docker, is_kubernetes, expected_runner",
-    [(False, False, SCTool), (True, False, SCToolDocker), (True, True, SCTool)],
-    ids=["host", "docker", "k8s-pod"],
+    [
+        pytest.param(False, False, SCTool, id="host"),
+        pytest.param(True, False, SCToolDocker, id="docker"),
+        pytest.param(True, True, SCTool, id="k8s-pod"),
+    ],
 )
 def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, is_kubernetes, expected_runner):
     """A ManagerCluster or a task must not fall back to the host runner on Docker.
@@ -101,7 +120,7 @@ def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, is_kubern
     plain SCTool would run `sudo sctool` on the monitor node, where there is no such binary,
     so `cluster list` returns nothing and every backup/repair fails.
     """
-    node = _manager_node_mock(is_docker=is_docker, is_kubernetes=is_kubernetes)
+    node = make_manager_node(is_docker=is_docker, is_kubernetes=is_kubernetes)
 
     # SCToolDocker subclasses SCTool, so isinstance() would pass either way -- compare exact types.
     assert type(create_sctool(manager_node=node)) is expected_runner
@@ -110,35 +129,27 @@ def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, is_kubern
 
 
 def test_docker_sctool_without_a_container_name_fails_loudly():
-    node = _manager_node_mock(is_docker=True, container_name=None)
+    """create_sctool raises ScyllaManagerError on Docker when the manager container name is unset."""
+    node = make_manager_node(is_docker=True, container_name=None)
 
     with pytest.raises(ScyllaManagerError, match="manager_container_name"):
         create_sctool(manager_node=node)
 
 
-def backup_task_with_progress_statuses(statuses):
-    """BackupTask whose consecutive `sctool progress` calls report the given `Status:` values."""
-    task = BackupTask(
-        task_id="backup/2a4125d6-5d5a-45b9-9d8d-dec038b3732d", cluster_id="c1", manager_node=mock.MagicMock()
-    )
-    task.sctool.run = mock.Mock(
-        side_effect=[
-            mock.Mock(stdout=f"Run:\t\t{i}\nStatus:\t\t{status}\nSnapshot Tag:\tsm_x\n")
-            for i, status in enumerate(statuses)
-        ]
-    )
-    return task
-
-
 @pytest.mark.parametrize(
     "statuses,expected_calls",
     [
-        (["RUNNING (taking snapshot)", "RUNNING (uploading data)"], 2),
-        (["RUNNING (indexing files)", "RUNNING (uploading schema)", "RUNNING (moving manifests)"], 3),
-        (["RUNNING (retention)"], 1),
+        pytest.param(["RUNNING (taking snapshot)", "RUNNING (uploading data)"], 2, id="upload-after-two-polls"),
+        pytest.param(
+            ["RUNNING (indexing files)", "RUNNING (uploading schema)", "RUNNING (moving manifests)"],
+            3,
+            id="upload-after-three-polls",
+        ),
+        pytest.param(["RUNNING (retention)"], 1, id="upload-on-first-poll"),
     ],
 )
 def test_wait_for_started_upload_stage_returns_once_the_upload_started(statuses, expected_calls):
+    """wait_for_started_upload_stage returns True as soon as a status shows the upload stage."""
     task = backup_task_with_progress_statuses(statuses)
     with mock.patch("sdcm.utils.decorators.time.sleep"):
         assert task.wait_for_started_upload_stage(timeout=60) is True
@@ -148,31 +159,48 @@ def test_wait_for_started_upload_stage_returns_once_the_upload_started(statuses,
 @pytest.mark.parametrize(
     "final_status",
     [
-        "DONE",
-        "ERROR (taking snapshot)",
-        "ERROR (uploading data)",
-        "STOPPED (uploading data)",
-        "ABORTED (indexing files)",
-        "WAITING (uploading data)",
+        pytest.param("DONE", id="done"),
+        pytest.param("ERROR (taking snapshot)", id="error-snapshot"),
+        pytest.param("ERROR (uploading data)", id="error-upload"),
+        pytest.param("STOPPED (uploading data)", id="stopped-upload"),
+        pytest.param("ABORTED (indexing files)", id="aborted-indexing"),
+        pytest.param("WAITING (uploading data)", id="waiting-upload"),
     ],
 )
 def test_wait_for_stage_fails_fast_once_the_task_is_not_running(final_status):
+    """wait_for_uploading_stage raises once the task ends without reaching the upload stage."""
     task = backup_task_with_progress_statuses(["RUNNING (taking snapshot)", final_status])
     with mock.patch("sdcm.utils.decorators.time.sleep"), pytest.raises(ScyllaManagerError, match="can't be reached"):
         task.wait_for_uploading_stage(timeout=60)
     assert task.sctool.run.call_count == 2
 
 
-@pytest.mark.parametrize("status", ["NEW", "STARTING"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param("NEW", id="new"),
+        pytest.param("STARTING", id="starting"),
+    ],
+)
 def test_wait_for_stage_keeps_waiting_while_the_task_has_not_started(status):
+    """wait_for_uploading_stage keeps polling while the task is NEW or STARTING."""
     task = backup_task_with_progress_statuses([status, status, "RUNNING (uploading data)"])
     with mock.patch("sdcm.utils.decorators.time.sleep"):
         assert task.wait_for_uploading_stage(timeout=60) is True
     assert task.sctool.run.call_count == 3
 
 
-@pytest.mark.parametrize("stage", ["taking snapshot", "indexing files", "uploading manifests", "uploading schema"])
+@pytest.mark.parametrize(
+    "stage",
+    [
+        pytest.param("taking snapshot", id="snapshot"),
+        pytest.param("indexing files", id="indexing"),
+        pytest.param("uploading manifests", id="manifests"),
+        pytest.param("uploading schema", id="schema"),
+    ],
+)
 def test_wait_for_started_upload_stage_keeps_waiting_before_the_upload(stage):
+    """wait_for_started_upload_stage raises BackupStageNotReachedError when the timeout expires before upload starts."""
     task = backup_task_with_progress_statuses([f"RUNNING ({stage})"] * 3)
     with (
         mock.patch("sdcm.utils.decorators.time.sleep"),

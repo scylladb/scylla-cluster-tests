@@ -24,6 +24,33 @@ from sdcm.spark_migrator import (
 )
 
 
+def make_discover_mock(instances):
+    """Mock EC2 client whose describe_instances returns the given instance list."""
+    mock_client = MagicMock()
+    mock_client.describe_instances.return_value = {"Reservations": [{"Instances": instances}]}
+    return mock_client
+
+
+def make_tester():
+    """SparkMigratorTest instance built without ClusterTester.__init__, with a MagicMock params."""
+    tester = spark_migrator_test.SparkMigratorTest.__new__(spark_migrator_test.SparkMigratorTest)
+    tester.log = logging.getLogger("test")
+    tester.params = MagicMock()
+    tester.params.get.return_value = None
+    return tester
+
+
+def build_native_runner_and_config(step_return_value):
+    """SparkMigratorRunner on a native (no bootstrap) provisioner mock, plus the provisioner and a config."""
+    provisioner = MagicMock(region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": False})
+    provisioner.add_step.return_value = step_return_value
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/configs/test-id/config.yaml"
+
+    return SparkMigratorRunner(provisioner), provisioner, config
+
+
 def test_migrator_config_defaults():
     """Test MigratorConfig has sensible defaults."""
     config = MigratorConfig()
@@ -297,7 +324,10 @@ def test_upload_runner_script_cds_to_tmp_so_client_mode_finds_relative_config():
     assert cd_pos < submit_pos, "cd /tmp must precede spark-submit so driver CWD has the config"
 
 
-@pytest.mark.parametrize("source_type", ["cassandra", "scylla"])
+@pytest.mark.parametrize(
+    "source_type",
+    [pytest.param("cassandra", id="cassandra"), pytest.param("scylla", id="scylla")],
+)
 def test_generate_migrator_config_source_and_target_types(source_type):
     """Test that source.type reflects the configured source_type; target.type is always 'scylla'."""
     config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2", source_type=source_type)
@@ -312,13 +342,6 @@ def test_generate_migrator_config_picks_single_source_host():
     assert SparkMigratorRunner.generate_migrator_config(config)["source"]["host"] == "10.0.0.1"
 
 
-def _make_discover_mock(instances):
-    """Mock EC2 client returning the given instance list."""
-    mock_client = MagicMock()
-    mock_client.describe_instances.return_value = {"Reservations": [{"Instances": instances}]}
-    return mock_client
-
-
 def test_discover_cs_source_hosts_returns_public_ips():
     """Test that discover_cs_source_hosts returns public IPs from the EC2 response."""
     test_id = "aaaa-bbbb-cccc"
@@ -326,14 +349,20 @@ def test_discover_cs_source_hosts_returns_public_ips():
         {"PublicIpAddress": "54.1.2.3", "InstanceId": "i-001"},
         {"PublicIpAddress": "54.4.5.6", "InstanceId": "i-002"},
     ]
-    mock_client = _make_discover_mock(instances)
+    mock_client = make_discover_mock(instances)
 
     with patch("sdcm.spark_migrator.boto3") as mock_boto3:
         mock_boto3.client.return_value = mock_client
         hosts = discover_cs_source_hosts(test_id, "eu-west-1")
 
     assert hosts == ["54.1.2.3", "54.4.5.6"]
-    mock_client.describe_instances.assert_called_once()
+    mock_client.describe_instances.assert_called_once_with(
+        Filters=[
+            {"Name": "tag:TestId", "Values": [test_id]},
+            {"Name": "tag:NodeType", "Values": ["cs-db"]},
+            {"Name": "instance-state-name", "Values": ["running"]},
+        ]
+    )
     filters = {f["Name"]: f["Values"] for f in mock_client.describe_instances.call_args[1]["Filters"]}
     assert filters["tag:TestId"] == [test_id]
     assert filters["tag:NodeType"] == ["cs-db"]
@@ -346,7 +375,7 @@ def test_discover_cs_source_hosts_falls_back_to_private_ip():
         {"PublicIpAddress": "54.1.2.3", "PrivateIpAddress": "10.0.0.1", "InstanceId": "i-001"},
         {"PrivateIpAddress": "10.0.0.2", "InstanceId": "i-002"},  # private-only
     ]
-    mock_client = _make_discover_mock(instances)
+    mock_client = make_discover_mock(instances)
 
     with patch("sdcm.spark_migrator.boto3") as mock_boto3:
         mock_boto3.client.return_value = mock_client
@@ -355,18 +384,9 @@ def test_discover_cs_source_hosts_falls_back_to_private_ip():
     assert hosts == ["54.1.2.3", "10.0.0.2"]
 
 
-def _make_tester():
-    """Instantiate SparkMigratorTest without triggering ClusterTester.__init__."""
-    tester = spark_migrator_test.SparkMigratorTest.__new__(spark_migrator_test.SparkMigratorTest)
-    tester.log = logging.getLogger("test")
-    tester.params = MagicMock()
-    tester.params.get.return_value = None
-    return tester
-
-
 def test_build_cs_to_scylla_migrator_config_source_target_selection():
     """_build_cs_to_scylla_migrator_config uses cs_db_cluster for source and db_cluster for target."""
-    tester = _make_tester()
+    tester = make_tester()
 
     src_node = MagicMock(private_ip_address="10.0.0.1")
     tester.cs_db_cluster = MagicMock(nodes=[src_node])
@@ -390,17 +410,20 @@ def test_build_cs_to_scylla_migrator_config_source_target_selection():
 @pytest.mark.parametrize(
     "stmt,expected",
     [
-        (
+        pytest.param(
             "CREATE TABLE ks.t (id int PRIMARY KEY)",
             "CREATE TABLE IF NOT EXISTS ks.t (id int PRIMARY KEY)",
+            id="table",
         ),
-        (
+        pytest.param(
             "CREATE TYPE ks.addr (street text)",
             "CREATE TYPE IF NOT EXISTS ks.addr (street text)",
+            id="type",
         ),
-        (
+        pytest.param(
             "CREATE INDEX idx_data ON ks.t (data)",
             "CREATE INDEX IF NOT EXISTS idx_data ON ks.t (data)",
+            id="index",
         ),
     ],
 )
@@ -417,7 +440,7 @@ def test_make_create_idempotent_keyspace_unchanged():
 
 def test_assert_region_coherence_raises_on_mismatch():
     """Test that error is raised when EMR is in a different region than the rest of the test setup."""
-    tester = _make_tester()
+    tester = make_tester()
     tester.emr_cluster = MagicMock(region_name="us-east-1")
     tester.params = MagicMock(region_names=["eu-west-1"])
     with pytest.raises(RuntimeError, match="EMR cluster region 'us-east-1' != test region 'eu-west-1'"):
@@ -502,23 +525,13 @@ def test_submit_migration_job_still_uses_cluster_deploy_mode():
     assert "--deploy-mode cluster" in body
 
 
-def _build_native_runner_and_config(step_return_value):
-    provisioner = MagicMock(region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": False})
-    provisioner.add_step.return_value = step_return_value
-
-    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
-    config.config_path = "s3://bucket/configs/test-id/config.yaml"
-
-    return SparkMigratorRunner(provisioner), provisioner, config
-
-
 def test_submit_migration_native_uses_command_runner_with_s3_files():
     """Native migration (cluster mode): command-runner.jar spark-submit, config read via --files from S3.
 
     In cluster mode YARN localizes --files into the driver container CWD, so a relative
     spark.scylla.config basename resolves — no local staging needed.
     """
-    runner, provisioner, config = _build_native_runner_and_config("s-MIG")
+    runner, provisioner, config = build_native_runner_and_config("s-MIG")
 
     with patch.object(SparkMigratorRunner, "_upload_runner_script") as mock_upload:
         step_id = runner.submit_migration_job("j-CLUSTER", "s3://bucket/jars/x/migrator.jar", config)
@@ -547,7 +560,7 @@ def test_submit_migration_native_uses_command_runner_with_s3_files():
 
 def test_submit_validator_native_stages_config_locally_for_client_mode():
     """Native validator (client mode) must stage config to /tmp and use local spark.scylla.config path."""
-    runner, provisioner, config = _build_native_runner_and_config("s-VAL")
+    runner, provisioner, config = build_native_runner_and_config("s-VAL")
     jar_s3_path = "s3://bucket/jars/x/migrator.jar"
 
     expected_args = [
@@ -631,7 +644,7 @@ def test_get_step_stdout_skips_missing_log_files():
 
 def test_run_validator_passes_on_completed_step():
     """COMPLETED EMR step → _run_validator returns silently, no log fetch."""
-    tester = _make_tester()
+    tester = make_tester()
     tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
 
     runner = MagicMock()
@@ -651,7 +664,7 @@ def test_run_validator_passes_on_completed_step():
 
 def test_run_validator_raises_when_step_failed():
     """FAILED EMR step (validator System.exit(1)) → fetch stdout, dump, raise."""
-    tester = _make_tester()
+    tester = make_tester()
     tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
 
     runner = MagicMock()
@@ -670,7 +683,7 @@ def test_run_validator_raises_when_step_failed():
 
 def test_run_validator_raises_when_step_failed_and_log_fetch_raises():
     """Log-fetch failure on a FAILED step still raises with the FAILED message."""
-    tester = _make_tester()
+    tester = make_tester()
     tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
 
     runner = MagicMock()

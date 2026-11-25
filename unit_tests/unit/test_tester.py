@@ -33,9 +33,15 @@ from sdcm.utils.common import get_post_behavior_actions
 from unit_tests.lib.fake_events import make_fake_events
 from unit_tests.lib.fake_tester import ClusterTesterForTests, FakeSCTConfiguration
 
+RF_RACK_VALID = {"rf_rack_valid_keyspaces": True}
+ENFORCE_RACK_LIST = {"enforce_rack_list": True}
+
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
+    """Test body fails in two subtests and once more, and teardown fails."""
+
     def test(self):
+        """Fail two subtests, then the main body."""
         with self.subTest("SUBTEST1"):
             # This wont create error in events
             raise ValueError("Subtest1 failed")
@@ -45,11 +51,15 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
 
     @silence()
     def collect_relocatable_package(self):
+        """Teardown step that raises."""
         raise ValueError()
 
 
 class CriticalErrorNotCaughtTest(ClusterTesterForTests):
+    """Publishes a CRITICAL event and swallows the exception."""
+
     def test(self):
+        """Publish a CRITICAL event, then swallow the exception."""
         try:
             ClusterHealthValidatorEvent.NodeStatus(
                 node="node-1",
@@ -65,7 +75,10 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
 
 
 class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
+    """Test body fails with asserts in two subtests and once more, and teardown fails."""
+
     def test(self):
+        """Fail two subtests with asserts, then the main body."""
         with self.subTest("SUBTEST1"):
             # This wont create error in events
             assert False, "Subtest1 failed"
@@ -75,769 +88,59 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
 
     @silence()
     def collect_relocatable_package(self):
+        """Teardown step that raises."""
         raise ValueError()
 
 
 class TeardownFailsTest(ClusterTesterForTests):
+    """Passing test whose teardown fails."""
+
     def test(self):
-        pass
+        """Pass."""
 
     @silence()
     def collect_relocatable_package(self):
+        """Teardown step that raises."""
         raise ValueError()
 
 
 class SetupFailsTest(ClusterTesterForTests):
+    """Test whose setup (prepare_kms_host) fails."""
+
     def prepare_kms_host(self):
+        """Setup step that raises."""
         raise RuntimeError("prepare_kms_host failed")
 
     def test(self):
-        pass
+        """Pass."""
 
 
-class TestErrorTest(ClusterTesterForTests):
+class ErrorEventTest(ClusterTesterForTests):
+    """Test that publishes an ERROR TestFrameworkEvent."""
+
     def test(self):
+        """Publish a TestFrameworkEvent error."""
         TestFrameworkEvent(
             source=self.__class__.__name__, source_method="test", message="Something went wrong"
         ).publish()
 
 
 class SuccessTest(ClusterTesterForTests):
+    """Passing test."""
+
     def test(self):
-        pass
+        """Pass."""
 
 
 class SubtestsSuccessTest(ClusterTesterForTests):
+    """Passing test with two subtests."""
+
     def test(self):
+        """Pass two subtests."""
         with self.subTest("SUBTEST1"):
             pass
         with self.subTest("SUBTEST2"):
             pass
-
-
-@pytest.mark.parametrize(
-    "test_class, results, outcomes",
-    [
-        pytest.param(
-            TeardownFailsTest,
-            {"passed": 1},
-            [
-                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-                "TEST_STATUS: FAILED",
-                "ERROR 0: collect_relocatable_package (silenced)",
-            ],
-            id="TeardownFailsTest",
-        ),
-        pytest.param(
-            SubtestsSuccessTest,
-            {"passed": 1, "subtests": 2},
-            ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"],
-            id="SubtestsSuccessTest",
-        ),
-        pytest.param(
-            SuccessTest, {"passed": 1}, ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"], id="SuccessTest"
-        ),
-        pytest.param(
-            TestErrorTest,
-            {"passed": 1},
-            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: Something went wrong"],
-            id="TestErrorTest",
-        ),
-        pytest.param(
-            SetupFailsTest,
-            {"failed": 1},
-            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: prepare_kms_host failed"],
-            id="SetupFailsTest",
-        ),
-        pytest.param(
-            CriticalErrorNotCaughtTest,
-            {"passed": 1},
-            [
-                "EVENT_SUMMARY: {'NORMAL': 2, 'CRITICAL': 1}",
-                "TEST_STATUS: FAILED",
-                "CRITICAL 0: Reason to fail",
-            ],
-            id="CriticalErrorNotCaughtTest",
-        ),
-        pytest.param(
-            SubtestAndTeardownFailsTest,
-            {"failed": 3},
-            [
-                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-                "TEST_STATUS: FAILED",
-                "ERROR 0: collect_relocatable_package (silenced)",
-                "E           ValueError: Subtest1 failed",
-                "E           ValueError: Subtest2 failed",
-                "E       ValueError: Main test also failed",
-            ],
-            id="SubtestAndTeardownFailsTest",
-        ),
-        pytest.param(
-            SubtestAssertAndTeardownFailsTest,
-            {"failed": 3},
-            [
-                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-                "TEST_STATUS: FAILED",
-                "ERROR 0: collect_relocatable_package (silenced)",
-                "E           AssertionError: Subtest1 failed",
-                "E           AssertionError: Subtest2 failed",
-                "E       AssertionError: Main test also failed",
-            ],
-            id="SubtestAssertAndTeardownFailsTest",
-        ),
-    ],
-)
-def test_tester_subclass(pytester, test_class, results, outcomes):
-    # pytester sets HOME to its temp path; create a mock SSH key file
-    # so the ExistingFile validator for user_credentials_path succeeds.
-    ssh_dir = pytester.path / ".ssh"
-    ssh_dir.mkdir()
-    (ssh_dir / "scylla_test_id_ed25519").write_text("mock-key")
-
-    # Create a pytest file with the test class. We cannot just use the class directly
-    # because it would not be collected. If we made it collectable it would be run as part of standard test run as well.
-    # Which we do not want, as it is intended only to be run with pytester
-    pytester.makepyfile(f"""
-        from unit_tests.conftest import *
-        from unit_tests.unit.test_tester import {test_class.__name__}
-        {test_class.__name__}.__test__ = True
-    """)
-
-    # cause of https://github.com/pytest-dev/pytest/issues/13905
-    # we need to run with extra flag -q, so subtest summary output is shown
-    result = pytester.runpytest_inprocess("-q")
-    summary = result.parseoutcomes()
-    for status, count in results.items():
-        assert status in summary, f"Status '{status}' not found in results"
-        assert summary[status] == count, f"Status '{status}' count mismatch: expected {count}, got {summary[status]}"
-    output = result.stdout.str().splitlines()
-    for outcome in outcomes:
-        assert outcome in output
-
-
-class TestGatherFailureStatistics:
-    """Tests for the gather_failure_statistics functionality."""
-
-    def test_gather_failure_statistics_no_db_cluster(self, tmp_path):
-        """Test that gather_failure_statistics handles missing db_cluster gracefully."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_no_cluster")
-        tester.db_cluster = None
-        tester.logdir = str(tmp_path)
-
-        # Should not raise an exception
-        tester.gather_failure_statistics()
-
-    def test_gather_failure_statistics_with_nodes(self, tmp_path):
-        """Test that gather_failure_statistics collects nodetool outputs."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_with_nodes")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with nodes
-        mock_node = MagicMock()
-        mock_node.name = "test_node_1"
-        mock_node._is_node_ready_run_scylla_commands.return_value = True
-
-        # Mock nodetool commands
-        mock_result = MagicMock()
-        mock_result.ok = True
-        mock_result.stdout = "Test nodetool output"
-        mock_result.stderr = ""
-        mock_node.run_nodetool.return_value = mock_result
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-        tester.params = FakeSCTConfiguration()
-
-        # Run the function
-        tester.gather_failure_statistics()
-
-        # Verify nodetool commands were called
-        assert mock_node.run_nodetool.called
-        nodetool_calls = [call[1]["sub_cmd"] for call in mock_node.run_nodetool.call_args_list]
-        assert "status" in nodetool_calls
-        assert "gossipinfo" in nodetool_calls
-        assert "compactionstats" in nodetool_calls
-
-        # Verify files were created
-        assert (tmp_path / "nodetool_status_failure.log").exists()
-        assert (tmp_path / "nodetool_gossipinfo_failure_test_node_1.log").exists()
-        assert (tmp_path / "nodetool_compactionstats_failure_test_node_1.log").exists()
-
-    def test_gather_failure_statistics_node_not_ready(self, tmp_path):
-        """Test that gather_failure_statistics handles nodes that are not ready."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_node_not_ready")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with a node that's not ready
-        mock_node = MagicMock()
-        mock_node.name = "test_node_not_ready"
-        mock_node._is_node_ready_run_scylla_commands.return_value = False
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-        tester.params = FakeSCTConfiguration()
-
-        # Run the function
-        tester.gather_failure_statistics()
-
-        # Verify nodetool was not called on the not-ready node
-        assert not mock_node.run_nodetool.called
-
-    def test_gather_failure_statistics_with_multiple_nodes(self, tmp_path):
-        """Test that gather_failure_statistics collects from multiple nodes."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_multiple_nodes")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with multiple nodes
-        mock_nodes = []
-        for i in range(3):
-            mock_node = MagicMock()
-            mock_node.name = f"test_node_{i}"
-            mock_node._is_node_ready_run_scylla_commands.return_value = True
-
-            mock_result = MagicMock()
-            mock_result.ok = True
-            mock_result.stdout = f"Test output from node {i}"
-            mock_result.stderr = ""
-            mock_node.run_nodetool.return_value = mock_result
-
-            mock_nodes.append(mock_node)
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = mock_nodes
-        tester.params = FakeSCTConfiguration()
-
-        # Run the function
-        tester.gather_failure_statistics()
-
-        # Verify all nodes were queried for gossipinfo and compactionstats
-        for i, node in enumerate(mock_nodes):
-            assert node.run_nodetool.called
-            # Each node should have gossipinfo and compactionstats calls
-            nodetool_calls = [call[1]["sub_cmd"] for call in node.run_nodetool.call_args_list]
-            assert "gossipinfo" in nodetool_calls
-            assert "compactionstats" in nodetool_calls
-
-    def test_gather_failure_statistics_nodetool_failure(self, tmp_path):
-        """Test that gather_failure_statistics handles nodetool command failures."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_nodetool_failure")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with a node where nodetool fails
-        mock_node = MagicMock()
-        mock_node.name = "test_node_fail"
-        mock_node._is_node_ready_run_scylla_commands.return_value = True
-
-        # Mock failed nodetool command
-        mock_result = MagicMock()
-        mock_result.ok = False
-        mock_result.stdout = ""
-        mock_result.stderr = "Command failed"
-        mock_node.run_nodetool.return_value = mock_result
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-        tester.params = FakeSCTConfiguration()
-
-        # Should not raise an exception
-        tester.gather_failure_statistics()
-
-        # Verify it still attempted to call nodetool
-        assert mock_node.run_nodetool.called
-
-    def test_save_nodetool_output_in_file(self, tmp_path):
-        """Test save_nodetool_output_in_file method."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_save_nodetool")
-        tester.logdir = str(tmp_path)
-
-        # Mock node
-        mock_node = MagicMock()
-        mock_node.name = "test_node"
-
-        # Mock successful nodetool command
-        mock_result = MagicMock()
-        mock_result.ok = True
-        mock_result.stdout = "Test nodetool status output"
-        mock_result.stderr = ""
-        mock_node.run_nodetool.return_value = mock_result
-
-        # Save output
-        tester.save_nodetool_output_in_file(node=mock_node, sub_cmd="status", log_file="test_nodetool_output.log")
-
-        # Verify file was created with correct content
-        output_file = tmp_path / "test_nodetool_output.log"
-        assert output_file.exists()
-        assert output_file.read_text() == "Test nodetool status output"
-
-    def test_teardown_calls_gather_failure_statistics_on_failure(self, tmp_path):
-        """Test that tearDown calls gather_failure_statistics when test fails."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_teardown_failure")
-        tester.logdir = str(tmp_path)
-        tester.monitors = MagicMock()
-        tester.kafka_cluster = None  # Required by tearDown
-
-        # Mock db_cluster
-        mock_node = MagicMock()
-        mock_node.name = "test_node"
-        mock_node._is_node_ready_run_scylla_commands.return_value = True
-
-        mock_result = MagicMock()
-        mock_result.ok = True
-        mock_result.stdout = "Test output"
-        mock_node.run_nodetool.return_value = mock_result
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-        tester.params = FakeSCTConfiguration()
-        tester.start_time = time.time()  # Required by tearDown
-
-        # Setup fake events before calling tearDown
-        with make_fake_events():
-            tester.events_processes_registry = SctEvent._events_processes_registry
-
-            # Create an error event to make test status FAILED
-            TestFrameworkEvent(
-                source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
-            ).publish()
-
-            # Mock gather_failure_statistics to verify it's called
-            tester.gather_failure_statistics = MagicMock()
-
-            # Run tearDown
-            tester.tearDown()
-
-            # Verify gather_failure_statistics was called
-            assert tester.gather_failure_statistics.called
-
-
-def test_teardown_without_params_runs_reduced_teardown(tmp_path, caplog):
-    tester = ClusterTesterForTests()
-    tester._init_logging(tmp_path / "test_teardown_no_params")
-    tester.logdir = str(tmp_path)
-    tester.clean_resources = MagicMock()
-
-    assert not hasattr(tester, "params"), "params must be unset to simulate an early setUp failure"
-
-    with make_fake_events(), caplog.at_level(logging.INFO):
-        tester.events_processes_registry = SctEvent._events_processes_registry
-        tester.tearDown()
-        assert not tester.events["ERROR"], f"reduced teardown emitted errors: {tester.events['ERROR']}"
-
-    assert "running reduced teardown" in caplog.text
-    tester.clean_resources.assert_not_called()
-
-
-class TestSaveSchema:
-    """Tests for the save_schema functionality."""
-
-    def test_save_schema_no_db_cluster(self, tmp_path):
-        """Test that save_schema handles missing db_cluster gracefully."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_no_cluster")
-        tester.db_cluster = None
-        tester.logdir = str(tmp_path)
-
-        # Should not raise an exception
-        tester.save_schema()
-
-    def test_save_schema_saves_all_tables(self, tmp_path):
-        """Test that save_schema saves all expected tables and uploads compaction_history to S3."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_save_schema")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with a node
-        mock_node = MagicMock()
-        mock_node.name = "test_node_1"
-        mock_node._is_node_ready_run_scylla_commands.return_value = True
-        mock_node.is_docker.return_value = False
-
-        # Mock run_cqlsh to return sample data
-        mock_result = MagicMock()
-        mock_result.stdout = "Sample output"
-        mock_node.run_cqlsh.return_value = mock_result
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-
-        # Mock the upload_system_table_to_s3 function and argus_collect_logs
-        with (
-            patch("sdcm.tester.upload_system_table_to_s3") as mock_upload,
-            patch.object(tester, "argus_collect_logs") as mock_argus_logs,
-        ):
-            mock_upload.return_value = (
-                "https://s3.amazonaws.com/test-bucket/test.jsonl.tar.gz",
-                "system_compaction_history-20260524_092654-node-1.jsonl.tar.gz",
-            )
-
-            # Run save_schema
-            tester.save_schema()
-
-            # Verify upload_system_table_to_s3 was called for compaction_history
-            mock_upload.assert_called_once()
-            call_args = mock_upload.call_args
-            assert call_args[1]["node"] == mock_node
-            assert call_args[1]["table_name"] == "system.compaction_history"
-
-            # Verify argus_collect_logs was called with the S3 link
-            mock_argus_logs.assert_called_once_with(
-                {
-                    "system_compaction_history-20260524_092654-node-1.jsonl.tar.gz": "https://s3.amazonaws.com/test-bucket/test.jsonl.tar.gz"
-                }
-            )
-
-        # Verify run_cqlsh was called with expected commands (but NOT for compaction_history)
-        cqlsh_calls = [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
-        assert "desc schema" in cqlsh_calls
-        assert "select JSON * from system_schema.tables" in cqlsh_calls
-        assert "select JSON * from system.truncated" in cqlsh_calls
-        assert "select JSON * from system.tablets" in cqlsh_calls
-        assert "select JSON * from system.compaction_history" not in cqlsh_calls  # Now uploaded directly to S3
-        assert "desc schema with internals" in cqlsh_calls
-
-        # Verify files were created (except compaction_history which goes to S3)
-        assert (tmp_path / "schema.log").exists()
-        assert (tmp_path / "system_schema_tables.log").exists()
-        assert (tmp_path / "system_truncated.log").exists()
-        assert (tmp_path / "system_tablets.log").exists()
-        assert not (tmp_path / "system_compaction_history.log").exists()  # Not saved locally anymore
-        assert (tmp_path / "schema_with_internals.log").exists()
-
-    def test_save_schema_node_not_ready(self, tmp_path):
-        """Test that save_schema handles nodes that are not ready."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_node_not_ready")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with a node that's not ready
-        mock_node = MagicMock()
-        mock_node.name = "test_node_not_ready"
-        mock_node._is_node_ready_run_scylla_commands.return_value = False
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = [mock_node]
-
-        # Run save_schema
-        tester.save_schema()
-
-        # Verify run_cqlsh was not called on the not-ready node
-        assert not mock_node.run_cqlsh.called
-
-    def test_save_schema_only_uses_first_live_node(self, tmp_path):
-        """Test that save_schema only queries the first live node."""
-        tester = ClusterTesterForTests()
-        tester._init_logging(tmp_path / "test_first_node")
-        tester.logdir = str(tmp_path)
-
-        # Mock db_cluster with multiple nodes
-        mock_nodes = []
-        for i in range(3):
-            mock_node = MagicMock()
-            mock_node.name = f"test_node_{i}"
-            mock_node._is_node_ready_run_scylla_commands.return_value = True
-
-            mock_result = MagicMock()
-            mock_result.stdout = f"Output from node {i}"
-            mock_node.run_cqlsh.return_value = mock_result
-
-            mock_nodes.append(mock_node)
-
-        tester.db_cluster = MagicMock()
-        tester.db_cluster.nodes = mock_nodes
-
-        # Run save_schema
-        tester.save_schema()
-
-        # Verify only the first node was queried
-        assert mock_nodes[0].run_cqlsh.called
-        assert not mock_nodes[1].run_cqlsh.called
-        assert not mock_nodes[2].run_cqlsh.called
-
-
-@pytest.mark.parametrize(
-    "node_attrs",
-    (
-        pytest.param({"is_docker.return_value": True}, id="docker-node"),
-        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
-    ),
-)
-def test_save_schema_skips_the_s3_upload_without_ssh_access(tmp_path, node_attrs):
-    """The upload opens an SSH session of its own, which the docker, k8s and xcloud nodes have not."""
-    tester = ClusterTesterForTests()
-    tester._init_logging(tmp_path / "test_save_schema_no_ssh")
-    tester.logdir = str(tmp_path)
-
-    mock_node = MagicMock()
-    mock_node.name = "no-ssh-node-1"
-    mock_node._is_node_ready_run_scylla_commands.return_value = True
-    mock_node.is_docker.return_value = False
-    mock_node.run_cqlsh.return_value = MagicMock(stdout="Sample output")
-    mock_node.configure_mock(**node_attrs)
-
-    tester.db_cluster = MagicMock()
-    tester.db_cluster.nodes = [mock_node]
-
-    with (
-        patch("sdcm.tester.upload_system_table_to_s3") as mock_upload,
-        patch.object(tester, "argus_collect_logs") as mock_argus_logs,
-    ):
-        tester.save_schema()
-
-    mock_upload.assert_not_called()
-    mock_argus_logs.assert_not_called()
-    # the rest of the schema dump does not need SSH, so it must still run
-    assert "desc schema" in [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
-    assert (tmp_path / "schema.log").exists()
-
-
-def _perf_collector_tester(tmp_path, name, node_attrs=None):
-    """A tester with a single-node db_cluster whose run_func_parallel really runs the func."""
-    tester = ClusterTesterForTests()
-    tester._init_logging(tmp_path / name)
-    tester.logdir = str(tmp_path)
-
-    mock_node = MagicMock()
-    mock_node.name = "perf-collector-node-1"
-    mock_node.is_kubernetes.return_value = False
-    mock_node.is_docker.return_value = False
-    mock_node.spot_reclaimed = False
-    mock_node.is_service_exists.return_value = True
-    mock_node.configure_mock(**(node_attrs or {}))
-
-    tester.db_cluster = MagicMock()
-    tester.db_cluster.nodes = [mock_node]
-    tester.db_cluster.run_func_parallel.side_effect = lambda func, node_list=None: [
-        func(node) for node in (node_list or tester.db_cluster.nodes)
-    ]
-    return tester, mock_node
-
-
-def test_stop_perf_collector_no_db_cluster(tmp_path):
-    """The teardown of a test that failed before the cluster came up must not raise."""
-    tester = ClusterTesterForTests()
-    tester._init_logging(tmp_path / "test_perf_collector_no_cluster")
-    tester.db_cluster = None
-    tester.logdir = str(tmp_path)
-
-    tester.stop_perf_collector()
-
-
-def test_stop_perf_collector_stops_the_service(tmp_path):
-    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_stop")
-
-    tester.stop_perf_collector()
-
-    mock_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
-
-
-def test_stop_perf_collector_skips_node_without_the_service(tmp_path):
-    """Older Scylla versions ship no perf-collector unit, which is not an error."""
-    tester, mock_node = _perf_collector_tester(
-        tmp_path, "test_perf_collector_missing", {"is_service_exists.return_value": False}
-    )
-
-    tester.stop_perf_collector()
-
-    mock_node.stop_service.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "node_attrs",
-    (
-        pytest.param({"is_kubernetes.return_value": True}, id="k8s-node"),
-        pytest.param({"is_docker.return_value": True}, id="docker-node"),
-        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
-    ),
-)
-def test_stop_perf_collector_skips_nodes_without_systemd(tmp_path, node_attrs):
-    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_no_systemd", node_attrs)
-
-    tester.stop_perf_collector()
-
-    mock_node.is_service_exists.assert_not_called()
-    mock_node.stop_service.assert_not_called()
-
-
-def test_stop_perf_collector_tolerates_an_unreachable_node(tmp_path):
-    """An unreachable node must not raise out of teardown, nor skip the remaining nodes."""
-    tester, unreachable_node = _perf_collector_tester(
-        tmp_path, "test_perf_collector_unreachable", {"is_service_exists.side_effect": Exception("connection refused")}
-    )
-    healthy_node = MagicMock()
-    healthy_node.name = "perf-collector-node-2"
-    healthy_node.is_kubernetes.return_value = False
-    healthy_node.is_docker.return_value = False
-    healthy_node.spot_reclaimed = False
-    healthy_node.is_service_exists.return_value = True
-    tester.db_cluster.nodes = [unreachable_node, healthy_node]
-
-    tester.stop_perf_collector()
-
-    unreachable_node.stop_service.assert_not_called()
-    healthy_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
-
-
-def test_start_perf_collector_starts_the_service(tmp_path):
-    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_start")
-
-    tester.start_perf_collector()
-
-    mock_node.start_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
-    mock_node.stop_service.assert_not_called()
-
-
-def test_start_perf_collector_tolerates_an_unreachable_node(tmp_path):
-    tester, mock_node = _perf_collector_tester(
-        tmp_path,
-        "test_perf_collector_start_unreachable",
-        {"start_service.side_effect": Exception("connection refused")},
-    )
-
-    tester.start_perf_collector()
-
-    mock_node.start_service.assert_called_once()
-
-
-def test_teardown_stops_perf_collector_after_the_nemesis(tmp_path):
-    """A nemesis restarting scylla-server can bring the collector back, so the order matters."""
-    tester, _ = _perf_collector_tester(tmp_path, "test_teardown_perf_collector")
-    tester.monitors = MagicMock()
-    tester.kafka_cluster = None
-    tester.params = FakeSCTConfiguration()
-    tester.start_time = time.time()
-
-    calls = []
-    tester.stop_nemesis = MagicMock(side_effect=lambda *_, **__: calls.append("stop_nemesis"))
-    tester.stop_perf_collector = MagicMock(side_effect=lambda *_, **__: calls.append("stop_perf_collector"))
-    tester.start_perf_collector = MagicMock()
-
-    with make_fake_events():
-        tester.events_processes_registry = SctEvent._events_processes_registry
-        tester.tearDown()
-
-    assert calls == ["stop_nemesis", "stop_perf_collector"]
-
-
-@pytest.mark.parametrize("cluster_kept", (pytest.param(True, id="kept"), pytest.param(False, id="destroyed")))
-def test_teardown_restarts_perf_collector_only_on_a_kept_cluster(tmp_path, cluster_kept):
-    """After log collection the collector is started again, but only where the nodes live on."""
-    tester, mock_node = _perf_collector_tester(tmp_path, "test_teardown_perf_collector_kept")
-    tester.monitors = MagicMock()
-    tester.kafka_cluster = None
-    tester.params = FakeSCTConfiguration()
-    tester.start_time = time.time()
-    tester.stop_nemesis = MagicMock()
-
-    def clean_resources():
-        # the collector must not be started again before the logs are collected
-        mock_node.start_service.assert_not_called()
-        if not cluster_kept:
-            tester.db_cluster = None
-
-    tester.clean_resources = clean_resources
-
-    with make_fake_events():
-        tester.events_processes_registry = SctEvent._events_processes_registry
-        tester.tearDown()
-
-    mock_node.stop_service.assert_called_once()
-    assert mock_node.start_service.called == cluster_kept
-
-
-class TestEmrCleanResources:
-    """Tests for EMR cluster conditional cleanup in clean_resources."""
-
-    @pytest.fixture(autouse=True)
-    def _reset_test_config(self):
-        """Reset EMR keep-alive flag between tests."""
-        original = TestConfig.KEEP_ALIVE_EMR_CLUSTER
-        yield
-        TestConfig.KEEP_ALIVE_EMR_CLUSTER = original
-
-    @staticmethod
-    def _make_params(emr_action):
-        mock_params = MagicMock()
-        mock_params.get.side_effect = lambda key, default=None: {
-            "execute_post_behavior": True,
-            "post_behavior_db_nodes": "keep",
-            "post_behavior_loader_nodes": "keep",
-            "post_behavior_monitor_nodes": "keep",
-            "post_behavior_vector_store_nodes": "keep",
-            "post_behavior_k8s_cluster": "keep",
-            "post_behavior_emr_cluster": emr_action,
-            "db_type": "scylla",
-        }.get(key, default)
-        return mock_params
-
-    @staticmethod
-    def _make_tester(mock_params, emr_cluster=None):
-        tester = MagicMock(spec=ClusterTester)
-        tester.params = mock_params
-        tester.test_config = TestConfig
-        tester.log = logging.getLogger("test_emr")
-        tester.logdir = "/tmp/test"
-        tester.db_cluster = tester.loaders = tester.monitors = None
-        tester.emr_cluster = emr_cluster
-        return tester
-
-    @staticmethod
-    def _run_clean_resources(tester, critical_events):
-        actions = get_post_behavior_actions(tester.params)
-        with (
-            unittest.mock.patch("sdcm.tester.get_testrun_status", return_value=critical_events),
-            unittest.mock.patch("sdcm.tester.get_post_behavior_actions", return_value=actions),
-        ):
-            ClusterTester.clean_resources(tester)
-
-    @pytest.mark.parametrize(
-        "action, critical_events, expect_terminated",
-        [
-            pytest.param("destroy", False, True, id="destroy-no-critical"),
-            pytest.param("destroy", True, True, id="destroy-with-critical"),
-            pytest.param("keep-on-failure", False, True, id="keep-on-failure-no-critical"),
-            pytest.param("keep-on-failure", True, False, id="keep-on-failure-with-critical"),
-            pytest.param("keep", False, False, id="keep-no-critical"),
-            pytest.param("keep", True, False, id="keep-with-critical"),
-        ],
-    )
-    def test_emr_clean_resources_conditional_termination(self, action, critical_events, expect_terminated):
-        """Test that clean_resources terminates EMR cluster based on post-behavior action and critical events."""
-        mock_emr = MagicMock()
-        mock_emr.cluster_id = "j-TEST123"
-        tester = self._make_tester(self._make_params(action), emr_cluster=mock_emr)
-
-        self._run_clean_resources(tester, critical_events)
-
-        if expect_terminated:
-            mock_emr.terminate_emr_cluster.assert_called_once()
-        else:
-            mock_emr.terminate_emr_cluster.assert_not_called()
-
-    def test_emr_clean_resources_keeps_on_failure_sets_keep_alive(self):
-        """Test that keep-on-failure with critical events sets KEEP_ALIVE_EMR_CLUSTER flag."""
-        mock_emr = MagicMock()
-        mock_emr.cluster_id = "j-KEEPME"
-        tester = self._make_tester(self._make_params("keep-on-failure"), emr_cluster=mock_emr)
-
-        self._run_clean_resources(tester, critical_events=True)
-
-        mock_emr.terminate_emr_cluster.assert_not_called()
-        assert TestConfig.KEEP_ALIVE_EMR_CLUSTER is True
-
-    def test_emr_clean_resources_no_emr_cluster(self):
-        """Test that clean_resources handles None emr_cluster gracefully."""
-        tester = self._make_tester(self._make_params("destroy"))
-        self._run_clean_resources(tester, critical_events=False)
-
-
-# --- Tests for ClusterTester.init_argus_run() Argus config submission ---
 
 
 @pytest.fixture()
@@ -892,6 +195,787 @@ def tester_with_argus(monkeypatch):
     return tester, mock_argus_client
 
 
+def perf_collector_tester(tmp_path, name, node_attrs=None):
+    """A tester with a single-node db_cluster whose run_func_parallel really runs the func."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / name)
+    tester.logdir = str(tmp_path)
+
+    mock_node = MagicMock()
+    mock_node.name = "perf-collector-node-1"
+    mock_node.is_kubernetes.return_value = False
+    mock_node.is_docker.return_value = False
+    mock_node.spot_reclaimed = False
+    mock_node.is_service_exists.return_value = True
+    mock_node.configure_mock(**(node_attrs or {}))
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.db_cluster.run_func_parallel.side_effect = lambda func, node_list=None: [
+        func(node) for node in (node_list or tester.db_cluster.nodes)
+    ]
+    return tester, mock_node
+
+
+def docker_tester(tmp_path, n_monitor_nodes):
+    """ClusterTesterForTests with n_monitor_nodes set, for the docker backend."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "docker_monitors")
+    tester.params = FakeSCTConfiguration()
+    tester.params["n_monitor_nodes"] = n_monitor_nodes
+    tester.credentials = []
+    return tester
+
+
+def make_ready_node(name):
+    """Node mock that passes the readiness check and answers nodetool."""
+    node = MagicMock()
+    node.name = name
+    node.is_nonroot_install = False
+    node._is_node_ready_run_scylla_commands.return_value = True
+    node.run_nodetool.return_value = MagicMock(ok=True, stdout="nodetool output", stderr="")
+    return node
+
+
+def fake_latte_tester():
+    """The 'ClusterTester' attributes 'run_latte_thread' reads, and nothing else."""
+    return types.SimpleNamespace(
+        loaders="loader-set",
+        db_cluster=types.SimpleNamespace(nodes=["node-1"]),
+        _stress_duration=None,
+        params={"stop_test_on_stress_failure": True},
+        get_duration=lambda duration: 60 * duration,
+    )
+
+
+def rf_tester(n_db_nodes, racks_count, append_scylla_yaml=None, tablets_enabled=True):
+    """reliable_replication_factor of a ClusterTester mock with the given nodes and racks."""
+    tester = MagicMock(spec=ClusterTester)
+    tester.params = {"n_db_nodes": n_db_nodes, "append_scylla_yaml": append_scylla_yaml}
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [MagicMock()]
+    tester.db_cluster.racks_count = racks_count
+    with patch("sdcm.tester.is_tablets_feature_enabled", return_value=tablets_enabled):
+        return ClusterTester.reliable_replication_factor.fget(tester)
+
+
+@pytest.fixture()
+def restore_emr_keep_alive():
+    """Restore TestConfig.KEEP_ALIVE_EMR_CLUSTER, which clean_resources may set, after the test."""
+    original = TestConfig.KEEP_ALIVE_EMR_CLUSTER
+    yield
+    TestConfig.KEEP_ALIVE_EMR_CLUSTER = original
+
+
+def emr_params(emr_action):
+    """Params with the EMR post-behavior set to emr_action and every other cluster kept."""
+    mock_params = MagicMock()
+    mock_params.get.side_effect = lambda key, default=None: {
+        "execute_post_behavior": True,
+        "post_behavior_db_nodes": "keep",
+        "post_behavior_loader_nodes": "keep",
+        "post_behavior_monitor_nodes": "keep",
+        "post_behavior_vector_store_nodes": "keep",
+        "post_behavior_k8s_cluster": "keep",
+        "post_behavior_emr_cluster": emr_action,
+        "db_type": "scylla",
+    }.get(key, default)
+    return mock_params
+
+
+def emr_tester(mock_params, emr_cluster=None):
+    """ClusterTester mock carrying the params and EMR cluster that clean_resources reads."""
+    tester = MagicMock(spec=ClusterTester)
+    tester.params = mock_params
+    tester.test_config = TestConfig
+    tester.log = logging.getLogger("test_emr")
+    tester.logdir = "/tmp/test"
+    tester.db_cluster = tester.loaders = tester.monitors = None
+    tester.emr_cluster = emr_cluster
+    return tester
+
+
+def run_emr_clean_resources(tester, critical_events):
+    """Run ClusterTester.clean_resources on tester, with critical_events as the testrun status."""
+    actions = get_post_behavior_actions(tester.params)
+    with (
+        unittest.mock.patch("sdcm.tester.get_testrun_status", return_value=critical_events),
+        unittest.mock.patch("sdcm.tester.get_post_behavior_actions", return_value=actions),
+    ):
+        ClusterTester.clean_resources(tester)
+
+
+@pytest.mark.parametrize(
+    "test_class, results, outcomes",
+    [
+        pytest.param(
+            TeardownFailsTest,
+            {"passed": 1},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: collect_relocatable_package (silenced)",
+            ],
+            id="TeardownFailsTest",
+        ),
+        pytest.param(
+            SubtestsSuccessTest,
+            {"passed": 1, "subtests": 2},
+            ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"],
+            id="SubtestsSuccessTest",
+        ),
+        pytest.param(
+            SuccessTest, {"passed": 1}, ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"], id="SuccessTest"
+        ),
+        pytest.param(
+            ErrorEventTest,
+            {"passed": 1},
+            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: Something went wrong"],
+            id="ErrorEventTest",
+        ),
+        pytest.param(
+            SetupFailsTest,
+            {"failed": 1},
+            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: prepare_kms_host failed"],
+            id="SetupFailsTest",
+        ),
+        pytest.param(
+            CriticalErrorNotCaughtTest,
+            {"passed": 1},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'CRITICAL': 1}",
+                "TEST_STATUS: FAILED",
+                "CRITICAL 0: Reason to fail",
+            ],
+            id="CriticalErrorNotCaughtTest",
+        ),
+        pytest.param(
+            SubtestAndTeardownFailsTest,
+            {"failed": 3},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: collect_relocatable_package (silenced)",
+                "E           ValueError: Subtest1 failed",
+                "E           ValueError: Subtest2 failed",
+                "E       ValueError: Main test also failed",
+            ],
+            id="SubtestAndTeardownFailsTest",
+        ),
+        pytest.param(
+            SubtestAssertAndTeardownFailsTest,
+            {"failed": 3},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: collect_relocatable_package (silenced)",
+                "E           AssertionError: Subtest1 failed",
+                "E           AssertionError: Subtest2 failed",
+                "E       AssertionError: Main test also failed",
+            ],
+            id="SubtestAssertAndTeardownFailsTest",
+        ),
+    ],
+)
+def test_tester_subclass(pytester, test_class, results, outcomes):
+    """ClusterTester subclass reports the expected outcomes and summary in pytester."""
+    # pytester sets HOME to its temp path; create a mock SSH key file
+    # so the ExistingFile validator for user_credentials_path succeeds.
+    ssh_dir = pytester.path / ".ssh"
+    ssh_dir.mkdir()
+    (ssh_dir / "scylla_test_id_ed25519").write_text("mock-key")
+
+    # Create a pytest file with the test class. We cannot just use the class directly
+    # because it would not be collected. If we made it collectable it would be run as part of standard test run as well.
+    # Which we do not want, as it is intended only to be run with pytester
+    pytester.makepyfile(f"""
+        from unit_tests.conftest import *
+        from unit_tests.unit.test_tester import {test_class.__name__}
+        {test_class.__name__}.__test__ = True
+    """)
+
+    # cause of https://github.com/pytest-dev/pytest/issues/13905
+    # we need to run with extra flag -q, so subtest summary output is shown
+    result = pytester.runpytest_inprocess("-q")
+    summary = result.parseoutcomes()
+    for status, count in results.items():
+        assert status in summary, f"Status '{status}' not found in results"
+        assert summary[status] == count, f"Status '{status}' count mismatch: expected {count}, got {summary[status]}"
+    output = result.stdout.str().splitlines()
+    for outcome in outcomes:
+        assert outcome in output
+
+
+def test_gather_failure_statistics_no_db_cluster(tmp_path):
+    """Test that gather_failure_statistics handles missing db_cluster gracefully."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_no_cluster")
+    tester.db_cluster = None
+    tester.logdir = str(tmp_path)
+
+    # Should not raise an exception
+    tester.gather_failure_statistics()
+
+
+def test_gather_failure_statistics_with_nodes(tmp_path):
+    """Test that gather_failure_statistics collects nodetool outputs."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_with_nodes")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with nodes
+    mock_node = MagicMock()
+    mock_node.name = "test_node_1"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+    # Mock nodetool commands
+    mock_result = MagicMock()
+    mock_result.ok = True
+    mock_result.stdout = "Test nodetool output"
+    mock_result.stderr = ""
+    mock_node.run_nodetool.return_value = mock_result
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.params = FakeSCTConfiguration()
+
+    # Run the function
+    tester.gather_failure_statistics()
+
+    # Verify nodetool commands were called
+    assert mock_node.run_nodetool.called
+    nodetool_calls = [call[1]["sub_cmd"] for call in mock_node.run_nodetool.call_args_list]
+    assert "status" in nodetool_calls
+    assert "gossipinfo" in nodetool_calls
+    assert "compactionstats" in nodetool_calls
+
+    # Verify files were created
+    assert (tmp_path / "nodetool_status_failure.log").exists()
+    assert (tmp_path / "nodetool_gossipinfo_failure_test_node_1.log").exists()
+    assert (tmp_path / "nodetool_compactionstats_failure_test_node_1.log").exists()
+
+
+def test_gather_failure_statistics_node_not_ready(tmp_path):
+    """Test that gather_failure_statistics handles nodes that are not ready."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_node_not_ready")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with a node that's not ready
+    mock_node = MagicMock()
+    mock_node.name = "test_node_not_ready"
+    mock_node._is_node_ready_run_scylla_commands.return_value = False
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.params = FakeSCTConfiguration()
+
+    # Run the function
+    tester.gather_failure_statistics()
+
+    # Verify nodetool was not called on the not-ready node
+    assert not mock_node.run_nodetool.called
+
+
+def test_gather_failure_statistics_with_multiple_nodes(tmp_path):
+    """Test that gather_failure_statistics collects from multiple nodes."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_multiple_nodes")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with multiple nodes
+    mock_nodes = []
+    for i in range(3):
+        mock_node = MagicMock()
+        mock_node.name = f"test_node_{i}"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        mock_result = MagicMock()
+        mock_result.ok = True
+        mock_result.stdout = f"Test output from node {i}"
+        mock_result.stderr = ""
+        mock_node.run_nodetool.return_value = mock_result
+
+        mock_nodes.append(mock_node)
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = mock_nodes
+    tester.params = FakeSCTConfiguration()
+
+    # Run the function
+    tester.gather_failure_statistics()
+
+    # Verify all nodes were queried for gossipinfo and compactionstats
+    for i, node in enumerate(mock_nodes):
+        assert node.run_nodetool.called
+        # Each node should have gossipinfo and compactionstats calls
+        nodetool_calls = [call[1]["sub_cmd"] for call in node.run_nodetool.call_args_list]
+        assert "gossipinfo" in nodetool_calls
+        assert "compactionstats" in nodetool_calls
+
+
+def test_gather_failure_statistics_nodetool_failure(tmp_path):
+    """Test that gather_failure_statistics handles nodetool command failures."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_nodetool_failure")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with a node where nodetool fails
+    mock_node = MagicMock()
+    mock_node.name = "test_node_fail"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+    # Mock failed nodetool command
+    mock_result = MagicMock()
+    mock_result.ok = False
+    mock_result.stdout = ""
+    mock_result.stderr = "Command failed"
+    mock_node.run_nodetool.return_value = mock_result
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.params = FakeSCTConfiguration()
+
+    # Should not raise an exception
+    tester.gather_failure_statistics()
+
+    # Verify it still attempted to call nodetool
+    assert mock_node.run_nodetool.called
+
+
+def test_save_nodetool_output_in_file(tmp_path):
+    """Test save_nodetool_output_in_file method."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_save_nodetool")
+    tester.logdir = str(tmp_path)
+
+    # Mock node
+    mock_node = MagicMock()
+    mock_node.name = "test_node"
+
+    # Mock successful nodetool command
+    mock_result = MagicMock()
+    mock_result.ok = True
+    mock_result.stdout = "Test nodetool status output"
+    mock_result.stderr = ""
+    mock_node.run_nodetool.return_value = mock_result
+
+    # Save output
+    tester.save_nodetool_output_in_file(node=mock_node, sub_cmd="status", log_file="test_nodetool_output.log")
+
+    # Verify file was created with correct content
+    output_file = tmp_path / "test_nodetool_output.log"
+    assert output_file.exists()
+    assert output_file.read_text() == "Test nodetool status output"
+
+
+def test_teardown_calls_gather_failure_statistics_on_failure(tmp_path):
+    """Test that tearDown calls gather_failure_statistics when test fails."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_teardown_failure")
+    tester.logdir = str(tmp_path)
+    tester.monitors = MagicMock()
+    tester.kafka_cluster = None  # Required by tearDown
+
+    # Mock db_cluster
+    mock_node = MagicMock()
+    mock_node.name = "test_node"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+    mock_result = MagicMock()
+    mock_result.ok = True
+    mock_result.stdout = "Test output"
+    mock_node.run_nodetool.return_value = mock_result
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.params = FakeSCTConfiguration()
+    tester.start_time = time.time()  # Required by tearDown
+
+    # Setup fake events before calling tearDown
+    with make_fake_events():
+        tester.events_processes_registry = SctEvent._events_processes_registry
+
+        # Create an error event to make test status FAILED
+        TestFrameworkEvent(
+            source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
+        ).publish()
+
+        # Mock gather_failure_statistics to verify it's called
+        tester.gather_failure_statistics = MagicMock()
+
+        # Run tearDown
+        tester.tearDown()
+
+        # Verify gather_failure_statistics was called
+        assert tester.gather_failure_statistics.called
+
+
+def test_teardown_without_params_runs_reduced_teardown(tmp_path, caplog):
+    """Teardown without params runs the reduced teardown and emits no errors."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_teardown_no_params")
+    tester.logdir = str(tmp_path)
+    tester.clean_resources = MagicMock()
+
+    assert not hasattr(tester, "params"), "params must be unset to simulate an early setUp failure"
+
+    with make_fake_events(), caplog.at_level(logging.INFO):
+        tester.events_processes_registry = SctEvent._events_processes_registry
+        tester.tearDown()
+        assert not tester.events["ERROR"], f"reduced teardown emitted errors: {tester.events['ERROR']}"
+
+    assert "running reduced teardown" in caplog.text
+    tester.clean_resources.assert_not_called()
+
+
+def test_save_schema_no_db_cluster(tmp_path):
+    """Test that save_schema handles missing db_cluster gracefully."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_no_cluster")
+    tester.db_cluster = None
+    tester.logdir = str(tmp_path)
+
+    # Should not raise an exception
+    tester.save_schema()
+
+
+def test_save_schema_saves_all_tables(tmp_path):
+    """Test that save_schema saves all expected tables and uploads compaction_history to S3."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_save_schema")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with a node
+    mock_node = MagicMock()
+    mock_node.name = "test_node_1"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+    mock_node.is_docker.return_value = False
+
+    # Mock run_cqlsh to return sample data
+    mock_result = MagicMock()
+    mock_result.stdout = "Sample output"
+    mock_node.run_cqlsh.return_value = mock_result
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+
+    # Mock the upload_system_table_to_s3 function and argus_collect_logs
+    with (
+        patch("sdcm.tester.upload_system_table_to_s3") as mock_upload,
+        patch.object(tester, "argus_collect_logs") as mock_argus_logs,
+    ):
+        mock_upload.return_value = (
+            "https://s3.amazonaws.com/test-bucket/test.jsonl.tar.gz",
+            "system_compaction_history-20260524_092654-node-1.jsonl.tar.gz",
+        )
+
+        # Run save_schema
+        tester.save_schema()
+
+        # Verify upload_system_table_to_s3 was called for compaction_history
+        mock_upload.assert_called_once_with(
+            node=mock_node, table_name="system.compaction_history", test_id=tester.test_config.test_id()
+        )
+
+        # Verify argus_collect_logs was called with the S3 link
+        mock_argus_logs.assert_called_once_with(
+            {
+                "system_compaction_history-20260524_092654-node-1.jsonl.tar.gz": "https://s3.amazonaws.com/test-bucket/test.jsonl.tar.gz"
+            }
+        )
+
+    # Verify run_cqlsh was called with expected commands (but NOT for compaction_history)
+    cqlsh_calls = [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
+    assert "desc schema" in cqlsh_calls
+    assert "select JSON * from system_schema.tables" in cqlsh_calls
+    assert "select JSON * from system.truncated" in cqlsh_calls
+    assert "select JSON * from system.tablets" in cqlsh_calls
+    assert "select JSON * from system.compaction_history" not in cqlsh_calls  # Now uploaded directly to S3
+    assert "desc schema with internals" in cqlsh_calls
+
+    # Verify files were created (except compaction_history which goes to S3)
+    assert (tmp_path / "schema.log").exists()
+    assert (tmp_path / "system_schema_tables.log").exists()
+    assert (tmp_path / "system_truncated.log").exists()
+    assert (tmp_path / "system_tablets.log").exists()
+    assert not (tmp_path / "system_compaction_history.log").exists()  # Not saved locally anymore
+    assert (tmp_path / "schema_with_internals.log").exists()
+
+
+def test_save_schema_node_not_ready(tmp_path):
+    """Test that save_schema handles nodes that are not ready."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_node_not_ready")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with a node that's not ready
+    mock_node = MagicMock()
+    mock_node.name = "test_node_not_ready"
+    mock_node._is_node_ready_run_scylla_commands.return_value = False
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+
+    # Run save_schema
+    tester.save_schema()
+
+    # Verify run_cqlsh was not called on the not-ready node
+    assert not mock_node.run_cqlsh.called
+
+
+def test_save_schema_only_uses_first_live_node(tmp_path):
+    """Test that save_schema only queries the first live node."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_first_node")
+    tester.logdir = str(tmp_path)
+
+    # Mock db_cluster with multiple nodes
+    mock_nodes = []
+    for i in range(3):
+        mock_node = MagicMock()
+        mock_node.name = f"test_node_{i}"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        mock_result = MagicMock()
+        mock_result.stdout = f"Output from node {i}"
+        mock_node.run_cqlsh.return_value = mock_result
+
+        mock_nodes.append(mock_node)
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = mock_nodes
+
+    # Run save_schema
+    tester.save_schema()
+
+    # Verify only the first node was queried
+    assert mock_nodes[0].run_cqlsh.called
+    assert not mock_nodes[1].run_cqlsh.called
+    assert not mock_nodes[2].run_cqlsh.called
+
+
+@pytest.mark.parametrize(
+    "node_attrs",
+    (
+        pytest.param({"is_docker.return_value": True}, id="docker-node"),
+        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
+    ),
+)
+def test_save_schema_skips_the_s3_upload_without_ssh_access(tmp_path, node_attrs):
+    """The upload opens an SSH session of its own, which the docker, k8s and xcloud nodes have not."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_save_schema_no_ssh")
+    tester.logdir = str(tmp_path)
+
+    mock_node = MagicMock()
+    mock_node.name = "no-ssh-node-1"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+    mock_node.is_docker.return_value = False
+    mock_node.run_cqlsh.return_value = MagicMock(stdout="Sample output")
+    mock_node.configure_mock(**node_attrs)
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+
+    with (
+        patch("sdcm.tester.upload_system_table_to_s3") as mock_upload,
+        patch.object(tester, "argus_collect_logs") as mock_argus_logs,
+    ):
+        tester.save_schema()
+
+    mock_upload.assert_not_called()
+    mock_argus_logs.assert_not_called()
+    # the rest of the schema dump does not need SSH, so it must still run
+    assert "desc schema" in [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
+    assert (tmp_path / "schema.log").exists()
+
+
+def test_stop_perf_collector_no_db_cluster(tmp_path):
+    """The teardown of a test that failed before the cluster came up must not raise."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_perf_collector_no_cluster")
+    tester.db_cluster = None
+    tester.logdir = str(tmp_path)
+
+    tester.stop_perf_collector()
+
+
+def test_stop_perf_collector_stops_the_service(tmp_path):
+    """stop_perf_collector stops the perf-collector service on the node."""
+    tester, mock_node = perf_collector_tester(tmp_path, "test_perf_collector_stop")
+
+    tester.stop_perf_collector()
+
+    mock_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+
+
+def test_stop_perf_collector_skips_node_without_the_service(tmp_path):
+    """Older Scylla versions ship no perf-collector unit, which is not an error."""
+    tester, mock_node = perf_collector_tester(
+        tmp_path, "test_perf_collector_missing", {"is_service_exists.return_value": False}
+    )
+
+    tester.stop_perf_collector()
+
+    mock_node.stop_service.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "node_attrs",
+    (
+        pytest.param({"is_kubernetes.return_value": True}, id="k8s-node"),
+        pytest.param({"is_docker.return_value": True}, id="docker-node"),
+        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
+    ),
+)
+def test_stop_perf_collector_skips_nodes_without_systemd(tmp_path, node_attrs):
+    """stop_perf_collector skips k8s, docker and xcloud nodes without touching systemd."""
+    tester, mock_node = perf_collector_tester(tmp_path, "test_perf_collector_no_systemd", node_attrs)
+
+    tester.stop_perf_collector()
+
+    mock_node.is_service_exists.assert_not_called()
+    mock_node.stop_service.assert_not_called()
+
+
+def test_stop_perf_collector_tolerates_an_unreachable_node(tmp_path):
+    """An unreachable node must not raise out of teardown, nor skip the remaining nodes."""
+    tester, unreachable_node = perf_collector_tester(
+        tmp_path, "test_perf_collector_unreachable", {"is_service_exists.side_effect": Exception("connection refused")}
+    )
+    healthy_node = MagicMock()
+    healthy_node.name = "perf-collector-node-2"
+    healthy_node.is_kubernetes.return_value = False
+    healthy_node.is_docker.return_value = False
+    healthy_node.spot_reclaimed = False
+    healthy_node.is_service_exists.return_value = True
+    tester.db_cluster.nodes = [unreachable_node, healthy_node]
+
+    tester.stop_perf_collector()
+
+    unreachable_node.stop_service.assert_not_called()
+    healthy_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+
+
+def test_start_perf_collector_starts_the_service(tmp_path):
+    """start_perf_collector starts the perf-collector service and does not stop it."""
+    tester, mock_node = perf_collector_tester(tmp_path, "test_perf_collector_start")
+
+    tester.start_perf_collector()
+
+    mock_node.start_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+    mock_node.stop_service.assert_not_called()
+
+
+def test_start_perf_collector_tolerates_an_unreachable_node(tmp_path):
+    """start_perf_collector logs and continues when the node raises."""
+    tester, mock_node = perf_collector_tester(
+        tmp_path,
+        "test_perf_collector_start_unreachable",
+        {"start_service.side_effect": Exception("connection refused")},
+    )
+
+    tester.start_perf_collector()
+
+    mock_node.start_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+
+
+def test_teardown_stops_perf_collector_after_the_nemesis(tmp_path):
+    """A nemesis restarting scylla-server can bring the collector back, so the order matters."""
+    tester, _ = perf_collector_tester(tmp_path, "test_teardown_perf_collector")
+    tester.monitors = MagicMock()
+    tester.kafka_cluster = None
+    tester.params = FakeSCTConfiguration()
+    tester.start_time = time.time()
+
+    calls = []
+    tester.stop_nemesis = MagicMock(side_effect=lambda *_, **__: calls.append("stop_nemesis"))
+    tester.stop_perf_collector = MagicMock(side_effect=lambda *_, **__: calls.append("stop_perf_collector"))
+    tester.start_perf_collector = MagicMock()
+
+    with make_fake_events():
+        tester.events_processes_registry = SctEvent._events_processes_registry
+        tester.tearDown()
+
+    assert calls == ["stop_nemesis", "stop_perf_collector"]
+
+
+@pytest.mark.parametrize("cluster_kept", (pytest.param(True, id="kept"), pytest.param(False, id="destroyed")))
+def test_teardown_restarts_perf_collector_only_on_a_kept_cluster(tmp_path, cluster_kept):
+    """After log collection the collector is started again, but only where the nodes live on."""
+    tester, mock_node = perf_collector_tester(tmp_path, "test_teardown_perf_collector_kept")
+    tester.monitors = MagicMock()
+    tester.kafka_cluster = None
+    tester.params = FakeSCTConfiguration()
+    tester.start_time = time.time()
+    tester.stop_nemesis = MagicMock()
+
+    def clean_resources():
+        # the collector must not be started again before the logs are collected
+        mock_node.start_service.assert_not_called()
+        if not cluster_kept:
+            tester.db_cluster = None
+
+    tester.clean_resources = clean_resources
+
+    with make_fake_events():
+        tester.events_processes_registry = SctEvent._events_processes_registry
+        tester.tearDown()
+
+    mock_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+    assert mock_node.start_service.called == cluster_kept
+
+
+@pytest.mark.usefixtures("restore_emr_keep_alive")
+@pytest.mark.parametrize(
+    "action, critical_events, expect_terminated",
+    [
+        pytest.param("destroy", False, True, id="destroy-no-critical"),
+        pytest.param("destroy", True, True, id="destroy-with-critical"),
+        pytest.param("keep-on-failure", False, True, id="keep-on-failure-no-critical"),
+        pytest.param("keep-on-failure", True, False, id="keep-on-failure-with-critical"),
+        pytest.param("keep", False, False, id="keep-no-critical"),
+        pytest.param("keep", True, False, id="keep-with-critical"),
+    ],
+)
+def test_emr_clean_resources_conditional_termination(action, critical_events, expect_terminated):
+    """clean_resources terminates the EMR cluster based on the post-behavior action and critical events."""
+    mock_emr = MagicMock()
+    mock_emr.cluster_id = "j-TEST123"
+    tester = emr_tester(emr_params(action), emr_cluster=mock_emr)
+
+    run_emr_clean_resources(tester, critical_events)
+
+    if expect_terminated:
+        mock_emr.terminate_emr_cluster.assert_called_once_with()
+    else:
+        mock_emr.terminate_emr_cluster.assert_not_called()
+
+
+@pytest.mark.usefixtures("restore_emr_keep_alive")
+def test_emr_clean_resources_keeps_on_failure_sets_keep_alive():
+    """Test that keep-on-failure with critical events sets KEEP_ALIVE_EMR_CLUSTER flag."""
+    mock_emr = MagicMock()
+    mock_emr.cluster_id = "j-KEEPME"
+    tester = emr_tester(emr_params("keep-on-failure"), emr_cluster=mock_emr)
+
+    run_emr_clean_resources(tester, critical_events=True)
+
+    mock_emr.terminate_emr_cluster.assert_not_called()
+    assert TestConfig.KEEP_ALIVE_EMR_CLUSTER is True
+
+
+@pytest.mark.usefixtures("restore_emr_keep_alive")
+def test_emr_clean_resources_no_emr_cluster():
+    """clean_resources handles a None EMR cluster without error."""
+    tester = emr_tester(emr_params("destroy"))
+    run_emr_clean_resources(tester, critical_events=False)
+
+
+# --- Tests for ClusterTester.init_argus_run() Argus config submission ---
+
+
 def test_init_argus_run_pydantic_root_model_serializes_valid_json(tester_with_argus):
     """Regression: json.dumps previously raised ValueError (circular reference) with AdaptiveTimeoutMultipliers."""
     tester, mock_argus_client = tester_with_argus
@@ -932,20 +1016,9 @@ def test_init_argus_run_config_excludes_internal_fields(tester_with_argus):
 
 
 # get_cluster_docker: the monitoring set follows 'n_monitor_nodes', as on every other backend
-
-
-def _docker_tester(tmp_path, n_monitor_nodes):
-    tester = ClusterTesterForTests()
-    tester._init_logging(tmp_path / "docker_monitors")
-    tester.params = FakeSCTConfiguration()
-    tester.params["n_monitor_nodes"] = n_monitor_nodes
-    tester.credentials = []
-    return tester
-
-
 def test_get_cluster_docker_zero_monitor_nodes_uses_no_monitor_set(tmp_path):
     """'n_monitor_nodes: 0' must not start the monitoring stack on the docker backend."""
-    tester = _docker_tester(tmp_path, 0)
+    tester = docker_tester(tmp_path, 0)
 
     with patch("sdcm.tester.cluster_docker") as cluster_docker_mock, patch("sdcm.tester.UserRemoteCredentials"):
         tester.get_cluster_docker()
@@ -956,31 +1029,30 @@ def test_get_cluster_docker_zero_monitor_nodes_uses_no_monitor_set(tmp_path):
 
 def test_get_cluster_docker_nonzero_monitor_nodes_builds_monitor_set_docker(tmp_path):
     """A monitored docker run is unchanged: the parameter still builds a 'MonitorSetDocker'."""
-    tester = _docker_tester(tmp_path, 1)
+    tester = docker_tester(tmp_path, 1)
 
     with patch("sdcm.tester.cluster_docker") as cluster_docker_mock, patch("sdcm.tester.UserRemoteCredentials"):
         tester.get_cluster_docker()
 
-    cluster_docker_mock.MonitorSetDocker.assert_called_once()
+    cluster_docker_mock.MonitorSetDocker.assert_called_once_with(
+        n_nodes=[1],
+        targets=dict(
+            db_cluster=cluster_docker_mock.ScyllaDockerCluster.return_value,
+            loaders=cluster_docker_mock.LoaderSetDocker.return_value,
+        ),
+        user_prefix=tester.params.get("user_prefix"),
+        params=tester.params,
+    )
     assert tester.monitors is cluster_docker_mock.MonitorSetDocker.return_value
 
 
 # --- scylla-doctor gather_failure_statistics tests ---
 
 
-def _make_ready_node(name):
-    node = MagicMock()
-    node.name = name
-    node.is_nonroot_install = False
-    node._is_node_ready_run_scylla_commands.return_value = True
-    node.run_nodetool.return_value = MagicMock(ok=True, stdout="nodetool output", stderr="")
-    return node
-
-
 def test_gather_failure_statistics_scylla_doctor_stuck_node_does_not_block_teardown(tmp_path, monkeypatch, caplog):
     """A scylla-doctor run that never returns on one node must not stall the rest of tearDown."""
     release = threading.Event()
-    stuck_node, fast_node = _make_ready_node("stuck-node"), _make_ready_node("fast-node")
+    stuck_node, fast_node = make_ready_node("stuck-node"), make_ready_node("fast-node")
 
     def fake_scylla_doctor(node, test_config, offline_install):  # noqa: ARG001
         doctor = MagicMock(json_result_file="", scylla_logs_file="", is_full_edition=False)
@@ -1017,19 +1089,6 @@ def test_gather_failure_statistics_scylla_doctor_stuck_node_does_not_block_teard
 
 
 # run_latte_thread: per-invocation options reach the thread
-
-
-def _fake_latte_tester():
-    """The 'ClusterTester' attributes 'run_latte_thread' reads, and nothing else."""
-    return types.SimpleNamespace(
-        loaders="loader-set",
-        db_cluster=types.SimpleNamespace(nodes=["node-1"]),
-        _stress_duration=None,
-        params={"stop_test_on_stress_failure": True},
-        get_duration=lambda duration: 60 * duration,
-    )
-
-
 def test_run_latte_thread_forwards_the_files_to_stage():
     """A caller with per-invocation data -- a dataset shard -- reaches the thread through here, so
     it does not have to reimplement this helper's timeout resolution and loader fan-out.
@@ -1040,7 +1099,7 @@ def test_run_latte_thread_forwards_the_files_to_stage():
         patch.object(LatteStressThread, "run", return_value="thread-pool") as mock_run,
     ):
         result = ClusterTester.run_latte_thread(
-            _fake_latte_tester(),
+            fake_latte_tester(),
             stress_cmd="latte run -f load data_dir/latte/x.rn",
             duration=10,
             extra_files_to_stage=files,
@@ -1054,12 +1113,13 @@ def test_run_latte_thread_forwards_the_files_to_stage():
 
 
 def test_run_latte_thread_stages_nothing_by_default():
+    """run_latte_thread passes no extra files to the thread by default."""
     with (
         patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
         patch.object(LatteStressThread, "run", return_value="thread-pool") as mock_run,
     ):
         result = ClusterTester.run_latte_thread(
-            _fake_latte_tester(), stress_cmd="latte run -f search data_dir/latte/x.rn", duration=10
+            fake_latte_tester(), stress_cmd="latte run -f search data_dir/latte/x.rn", duration=10
         )
 
     assert result == "thread-pool"
@@ -1069,22 +1129,6 @@ def test_run_latte_thread_stages_nothing_by_default():
 
 
 # --- Tests for ClusterTester.reliable_replication_factor RF-by-racks bounding ---
-
-
-def _rf_tester(n_db_nodes, racks_count, append_scylla_yaml=None, tablets_enabled=True):
-    tester = MagicMock(spec=ClusterTester)
-    tester.params = {"n_db_nodes": n_db_nodes, "append_scylla_yaml": append_scylla_yaml}
-    tester.db_cluster = MagicMock()
-    tester.db_cluster.nodes = [MagicMock()]
-    tester.db_cluster.racks_count = racks_count
-    with patch("sdcm.tester.is_tablets_feature_enabled", return_value=tablets_enabled):
-        return ClusterTester.reliable_replication_factor.fget(tester)
-
-
-RF_RACK_VALID = {"rf_rack_valid_keyspaces": True}
-ENFORCE_RACK_LIST = {"enforce_rack_list": True}
-
-
 @pytest.mark.parametrize(
     "tablets_enabled, append_scylla_yaml, n_db_nodes, racks_count, expected_rf",
     [
@@ -1101,7 +1145,8 @@ ENFORCE_RACK_LIST = {"enforce_rack_list": True}
     ],
 )
 def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_nodes, racks_count, expected_rf):
-    rf = _rf_tester(
+    """reliable_replication_factor is capped by racks only where tablets and rf_rack_valid apply."""
+    rf = rf_tester(
         n_db_nodes=n_db_nodes,
         racks_count=racks_count,
         append_scylla_yaml=append_scylla_yaml,
@@ -1149,6 +1194,7 @@ def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_n
     ],
 )
 def test_run_latte_thread_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    """run_latte_thread replaces a time-based --duration with the test duration."""
     tester = ClusterTesterForTests()
     tester.params = FakeSCTConfiguration()
     tester.loaders = MagicMock()
@@ -1187,6 +1233,7 @@ def test_run_latte_thread_duration_overrides_time_based_duration(stress_cmd, exp
     ],
 )
 def test_run_latte_thread_stress_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    """run_latte_thread replaces a time-based --duration with the stress duration."""
     tester = ClusterTesterForTests()
     tester.params = FakeSCTConfiguration()
     tester.loaders = MagicMock()
@@ -1200,7 +1247,9 @@ def test_run_latte_thread_stress_duration_overrides_time_based_duration(stress_c
     assert latte_thread_mock.call_args.kwargs["timeout"] == 30 * 60 + 600
 
 
-@pytest.mark.parametrize("record_hdr", [True, False])
+@pytest.mark.parametrize(
+    "record_hdr", [pytest.param(True, id="record-hdr-on"), pytest.param(False, id="record-hdr-off")]
+)
 def test_run_latte_thread_forwards_record_hdr(record_hdr):
     """'run_latte_thread' swallows unknown kwargs, so a missing pass-through would go unnoticed."""
     with (
@@ -1208,19 +1257,20 @@ def test_run_latte_thread_forwards_record_hdr(record_hdr):
         patch.object(LatteStressThread, "run", return_value="thread-pool"),
     ):
         ClusterTester.run_latte_thread(
-            _fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, record_hdr=record_hdr
+            fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, record_hdr=record_hdr
         )
 
     assert mock_init.call_args.kwargs["record_hdr"] is record_hdr
 
 
 def test_run_latte_thread_forwards_the_loader():
+    """run_latte_thread forwards the loader to LatteStressThread."""
     with (
         patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
         patch.object(LatteStressThread, "run", return_value="thread-pool"),
     ):
         ClusterTester.run_latte_thread(
-            _fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, loader="loader-2"
+            fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, loader="loader-2"
         )
 
     assert mock_init.call_args.kwargs["loader"] == "loader-2"

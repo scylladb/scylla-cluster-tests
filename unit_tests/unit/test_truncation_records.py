@@ -20,15 +20,23 @@ T1 = datetime(2026, 10, 11, 21, 59, 30)
 T2 = T1 + timedelta(seconds=5)
 
 
+def raise_assertion(msg):
+    """Raise AssertionError with msg, used as the tester.fail side effect."""
+    raise AssertionError(msg)
+
+
 def test_expected_hosts_are_replicas_present_before_and_after_the_truncate():
+    """expected_record_hosts keeps only the replicas present both before and after the truncate."""
     assert expected_record_hosts({"a", "b", "c"}, {"a", "b", "d"}, {"a", "b", "c", "d", "e", "f"}) == {"a", "b"}
 
 
 def test_vnode_table_expects_a_record_on_every_host():
+    """expected_record_hosts expects a record on every host for a vnode table."""
     assert expected_record_hosts(set(), set(), {"a", "b", "c"}) == {"a", "b", "c"}
 
 
 def test_missing_fresh_records_reports_absent_and_stale_rows():
+    """missing_fresh_records reports hosts with no record or a record not newer than the baseline."""
     baseline = {"node-1": T1, "node-2": None, "node-3": T1, "node-4": None}
     found = {"node-1": T2, "node-2": None, "node-3": T1, "node-4": T1}
     assert missing_fresh_records(baseline, found) == {
@@ -38,6 +46,7 @@ def test_missing_fresh_records_reports_absent_and_stale_rows():
 
 
 def test_changed_records_reports_gone_and_rewritten_rows():
+    """changed_records reports records that disappeared or were rewritten with an older value."""
     recorded = {"node-1": T2, "node-2": T2, "node-3": T2}
     found = {"node-1": T2, "node-2": None, "node-3": T1}
     assert changed_records(recorded, found) == {
@@ -47,6 +56,7 @@ def test_changed_records_reports_gone_and_rewritten_rows():
 
 
 def test_host_ids_and_records_are_read_from_each_node_over_its_own_connection():
+    """_read_host_ids_and_records maps host ids to nodes and keeps the oldest truncate record per table."""
     host_id, table_id = uuid4(), uuid4()
     tester = MagicMock()
     session = tester.db_cluster.cql_connection_patient_exclusive.return_value.__enter__.return_value
@@ -64,13 +74,10 @@ def test_host_ids_and_records_are_read_from_each_node_over_its_own_connection():
     assert records == {"truncate_table0": {"node-1": T1}, "truncate_table1": {"node-1": None}}
 
 
-def _raise(msg):
-    raise AssertionError(msg)
-
-
 def test_truncate_check_fails_when_every_replica_moved_during_the_truncate():
+    """_verify_truncation_recorded fails when no replica stayed in place during the truncate."""
     tester = MagicMock()
-    tester.fail.side_effect = _raise
+    tester.fail.side_effect = raise_assertion
     tester._tablet_replica_hosts.return_value = {"h2"}
     tester._read_host_ids_and_records.return_value = ({}, {"truncate_table0": {}})
     check = TruncationCheck(

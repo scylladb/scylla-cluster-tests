@@ -66,29 +66,40 @@ TRACKED_SEARCH = {**SEARCH, "track": "throughput", "label": "10M term_common"}
 TRACKED_BUILD = {**BUILD, "track": "index build", "label": "10M_20tok"}
 
 
-class _ArgusClient:
+class ArgusClient:
+    """Fake Argus client that records the tables submitted to it."""
+
     def __init__(self):
+        """Start with no submitted tables."""
         self.submitted = []
 
     def submit_results(self, table):
+        """Record one submitted table."""
         self.submitted.append(table)
 
 
-def _report(*records, sut_timestamp=0):
-    client = _ArgusClient()
+def report_records(*records, sut_timestamp=0):
+    """Report the records with a fake client and return the tables it received, in order."""
+    client = ArgusClient()
     reporter = SearchArgusReporter(WORKLOAD, client, sut_timestamp=sut_timestamp)
     for record in records:
         reporter.report(record)
     return client.submitted
 
 
-def _cells(table):
+def cells(table):
+    """Map each (row, column) of a table to its value."""
     return {(cell.row, cell.column): cell.value for cell in table.results}
 
 
-def _graphed(table):
+def graphed_columns(table):
     """Argus graphs every numeric column."""
     return [column.name for column in table.columns if column.type != ResultType.TEXT]
+
+
+def day_timestamp(date: str) -> int:
+    """Unix time of midnight UTC on a YYYYMMDD date."""
+    return int(datetime.strptime(date, "%Y%m%d").replace(tzinfo=timezone.utc).timestamp())
 
 
 # ---------------------------------------------------------------------------
@@ -97,30 +108,33 @@ def _graphed(table):
 
 
 def test_an_untracked_record_goes_only_to_its_log():
-    tables = _report(SEARCH, BUILD)
+    """An untracked record is logged to its kind's table only, with no track row."""
+    tables = report_records(SEARCH, BUILD)
 
     assert [table.name for table in tables] == ["SB searches", "SB index builds"]
 
 
 def test_the_logs_graph_nothing():
     """They are the run's results to read, not a history: an exploratory entry costs no graph."""
-    search, build = _report(SEARCH, BUILD)
+    search, build = report_records(SEARCH, BUILD)
 
-    assert _graphed(search) == _graphed(build) == []
+    assert graphed_columns(search) == graphed_columns(build) == []
 
 
 def test_each_log_has_only_its_own_columns():
-    search, build = _report(SEARCH, BUILD)
+    """The search log has no build columns and the build log no search columns."""
+    search, build = report_records(SEARCH, BUILD)
 
     assert "build time" not in {column.name for column in search.columns}
     assert "P99" not in {column.name for column in build.columns}
 
 
 def test_a_search_in_its_log():
-    (table,) = _report(SEARCH)
+    """A search's log row carries its configuration and latency percentiles, with the P99 limit."""
+    (table,) = report_records(SEARCH)
 
     row = "#01 term_common"
-    assert _cells(table) == {
+    assert cells(table) == {
         (row, "dataset"): "10M_20tok",
         (row, "step"): "1",
         (row, "document count"): "1,000,000",
@@ -138,10 +152,11 @@ def test_a_search_in_its_log():
 
 
 def test_an_index_build_in_its_log():
-    (table,) = _report(TRACKED_BUILD)[:1]
+    """An index build's log row carries its size, build time and indexing throughput."""
+    (table,) = report_records(TRACKED_BUILD)[:1]
 
     row = "#01 index build"
-    assert _cells(table) == {
+    assert cells(table) == {
         (row, "dataset"): "10M_20tok",
         (row, "step"): "2",
         (row, "document count"): "2,000,000",
@@ -152,13 +167,15 @@ def test_an_index_build_in_its_log():
 
 
 def test_overview_rows_keep_the_run_order_and_a_repeated_configuration_apart():
-    tables = _report(BUILD, SEARCH, {**SEARCH, "query_index": 2})
+    """Each log row is numbered in run order, so a repeated configuration gets its own row."""
+    tables = report_records(BUILD, SEARCH, {**SEARCH, "query_index": 2})
 
     assert [next(iter(table.results)).row.split(" ")[0] for table in tables] == ["#01", "#02", "#03"]
 
 
 def test_an_unmeasured_value_is_left_out_rather_than_sent_as_null():
-    (table,) = _report({**BUILD, "build_time_s": None, "indexing_throughput": None})
+    """A None measurement is omitted from the row, not sent as null."""
+    (table,) = report_records({**BUILD, "build_time_s": None, "indexing_throughput": None})
 
     assert {cell.column for cell in table.results} == {"dataset", "step", "document count"}
 
@@ -169,11 +186,12 @@ def test_an_unmeasured_value_is_left_out_rather_than_sent_as_null():
 
 
 def test_a_tracked_search_is_also_a_row_of_its_track():
-    overview, track = _report(TRACKED_SEARCH)
+    """A tracked search goes to its log and as a row of its track table."""
+    overview, track = report_records(TRACKED_SEARCH)
 
     assert overview.name == "SB searches"
     assert track.name == "SB throughput"
-    assert _cells(track) == {
+    assert cells(track) == {
         ("10M term_common", "P50"): 1.0,
         ("10M term_common", "P90"): 2.0,
         ("10M term_common", "P99"): 4.0,
@@ -189,39 +207,42 @@ def test_a_tracked_search_is_also_a_row_of_its_track():
 
 
 def test_a_track_graphs_only_measurements():
-    _, track = _report(TRACKED_SEARCH)
+    """A track's graphed columns are its latency and throughput measurements only."""
+    _, track = report_records(TRACKED_SEARCH)
 
-    assert _graphed(track) == ["P50", "P90", "P99", "P99.9", "throughput"]
+    assert graphed_columns(track) == ["P50", "P90", "P99", "P99.9", "throughput"]
 
 
 def test_a_rate_limited_track_graphs_no_throughput():
     """Its throughput is the rate it was asked for."""
-    _, track = _report({**TRACKED_SEARCH, "rate": 50})
+    _, track = report_records({**TRACKED_SEARCH, "rate": 50})
 
-    assert _graphed(track) == ["P50", "P90", "P99", "P99.9"]
+    assert graphed_columns(track) == ["P50", "P90", "P99", "P99.9"]
     assert "throughput" not in {cell.column for cell in track.results}
 
 
 def test_a_rate_limited_tracks_p99_is_checked_against_the_plans_expectation():
-    _, track = _report({**TRACKED_SEARCH, "rate": 50})
+    """A rate-limited track validates P99 against the plan's expected read latency."""
+    _, track = report_records({**TRACKED_SEARCH, "rate": 50})
 
     assert track.validation_rules["P99"].fixed_limit == 20.0
 
 
 def test_an_unthrottled_track_checks_nothing():
     """At saturation P99 follows concurrency over throughput, so a P99 limit would check neither."""
-    _, track = _report(TRACKED_SEARCH)
+    _, track = report_records(TRACKED_SEARCH)
 
     assert track.validation_rules == {}
     assert "checked against" not in track.description
 
 
 def test_a_tracked_index_build_is_a_row_of_its_track():
-    _, track = _report(TRACKED_BUILD)
+    """A tracked index build goes to its log and as a row of its build track."""
+    _, track = report_records(TRACKED_BUILD)
 
     assert track.name == "SB index build"
-    assert _graphed(track) == ["build time", "indexing throughput"]
-    assert _cells(track) == {
+    assert graphed_columns(track) == ["build time", "indexing throughput"]
+    assert cells(track) == {
         ("10M_20tok", "build time"): 40.0,
         ("10M_20tok", "indexing throughput"): 50000.0,
         ("10M_20tok", "document count"): "2,000,000",
@@ -230,8 +251,8 @@ def test_a_tracked_index_build_is_a_row_of_its_track():
 
 def test_a_track_row_is_named_by_the_plan_alone():
     """A row's history across runs is one series only if its name does not depend on the run."""
-    _, first = _report(TRACKED_SEARCH)
-    _, second = _report({**TRACKED_SEARCH, "step": 3, "query_index": 4, "p99_ms": 9.0, "query_example": "other"})
+    _, first = report_records(TRACKED_SEARCH)
+    _, second = report_records({**TRACKED_SEARCH, "step": 3, "query_index": 4, "p99_ms": 9.0, "query_example": "other"})
 
     assert {cell.row for cell in first.results} == {cell.row for cell in second.results} == {"10M term_common"}
 
@@ -239,21 +260,20 @@ def test_a_track_row_is_named_by_the_plan_alone():
 def test_a_workload_without_a_description_is_named_by_its_name():
     """Rather than a title starting with ': every measurement'."""
     unnamed = dataclasses.replace(WORKLOAD, description="")
-    reporter = SearchArgusReporter(unnamed, _ArgusClient())
+    client = ArgusClient()
+    reporter = SearchArgusReporter(unnamed, client)
 
-    tables = [
-        reporter._log(SEARCH),
-        reporter._log(BUILD),
-        reporter._build_track(TRACKED_BUILD),
-        reporter._search_track(TRACKED_SEARCH),
-    ]
+    for record in (SEARCH, BUILD, TRACKED_BUILD, TRACKED_SEARCH):
+        reporter.report(record)
 
-    assert all(table.description.startswith("search_bench") for table in tables)
+    assert client.submitted
+    assert all(table.description.startswith("search_bench") for table in client.submitted)
 
 
 def test_a_workload_without_a_table_prefix_names_its_tables_by_its_name():
+    """Without a table prefix, table names start with the workload name."""
     unprefixed = dataclasses.replace(WORKLOAD, table_prefix="")
-    client = _ArgusClient()
+    client = ArgusClient()
     reporter = SearchArgusReporter(unprefixed, client)
 
     reporter.report(TRACKED_SEARCH)
@@ -269,7 +289,7 @@ def test_a_workload_without_a_table_prefix_names_its_tables_by_its_name():
 
 def test_fts_tables_are_prefixed_fts():
     """The prefix is part of every table's name, and so of its history in Argus."""
-    client = _ArgusClient()
+    client = ArgusClient()
 
     SearchArgusReporter(FTS_WORKLOAD, client).report({**TRACKED_SEARCH, "workload": FTS_WORKLOAD.name})
 
@@ -278,7 +298,7 @@ def test_fts_tables_are_prefixed_fts():
 
 def test_a_failed_log_row_still_sends_the_track_row():
     """The track row is the record's only graphed copy."""
-    client = _ArgusClient()
+    client = ArgusClient()
     submit = client.submit_results
 
     def overview_fails(table):
@@ -294,12 +314,14 @@ def test_a_failed_log_row_still_sends_the_track_row():
 
 
 def test_an_unknown_phase_is_an_error():
+    """A record with an unknown phase raises ValueError naming the phase."""
     with pytest.raises(ValueError, match="Unknown results record phase 'warmup'"):
-        _report({**BUILD, "phase": "warmup"})
+        report_records({**BUILD, "phase": "warmup"})
 
 
 def test_every_table_carries_the_runs_x_position():
-    tables = _report(TRACKED_BUILD, TRACKED_SEARCH, sut_timestamp=1760000123)
+    """Every table of a run carries the run's sut_timestamp."""
+    tables = report_records(TRACKED_BUILD, TRACKED_SEARCH, sut_timestamp=1760000123)
 
     assert [table.sut_timestamp for table in tables] == [1760000123] * 4
 
@@ -309,23 +331,20 @@ def test_every_table_carries_the_runs_x_position():
 # ---------------------------------------------------------------------------
 
 
-def _day(date: str) -> int:
-    return int(datetime.strptime(date, "%Y%m%d").replace(tzinfo=timezone.utc).timestamp())
-
-
 def test_the_later_build_sets_the_day():
-    vector_store_noon = _day("20261005") + 12 * 3600
+    """The later of the two builds' dates sets the day of the x position."""
+    vector_store_noon = day_timestamp("20261005") + 12 * 3600
 
     newer_scylla = sut_timestamp("20261007", "abc", vector_store_noon, "1.11.0")
     newer_vector_store = sut_timestamp("20261001", "abc", vector_store_noon, "1.11.0")
 
-    assert _day("20261007") <= newer_scylla < _day("20261008")
-    assert _day("20261005") <= newer_vector_store < _day("20261006")
+    assert day_timestamp("20261007") <= newer_scylla < day_timestamp("20261008")
+    assert day_timestamp("20261005") <= newer_vector_store < day_timestamp("20261006")
 
 
 def test_each_pair_of_builds_has_its_own_position_and_keeps_it():
     """An older ScyllaDB build than the vector-store commit must still move the point."""
-    vector_store = _day("20261005")
+    vector_store = day_timestamp("20261005")
 
     assert sut_timestamp("20261001", "abc", vector_store, "1.11.0") != sut_timestamp(
         "20261002", "def", vector_store, "1.11.0"
@@ -340,10 +359,22 @@ def test_each_pair_of_builds_has_its_own_position_and_keeps_it():
 
 
 def test_one_known_date_is_enough():
-    assert _day("20261007") <= sut_timestamp("20261007", "abc", None, "") < _day("20261008")
-    assert _day("20261005") <= sut_timestamp(None, "", _day("20261005") + 5, "x") < _day("20261006")
+    """A single known date, ScyllaDB or vector-store, sets the x position."""
+    assert day_timestamp("20261007") <= sut_timestamp("20261007", "abc", None, "") < day_timestamp("20261008")
+    assert (
+        day_timestamp("20261005")
+        <= sut_timestamp(None, "", day_timestamp("20261005") + 5, "x")
+        < day_timestamp("20261006")
+    )
 
 
-@pytest.mark.parametrize("scylla_date", (None, "#NO_DATE"))
+@pytest.mark.parametrize(
+    "scylla_date",
+    [
+        pytest.param(None, id="no-date"),
+        pytest.param("#NO_DATE", id="no-date-marker"),
+    ],
+)
 def test_no_known_date_leaves_the_position_to_argus(scylla_date):
+    """Without any known date the position is 0, left to Argus."""
     assert sut_timestamp(scylla_date, "", None, "") == 0

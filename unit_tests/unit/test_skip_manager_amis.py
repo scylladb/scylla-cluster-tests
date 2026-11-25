@@ -25,7 +25,8 @@ import pytest
 from sdcm.utils.common import get_branched_ami, get_scylla_ami_versions, is_scylla_manager_ami
 
 
-def _image(image_id: str, name: str, creation_date: str, tags: dict[str, str]) -> Mock:
+def make_image(image_id: str, name: str, creation_date: str, tags: dict[str, str]) -> Mock:
+    """Return a mock EC2 image with the given id, name, creation date and tags."""
     image = Mock()
     image.image_id = image_id
     image.name = name
@@ -34,7 +35,7 @@ def _image(image_id: str, name: str, creation_date: str, tags: dict[str, str]) -
     return image
 
 
-SCYLLA_AMI = _image(
+SCYLLA_AMI = make_image(
     "ami-scylla",
     "ScyllaDB 2025.4.5 aarch64 2026-08-20",
     "2026-08-20T10:00:00.000Z",
@@ -46,7 +47,7 @@ SCYLLA_AMI = _image(
         "user_data_format_version": "3",
     },
 )
-MANAGER_AMI = _image(
+MANAGER_AMI = make_image(
     "ami-0632b8f285fee79fa",
     "scylla-manager-3.13.0-dev-aarch64-2026-08-31T15-42-52",
     "2026-08-31T15:42:52.000Z",
@@ -58,26 +59,6 @@ MANAGER_AMI = _image(
         "build_mode": "release",
     },
 )
-
-
-@pytest.mark.parametrize(
-    ("image", "expected"),
-    [
-        (SCYLLA_AMI, False),
-        (MANAGER_AMI, True),
-        (_image("ami-1", "scylla-manager-3.12.1-x86_64", "2026-01-01T00:00:00.000Z", {}), True),
-        (_image("ami-2", "no-tags", "2026-01-01T00:00:00.000Z", {}), False),
-    ],
-    ids=["scylla", "manager-by-tag", "manager-by-name", "plain"],
-)
-def test_is_scylla_manager_ami(image, expected):
-    assert is_scylla_manager_ami(image) is expected
-
-
-def test_is_scylla_manager_ami_handles_untagged_image():
-    image = Mock()
-    image.tags = None
-    assert is_scylla_manager_ami(image) is False
 
 
 @pytest.fixture
@@ -94,32 +75,69 @@ def ec2_with_both_images():
         get_scylla_ami_versions.cache_clear()
 
 
+@pytest.mark.parametrize(
+    ("image", "expected"),
+    [
+        pytest.param(SCYLLA_AMI, False, id="scylla"),
+        pytest.param(MANAGER_AMI, True, id="manager-by-tag"),
+        pytest.param(
+            make_image("ami-1", "scylla-manager-3.12.1-x86_64", "2026-01-01T00:00:00.000Z", {}),
+            True,
+            id="manager-by-name",
+        ),
+        pytest.param(make_image("ami-2", "no-tags", "2026-01-01T00:00:00.000Z", {}), False, id="plain"),
+    ],
+)
+def test_is_scylla_manager_ami(image, expected):
+    """is_scylla_manager_ami is True only for Manager images, matched by tag or by name."""
+    assert is_scylla_manager_ami(image) is expected
+
+
+def test_is_scylla_manager_ami_handles_untagged_image():
+    """is_scylla_manager_ami returns False for an image whose tags are None."""
+    image = Mock()
+    image.tags = None
+    assert is_scylla_manager_ami(image) is False
+
+
 def test_get_scylla_ami_versions_skips_manager_ami(ec2_with_both_images):
+    """get_scylla_ami_versions never returns the Scylla Manager AMI."""
     amis = get_scylla_ami_versions(region_name="us-east-1", arch="arm64", version="2025.4")
     assert [ami.image_id for ami in amis] == ["ami-scylla"]
 
 
 def test_get_branched_ami_skips_manager_ami(ec2_with_both_images):
+    """get_branched_ami for the latest build never returns the Scylla Manager AMI."""
     amis = get_branched_ami(scylla_version="master:latest", region_name="us-east-1", arch="arm64")
     assert [ami.image_id for ami in amis] == ["ami-scylla"]
 
 
 def test_get_branched_ami_all_skips_manager_ami(ec2_with_both_images):
+    """get_branched_ami for all builds never returns the Scylla Manager AMI."""
     amis = get_branched_ami(scylla_version="master:all", region_name="us-east-1", arch="arm64")
     assert [ami.image_id for ami in amis] == ["ami-scylla"]
 
 
-@pytest.mark.parametrize(("sha", "expected"), [("abcdef1", ["ami-scylla"]), ("abcdef123456", ["ami-scylla"])])
+@pytest.mark.parametrize(
+    ("sha", "expected"),
+    [
+        pytest.param("abcdef1", ["ami-scylla"], id="short-sha"),
+        pytest.param("abcdef123456", ["ami-scylla"], id="full-sha"),
+    ],
+)
 def test_get_branched_ami_by_scylla_sha(ec2_with_both_images, sha, expected):
+    """get_branched_ami finds the Scylla AMI by a short or full commit SHA."""
     amis = get_branched_ami(scylla_version=f"master:{sha}", region_name="us-east-1", arch="arm64")
     assert [ami.image_id for ami in amis] == expected
 
 
 def test_get_branched_ami_unknown_sha_not_found(ec2_with_both_images):
+    """get_branched_ami raises AssertionError when no image matches the SHA."""
     with pytest.raises(AssertionError, match="not found"):
         get_branched_ami(scylla_version="master:0000000", region_name="us-east-1", arch="arm64")
 
 
 def test_get_branched_ami_rejects_job_number_before_lookup(ec2_with_both_images):
+    """get_branched_ami rejects a job number, which is not a Scylla SHA, with ValueError."""
     with pytest.raises(ValueError, match="not a Scylla SHA"):
         get_branched_ami(scylla_version="master:2131", region_name="us-east-1", arch="arm64")
