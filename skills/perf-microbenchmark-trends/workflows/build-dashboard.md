@@ -78,9 +78,13 @@ attached; delete it only if they ask.
    per benchmark) as base64
    content instead; and `update_draft` cannot add files, so a changed body means a new draft (then
    delete the superseded one). A chart with a single master run gets its value instead of a
-   sparkline, so no two images are identical: editing a draft in Gmail's web composer re-numbers
-   identical inline images and puts them in the wrong cells. After any edit in Gmail, re-read the
-   draft and check each `cid` still names its chart's PNG.
+   sparkline.
+   **Gmail's web composer re-pairs inline images with the wrong cells** when it saves or sends a
+   draft it has edited, even when every image is distinct (the sent 11/18/2026 email had 22 of 24
+   sparklines in the wrong cells; its numbers were right). So never edit the draft in Gmail: change
+   the inputs, regenerate and create a new draft. Before sending, and after any save in Gmail,
+   re-read the draft as RAW and check that each `<img>` `cid` resolves to the part whose filename
+   is that cell's `spark-<benchmark>-<metric>-<workload>_<arch>.png`.
 2. Fill the two placeholders in the generated file:
    - `NOTES-GO-HERE`: 2-4 `<li>` notes, each a fact the tables cannot show by themselves:
      - where a master change sits and which build brought it (e.g. "write only, both

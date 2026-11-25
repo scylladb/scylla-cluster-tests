@@ -136,9 +136,7 @@ def master_trend_table(rows: list, bench: str, sparks: list, spark_dir: str) -> 
                 continue
             values = [float(r[metric]) for r in runs]
             if len(values) == 1:
-                # No trend yet: show the value, not a one-dot image. Single-run images are also
-                # byte-identical across cells, and Gmail's composer mixes up identical inline
-                # images when the draft is edited.
+                # No trend yet: show the value, not a one-dot image that reads like history.
                 cells += (
                     f'<td style="{BORDER}">{fmt_value(metric, values[0])}<br>'
                     f'<span style="color:#6c757d;font-size:11px;">{runs_label(1)}</span></td>'
