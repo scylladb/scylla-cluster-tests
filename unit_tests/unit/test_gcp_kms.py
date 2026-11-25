@@ -10,6 +10,7 @@ from sdcm.utils.gcp_kms import GcpKms
 
 @pytest.fixture
 def kms_client(monkeypatch):
+    """Patch the KMS client class and keystore so GcpKms makes no cloud calls."""
     monkeypatch.delenv("GCE_ENDPOINT_URL", raising=False)
     keystore = MagicMock()
     keystore.get_gcp_kms_config.return_value = {"keyring_name": "test-ring"}
@@ -22,6 +23,7 @@ def kms_client(monkeypatch):
 
 
 def test_ensure_key_ring_creates_missing_ring(kms_client):
+    """ensure_key_ring creates the configured key ring when get_key_ring reports NotFound."""
     kms_client.return_value.get_key_ring.side_effect = NotFound("no ring")
 
     GcpKms("proj", "us-east1", "scylla-key-1").ensure_key_ring()
@@ -32,6 +34,7 @@ def test_ensure_key_ring_creates_missing_ring(kms_client):
 
 
 def test_ensure_key_ring_keeps_existing_ring(kms_client):
+    """ensure_key_ring reuses an existing key ring and never creates one."""
     GcpKms("proj", "us-east1", "scylla-key-1").ensure_key_ring()
 
     kms_client.return_value.get_key_ring.assert_called_once_with(
@@ -41,6 +44,7 @@ def test_ensure_key_ring_keeps_existing_ring(kms_client):
 
 
 def test_ensure_key_ring_accepts_concurrently_created_ring(kms_client):
+    """ensure_key_ring does not fail when another run creates the ring first (AlreadyExists)."""
     kms_client.return_value.get_key_ring.side_effect = NotFound("no ring")
     kms_client.return_value.create_key_ring.side_effect = AlreadyExists("created by another run")
 
@@ -48,6 +52,7 @@ def test_ensure_key_ring_accepts_concurrently_created_ring(kms_client):
 
 
 def test_client_uses_rest_transport_on_custom_endpoint(kms_client, monkeypatch):
+    """GcpKms uses the REST transport and the GCE_ENDPOINT_URL endpoint when it is set."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:5000")
 
     GcpKms("proj", "us-east1", "scylla-key-1")
@@ -58,6 +63,7 @@ def test_client_uses_rest_transport_on_custom_endpoint(kms_client, monkeypatch):
 
 
 def test_client_uses_default_transport_without_endpoint(kms_client):
+    """GcpKms passes no transport or endpoint options when GCE_ENDPOINT_URL is unset."""
     GcpKms("proj", "us-east1", "scylla-key-1")
 
     assert "transport" not in kms_client.call_args.kwargs

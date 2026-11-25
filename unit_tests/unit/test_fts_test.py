@@ -37,6 +37,7 @@ RUNE_FUNCTION_RE = re.compile(r"^pub async fn (?P<name>\w+)", re.MULTILINE)
 
 @pytest.fixture(scope="module")
 def script_source():
+    """Text of the FTS workload script (fts.rn), read once per module."""
     with open(sct_abs_path(FTS_WORKLOAD.script), encoding="utf-8") as script:
         return script.read()
 

@@ -20,10 +20,11 @@ from sdcm.fill_db_data import (
 )
 
 
-class _Harness:
+class FakeFillDb:
     """Minimal stand-in for FillDatabaseData: truncate_tables() only needs these members."""
 
     def __init__(self, items, failing=()):
+        """Store the verification items and the truncate statements that should fail."""
         self.all_verification_items = items
         self.log = logging.getLogger(__name__)
         self.failing = set(failing)
@@ -31,46 +32,51 @@ class _Harness:
         self._execute_and_log = FillDatabaseData._execute_and_log.__get__(self)
 
     def truncate_table(self, session, truncate):
+        """Raise a client timeout for failing statements, otherwise record the truncate as done."""
         if truncate in self.failing:
             raise OperationTimedOut(f"simulated client timeout for {truncate}")
         self.truncated.append(truncate)
 
 
-def _item(name, table, skip=""):
+def make_item(name, table, skip=""):
+    """Build a verification item that truncates ``table``."""
     return {"name": name, "truncates": [f"TRUNCATE {table}"], "skip": skip}
 
 
-def _truncate_tables(harness, session=None):
-    return FillDatabaseData.truncate_tables(harness, session or MagicMock())
+def run_truncate_tables(fake, session=None):
+    """Run FillDatabaseData.truncate_tables against ``fake`` with a mock session by default."""
+    return FillDatabaseData.truncate_tables(fake, session or MagicMock())
 
 
 def test_all_tables_truncated_when_nothing_fails():
-    harness = _Harness([_item("a", "t_a"), _item("b", "t_b"), _item("c", "t_c")])
+    """Every table is truncated, in order, when no statement fails."""
+    fake = FakeFillDb([make_item("a", "t_a"), make_item("b", "t_b"), make_item("c", "t_c")])
 
-    _truncate_tables(harness)
+    run_truncate_tables(fake)
 
-    assert harness.truncated == ["TRUNCATE t_a", "TRUNCATE t_b", "TRUNCATE t_c"]
+    assert fake.truncated == ["TRUNCATE t_a", "TRUNCATE t_b", "TRUNCATE t_c"]
 
 
 def test_one_failure_does_not_skip_the_remaining_tables():
     """The regression: a timeout on the first table used to abort the whole pass."""
-    harness = _Harness([_item("a", "t_a"), _item("b", "t_b"), _item("c", "t_c")], failing=["TRUNCATE t_a"])
+    fake = FakeFillDb([make_item("a", "t_a"), make_item("b", "t_b"), make_item("c", "t_c")], failing=["TRUNCATE t_a"])
 
     with pytest.raises(TruncateTablesError):
-        _truncate_tables(harness)
+        run_truncate_tables(fake)
 
     # t_b and t_c must still have been truncated despite t_a failing first.
-    assert harness.truncated == ["TRUNCATE t_b", "TRUNCATE t_c"]
+    assert fake.truncated == ["TRUNCATE t_b", "TRUNCATE t_c"]
 
 
 def test_error_names_every_table_left_untruncated():
-    harness = _Harness(
-        [_item("alpha", "t_a"), _item("beta", "t_b"), _item("gamma", "t_c")],
+    """TruncateTablesError names each table that was left untruncated and counts them."""
+    fake = FakeFillDb(
+        [make_item("alpha", "t_a"), make_item("beta", "t_b"), make_item("gamma", "t_c")],
         failing=["TRUNCATE t_a", "TRUNCATE t_c"],
     )
 
     with pytest.raises(TruncateTablesError) as excinfo:
-        _truncate_tables(harness)
+        run_truncate_tables(fake)
 
     message = str(excinfo.value)
     assert "alpha" in message and "gamma" in message
@@ -79,36 +85,38 @@ def test_error_names_every_table_left_untruncated():
 
 
 def test_skipped_items_are_not_truncated():
-    harness = _Harness([_item("a", "t_a"), _item("b", "t_b", skip="disabled for a reason")])
+    """Items with a skip reason are left alone and never truncated."""
+    fake = FakeFillDb([make_item("a", "t_a"), make_item("b", "t_b", skip="disabled for a reason")])
 
-    _truncate_tables(harness)
+    run_truncate_tables(fake)
 
-    assert harness.truncated == ["TRUNCATE t_a"]
+    assert fake.truncated == ["TRUNCATE t_a"]
 
 
 def test_gives_up_after_the_failure_cap_instead_of_burning_the_budget():
     """Every failure costs a full TRUNCATE_TIMEOUT, so a hopeless cluster must not run ~100 of them."""
-    items = [_item(f"t{i}", f"t_{i}") for i in range(MAX_TRUNCATE_FAILURES + 5)]
-    harness = _Harness(items, failing=[f"TRUNCATE t_{i}" for i in range(len(items))])
+    items = [make_item(f"t{i}", f"t_{i}") for i in range(MAX_TRUNCATE_FAILURES + 5)]
+    fake = FakeFillDb(items, failing=[f"TRUNCATE t_{i}" for i in range(len(items))])
 
     with pytest.raises(TruncateTablesError) as excinfo:
-        _truncate_tables(harness)
+        run_truncate_tables(fake)
 
     assert "gave up" in str(excinfo.value)
     assert f"{MAX_TRUNCATE_FAILURES} table(s)" in str(excinfo.value)
 
 
 def test_no_early_exit_while_under_the_failure_cap():
-    items = [_item(f"t{i}", f"t_{i}") for i in range(MAX_TRUNCATE_FAILURES + 3)]
+    """Below the failure cap, every remaining table is still attempted."""
+    items = [make_item(f"t{i}", f"t_{i}") for i in range(MAX_TRUNCATE_FAILURES + 3)]
     # One fewer failure than the cap, so every remaining table still gets attempted.
     failing = [f"TRUNCATE t_{i}" for i in range(MAX_TRUNCATE_FAILURES - 1)]
-    harness = _Harness(items, failing=failing)
+    fake = FakeFillDb(items, failing=failing)
 
     with pytest.raises(TruncateTablesError) as excinfo:
-        _truncate_tables(harness)
+        run_truncate_tables(fake)
 
     assert "gave up" not in str(excinfo.value)
-    assert len(harness.truncated) == len(items) - len(failing)
+    assert len(fake.truncated) == len(items) - len(failing)
 
 
 def test_truncate_table_applies_the_timeout_on_both_sides():
@@ -124,6 +132,7 @@ def test_truncate_table_applies_the_timeout_on_both_sides():
 
 
 def test_truncate_table_keeps_an_explicit_using_timeout():
+    """A TRUNCATE that already carries USING TIMEOUT is sent unchanged."""
     session = MagicMock()
     harness = MagicMock()
 

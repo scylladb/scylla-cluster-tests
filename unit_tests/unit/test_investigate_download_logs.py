@@ -58,9 +58,8 @@ def runner():
 
 def test_download_logs_list_types_shows_available_types(runner, mock_logs):
     """Test --list-types shows available log types without downloading."""
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.add_file_logger"):
-            result = runner.invoke(download_logs, ["test-id-123", "--list-types"])
+    with patch("sct.list_logs_by_test_id", return_value=mock_logs), patch("sct.add_file_logger"):
+        result = runner.invoke(download_logs, ["test-id-123", "--list-types"])
 
     assert result.exit_code == 0
     assert "Available log types:" in result.output
@@ -71,9 +70,8 @@ def test_download_logs_list_types_shows_available_types(runner, mock_logs):
 
 def test_download_logs_no_logs_found_shows_message(runner):
     """Test shows appropriate message when no logs found."""
-    with patch("sct.list_logs_by_test_id", return_value=[]):
-        with patch("sct.add_file_logger"):
-            result = runner.invoke(download_logs, ["nonexistent-test-id"])
+    with patch("sct.list_logs_by_test_id", return_value=[]), patch("sct.add_file_logger"):
+        result = runner.invoke(download_logs, ["nonexistent-test-id"])
 
     assert result.exit_code == 0
     assert "No logs found for test id: nonexistent-test-id" in result.output
@@ -84,15 +82,17 @@ def test_download_logs_filter_by_type(runner, mock_logs, tmp_path):
     mock_storage = MagicMock()
     mock_storage.download_file.return_value = str(tmp_path / "sct-runner.tar.zst")
 
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.S3Storage", return_value=mock_storage):
-            with patch("sct.add_file_logger"):
-                result = runner.invoke(download_logs, ["test-id-123", "-t", "sct", "-d", str(tmp_path)])
+    with (
+        patch("sct.list_logs_by_test_id", return_value=mock_logs),
+        patch("sct.S3Storage", return_value=mock_storage),
+        patch("sct.add_file_logger"),
+    ):
+        result = runner.invoke(download_logs, ["test-id-123", "-t", "sct", "-d", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "Downloading 1 log file(s)" in result.output
     assert "Downloaded: 1/1 files" in result.output
-    mock_storage.download_file.assert_called_once()
+    mock_storage.download_file.assert_called_once_with(mock_logs[0]["s3_url"], str(tmp_path))
 
 
 def test_download_logs_filter_by_multiple_types(runner, mock_logs, tmp_path):
@@ -103,12 +103,12 @@ def test_download_logs_filter_by_multiple_types(runner, mock_logs, tmp_path):
         str(tmp_path / "db-cluster.tar.zst"),
     ]
 
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.S3Storage", return_value=mock_storage):
-            with patch("sct.add_file_logger"):
-                result = runner.invoke(
-                    download_logs, ["test-id-123", "-t", "sct", "-t", "db-cluster", "-d", str(tmp_path)]
-                )
+    with (
+        patch("sct.list_logs_by_test_id", return_value=mock_logs),
+        patch("sct.S3Storage", return_value=mock_storage),
+        patch("sct.add_file_logger"),
+    ):
+        result = runner.invoke(download_logs, ["test-id-123", "-t", "sct", "-t", "db-cluster", "-d", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "Downloading 2 log file(s)" in result.output
@@ -118,9 +118,8 @@ def test_download_logs_filter_by_multiple_types(runner, mock_logs, tmp_path):
 
 def test_download_logs_filter_no_matching_type(runner, mock_logs):
     """Test shows message when no logs match the requested type."""
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.add_file_logger"):
-            result = runner.invoke(download_logs, ["test-id-123", "-t", "nonexistent-type"])
+    with patch("sct.list_logs_by_test_id", return_value=mock_logs), patch("sct.add_file_logger"):
+        result = runner.invoke(download_logs, ["test-id-123", "-t", "nonexistent-type"])
 
     assert result.exit_code == 0
     assert "No logs found matching types: nonexistent-type" in result.output
@@ -135,10 +134,12 @@ def test_download_logs_all_files_success(runner, mock_logs, tmp_path):
         str(tmp_path / "events.tar.zst"),
     ]
 
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.S3Storage", return_value=mock_storage):
-            with patch("sct.add_file_logger"):
-                result = runner.invoke(download_logs, ["test-id-123", "-d", str(tmp_path)])
+    with (
+        patch("sct.list_logs_by_test_id", return_value=mock_logs),
+        patch("sct.S3Storage", return_value=mock_storage),
+        patch("sct.add_file_logger"),
+    ):
+        result = runner.invoke(download_logs, ["test-id-123", "-d", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "Downloading 3 log file(s)" in result.output
@@ -155,10 +156,12 @@ def test_download_logs_partial_failure(runner, mock_logs, tmp_path):
         str(tmp_path / "events.tar.zst"),
     ]
 
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs):
-        with patch("sct.S3Storage", return_value=mock_storage):
-            with patch("sct.add_file_logger"):
-                result = runner.invoke(download_logs, ["test-id-123", "-d", str(tmp_path)])
+    with (
+        patch("sct.list_logs_by_test_id", return_value=mock_logs),
+        patch("sct.S3Storage", return_value=mock_storage),
+        patch("sct.add_file_logger"),
+    ):
+        result = runner.invoke(download_logs, ["test-id-123", "-d", str(tmp_path)])
 
     # A failed download must surface as a non-zero exit so callers/CI can detect it.
     assert result.exit_code == 1
@@ -173,10 +176,12 @@ def test_download_logs_creates_dest_directory(runner, mock_logs, tmp_path):
     mock_storage = MagicMock()
     mock_storage.download_file.return_value = str(new_dir / "sct-runner.tar.zst")
 
-    with patch("sct.list_logs_by_test_id", return_value=mock_logs[:1]):
-        with patch("sct.S3Storage", return_value=mock_storage):
-            with patch("sct.add_file_logger"):
-                result = runner.invoke(download_logs, ["test-id-123", "-d", str(new_dir)])
+    with (
+        patch("sct.list_logs_by_test_id", return_value=mock_logs[:1]),
+        patch("sct.S3Storage", return_value=mock_storage),
+        patch("sct.add_file_logger"),
+    ):
+        result = runner.invoke(download_logs, ["test-id-123", "-d", str(new_dir)])
 
     assert result.exit_code == 0
     assert new_dir.exists()

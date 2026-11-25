@@ -24,9 +24,12 @@ import json
 import pytest
 import requests
 
+from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.grafana_api import (
+    GRAFANA_ANNOTATIONS_API_PATH,
     GRAFANA_DASHBOARD_API_PATH,
     GRAFANA_LEGACY_DASHBOARD_API_PATH,
+    GRAFANA_SEARCH_API_PATH,
     GRAFANA_UID_MAX_LENGTH,
     convert_dashboard_payload_to_new_api,
     dashboard_uid_from_payload,
@@ -39,12 +42,15 @@ BASE_URL = "http://grafana.example:3000"
 
 
 class FakeResponse:
+    """Minimal response carrying only the status code and text the helpers read."""
+
     def __init__(self, status_code: int):
         self.status_code = status_code
         self.text = ""
 
     @property
     def ok(self):
+        """True for any status below 400, as requests.Response.ok."""
         return self.status_code < http.HTTPStatus.BAD_REQUEST
 
 
@@ -57,15 +63,18 @@ class FakeSession:
         self.calls: list[tuple[str, str, dict]] = []
 
     def put(self, url, **kwargs):
+        """Record a PUT and answer with put_status."""
         self.calls.append(("PUT", url, kwargs))
         return FakeResponse(self.put_status)
 
     def post(self, url, **kwargs):
+        """Record a POST and answer with post_status."""
         self.calls.append(("POST", url, kwargs))
         return FakeResponse(self.post_status)
 
 
 def test_payload_is_wrapped_into_metadata_and_spec():
+    """convert_dashboard_payload_to_new_api moves title and uid into metadata and spec."""
     converted = convert_dashboard_payload_to_new_api({"dashboard": {"title": "some dash", "uid": "dash-uid"}})
 
     assert converted["metadata"]["name"] == "dash-uid"
@@ -75,6 +84,7 @@ def test_payload_is_wrapped_into_metadata_and_spec():
 
 
 def test_payload_without_dashboard_wrapper_is_accepted():
+    """A bare dashboard model without the ``dashboard`` wrapper converts the same way."""
     converted = convert_dashboard_payload_to_new_api({"title": "bare dash", "uid": "bare-uid"})
 
     assert converted["metadata"]["name"] == "bare-uid"
@@ -82,6 +92,7 @@ def test_payload_without_dashboard_wrapper_is_accepted():
 
 
 def test_folder_uid_is_carried_over_as_an_annotation():
+    """The payload folderUid becomes the grafana.app/folder annotation."""
     converted = convert_dashboard_payload_to_new_api({"dashboard": {"uid": "u"}, "folderUid": "folder-1"})
 
     assert converted["metadata"]["annotations"]["grafana.app/folder"] == "folder-1"
@@ -96,6 +107,7 @@ def test_name_is_always_set_so_uploads_can_be_replayed():
 
 
 def test_uid_is_derived_from_the_title_and_is_stable():
+    """dashboard_uid_from_payload is deterministic per title and differs between titles."""
     payload = {"dashboard": {"title": "Scylla Per Server Metrics"}}
 
     assert dashboard_uid_from_payload(payload) == dashboard_uid_from_payload(payload)
@@ -103,16 +115,17 @@ def test_uid_is_derived_from_the_title_and_is_stable():
 
 
 def test_uid_from_payload_prefers_an_explicit_uid():
+    """An explicit dashboard uid wins over the uid derived from the title."""
     assert dashboard_uid_from_payload({"dashboard": {"title": "t", "uid": "explicit"}}) == "explicit"
 
 
 @pytest.mark.parametrize(
     ("uid", "expected"),
     [
-        ("plain-uid_1", "plain-uid_1"),
-        ("has.dots", "has-dots"),
-        ("has spaces", "has-spaces"),
-        ("weird/chars:here", "weird-chars-here"),
+        pytest.param("plain-uid_1", "plain-uid_1", id="plain"),
+        pytest.param("has.dots", "has-dots", id="dots"),
+        pytest.param("has spaces", "has-spaces", id="spaces"),
+        pytest.param("weird/chars:here", "weird-chars-here", id="slashes-and-colons"),
     ],
 )
 def test_illegal_uid_characters_are_replaced(uid, expected):
@@ -131,8 +144,7 @@ def test_overlong_uid_is_truncated_but_stays_unique():
 
 
 def test_derived_uid_fits_grafana_limits_for_the_real_dashboard():
-    from sdcm.utils.common import get_data_dir_path  # noqa: PLC0415 - data path only needed here
-
+    """The uid derived from the shipped nemesis dashboard fits Grafana's length and charset rules."""
     with open(get_data_dir_path("scylla-dash-per-server-nemesis.master.json"), encoding="utf-8") as dashboard_file:
         payload = json.load(dashboard_file)
 
@@ -142,6 +154,7 @@ def test_derived_uid_fits_grafana_limits_for_the_real_dashboard():
 
 
 def test_upsert_url_targets_the_named_resource():
+    """dashboard_upsert_url appends the dashboard uid to the new API path."""
     assert dashboard_upsert_url(BASE_URL, "some-uid") == f"{BASE_URL}{GRAFANA_DASHBOARD_API_PATH}/some-uid"
 
 
@@ -161,11 +174,20 @@ def test_upload_uses_put_on_the_new_api():
 @pytest.mark.parametrize(
     ("put_status", "reason"),
     [
-        (http.HTTPStatus.NOT_FOUND, "grafana < 12 has no /apis surface at all and answers 404 there"),
-        (http.HTTPStatus.SERVICE_UNAVAILABLE, "the apiserver behind /apis is registered but not ready yet"),
+        pytest.param(
+            http.HTTPStatus.NOT_FOUND,
+            "grafana < 12 has no /apis surface at all and answers 404 there",
+            id="grafana-below-12",
+        ),
+        pytest.param(
+            http.HTTPStatus.SERVICE_UNAVAILABLE,
+            "the apiserver behind /apis is registered but not ready yet",
+            id="apis-not-ready",
+        ),
     ],
 )
 def test_upload_falls_back_to_the_legacy_endpoint_when_apis_cannot_serve_it(put_status, reason):
+    """upload_dashboard retries on the legacy endpoint when PUT on /apis answers 404 or 503."""
     session = FakeSession(put_status=put_status)
 
     response = upload_dashboard(BASE_URL, {"dashboard": {"uid": "dash-1"}}, session=session)
@@ -188,6 +210,7 @@ def test_upload_does_not_fall_back_on_other_errors():
 
 
 def test_upload_uses_a_retry_session_by_default(monkeypatch):
+    """upload_dashboard builds its session with create_retry_session when none is passed."""
     created = []
 
     def fake_create_retry_session(*args, **kwargs):
@@ -203,11 +226,6 @@ def test_upload_uses_a_retry_session_by_default(monkeypatch):
 
 def test_annotations_and_search_remain_on_the_legacy_api():
     """No /apis replacement exists for these, so they must not be migrated."""
-    from sdcm.utils.grafana_api import (  # noqa: PLC0415 - asserted as a pair with the paths above
-        GRAFANA_ANNOTATIONS_API_PATH,
-        GRAFANA_SEARCH_API_PATH,
-    )
-
     assert GRAFANA_ANNOTATIONS_API_PATH == "/api/annotations"
     assert GRAFANA_SEARCH_API_PATH == "/api/search"
 

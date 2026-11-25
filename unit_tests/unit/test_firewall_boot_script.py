@@ -28,7 +28,8 @@ from sdcm.provision.common.utils import disable_firewall, guest_firewall_needs_d
 from sdcm.sct_provision.user_data_objects.firewall import DisableFirewallUserDataObject
 
 
-def _user_data_object(backend: str = "oci") -> DisableFirewallUserDataObject:
+def make_user_data_object(backend: str = "oci") -> DisableFirewallUserDataObject:
+    """Build the firewall user data object for a node of the given backend."""
     return DisableFirewallUserDataObject(
         test_config=Mock(), params={"cluster_backend": backend}, instance_name="node-1", node_type="scylla-db"
     )
@@ -36,7 +37,13 @@ def _user_data_object(backend: str = "oci") -> DisableFirewallUserDataObject:
 
 @pytest.mark.parametrize(
     ("backend", "disabled"),
-    [("oci", True), ("aws", False), ("gce", False), ("azure", False), ("k8s-gke", False)],
+    [
+        pytest.param("oci", True, id="oci-disabled"),
+        pytest.param("aws", False, id="aws-kept"),
+        pytest.param("gce", False, id="gce-kept"),
+        pytest.param("azure", False, id="azure-kept"),
+        pytest.param("k8s-gke", False, id="k8s-gke-kept"),
+    ],
 )
 def test_only_oci_boots_with_its_firewall_taken_down(backend, disabled):
     """OCI is the only backend whose images ship a ruleset that has to go.
@@ -46,12 +53,12 @@ def test_only_oci_boots_with_its_firewall_taken_down(backend, disabled):
     one tuple in `sdcm/provision/common/utils.py`.
     """
     assert guest_firewall_needs_disabling({"cluster_backend": backend}) is disabled
-    assert _user_data_object(backend).is_applicable is disabled
+    assert make_user_data_object(backend).is_applicable is disabled
 
 
 def test_the_boot_script_itself_has_nothing_backend_specific_in_it():
     """Which is what makes widening that tuple the only change another backend would need."""
-    script = _user_data_object().script_to_run
+    script = make_user_data_object().script_to_run
 
     for backend in ("oci", "aws", "gce", "azure"):
         assert backend not in script
@@ -59,7 +66,7 @@ def test_the_boot_script_itself_has_nothing_backend_specific_in_it():
 
 def test_the_boot_script_removes_what_restores_the_ruleset():
     """Flushing the live tables is not what makes it stick - dropping the saved rules is."""
-    script = _user_data_object().script_to_run
+    script = make_user_data_object().script_to_run
 
     assert "rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6" in script
     assert "systemctl disable --now $service" in script
@@ -77,7 +84,7 @@ def test_the_boot_script_skips_the_tooling_a_distro_does_not_have():
     `systemctl disable --now` of a unit which is not there fails harmlessly, and the tables are
     only flushed with a tool the node actually has - so centos, rhel and ubuntu all run it as is.
     """
-    script = _user_data_object().script_to_run
+    script = make_user_data_object().script_to_run
 
     assert "command -v $iptables >/dev/null || continue" in script
     assert script.count("|| true") >= 4, "every command must be allowed to fail, the script runs under 'set -e'"

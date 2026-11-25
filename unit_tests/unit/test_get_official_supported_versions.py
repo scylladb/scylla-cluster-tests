@@ -32,7 +32,8 @@ SAMPLE_RESPONSE = {
 }
 
 
-def _mock_session_get(url, timeout=30):
+def mock_session_get(url, timeout=30):
+    """Return a response whose json() is SAMPLE_RESPONSE, for session.get side_effect."""
     resp = MagicMock()
     resp.json.return_value = SAMPLE_RESPONSE
     resp.raise_for_status = MagicMock()
@@ -42,7 +43,7 @@ def _mock_session_get(url, timeout=30):
 def test_fetch_official_supported_versions_filters_supported():
     """Only versions with status 'Supported' are returned."""
     mock_session = MagicMock()
-    mock_session.get.side_effect = _mock_session_get
+    mock_session.get.side_effect = mock_session_get
 
     with patch("utils.get_supported_scylla_base_versions.create_retry_session", return_value=mock_session):
         result = fetch_official_supported_versions()

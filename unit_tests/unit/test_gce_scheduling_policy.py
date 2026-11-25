@@ -16,19 +16,20 @@ from sdcm.provision.provisioner import InstanceDefinition, PricingModel
 from sdcm.utils.gce_utils import create_instance
 
 
-def _scheduling_set_explicitly(instance: compute_v1.Instance, field: str) -> bool:
+def scheduling_set_explicitly(instance: compute_v1.Instance, field: str) -> bool:
     """Confirm the field was explicitly set, not just proto-plus default."""
     return compute_v1.Scheduling.pb(instance.scheduling).HasField(field)
 
 
-def _assert_terminate_no_restart(instance: compute_v1.Instance) -> None:
+def assert_terminate_no_restart(instance: compute_v1.Instance) -> None:
+    """Assert the instance has on_host_maintenance=TERMINATE and an explicit automatic_restart=False."""
     assert instance.scheduling.on_host_maintenance == "TERMINATE"
-    assert _scheduling_set_explicitly(instance, "automatic_restart")
+    assert scheduling_set_explicitly(instance, "automatic_restart")
     assert instance.scheduling.automatic_restart is False
 
 
 @patch("sdcm.provision.gce.instance_provider.get_gce_service_accounts", return_value=None)
-def _provider_insert_request(_mock_sa, tags: dict[str, str]) -> compute_v1.Instance:
+def provider_insert_request(_mock_sa, tags: dict[str, str]) -> compute_v1.Instance:
     """Build one VirtualMachineProvider insert and return the instance it sends."""
     disk_provider = MagicMock()
     disk_provider.create_disks_config.return_value = [
@@ -72,16 +73,7 @@ def _provider_insert_request(_mock_sa, tags: dict[str, str]) -> compute_v1.Insta
     return provider._instances_client.insert.call_args.kwargs["request"].instance_resource
 
 
-def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart() -> None:
-    _assert_terminate_no_restart(_provider_insert_request(tags={"env": "test"}))
-
-
-def test_instance_provider_insert_carries_normalized_labels() -> None:
-    instance = _provider_insert_request(tags={"NodeType": "scylla-db", "TestId": "Abc-1"})
-    assert dict(instance.labels) == {"nodetype": "scylla-db", "testid": "abc-1"}
-
-
-def _create_instance_insert_request(machine_type: str, disks: list[compute_v1.AttachedDisk], **kwargs):
+def create_instance_insert_request(machine_type: str, disks: list[compute_v1.AttachedDisk], **kwargs):
     """Run `gce_utils.create_instance` against a mocked client and return the instance it sends."""
     instance_client = MagicMock()
     instance_client.get.return_value = compute_v1.Instance()
@@ -103,26 +95,36 @@ def _create_instance_insert_request(machine_type: str, disks: list[compute_v1.At
     return instance_client.insert.call_args.kwargs["request"].instance_resource
 
 
+def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart() -> None:
+    """VirtualMachineProvider insert sets TERMINATE and automatic_restart=False explicitly."""
+    assert_terminate_no_restart(provider_insert_request(tags={"env": "test"}))
+
+
+def test_instance_provider_insert_carries_normalized_labels() -> None:
+    """VirtualMachineProvider insert lowercases tag keys and values into instance labels."""
+    instance = provider_insert_request(tags={"NodeType": "scylla-db", "TestId": "Abc-1"})
+    assert dict(instance.labels) == {"nodetype": "scylla-db", "testid": "abc-1"}
+
+
 def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> None:
-    instance = _create_instance_insert_request(
-        "n2-standard-1", [compute_v1.AttachedDisk(boot=True, device_name="boot")]
-    )
-    _assert_terminate_no_restart(instance)
+    """create_instance sets TERMINATE and automatic_restart=False explicitly for a plain machine type."""
+    instance = create_instance_insert_request("n2-standard-1", [compute_v1.AttachedDisk(boot=True, device_name="boot")])
+    assert_terminate_no_restart(instance)
 
 
-@pytest.mark.parametrize("spot", [False, True], ids=["on-demand", "spot"])
+@pytest.mark.parametrize("spot", [pytest.param(False, id="on-demand"), pytest.param(True, id="spot")])
 @pytest.mark.parametrize(
     "machine_type",
     [
-        "z3-highmem-8-highlssd",
-        "z4d-highmem-16-highlssd",
-        "z4d-highmem-16-standardlssd",
-        "zones/us-central1-a/machineTypes/z4d-highmem-16-highlssd",
+        pytest.param("z3-highmem-8-highlssd", id="z3-highlssd"),
+        pytest.param("z4d-highmem-16-highlssd", id="z4d-highlssd"),
+        pytest.param("z4d-highmem-16-standardlssd", id="z4d-standardlssd"),
+        pytest.param("zones/us-central1-a/machineTypes/z4d-highmem-16-highlssd", id="full-url-z4d"),
     ],
 )
 def test_create_instance_bundled_ssd_family_migrates_without_extra_local_ssds(machine_type, spot) -> None:
     """SCT-1410: GCE rejects z4d with TERMINATE, and rejects local SSDs requested on top of the bundled ones."""
-    instance = _create_instance_insert_request(
+    instance = create_instance_insert_request(
         machine_type,
         [
             compute_v1.AttachedDisk(boot=True, device_name="boot"),

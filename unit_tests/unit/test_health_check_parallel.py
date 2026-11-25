@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.cluster import BaseNode, BaseScyllaCluster, ClusterHealthCheckError
+from sdcm.sct_events import Severity
 
 
 @pytest.fixture
@@ -129,7 +130,11 @@ def test_parallel_failure_publishes_event_and_raises(mock_event_cls, mock_timeou
         cluster_instance.check_cluster_health()
 
     # Verify dedicated event was published for the failing node
-    mock_event_cls.ParallelHealthCheckFailure.assert_called_once()
+    mock_event_cls.ParallelHealthCheckFailure.assert_called_once_with(
+        node=cluster_instance.nodes[2],
+        error="Health check failed with exception: SSH connection failed",
+        severity=Severity.ERROR,
+    )
     call_kwargs = mock_event_cls.ParallelHealthCheckFailure.call_args
     assert call_kwargs.kwargs["node"] == cluster_instance.nodes[2]
     assert "SSH connection failed" in call_kwargs.kwargs["error"]
