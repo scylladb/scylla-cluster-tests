@@ -461,43 +461,81 @@ class TestSudoAndRunShellScript:
         assert shell_script_cmd("true") == 'bash -cxe "true"'
 
 
+class _FakeRemoteFileRunner:
+    sf_data = sf_src = sf_dst = rf_src = rf_dst = None
+    hostname = "localhost"
+    command_to_run = ""
+    rf_data = "new"
+
+    def __init__(self, exists: bool = True):
+        self.exists = exists
+        self.commands = []
+
+    def run(self, cmd, *_, **__):
+        self.command_to_run = cmd
+        self.commands.append(cmd)
+        if cmd == "mktemp":
+            return Result(stdout="temporary\n")
+        elif cmd.startswith("test -e"):
+            return Result(stdout="exists\n" if self.exists else "")
+        elif 'stat -c "%U:%G"' in cmd:
+            return Result(stdout="bentsi:bentsi")
+        elif 'stat -c "%a"' in cmd:
+            return Result(stdout="644")
+        return Result(stdout="", stderr="")
+
+    def send_files(self, src: str, dst: str, *_, **__) -> bool:
+        with open(src, encoding="utf-8") as fobj:
+            self.sf_data = fobj.read()
+        self.sf_src = src
+        self.sf_dst = dst
+        return True
+
+    def receive_files(self, src: str, dst: str, *_, **__) -> bool:
+        assert self.exists, "must not copy a missing file"
+        with open(dst, "w", encoding="utf-8") as fobj:
+            fobj.write(self.rf_data)
+        self.rf_src = src
+        self.rf_dst = dst
+        return True
+
+    def sudo(self, cmd, *_, **__):
+        return self.run(cmd)
+
+
+def test_remote_file_missing_target_is_created():
+    """A file the image doesn't ship (e.g. io_properties.yaml on an image without an io preset) must be created, not fail on stat."""
+    remoter = _FakeRemoteFileRunner(exists=False)
+    some_file = "/etc/scylla.d/io_properties.yaml"
+    with remote_file(remoter=remoter, remote_path=some_file, sudo=True) as fobj:
+        assert fobj.getvalue() == ""
+        fobj.write("disks: []")
+    assert remoter.sf_data == "disks: []"
+    assert not any(cmd.startswith(("stat", "chown", "chmod")) for cmd in remoter.commands)
+
+
+def test_remote_file_probe_quotes_the_path():
+    """A path with a space must be probed as one path, or an existing file reads as missing and is overwritten."""
+    remoter = _FakeRemoteFileRunner()
+    with remote_file(remoter=remoter, remote_path="/tmp/config copy.yaml") as fobj:
+        assert fobj.getvalue() == "new"
+    assert remoter.commands[0] == "test -e '/tmp/config copy.yaml' && echo exists || true"
+
+
+def test_remote_file_probe_failure_raises():
+    """A remoter failure on the probe must raise, not read as a missing file that is then overwritten."""
+    remoter = _FakeRemoteFileRunner()
+    failure = UnexpectedExit(Result(command="test -e", exited=255))
+    with (
+        patch.object(remoter, "run", side_effect=failure),
+        pytest.raises(UnexpectedExit),
+        remote_file(remoter=remoter, remote_path="/some/path/some.file"),
+    ):
+        pass
+
+
 class TestRemoteFile:
-    @classmethod
-    def setup_class(cls) -> None:
-        class _Runner:
-            sf_data = sf_src = sf_dst = rf_src = rf_dst = None
-            hostname = "localhost"
-            command_to_run = ""
-            rf_data = "new"
-
-            def run(self, cmd, *_, **__):
-                self.command_to_run = cmd
-                if cmd == "mktemp":
-                    return Result(stdout="temporary\n")
-                elif 'stat -c "%U:%G"' in cmd:
-                    return Result(stdout="bentsi:bentsi")
-                elif 'stat -c "%a"' in cmd:
-                    return Result(stdout="644")
-                return Result(stdout="", stderr="")
-
-            def send_files(self, src: str, dst: str, *_, **__) -> bool:
-                with open(src, encoding="utf-8") as fobj:
-                    self.sf_data = fobj.read()
-                self.sf_src = src
-                self.sf_dst = dst
-                return True
-
-            def receive_files(self, src: str, dst: str, *_, **__) -> bool:
-                with open(dst, "w", encoding="utf-8") as fobj:
-                    fobj.write(self.rf_data)
-                self.rf_src = src
-                self.rf_dst = dst
-                return True
-
-            def sudo(self, cmd, *_, **__):
-                return self.run(cmd)
-
-        cls.remoter_cls = _Runner
+    remoter_cls = _FakeRemoteFileRunner
 
     def test_remote_file(self):
         remoter = self.remoter_cls()
