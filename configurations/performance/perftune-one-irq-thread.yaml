@@ -1,0 +1,3 @@
+# seastar perftune.py that reserves one thread of each IRQ core on GCE z4d and c4 families
+# (branch fruch/seastar:perftune-one-irq-thread, on top of scylladb/seastar#3858).
+perftune_script_url: 'https://raw.githubusercontent.com/fruch/seastar/perftune-one-irq-thread/scripts/perftune.py'

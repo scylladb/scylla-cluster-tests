@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**45 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -287,6 +287,17 @@ enable peer verification for encrypted communication
 **default:** True
 
 **type:** bool
+
+
+<a id="perftune_script_url"></a>
+
+## **perftune_script_url** / SCT_PERFTUNE_SCRIPT_URL
+
+URL of a perftune.py to install on DB nodes over the packaged one, before Scylla starts.<br>Scylla's cpuset is computed again with it. For testing an unreleased seastar perftune change,<br>e.g. the raw file of a seastar pull request branch.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="prepare_saslauthd"></a>

@@ -120,6 +120,11 @@ class ScyllaConfigMixin(BaseModel):
     peer_verification: Boolean = SctField(
         description="enable peer verification for encrypted communication",
     )
+    perftune_script_url: String = SctField(
+        description="""URL of a perftune.py to install on DB nodes over the packaged one, before Scylla starts.
+            Scylla's cpuset is computed again with it. For testing an unreleased seastar perftune change,
+            e.g. the raw file of a seastar pull request branch.""",
+    )
     prepare_saslauthd: Boolean = SctField(
         description="When defined true, will install and start saslauthd service",
     )

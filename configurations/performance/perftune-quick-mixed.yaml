@@ -1,0 +1,37 @@
+# Quick A/B of a perftune change on top of perf-regression-predefined-throughput-steps-1-node.yaml:
+# one DB node, a 20M-row preload (the rows the mixed workload touches, about 20 GB), then a fixed-rate
+# mixed step (latency below saturation) and an unthrottled one (max throughput).
+# Run it twice on the same instance type, with and without perftune_script_url, and add
+# configurations/tablets_disabled.yaml: with tablets, the load balancer keeps moving tablets between
+# shards during the step, and throughput swings 290k-970k ops/s minute to minute (c4a A/A run, 2026-11-25).
+
+prepare_write_cmd: [
+  "cassandra-stress write  cl=ONE n=20000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate threads=200 throttle=150000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..20000000"
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ONE n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
+  "cassandra-stress read  cl=ONE n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000"
+]
+
+# One command per loader, so both loaders drive the node
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
+  "cassandra-stress mixed no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000"
+]
+
+# Cache reads (sub-test test_read_gradual_increase_load), for instance types whose disk limits the mixed workload
+# (c4d-highmem-16-lssd: 351 MB/s writes). One command per loader, like stress_cmd_m.
+stress_cmd_r: [
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000"
+]
+
+n_loaders: 2
+perf_gradual_threads: {"read": 620, "write": 400, "mixed": 950, "read_disk_only": 620}
+# 400k ops/s is below saturation on the 16-vCPU types (c4a mixed unthrottled: ~960k)
+perf_gradual_throttle_steps: {"read": ['400000', 'unthrottled'], "mixed": ['400000', 'unthrottled'], "write": ['unthrottled'], "read_disk_only": ['unthrottled']}
+perf_gradual_step_duration: {"read": '10m', "write": None, "mixed": '10m', "read_disk_only": '10m'}
+
+test_duration: 180
+user_prefix: 'perftune-quick'
