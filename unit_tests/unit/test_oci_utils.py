@@ -15,7 +15,6 @@
 
 import ast
 import subprocess
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -163,7 +162,16 @@ def test_get_ubuntu_image_ocid(mock_page_iterator, mock_get_client):
     result = get_ubuntu_image_ocid("compartment-id", region="us-ashburn-1")
 
     assert result == "ocid1.image.oc1..ubuntu2404"
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_images,
+        yield_mode="record",
+        compartment_id="compartment-id",
+        operating_system="Canonical Ubuntu",
+        operating_system_version="24.04",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+        lifecycle_state="AVAILABLE",
+    )
 
 
 @patch("sdcm.utils.oci_utils.OciService.get_compute_client")
@@ -183,12 +191,22 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
     result = get_ubuntu_image_ocid("compartment-id")
 
     assert result == "ocid1.image.oc1..ubuntu2404-amd64"
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_images,
+        yield_mode="record",
+        compartment_id="compartment-id",
+        operating_system="Canonical Ubuntu",
+        operating_system_version="24.04",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+        lifecycle_state="AVAILABLE",
+    )
 
 
 @patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mock_get_client):
+    """get_ubuntu_image_ocid with arch=ARM returns the aarch64 image, not the amd64 one."""
     mock_client = MagicMock()
     mock_arm_image = MagicMock()
     mock_arm_image.id = "ocid1.image.oc1..ubuntu2404-aarch64"
@@ -202,10 +220,20 @@ def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mo
     result = get_ubuntu_image_ocid("compartment-id", arch=VmArch.ARM)
 
     assert result == "ocid1.image.oc1..ubuntu2404-aarch64"
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_images,
+        yield_mode="record",
+        compartment_id="compartment-id",
+        operating_system="Canonical Ubuntu",
+        operating_system_version="24.04",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+        lifecycle_state="AVAILABLE",
+    )
 
 
 def test_get_arch_from_oci_shape():
+    """get_arch_from_oci_shape maps A1/A4 shapes to ARM, E5 shapes and None to X86."""
     assert get_arch_from_oci_shape("VM.Standard.A1.Flex") is VmArch.ARM
     assert get_arch_from_oci_shape("VM.Standard.A4.Flex") is VmArch.ARM
     assert get_arch_from_oci_shape("VM.Standard.E5.Flex") is VmArch.X86
@@ -222,7 +250,16 @@ def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
     mock_get_client.return_value = mock_client
     with pytest.raises(ValueError, match="No Canonical Ubuntu"):
         get_ubuntu_image_ocid("compartment-id")
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_images,
+        yield_mode="record",
+        compartment_id="compartment-id",
+        operating_system="Canonical Ubuntu",
+        operating_system_version="24.04",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+        lifecycle_state="AVAILABLE",
+    )
 
 
 # --- Tests for list_instances_oci ---
@@ -245,7 +282,9 @@ def test_list_instances_oci_single_region(mock_page_iterator, mock_get_client, m
 
     assert len(result) == 1
     assert result[0] == mock_instance
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_instances, yield_mode="record", compartment_id="compartment-id"
+    )
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compartment_id")
@@ -272,7 +311,9 @@ def test_list_instances_oci_with_tag_filter(mock_page_iterator, mock_get_client,
 
     assert len(result) == 1
     assert result[0] == mock_instance1
-    mock_page_iterator.assert_called_once()
+    mock_page_iterator.assert_called_once_with(
+        mock_client.list_instances, yield_mode="record", compartment_id="compartment-id"
+    )
 
 
 def test_wait_for_instance_state_running():
@@ -363,12 +404,11 @@ def test_secondary_vnics_script_starts_with_the_shebang():
     assert SECONDARY_VNICS_SCRIPT.startswith("#!/bin/bash\n"), SECONDARY_VNICS_SCRIPT[:40]
 
 
-def test_secondary_vnics_script_is_valid_bash():
+def test_secondary_vnics_script_is_valid_bash(tmp_path):
     """'bash -n' the rendered script, so a syntax error cannot reach a node."""
-    with tempfile.NamedTemporaryFile("w", suffix=".sh") as script_file:
-        script_file.write(SECONDARY_VNICS_SCRIPT)
-        script_file.flush()
-        result = subprocess.run(["bash", "-n", script_file.name], capture_output=True, text=True, check=False)
+    script_file = tmp_path / "secondary_vnics.sh"
+    script_file.write_text(SECONDARY_VNICS_SCRIPT)
+    result = subprocess.run(["bash", "-n", str(script_file)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
 
 
@@ -385,6 +425,7 @@ def test_secondary_vnics_script_embedded_python_is_valid():
 
 
 def test_secondary_vnics_service_unit_renders_execstart():
+    """The secondary vNIC systemd unit ExecStart carries the script path, NIC count and primary IP."""
     unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
         script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=2, primary_ip="10.0.1.10"
     )
@@ -393,6 +434,7 @@ def test_secondary_vnics_service_unit_renders_execstart():
 
 
 def test_oci_shape_arch_agrees_with_the_catalog_and_the_config_matcher():
+    """get_arch_from_oci_shape and is_arm_instance_type agree with the instance catalog for every OCI shape."""
     catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
     checked = 0
     for instance in catalog.instances:

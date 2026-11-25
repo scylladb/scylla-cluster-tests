@@ -25,7 +25,7 @@ from sdcm.utils.decorators import retrying
 
 @pytest.fixture
 def mock_keystore():
-    """Mock KeyStore to return test credentials."""
+    """Provide KeyStore Argus credentials, so download_file never reads the real keystore."""
     with patch.object(KeyStore, "get_argus_rest_credentials_per_provider") as mock_creds:
         mock_creds.return_value = {"token": "test-token", "extra_headers": {}}
         yield mock_creds
@@ -33,7 +33,7 @@ def mock_keystore():
 
 @pytest.fixture(autouse=True)
 def fast_retry(monkeypatch):
-    """Override S3Storage.download_file to use minimal retry times for tests."""
+    """Replace S3Storage.download_file with a retrying copy that sleeps 0.01s between attempts."""
     # Get the original undecorated method
     original_download = (
         S3Storage.download_file.__wrapped__
@@ -52,8 +52,8 @@ def fast_retry(monkeypatch):
     yield
 
 
-def test_download_direct_s3_link_success(tmp_path):
-    """Test successful download with direct S3 link."""
+def test_download_direct_s3_link_returns_local_path(tmp_path):
+    """download_file of a direct S3 link returns the local path and fetches the object by key."""
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/test-file.tar.zst"
 
     mock_bucket = Mock()
@@ -70,11 +70,15 @@ def test_download_direct_s3_link_success(tmp_path):
         result = storage.download_file(s3_link, str(tmp_path))
 
         assert result == os.path.join(os.path.abspath(str(tmp_path)), "test-file.tar.zst")
-        mock_bucket.download_file.assert_called_once()
+        mock_bucket.download_file.assert_called_once_with(
+            Key="test-path/test-file.tar.zst",
+            Filename=os.path.join(str(tmp_path), "test-file.tar.zst"),
+            Config=storage.transfer_config,
+        )
 
 
-def test_download_argus_link_success(tmp_path, mock_keystore):
-    """Test successful download with Argus proxy link that redirects to S3."""
+def test_download_argus_link_returns_local_path(tmp_path, mock_keystore):
+    """download_file of an Argus proxy link follows the redirect and downloads the S3 object."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/file.tar.zst?signature=xyz"
 
@@ -87,23 +91,26 @@ def test_download_argus_link_success(tmp_path, mock_keystore):
     mock_bucket = Mock()
     mock_bucket.download_file = Mock()
 
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource") as mock_boto3:
-            mock_boto3.return_value.Bucket.return_value = mock_bucket
+    with patch("requests.head", return_value=mock_response), patch("boto3.resource") as mock_boto3:
+        mock_boto3.return_value.Bucket.return_value = mock_bucket
 
-            # Create a test file to simulate successful download
-            test_file = tmp_path / "file.tar.zst"
-            test_file.write_text("test content")
+        # Create a test file to simulate successful download
+        test_file = tmp_path / "file.tar.zst"
+        test_file.write_text("test content")
 
-            storage = S3Storage()
-            result = storage.download_file(argus_link, str(tmp_path))
+        storage = S3Storage()
+        result = storage.download_file(argus_link, str(tmp_path))
 
-            assert result == os.path.join(os.path.abspath(str(tmp_path)), "file.tar.zst")
-            mock_bucket.download_file.assert_called_once()
+        assert result == os.path.join(os.path.abspath(str(tmp_path)), "file.tar.zst")
+        mock_bucket.download_file.assert_called_once_with(
+            Key="test-path/file.tar.zst",
+            Filename=os.path.join(str(tmp_path), "file.tar.zst"),
+            Config=storage.transfer_config,
+        )
 
 
 def test_download_argus_link_no_redirect_fails(tmp_path, mock_keystore):
-    """Test failure when Argus doesn't redirect (e.g., Cloudflare login page)."""
+    """download_file raises when Argus answers without a redirect, e.g. a Cloudflare login page."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # Mock requests.head to simulate no redirect (Cloudflare login page)
@@ -112,19 +119,17 @@ def test_download_argus_link_no_redirect_fails(tmp_path, mock_keystore):
     mock_response.status_code = 200
     mock_response.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
 
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource"):
-            storage = S3Storage()
+    with patch("requests.head", return_value=mock_response), patch("boto3.resource"):
+        storage = S3Storage()
 
-            with pytest.raises(RuntimeError) as exc_info:
-                storage.download_file(argus_link, str(tmp_path))
+        with pytest.raises(RuntimeError, match="Argus communication failed") as exc_info:
+            storage.download_file(argus_link, str(tmp_path))
 
-            assert "Argus communication failed" in str(exc_info.value)
-            assert "no redirect occurred" in str(exc_info.value)
+        assert "no redirect occurred" in str(exc_info.value)
 
 
 def test_download_argus_link_no_location_header_fails(tmp_path, mock_keystore):
-    """Test failure when Argus redirect has no location header."""
+    """download_file raises when the Argus redirect carries no location header."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # Mock requests.head to simulate redirect without location header
@@ -133,33 +138,33 @@ def test_download_argus_link_no_location_header_fails(tmp_path, mock_keystore):
     mock_response.history[0].headers = {}  # No location header
     mock_response.status_code = 200
 
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource"):
-            storage = S3Storage()
+    with patch("requests.head", return_value=mock_response), patch("boto3.resource"):
+        storage = S3Storage()
 
-            with pytest.raises(RuntimeError) as exc_info:
-                storage.download_file(argus_link, str(tmp_path))
+        with pytest.raises(RuntimeError, match="Argus redirect failed") as exc_info:
+            storage.download_file(argus_link, str(tmp_path))
 
-            assert "Argus redirect failed" in str(exc_info.value)
-            assert "no location header found" in str(exc_info.value)
+        assert "no location header found" in str(exc_info.value)
 
 
 def test_download_argus_request_exception_fails(tmp_path, mock_keystore):
-    """Test failure when request to Argus raises an exception."""
+    """download_file wraps a RequestException from Argus in RuntimeError."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
-    with patch("requests.head", side_effect=requests.exceptions.ConnectionError("Connection failed")):
-        with patch("boto3.resource"):
-            storage = S3Storage()
+    with (
+        patch("requests.head", side_effect=requests.exceptions.ConnectionError("Connection failed")),
+        patch("boto3.resource"),
+    ):
+        storage = S3Storage()
 
-            with pytest.raises(RuntimeError) as exc_info:
-                storage.download_file(argus_link, str(tmp_path))
+        with pytest.raises(RuntimeError, match="Failed to communicate with Argus") as exc_info:
+            storage.download_file(argus_link, str(tmp_path))
 
-            assert "Failed to communicate with Argus" in str(exc_info.value)
+        assert "Failed to communicate with Argus" in str(exc_info.value)
 
 
 def test_download_s3_client_error_fails(tmp_path):
-    """Test failure when S3 download raises ClientError (e.g., 404)."""
+    """download_file wraps a ClientError from S3 in RuntimeError."""
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/missing-file.tar.zst"
 
     mock_bucket = Mock()
@@ -171,29 +176,27 @@ def test_download_s3_client_error_fails(tmp_path):
 
         storage = S3Storage()
 
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(RuntimeError, match="Failed to download file") as exc_info:
             storage.download_file(s3_link, str(tmp_path))
 
-        assert "Failed to download file" in str(exc_info.value)
         assert "from S3 bucket" in str(exc_info.value)
 
 
 def test_download_invalid_link_no_filename_fails(tmp_path):
-    """Test failure when S3 link doesn't contain a valid filename."""
+    """download_file raises when the S3 link has no file name."""
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/"
 
     with patch("boto3.resource"):
         storage = S3Storage()
 
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(RuntimeError, match="Invalid S3 link") as exc_info:
             storage.download_file(s3_link, str(tmp_path))
 
-        assert "Invalid S3 link" in str(exc_info.value)
         assert "could not extract file name" in str(exc_info.value)
 
 
 def test_download_with_retry_on_argus_failure(tmp_path, mock_keystore):
-    """Test that download retries on Argus failures."""
+    """download_file retries Argus failures and downloads once the redirect succeeds."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # First two attempts fail with no redirect, third succeeds
@@ -212,30 +215,36 @@ def test_download_with_retry_on_argus_failure(tmp_path, mock_keystore):
     mock_bucket = Mock()
     mock_bucket.download_file = Mock()
 
-    with patch(
-        "requests.head",
-        side_effect=[
-            mock_response_fail,  # First attempt fails
-            mock_response_fail,  # Second attempt fails
-            mock_response_success,  # Third attempt succeeds
-        ],
+    with (
+        patch(
+            "requests.head",
+            side_effect=[
+                mock_response_fail,  # First attempt fails
+                mock_response_fail,  # Second attempt fails
+                mock_response_success,  # Third attempt succeeds
+            ],
+        ),
+        patch("boto3.resource") as mock_boto3,
     ):
-        with patch("boto3.resource") as mock_boto3:
-            mock_boto3.return_value.Bucket.return_value = mock_bucket
+        mock_boto3.return_value.Bucket.return_value = mock_bucket
 
-            # Create a test file to simulate successful download
-            test_file = tmp_path / "file.tar.zst"
-            test_file.write_text("test content")
+        # Create a test file to simulate successful download
+        test_file = tmp_path / "file.tar.zst"
+        test_file.write_text("test content")
 
-            storage = S3Storage()
-            result = storage.download_file(argus_link, str(tmp_path))
+        storage = S3Storage()
+        result = storage.download_file(argus_link, str(tmp_path))
 
-            assert result == os.path.join(os.path.abspath(str(tmp_path)), "file.tar.zst")
-            mock_bucket.download_file.assert_called_once()
+        assert result == os.path.join(os.path.abspath(str(tmp_path)), "file.tar.zst")
+        mock_bucket.download_file.assert_called_once_with(
+            Key="test-path/file.tar.zst",
+            Filename=os.path.join(str(tmp_path), "file.tar.zst"),
+            Config=storage.transfer_config,
+        )
 
 
 def test_download_retries_exhausted_fails(tmp_path, mock_keystore):
-    """Test that download fails after all retries are exhausted."""
+    """download_file raises once all Argus retries are exhausted."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # All attempts fail with no redirect
@@ -244,11 +253,10 @@ def test_download_retries_exhausted_fails(tmp_path, mock_keystore):
     mock_response.status_code = 200
     mock_response.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
 
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource"):
-            storage = S3Storage()
+    with patch("requests.head", return_value=mock_response), patch("boto3.resource"):
+        storage = S3Storage()
 
-            with pytest.raises(RuntimeError) as exc_info:
-                storage.download_file(argus_link, str(tmp_path))
+        with pytest.raises(RuntimeError, match="Argus communication failed") as exc_info:
+            storage.download_file(argus_link, str(tmp_path))
 
-            assert "Argus communication failed" in str(exc_info.value)
+        assert "Argus communication failed" in str(exc_info.value)

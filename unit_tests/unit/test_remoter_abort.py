@@ -43,15 +43,17 @@ class IdleSession:
 
     @staticmethod
     def simple_select(timeout=None):
+        """simple_select sleeps briefly and returns with no data ready."""
         time.sleep(0.01)
 
     @staticmethod
     def eagain(func, args=(), kwargs=None, timeout=None):
+        """Eagain returns None, as if no data was read."""
         return None
 
     @staticmethod
     def drop_channel(channel):
-        pass
+        """drop_channel does nothing for a silent host."""
 
 
 class SilentChannel:
@@ -59,34 +61,42 @@ class SilentChannel:
 
     @staticmethod
     def read():
+        """Read returns EAGAIN with no data."""
         return LIBSSH2_ERROR_EAGAIN, b""
 
     @staticmethod
     def read_stderr():
+        """read_stderr returns EAGAIN with no data."""
         return LIBSSH2_ERROR_EAGAIN, b""
 
     @staticmethod
     def eof():
+        """Eof stays EAGAIN, so EOF never comes."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def wait_eof():
+        """wait_eof stays EAGAIN, so EOF never comes."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def close():
+        """Close stays EAGAIN, so the channel never closes."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def wait_closed():
+        """wait_closed stays EAGAIN, so the channel never closes."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def get_exit_status():
+        """get_exit_status reports no exit status."""
         return -1
 
 
 def run_in_thread(target) -> tuple[threading.Thread, list]:
+    """Run target in a daemon thread; return the thread and a list collecting the exception it raised."""
     raised = []
 
     def _wrapper():
@@ -100,7 +110,16 @@ def run_in_thread(target) -> tuple[threading.Thread, list]:
     return thread, raised
 
 
+@pytest.fixture
+def remoter():
+    """RemoteLibSSH2CmdRunner to a fake host, stopped after the test."""
+    remoter = RemoteLibSSH2CmdRunner(hostname="10.0.0.1", user="test", key_file="/tmp/test_key")
+    yield remoter
+    remoter.stop()
+
+
 def test_no_watchers_read_loop_raises_on_abort():
+    """Output read loop without watchers keeps waiting on a silent channel and raises CommandAborted on abort."""
     abort_event = threading.Event()
     thread, raised = run_in_thread(
         lambda: Client._process_output_no_watchers(
@@ -126,6 +145,7 @@ def test_no_watchers_read_loop_raises_on_abort():
 
 
 def test_reader_thread_stops_on_abort():
+    """SSHReaderThread keeps waiting on a silent channel and stops with CommandAborted on abort."""
     abort_event = threading.Event()
     reader = SSHReaderThread(IdleSession(), SilentChannel(), None, 0.01, abort_event=abort_event)
     reader.start()
@@ -140,6 +160,7 @@ def test_reader_thread_stops_on_abort():
 
 
 def test_aborted_client_does_not_run_commands():
+    """A client aborted before run raises CommandAborted and never connects."""
     client = Client(host="10.0.0.1", user="test")
     client.connect = MagicMock()
 
@@ -169,14 +190,8 @@ def test_aborted_run_is_not_wrapped_as_retryable():
     assert type(raised[0]) is CommandAborted
 
 
-@pytest.fixture(name="remoter")
-def fixture_remoter():
-    remoter = RemoteLibSSH2CmdRunner(hostname="10.0.0.1", user="test", key_file="/tmp/test_key")
-    yield remoter
-    remoter.stop()
-
-
 def test_abort_running_commands_reaches_connections_of_other_threads(remoter):
+    """abort_running_commands aborts connections of every thread, including the main one."""
     connections = []
 
     def _get_connection():
@@ -197,16 +212,19 @@ def test_abort_running_commands_reaches_connections_of_other_threads(remoter):
 
 
 def test_abort_running_commands_without_connections(remoter):
+    """abort_running_commands is safe when no connection was created."""
     remoter.abort_running_commands()
 
 
 def test_abort_running_commands_is_noop_for_non_ssh_runners():
+    """LocalCmdRunner accepts abort_running_commands as a no-op."""
     # NOTE: loaders on the docker backend or with the SCT agent don't use an SSH remoter,
     #       `kill_docker_loaders` must still be able to call it on them
     LocalCmdRunner().abort_running_commands()
 
 
 def test_k8s_pod_runner_tracks_connections_for_abort():
+    """abort_running_commands aborts the pod connection used by a run."""
     # NOTE: `KubernetesPodRunner` keeps its own `_connections` list, tracking connections for abort
     #       must not clash with it
     runner = KubernetesPodRunner(
@@ -224,5 +242,7 @@ def test_k8s_pod_runner_tracks_connections_for_abort():
     runner._run_execute("true", new_session=True)
     runner.abort_running_commands()
 
-    connection.run.assert_called_once()
-    connection.abort.assert_called_once()
+    connection.run.assert_called_once_with(
+        command="true", warn=False, encoding="utf-8", hide=True, watchers=None, timeout=None, in_stream=False
+    )
+    connection.abort.assert_called_once_with()

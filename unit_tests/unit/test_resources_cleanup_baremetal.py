@@ -31,11 +31,13 @@ HOSTS = {
 
 
 class Config(dict):
+    """Config stand-in: a dict with the region_names attribute the cleanup reads."""
+
     region_names = []
 
 
-@pytest.fixture(name="cleaned")
-def fixture_cleaned(monkeypatch):
+@pytest.fixture
+def cleaned(monkeypatch):
     """Record what the cleanup does instead of doing it: the containers removed and each host's cleanup."""
     calls = []
     monkeypatch.setattr(keystore.KeyStore, "get_baremetal_config", lambda self, name: HOSTS)
@@ -59,7 +61,8 @@ def fixture_cleaned(monkeypatch):
     return calls
 
 
-def _config(**params):
+def make_config(**params):
+    """Config with the baremetal defaults, overridden by params."""
     defaults = {
         "cluster_backend": "baremetal",
         "s3_baremetal_config": "hosts",
@@ -70,9 +73,10 @@ def _config(**params):
 
 
 def test_post_behavior_selects_the_hosts_to_clean(cleaned):
+    """Only the hosts whose role is in NodeType are cleaned, each with its own flags."""
     tags = {"TestId": TEST_ID, "NodeType": ["scylla-db", "loader"]}
 
-    resources_cleanup.clean_resources_baremetal(tags, config=_config())
+    resources_cleanup.clean_resources_baremetal(tags, config=make_config())
 
     assert cleaned == [
         ("containers", tags),
@@ -82,7 +86,8 @@ def test_post_behavior_selects_the_hosts_to_clean(cleaned):
 
 
 def test_all_hosts_are_cleaned_without_post_behavior(cleaned):
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
+    """Without post_behavior every host and the run's monitoring stack are cleaned, at their private IPs."""
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config(ip_ssh_connections="private"))
 
     assert cleaned == [
         ("scylla-db 10.0.0.1", False, True, True),
@@ -94,24 +99,27 @@ def test_all_hosts_are_cleaned_without_post_behavior(cleaned):
 
 
 def test_nothing_is_cleaned_when_post_behavior_keeps_everything(cleaned):
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID, "NodeType": []}, config=_config())
+    """An empty NodeType cleans no host."""
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID, "NodeType": []}, config=make_config())
 
     assert cleaned == []
 
 
 def test_a_preinstalled_scylla_keeps_its_disk_setup(cleaned):
+    """use_preinstalled_scylla skips the Scylla disk setup cleanup on the DB node."""
     resources_cleanup.clean_resources_baremetal(
-        {"TestId": TEST_ID, "NodeType": ["scylla-db"]}, config=_config(use_preinstalled_scylla=True)
+        {"TestId": TEST_ID, "NodeType": ["scylla-db"]}, config=make_config(use_preinstalled_scylla=True)
     )
 
     assert cleaned[1:] == [("scylla-db 1.0.0.1", True, False, True)]
 
 
 def test_dry_run_touches_no_host(cleaned, monkeypatch, caplog):
+    """dry_run logs what would be cleaned for each host and opens no SSH connection."""
     monkeypatch.setattr(remote.RemoteCmdRunnerBase, "create_remoter", MagicMock(side_effect=AssertionError("SSH")))
 
     with caplog.at_level(logging.INFO, logger=resources_cleanup.LOGGER.name):
-        resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(), dry_run=True)
+        resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config(), dry_run=True)
 
     assert [call for call in cleaned if call[0] != "containers"] == []
     assert (
@@ -133,7 +141,7 @@ def test_each_role_is_cleaned_up_by_its_own_ip_ssh_connections(cleaned, monkeypa
     }
     monkeypatch.setattr(keystore.KeyStore, "get_baremetal_config", lambda self, name: hosts)
 
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config(ip_ssh_connections="private"))
 
     assert cleaned == [
         ("containers", {"TestId": TEST_ID}),
@@ -162,7 +170,7 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
         lambda **kwargs: logins.append(kwargs) or MagicMock(login=(kwargs["hostname"], kwargs)),
     )
 
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config())
 
     # the lab host logs in without the SCT key: the access service accepts only `none` auth
     assert [(login["hostname"], login.get("port"), login["key_file"]) for login in logins] == [
@@ -172,10 +180,11 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
     # the access service blocks port forwarding, so the lab host had no tunnel ports to free
     assert cleaned[1:] == [("scylla-db 10.0.0.1", True, True, True), ("loader monster", False, False, False)]
     localhost.lab_access_ssh_address.assert_called_once_with("monster")
-    localhost.destroy.assert_called_once()
+    localhost.destroy.assert_called_once_with()
 
 
 def test_a_lab_host_the_access_service_cant_reach_doesnt_stop_the_cleanup(cleaned, monkeypatch):
+    """A lab host the access service can't reach is skipped, and the rest of the cleanup still runs."""
     hosts = {
         "db_nodes": {"username": "fedora", "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]},
         "loader_nodes": HOSTS["loader_nodes"],
@@ -186,28 +195,31 @@ def test_a_lab_host_the_access_service_cant_reach_doesnt_stop_the_cleanup(cleane
     localhost.lab_access_ssh_address.side_effect = RuntimeError("sdm status failed")
     monkeypatch.setattr(resources_cleanup, "LocalHost", lambda **kwargs: localhost)
 
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config(ip_ssh_connections="private"))
 
     assert cleaned == [("loader 10.0.0.2", False, False, False)]
-    localhost.destroy.assert_called_once()
+    localhost.destroy.assert_called_once_with()
 
 
 def test_a_lab_host_without_a_localhost_is_reported_clearly():
+    """Looking up a lab host without a LocalHost raises a ValueError naming the access service."""
     with pytest.raises(ValueError, match="'monster' is reached through the lab access service"):
         host_ssh_address({"private_ip": "10.0.0.60", "access": "monster"}, "private", None)
 
 
 def test_cleanup_without_lab_hosts_starts_no_access_container(cleaned, monkeypatch):
+    """Cleanup with no lab hosts never starts the access container."""
     monkeypatch.setattr(resources_cleanup, "LocalHost", MagicMock(side_effect=AssertionError("access container")))
 
-    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=make_config())
 
 
 def test_clean_cloud_resources_cleans_up_baremetal_hosts(monkeypatch):
+    """clean_cloud_resources delegates to the bare-metal cleanup without touching AWS."""
     clean_baremetal = MagicMock()
     monkeypatch.setattr(resources_cleanup, "clean_resources_baremetal", clean_baremetal)
     monkeypatch.setattr(resources_cleanup, "clean_instances_aws", MagicMock(side_effect=AssertionError("AWS")))
-    config = _config()
+    config = make_config()
 
     assert resources_cleanup.clean_cloud_resources({"TestId": TEST_ID}, config=config) is True
 

@@ -30,6 +30,8 @@ from sdcm.remote.remote_base import RemoteCmdRunnerBase
 
 
 class MockRemoter(RemoteCmdRunnerBase):
+    """Remoter whose connections are MagicMocks that record the hostname and count creations."""
+
     exception_unexpected = Exception
     exception_failure = Exception
     exception_retryable = (Exception,)
@@ -39,19 +41,22 @@ class MockRemoter(RemoteCmdRunnerBase):
         self.created_connections = 0
 
     def _create_connection(self):
+        """Return a MagicMock connection bound to this remoter's hostname."""
         self.created_connections += 1
         connection = MagicMock()
         connection.hostname = self.hostname
         return connection
 
     def is_up(self, timeout: float = 30):
+        """Always report the host as up."""
         return True
 
     def _run_on_retryable_exception(self, exc, new_session, suppress_errors=False):
+        """Never retry on a retryable exception."""
         return False
 
 
-def _force_shared_id(monkeypatch):
+def force_shared_id(monkeypatch):
     """Make `id()` return the same value for every remoter in `remote_base`.
 
     The fixed code doesn't call `id()`, so this changes nothing there. It makes the collision certain if
@@ -60,7 +65,8 @@ def _force_shared_id(monkeypatch):
     monkeypatch.setattr(remote_base, "id", lambda obj: 42, raising=False)
 
 
-def _use_connection_in_thread(remoter):
+def use_connection_in_thread(remoter):
+    """Open the remoter's connection from a new thread, which leaves it in that thread's map."""
     thread = threading.Thread(target=lambda: remoter.connection)
     thread.start()
     thread.join()
@@ -75,7 +81,7 @@ def test_connection_key_recycled_id_gets_own_connection(monkeypatch):
     Forces every remoter to share one id(), so the test doesn't depend on CPython reusing a freed address.
     The old remoter is never stopped, as when its last reference is dropped in a thread that never used it.
     """
-    _force_shared_id(monkeypatch)
+    force_shared_id(monkeypatch)
     node10_remoter = MockRemoter(hostname="10.0.0.10")
     assert node10_remoter.connection.hostname == "10.0.0.10"
 
@@ -103,7 +109,7 @@ def test_stop_in_other_thread_recycled_id_gets_own_connection(monkeypatch):
 
     stop() only clears the thread it runs in, so cleanup alone doesn't protect the worker thread.
     """
-    _force_shared_id(monkeypatch)
+    force_shared_id(monkeypatch)
     old_remoter = MockRemoter(hostname="10.0.0.10")
     connections = {}
     old_remoter_used = threading.Event()
@@ -134,7 +140,7 @@ def test_stop_after_failed_init_does_not_raise(monkeypatch):
 
     monkeypatch.setattr(remote_base.tempfile, "mkstemp", fail_mkstemp)
     remoter = MockRemoter.__new__(MockRemoter)
-    with pytest.raises(OSError):
+    with pytest.raises(OSError, match="no space left on device"):
         remoter.__init__(hostname="10.0.0.4")
 
     remoter.stop()
@@ -155,6 +161,6 @@ def test_connection_per_thread_created_once():
     main_connection = remoter.connection
     assert remoter.connection is main_connection
 
-    _use_connection_in_thread(remoter)
+    use_connection_in_thread(remoter)
 
     assert remoter.created_connections == 2

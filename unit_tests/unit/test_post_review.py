@@ -56,6 +56,7 @@ def post_review(tmp_path):
     env = os.environ | {"PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}", "FAKE_GH_DIR": str(tmp_path)}
 
     def run(review: dict, *extra: str) -> tuple[str, dict | None]:
+        """Write the review file, run the script, and return its stdout and the posted review."""
         review_file = tmp_path / "review.json"
         review_file.write_text(json.dumps(review))
         result = subprocess.run(
@@ -70,6 +71,7 @@ def post_review(tmp_path):
 
 
 def test_posts_a_comment_review_pinned_to_the_reviewed_commit(post_review):
+    """The review is posted as COMMENT at the head SHA passed on the command line, whatever the file says."""
     output, posted = post_review({"event": "APPROVE", "commit_id": "other", "body": "LGTM", "comments": []})
 
     assert posted == {"commit_id": "abc123", "event": "COMMENT", "body": "LGTM", "comments": []}
@@ -77,6 +79,7 @@ def test_posts_a_comment_review_pinned_to_the_reviewed_commit(post_review):
 
 
 def test_moves_comments_outside_the_diff_to_the_body(post_review):
+    """Comments on lines outside the PR diff are listed in the review body; in-diff ones stay inline."""
     _, posted = post_review({
         "body": "Summary.",
         "comments": [
@@ -98,6 +101,7 @@ def test_moves_comments_outside_the_diff_to_the_body(post_review):
 
 
 def test_keeps_a_multi_line_range_inside_the_diff(post_review):
+    """A multi-line comment whose range lies inside the diff is posted with start_line and RIGHT sides."""
     _, posted = post_review({"comments": [{"path": "a.py", "start_line": 10, "line": 13, "body": "♻️ **refactor:** x"}]})
 
     assert posted["comments"] == [
@@ -113,8 +117,15 @@ def test_keeps_a_multi_line_range_inside_the_diff(post_review):
     assert posted["body"] == "No findings."
 
 
-@pytest.mark.parametrize("secret", ["sk-ant-api03-abcdefgh1234", "ghs_" + "a" * 36])
+@pytest.mark.parametrize(
+    "secret",
+    [
+        pytest.param("sk-ant-api03-abcdefgh1234", id="anthropic-key"),
+        pytest.param("ghs_" + "a" * 36, id="github-app-token"),
+    ],
+)
 def test_refuses_to_post_a_review_that_holds_a_secret(post_review, secret):
+    """The script exits non-zero and posts nothing when a comment contains a credential."""
     with pytest.raises(subprocess.CalledProcessError) as error:
         post_review({"body": "LGTM", "comments": [{"path": "a.py", "line": 11, "body": f"key: {secret}"}]})
 
@@ -122,6 +133,7 @@ def test_refuses_to_post_a_review_that_holds_a_secret(post_review, secret):
 
 
 def test_dry_run_prints_the_review_and_posts_nothing(post_review):
+    """--dry-run prints the review JSON to stdout and does not call the reviews API."""
     output, posted = post_review({"body": "LGTM"}, "--dry-run")
 
     assert posted is None

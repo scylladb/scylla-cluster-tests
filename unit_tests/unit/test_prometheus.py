@@ -13,12 +13,12 @@
 
 import json
 
-import pytest
-
 from sdcm.prometheus import PrometheusAlertManagerListener
 
 
 class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListener):
+    """PrometheusAlertManagerListener fed a scripted alert sequence instead of a live Alertmanager."""
+
     interval = 0
 
     def __init__(self, artificial_alerts: list):
@@ -43,24 +43,21 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         self._results["_publish_new_alerts"].append(alerts)
 
     def get_result(self):
+        """Return the alerts published so far, keyed by publish method name."""
         return self._results
 
     def wait_till_alert_manager_up(self):
-        pass
+        """No-op: the scripted alert source is always up."""
 
 
-class TestPrometheusAlertManager:
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, test_data_dir):
-        self.test_data_dir = test_data_dir
-
-    def test_alert_manager_listener_artificial_run(self):
-        with (self.test_data_dir / "test_prometheus" / "test_alert_manager_listener_artificial_run.yaml").open(
-            encoding="utf-8"
-        ) as file:
-            test_data = json.load(file)
-        listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data["post"])
-        listener.start()
-        listener.join()
-        result = listener.get_result()
-        assert result == test_data["expected"]
+def test_alert_manager_listener_artificial_run(test_data_dir):
+    """The listener publishes new and ended alerts from a scripted run, matching the recorded expectation."""
+    with (test_data_dir / "test_prometheus" / "test_alert_manager_listener_artificial_run.yaml").open(
+        encoding="utf-8"
+    ) as file:
+        test_data = json.load(file)
+    listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data["post"])
+    listener.start()
+    listener.join()
+    result = listener.get_result()
+    assert result == test_data["expected"]
