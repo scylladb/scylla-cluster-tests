@@ -2893,6 +2893,15 @@ enable debug for cassandra-stress
 **type:** boolean
 
 
+## **cs_docker_memory_limit_percent** / SCT_CS_DOCKER_MEMORY_LIMIT_PERCENT
+
+Memory limit of each cassandra-stress container, in percent of the loader memory. Use it when cassandra-stress shares a loader with another tool, such as gemini. Each cassandra-stress command runs in its own container with this limit. Use a value from 1 to 100. Empty means no limit. Not supported for k8s backends and prepared loaders.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **stress_cmd_mv** / SCT_STRESS_CMD_MV
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
