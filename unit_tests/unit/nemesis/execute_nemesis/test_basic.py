@@ -14,7 +14,7 @@ def test_execute_nemesis_success(nemesis, nemesis_runner, capsys):
 
     captured = capsys.readouterr()
     assert "Disrupting cluster" in captured.out
-    nemesis_runner.cluster.check_cluster_health.assert_called_once()
+    nemesis_runner.cluster.check_cluster_health.assert_called_once_with()
     nemesis_runner.metrics_srv.event.assert_called_once_with("CustomTestNemesis")
     assert len(nemesis_runner.duration_list) == 1
     assert len(nemesis_runner.operation_log) == 1
@@ -49,7 +49,7 @@ def test_execute_nemesis_failure(failing_nemesis, nemesis_runner):
     """Test execute_nemesis handles disruption failures."""
     nemesis_runner.execute_nemesis(failing_nemesis)
 
-    nemesis_runner.cluster.check_cluster_health.assert_called_once()
+    nemesis_runner.cluster.check_cluster_health.assert_called_once_with()
     assert len(nemesis_runner.error_list) == 1
     assert "Intentional failure" in nemesis_runner.error_list[0]
 
@@ -74,7 +74,7 @@ def test_execute_nemesis_skip(skipping_nemesis, nemesis_runner):
     with pytest.raises(UnsupportedNemesis, match="Intentional skip"):
         nemesis_runner.execute_nemesis(skipping_nemesis)
 
-    nemesis_runner.cluster.check_cluster_health.assert_called_once()
+    nemesis_runner.cluster.check_cluster_health.assert_called_once_with()
 
     # Verify the DisruptionEvent was marked as skipped
     event = nemesis_runner.last_nemesis_event
