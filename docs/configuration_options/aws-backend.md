@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**22 options.**
+**23 options.**
 
 
 <a id="ami_db_scylla_user"></a>
@@ -272,3 +272,14 @@ if true, create 'cluster' placement group for test case for low-latency network 
 **default:** False
 
 **type:** bool
+
+
+<a id="aws_placement_group_strategy"></a>
+
+## **aws_placement_group_strategy** / SCT_AWS_PLACEMENT_GROUP_STRATEGY
+
+Strategy of the placement group created when [`use_placement_group`](#use_placement_group) is true.<br>'cluster' (default): DB and loader nodes are packed close together, for the lowest network latency.<br>'spread': each DB node goes on separate hardware (its own rack), so DB nodes never share a host;<br>loader nodes stay out of the group. AWS allows at most 7 instances per spread group per AZ.
+
+**default:** cluster
+
+**type:** Literal['cluster', 'spread']

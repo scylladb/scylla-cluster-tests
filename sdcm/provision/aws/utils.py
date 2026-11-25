@@ -412,12 +412,20 @@ def configure_set_preserve_hostname_script():
 
 
 # -----AWS Placement Group section -----
-def create_cluster_placement_groups_aws(name: str, tags: dict, region=None, dry_run=False):
+# A spread group puts each instance on its own rack, at most 7 per AZ, so only DB nodes join it.
+SPREAD_NODE_TYPE = "scylla-db"
+
+
+def joins_placement_group(params, node_type: str | None) -> bool:
+    return params.get("aws_placement_group_strategy") != "spread" or node_type == SPREAD_NODE_TYPE
+
+
+def create_cluster_placement_groups_aws(name: str, tags: dict, region=None, dry_run=False, strategy="cluster"):
     ec2: EC2Client = ec2_clients[region]
     result = ec2.create_placement_group(
         DryRun=dry_run,
         GroupName=name,
-        Strategy="cluster",
+        Strategy=strategy,
         TagSpecifications=[
             {
                 "ResourceType": "placement-group",

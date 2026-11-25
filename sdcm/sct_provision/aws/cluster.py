@@ -22,7 +22,7 @@ from sdcm import cluster
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, attach_failed_region
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
-from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
+from sdcm.provision.aws.utils import create_cluster_placement_groups_aws, joins_placement_group
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
@@ -124,6 +124,9 @@ class ClusterBase(BaseModel):
     @property
     def placement_group_name(self) -> str | None:
         if self.params.get("use_placement_group") and self._USE_PLACEMENT_GROUP:
+            # PlacementGroup itself has no node type: it always needs the name, to create the group
+            if self._NODE_TYPE and not joins_placement_group(self.params, self._NODE_TYPE):
+                return None
             return "%s-%s" % (cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
         else:
             return None
@@ -448,7 +451,10 @@ class PlacementGroup(ClusterBase):
     def provision(self):
         if self.placement_group_name:
             create_cluster_placement_groups_aws(
-                name=self.placement_group_name, tags=self.common_tags, region=self._region(0)
+                name=self.placement_group_name,
+                tags=self.common_tags,
+                region=self._region(0),
+                strategy=self.params.get("aws_placement_group_strategy"),
             )
 
 

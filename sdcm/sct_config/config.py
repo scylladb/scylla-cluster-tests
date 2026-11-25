@@ -2460,6 +2460,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
                 f"when param use_placement_group is used"
             )
+            if backend == "aws" and self.get("aws_placement_group_strategy") == "spread":
+                db_nodes = sum(self.get("n_db_nodes"))
+                assert db_nodes <= 7, (
+                    f"aws_placement_group_strategy 'spread' holds at most 7 instances per AZ, got {db_nodes} DB nodes"
+                )
+                for param in ("use_capacity_reservation", "use_dedicated_host"):
+                    assert not self.get(param), f"aws_placement_group_strategy 'spread' can't be used with {param}"
 
     def _validate_scylla_d_overrides_files_exists(self):
         if scylla_d_overrides_files := self.get("scylla_d_overrides_files"):

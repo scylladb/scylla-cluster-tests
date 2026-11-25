@@ -34,7 +34,7 @@ from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
-from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
+from sdcm.provision.aws.utils import configure_set_preserve_hostname_script, joins_placement_group
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
@@ -144,6 +144,8 @@ class AWSCluster(cluster.BaseCluster):
         self.placement_group_name = PlacementGroup(
             params=params, common_tags=self.test_config.common_tags(), test_id=self.test_config.test_id()
         ).placement_group_name
+        if not joins_placement_group(params, node_type):
+            self.placement_group_name = None
 
         super().__init__(
             cluster_uuid=cluster_uuid,

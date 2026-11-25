@@ -284,6 +284,7 @@ rack_aware_loader: false
 use_dns_names: false
 
 use_placement_group: false
+aws_placement_group_strategy: "cluster"
 use_capacity_reservation: false
 use_dedicated_host: false
 
