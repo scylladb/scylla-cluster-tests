@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -43,6 +43,15 @@ def test_execute_nemesis_success(nemesis, nemesis_runner, capsys):
     assert 0 <= (op["end"] - op["start"]) - op["duration"] <= 1
     assert "error" not in op
     assert "skip_reason" not in op
+
+
+@pytest.mark.parametrize("disruptive", [True, False])
+def test_execute_nemesis_ignores_audit_log_timeouts_only_when_disruptive(nemesis, nemesis_runner, disruptive):
+    nemesis.disruptive = disruptive
+    with patch("sdcm.nemesis.ignore_audit_log_timeouts") as ignore_audit_log_timeouts:
+        nemesis_runner.execute_nemesis(nemesis)
+
+    assert ignore_audit_log_timeouts.called is disruptive
 
 
 def test_execute_nemesis_failure(failing_nemesis, nemesis_runner):

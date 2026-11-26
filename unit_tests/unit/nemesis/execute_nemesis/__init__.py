@@ -12,6 +12,8 @@ from sdcm.utils.version_utils import MethodVersionNotFound
 class TestExecuteBaseClass(ABC):
     """For tests purposes TestExecuteBaseClass is also a flag class"""
 
+    disruptive = False
+
     def __init__(self, runner):
         self.runner = runner
 

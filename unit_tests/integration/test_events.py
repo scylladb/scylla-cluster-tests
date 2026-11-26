@@ -16,6 +16,7 @@ import pytest
 import sdcm.sct_events.setup as events_setup
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.group_common_events import ignore_audit_log_timeouts
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.setup import enable_default_filters
 from sdcm.utils.context_managers import environment
@@ -27,6 +28,12 @@ AUDIT_UNAVAILABLE_LINE = (
     "client_ip [2a05:d018:12e3:f000:6de7:6245:94a3:6344%0]:0 username cassandra error false "
     "exception Cannot achieve consistency level for cl ONE. Requires 1, alive 0"
 )
+AUDIT_TIMEOUT_LINE = (
+    "2026-11-25T05:03:05.048 db-node-17  !ERR | scylla[7115]  [shard 2:sl:d] audit - Unexpected exception when "
+    "writing login log with: node_ip [2a05:d01c:964:7d02:7895:360d:7f15:b9c6]:0 "
+    "client_ip [2a05:d018:12e3:f000:ffb:b4a2:5b4f:d038%0]:0 username cassandra error false "
+    "exception Operation timed out for audit.audit_log - received only 0 responses from 1 CL=ONE."
+)
 
 
 class TestSctEventsIntegration(RealEventsTest):
@@ -37,7 +44,7 @@ class TestSctEventsIntegration(RealEventsTest):
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=8):
+        with self.wait_for_n_events(self.get_events_logger(), count=9):
             DatabaseLogEvent.BACKTRACE().add_info(
                 node="A",
                 line_number=22,
@@ -88,6 +95,7 @@ class TestSctEventsIntegration(RealEventsTest):
             ).publish()
 
             DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=AUDIT_UNAVAILABLE_LINE).publish()
+            DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=23, line=AUDIT_TIMEOUT_LINE).publish()
 
         log_content = self.get_event_log_file("events.log")
 
@@ -105,6 +113,8 @@ class TestSctEventsIntegration(RealEventsTest):
         assert "Authentication error" not in error_log_content
         assert "exceptions::unavailable_exception" not in error_log_content
         assert AUDIT_UNAVAILABLE_LINE not in error_log_content
+        # only ignored while a disruptive nemesis runs, see ignore_audit_log_timeouts
+        assert AUDIT_TIMEOUT_LINE in error_log_content
         assert "topology change coordinator fiber got error" not in error_log_content
 
     @pytest.mark.integration
@@ -174,3 +184,15 @@ class TestSctEventsGceBindRaceFilter(RealEventsTest):
         error_log_content = self.get_event_log_file("error.log")
         assert "Could not start Prometheus API server" not in error_log_content
         assert "init - Startup failed" not in error_log_content
+
+
+class TestIgnoreAuditLogTimeouts(RealEventsTest):
+    """Own class: event log files are shared within a RealEventsTest class."""
+
+    @pytest.mark.integration
+    def test_ignore_audit_log_timeouts(self):
+        with self.wait_for_n_events(self.get_events_logger(), count=1), ignore_audit_log_timeouts():
+            DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=AUDIT_TIMEOUT_LINE).publish()
+
+        assert AUDIT_TIMEOUT_LINE in self.get_event_log_file("warning.log")
+        assert AUDIT_TIMEOUT_LINE not in self.get_event_log_file("error.log")
