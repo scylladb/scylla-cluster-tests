@@ -63,6 +63,7 @@ simulated_racks: 3
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
+  arch: x86_64
   local_disk_gb: '>=1500'
 # instance types and number are chosen so at the end of the test the storage utilization is ~85-90%
 n_loaders: 6

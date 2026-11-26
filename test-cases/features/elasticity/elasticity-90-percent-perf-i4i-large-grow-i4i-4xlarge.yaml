@@ -36,6 +36,7 @@ simulated_racks: 3
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
   local_disk_gb: '>=370'
 
 nemesis_add_node_cnt: 3

@@ -21,6 +21,7 @@ n_loaders: 1
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
   local_disk_gb: '>=370'
 
 root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operation.log that can't be disabled

@@ -38,6 +38,7 @@ simulated_racks: 0
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 4
   memory: '>=32'
+  arch: x86_64
   local_disk_gb: '>=750'
 
 nemesis_class_name: 'SisyphusMonkey'
