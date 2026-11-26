@@ -25,6 +25,14 @@ class ToggleAuditBaseMonkey(NemesisBaseClass, abc.ABC):
     schema_changes = True
     config_changes = True
     free_tier_set = True
+    store: AuditStore = "syslog"
+
+    def precheck(self, node) -> str | None:
+        """Skip the syslog store on Kubernetes."""
+        if self.store == "syslog" and self.runner._is_it_on_kubernetes():
+            # generally syslog is not supported on K8S because of different log line format
+            return "syslog store is not supported on Kubernetes scylladb/scylla-operator#1299"
+        return None
 
     def reduce_audit_categories(self, audit: Audit, audit_config: AuditConfiguration, use_audit_rules: bool):
         """Reconfigure audit with DML and QUERY dropped from the audited categories."""
@@ -35,29 +43,15 @@ class ToggleAuditBaseMonkey(NemesisBaseClass, abc.ABC):
         with self.runner.action_log_scope(f"Reconfiguring audit with {REDUCED_AUDIT_CATEGORIES} categories"):
             audit.configure(audit_config)
 
-    def toggle_audit(self, store: AuditStore, use_audit_rules: bool = False):  # noqa: PLR0914
+    def toggle_audit(self, use_audit_rules: bool = False):  # noqa: PLR0914
         """
         Enable audit log with all categories and user keyspaces (if audit already enabled, disable it and finish the Nemesis),
         verify audit log content,
         reduce categories by excluding DML and QUERY,
         verify DDL are logged in audit log correctly. Leaves audit log enabled this way.
         """
+        store = self.store
         target_node = self.runner.target_node
-        if not target_node.is_enterprise:
-            raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
-
-        if store == "syslog" and self.runner._is_it_on_kubernetes():
-            # generally syslog is not supported on K8S because of different log line format
-            raise UnsupportedNemesis("syslog store is not supported on Kubernetes scylladb/scylla-operator#1299")
-        if ComparableScyllaVersion(target_node.scylla_version) <= ComparableScyllaVersion("2025.1"):
-            raise UnsupportedNemesis(
-                "Audit feature log format was changed in Scylla 2025.2 and later. Use old sct-branch for Scylla < 2025.2"
-            )
-        if use_audit_rules and (
-            ComparableScyllaVersion(target_node.scylla_version) < ComparableScyllaVersion("2026.2.0-dev")
-        ):
-            raise UnsupportedNemesis("audit_rules are supported by Scylla 2026.2.0-dev and later")
-
         audit = Audit(self.runner.cluster)
 
         if audit.is_enabled():
@@ -171,7 +165,7 @@ class ToggleAuditNemesisSyslog(ToggleAuditBaseMonkey):
 
     def disrupt(self):
         """Toggle syslog auditing."""
-        self.toggle_audit(store="syslog")
+        self.toggle_audit()
 
 
 class ToggleAuditRulesNemesisSyslog(ToggleAuditBaseMonkey):
@@ -179,10 +173,18 @@ class ToggleAuditRulesNemesisSyslog(ToggleAuditBaseMonkey):
 
     additional_configs = ["configurations/toggle-audit-rules-nemesis.yaml"]
 
+    def precheck(self, node) -> str | None:
+        """Also require Scylla 2026.2+, which introduced audit_rules."""
+        if reason := super().precheck(node):
+            return reason
+        if ComparableScyllaVersion(node.scylla_version) < ComparableScyllaVersion("2026.2.0-dev"):
+            return "audit_rules are supported by Scylla 2026.2.0-dev and later"
+        return None
+
     def disrupt(self):
         """Toggle syslog audit rules."""
         with self.runner.target_node.remote_scylla_yaml() as scylla_yaml:
             configured_audit = scylla_yaml.audit or "none"
         if configured_audit != "none":
             raise UnsupportedNemesis("ToggleAuditRulesNemesisSyslog requires audit to be initially disabled")
-        self.toggle_audit(store="syslog", use_audit_rules=True)
+        self.toggle_audit(use_audit_rules=True)

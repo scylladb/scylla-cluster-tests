@@ -16,23 +16,10 @@ pytestmark = pytest.mark.usefixtures("events")
 
 
 @pytest.fixture()
-def scylla_version():
-    """Scylla version of the target node; recent enough for both nemesis."""
-    return "2026.2.0"
-
-
-@pytest.fixture()
-def scylla_yaml_audit():
-    """``audit`` value in the target node's scylla.yaml; None means audit is not configured."""
-    return None
-
-
-@pytest.fixture()
-def runner(base_runner, scylla_version, scylla_yaml_audit):
-    """``base_runner`` on an enterprise, non-k8s cluster, with a CQL session that records calls only."""
-    base_runner.target_node.is_enterprise = True
-    base_runner.target_node.scylla_version = scylla_version
-    base_runner.target_node.remote_scylla_yaml.return_value.__enter__.return_value.audit = scylla_yaml_audit
+def runner(base_runner):
+    """``base_runner`` on a non-k8s Scylla 2026.2 cluster with no audit in scylla.yaml, and a CQL session that records calls only."""
+    base_runner.target_node.scylla_version = "2026.2.0"
+    base_runner.target_node.remote_scylla_yaml.return_value.__enter__.return_value.audit = None
     base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
     base_runner._nemesis_stress_failure_handler = MagicMock()
     base_runner.tester.reliable_replication_factor = 3
@@ -126,32 +113,40 @@ def audit_log_rows(count, category, operation):
     return [row] * count
 
 
-@pytest.mark.parametrize(
-    "setup,match",
-    [
-        pytest.param(lambda r: setattr(r.target_node, "is_enterprise", False), "Scylla Enterprise", id="oss"),
-        pytest.param(lambda r: r._is_it_on_kubernetes.configure_mock(return_value=True), "Kubernetes", id="k8s"),
-        pytest.param(lambda r: setattr(r.target_node, "scylla_version", "2024.2.0"), "2025.2", id="old-version"),
-    ],
-)
-def test_unsupported_setups_skip_before_configuring_audit(runner, audit, monkey_class, setup, match):
-    """Both nemesis need enterprise Scylla 2025.2+ off Kubernetes, and skip before touching the audit config."""
-    setup(runner)
-    with pytest.raises(UnsupportedNemesis, match=match):
-        monkey_class(runner).disrupt()
-    audit.configure.assert_not_called()
+def test_precheck_excludes_kubernetes(runner, monkey_class):
+    """Both nemesis use the syslog store, which is not supported on Kubernetes."""
+    runner._is_it_on_kubernetes.return_value = True
+
+    assert (
+        monkey_class(runner).precheck(node=runner.target_node)
+        == "syslog store is not supported on Kubernetes scylladb/scylla-operator#1299"
+    )
+
+
+def test_precheck_keeps_supported_setup(runner, monkey_class):
+    """Both nemesis run on Scylla 2026.2 off Kubernetes."""
+    assert monkey_class(runner).precheck(node=runner.target_node) is None
 
 
 @pytest.mark.parametrize(
-    "scylla_version,scylla_yaml_audit,match",
+    "version,reason",
     [
-        pytest.param("2026.1.0", None, "audit_rules are supported by Scylla 2026.2.0-dev", id="before-2026.2"),
-        pytest.param("2026.2.0", "table", "requires audit to be initially disabled", id="audit-configured"),
+        pytest.param("2026.1.0", "audit_rules are supported by Scylla 2026.2.0-dev and later", id="2026.1"),
+        pytest.param("2026.2.0-dev", None, id="2026.2-dev"),
     ],
 )
-def test_audit_rules_unsupported_setups_skip_before_configuring_audit(runner, audit, match):
-    """The audit_rules nemesis also needs Scylla 2026.2+ and no audit configured in scylla.yaml."""
-    with pytest.raises(UnsupportedNemesis, match=match):
+def test_audit_rules_precheck_needs_2026_2(runner, version, reason):
+    """The audit_rules nemesis also needs Scylla 2026.2+, including its dev builds."""
+    runner.target_node.scylla_version = version
+
+    assert ToggleAuditRulesNemesisSyslog(runner).precheck(node=runner.target_node) == reason
+
+
+def test_audit_rules_skip_when_audit_configured(runner, audit):
+    """The audit_rules nemesis skips, without touching the audit config, if scylla.yaml already configures audit."""
+    runner.target_node.remote_scylla_yaml.return_value.__enter__.return_value.audit = "table"
+
+    with pytest.raises(UnsupportedNemesis, match="requires audit to be initially disabled"):
         ToggleAuditRulesNemesisSyslog(runner).disrupt()
     audit.configure.assert_not_called()
 
