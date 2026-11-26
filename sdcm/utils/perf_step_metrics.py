@@ -10,13 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2026 ScyllaDB
-"""Per-step resource and disk usage of the perf steps tests, from the monitor's Prometheus, for Argus.
+"""Per-step resource usage, disk usage and Scylla internals of the perf steps tests, from the monitor's Prometheus, for Argus.
 
 For each step, every query below gives each node's average over the step's window, and every node
 role (DB, loader) reports the mean of its nodes' averages and the highest one: the hottest node,
 not a single-sample spike. That is enough to tell a step capped by the loaders (loader CPU near
-100%) from one capped by Scylla (reactor utilization near 100%), and the disk table tells whether
-Scylla's data disk is the limit.
+100%) from one capped by Scylla (reactor utilization near 100%). The disk table tells whether
+Scylla's data disk is the limit, and the Scylla internals table where Scylla waits: on its I/O
+queues, on memory for writes, or on timeouts and cache misses.
 """
 
 import logging
@@ -77,6 +78,48 @@ DISK_WRITE_LATENCY_QUERY = (
     f"/ {data_disk_rate('node_disk_writes_completed_total')}"
 )
 
+# Scylla's I/O queue wait per request, of a group of I/O classes, on the data disk: the time the
+# requests spent in the queue over their count. A node whose classes did no I/O in the window has
+# no value (0/0). Scylla's other I/O group, with an empty mountpoint, is left out.
+SCYLLA_IO_CLASSES = {
+    # Every service level ('sl:default', 'sl:driver', 'sl:<user service level>'), so the columns
+    # stay the same whatever service levels a test creates
+    "queries": 'class=~"sl:.*"',
+    "commitlog": 'class=~"commitlog|schema_commitlog"',
+    "memtable": 'class="memtable"',
+    "compaction": 'class="compaction"',
+    "other": 'class!~"sl:.*|commitlog|schema_commitlog|memtable|compaction"',
+}
+
+
+def io_queue_wait_query(class_filter: str) -> str:
+    labels = f'mountpoint="/var/lib/scylla", {class_filter}'
+    return (
+        f"1000 * sum by (instance) (rate(scylla_io_queue_total_delay_sec{{{labels}}}[${{window}}s])) "
+        f"/ sum by (instance) (rate(scylla_io_queue_total_operations{{{labels}}}[${{window}}s]))"
+    )
+
+
+def counter_increase_or_zero(counter: str) -> str:
+    """Each DB node's increase of a counter over the window, 0 on a node that doesn't export it.
+
+    Scylla exports the timeout counters only after the first timeout (set_skip_when_empty), so a
+    node without timeouts has no series. The fallback gives it a 0 from a series every DB node has.
+    """
+    return (
+        f"sum by (instance) (increase({counter}[${{window}}s])) or 0 * avg by (instance) (scylla_reactor_utilization)"
+    )
+
+
+# Writes that waited for the memtables' dirty memory to drop below its limit
+BLOCKED_WRITES_QUERY = "sum by (instance) (increase(scylla_database_requests_blocked_memory[${window}s]))"
+READ_TIMEOUTS_QUERY = counter_increase_or_zero("scylla_storage_proxy_coordinator_read_timeouts")
+WRITE_TIMEOUTS_QUERY = counter_increase_or_zero("scylla_storage_proxy_coordinator_write_timeouts")
+CACHE_ROW_HIT_RATE_QUERY = (
+    "100 * sum by (instance) (rate(scylla_cache_row_hits[${window}s])) / (sum by (instance) "
+    "(rate(scylla_cache_row_hits[${window}s])) + sum by (instance) (rate(scylla_cache_row_misses[${window}s])))"
+)
+
 
 @dataclass(frozen=True)
 class StepMetric:
@@ -106,6 +149,18 @@ STEP_DISK_METRICS = (
     StepMetric(column="Disk queue depth", query=DISK_QUEUE_DEPTH_QUERY, role="db", unit="", digits=2),
     StepMetric(column="Disk read latency", query=DISK_READ_LATENCY_QUERY, role="db", unit="ms", digits=3),
     StepMetric(column="Disk write latency", query=DISK_WRITE_LATENCY_QUERY, role="db", unit="ms", digits=3),
+)
+
+STEP_SCYLLA_METRICS = (
+    *(
+        StepMetric(column=f"I/O wait {group}", query=io_queue_wait_query(class_filter), role="db", unit="ms", digits=3)
+        for group, class_filter in SCYLLA_IO_CLASSES.items()
+    ),
+    # Counts over the step's window, per node
+    StepMetric(column="Blocked writes", query=BLOCKED_WRITES_QUERY, role="db", unit="", digits=0),
+    StepMetric(column="Read timeouts", query=READ_TIMEOUTS_QUERY, role="db", unit="", digits=0),
+    StepMetric(column="Write timeouts", query=WRITE_TIMEOUTS_QUERY, role="db", unit="", digits=0),
+    StepMetric(column="Cache row hit rate", query=CACHE_ROW_HIT_RATE_QUERY, role="db", unit="%", digits=2),
 )
 
 
@@ -248,6 +303,13 @@ class PerfStepDiskUsageResult(StaticGenericResultTable):
         Columns = metric_columns(STEP_DISK_METRICS)
 
 
+class PerfStepScyllaInternalsResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # set per workload, one table per run with one row per step
+        description = ""
+        Columns = metric_columns(STEP_SCYLLA_METRICS)
+
+
 @dataclass(frozen=True)
 class StepResourceUsage:
     """The values of one step, of the metrics of both tables."""
@@ -295,5 +357,18 @@ def step_disk_usage_table(workload: str, steps: Iterable[StepResourceUsage]):
         f"{workload} workload - per-step throughput, IOPS, queue depth and request latency of the DB nodes' "
         f"Scylla data disk (mounted at /var/lib/scylla): the mean and the busiest node's average over each "
         f"step, without its first minutes and its last {STEP_TAIL_SEC}s"
+    )
+    return _steps_table(table, steps)
+
+
+def step_scylla_internals_table(workload: str, steps: Iterable[StepResourceUsage]):
+    """The DB nodes' I/O queue wait per class, blocked writes, timeouts and cache hit rate, one row per step."""
+    table = PerfStepScyllaInternalsResult()
+    table.name = f"{workload} - Step Scylla internals"
+    table.description = (
+        f"{workload} workload - per-step I/O queue wait per request of each I/O class group on the data disk "
+        f"(queries: all service levels), writes blocked on dirty memory, coordinator read and write timeouts "
+        f"(counts over the step) and cache row hit rate: the mean and the busiest node's value over each step, "
+        f"without its first minutes and its last {STEP_TAIL_SEC}s"
     )
     return _steps_table(table, steps)

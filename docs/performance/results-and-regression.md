@@ -99,12 +99,12 @@ issues two query families:
 > This whole block is **best-effort** — skipped entirely when there is no monitoring set. It
 > feeds the local JSON and the Argus screenshots, not the pass/fail decision.
 
-### 2.3 Per-step resource and disk usage — `sdcm/utils/perf_step_metrics.py`
+### 2.3 Per-step resource usage, disk usage and Scylla internals — `sdcm/utils/perf_step_metrics.py`
 
 The perf steps tests (`performance_regression_gradual_grow_throughput.py`, cassandra-stress and
-latte alike) send two more Argus tables per run, `<workload> - Step resource usage` and, below it,
-`<workload> - Step disk usage`, each with one row per step, below the steps' tables. After every
-step both tables are sent again with the rows of all the steps so far: Argus shows a run's tables in
+latte alike) send three more Argus tables per run, below the steps' tables and in this order:
+`<workload> - Step resource usage`, `<workload> - Step disk usage` and `<workload> - Step Scylla
+internals`, each with one row per step. After every step the tables are sent again with the rows of all the steps so far: Argus shows a run's tables in
 the order their cells were written, and a test that fails in a later step keeps the rows of the
 earlier ones. The resource table tells a step capped by the loaders from one capped by Scylla:
 
@@ -125,8 +125,8 @@ earlier ones. The resource table tells a step capped by the loaders from one cap
   counted from its start, before the loaders launch, and its last 60 seconds, where the loaders
   end at different moments. A step no longer than twice the warm-up plus 60 seconds is used
   whole; 0 disables the cut.
-- `report_step_resource_usage` runs after every step, also after a failed one, and sends both
-  tables. It is best-effort: a query with no data leaves its columns out, and any failure, a
+- `report_step_resource_usage` runs after every step, also after a failed one, and sends the
+  three tables. It is best-effort: a query with no data leaves its columns out, and any failure, a
   failed query included, is a WARNING `TestFrameworkEvent`, never a failed test. Each Prometheus request
   times out after 30 seconds, so a silent monitor does not hold the next step. A window shorter
   than two node_exporter scrapes (about two minutes) has no CPU columns. Values are sent with
@@ -160,6 +160,30 @@ The disk table has the DB nodes' Scylla data disk, from node_exporter's diskstat
   stop growing mean the disk is the limit. For scale, a write run on 3 `i8g.4xlarge` gave
   14.5K write IOPS, 1.8 GB/s, queue depth 2.9 and 0.1 ms at 350K op/s, and 20.3K, 2.5 GB/s, 3.9
   and 0.13 ms unthrottled.
+
+The Scylla internals table has where Scylla waits, on the DB nodes:
+
+| Columns | Query, per node |
+|---|---|
+| `I/O wait queries` / `commitlog` / `memtable` / `compaction` / `other` `avg` / `max` (ms) | `1000 * rate(scylla_io_queue_total_delay_sec{mountpoint="/var/lib/scylla", class=~...}) / rate(scylla_io_queue_total_operations{...})`: the average time a request of those I/O classes waited in Scylla's I/O queue |
+| `Blocked writes` | `increase(scylla_database_requests_blocked_memory)`: writes that waited for the memtables' dirty memory, over the window |
+| `Read timeouts` / `Write timeouts` | `increase(scylla_storage_proxy_coordinator_read_timeouts)` / `write_timeouts`, over the window |
+| `Cache row hit rate` (%) | `rate(scylla_cache_row_hits) / (rate(scylla_cache_row_hits) + rate(scylla_cache_row_misses))` |
+| `window start`, `window duration` | as in the resource table |
+
+- The I/O classes are grouped so the columns stay the same whatever service levels a test
+  creates: `queries` is every service level (`sl:default`, `sl:driver`, `sl:<name>`),
+  `commitlog` includes `schema_commitlog`, and `other` is the rest (`main`, `streaming`,
+  `gossip`, ...). Only the data disk's I/O group counts: Scylla's other one has an empty
+  `mountpoint`. A group without I/O in the window has no value: a write workload does no
+  `queries` I/O.
+- Scylla exports the timeout counters only after the first timeout, so the timeout queries fall
+  back to 0 on a DB node without them. `Blocked writes`, `Read timeouts` and `Write timeouts` are
+  counts over the window, per node.
+- Reading it: a growing I/O wait of `memtable` or `compaction` means the flushes and compactions
+  wait for the disk, which ends in blocked writes. For scale, a write run on 3 `i8g.4xlarge` had
+  memtable/compaction waits of 24/17 ms at 350K op/s, while a mixed run stayed under 0.4 ms in
+  every class up to unthrottled.
 
 ---
 

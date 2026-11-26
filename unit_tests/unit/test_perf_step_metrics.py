@@ -16,7 +16,10 @@ from sdcm.utils.perf_step_metrics import (
     DISK_WRITE_IOPS_QUERY,
     PROMETHEUS_REQUEST_TIMEOUT_SEC,
     REACTOR_UTILIZATION_QUERY,
+    READ_TIMEOUTS_QUERY,
+    SCYLLA_IO_CLASSES,
     STEP_DISK_METRICS,
+    STEP_SCYLLA_METRICS,
     STEP_TAIL_SEC,
     StepResourceUsage,
     StepWindow,
@@ -26,6 +29,7 @@ from sdcm.utils.perf_step_metrics import (
     series_average,
     step_disk_usage_table,
     step_resource_usage_table,
+    step_scylla_internals_table,
     step_window,
     summarize_by_role,
 )
@@ -246,6 +250,66 @@ def test_step_disk_usage_table_has_only_its_columns_and_the_steps_with_disk_data
     assert units["Disk write latency avg"] == "ms"
 
 
+def test_io_wait_class_groups_cover_every_class_once():
+    groups = {
+        group: re.fullmatch(r'class(=~|!~|=)"(.+)"', class_filter).groups()
+        for group, class_filter in SCYLLA_IO_CLASSES.items()
+    }
+
+    def groups_of(io_class):
+        matched = []
+        for group, (op, pattern) in groups.items():
+            hit = re.fullmatch(pattern, io_class) is not None
+            if hit != (op == "!~"):
+                matched.append(group)
+        return matched
+
+    # The classes seen on 2026.x, and user service levels: each falls in exactly one group
+    assert groups_of("sl:default") == ["queries"]
+    assert groups_of("sl:driver") == ["queries"]
+    assert groups_of("sl:sl500_reads") == ["queries"]
+    assert groups_of("commitlog") == ["commitlog"]
+    assert groups_of("schema_commitlog") == ["commitlog"]
+    assert groups_of("memtable") == ["memtable"]
+    assert groups_of("compaction") == ["compaction"]
+    for io_class in ("main", "streaming", "gossip", "background_reclaim"):
+        assert groups_of(io_class) == ["other"]
+
+
+def test_scylla_queries_use_the_data_disk_io_group_and_zero_missing_timeouts():
+    for metric in STEP_SCYLLA_METRICS:
+        assert metric.role == "db"
+        if metric.column.startswith("I/O wait"):
+            assert metric.query.count('mountpoint="/var/lib/scylla"') == 2
+    # Scylla exports the timeout counters only after the first timeout
+    assert " or 0 * avg by (instance) (scylla_reactor_utilization)" in READ_TIMEOUTS_QUERY
+
+
+def test_step_scylla_internals_table_has_one_row_per_step():
+    table = step_scylla_internals_table(
+        workload="write",
+        steps=[
+            StepResourceUsage(
+                step="350000",
+                window=StepWindow(0, 600, True),
+                metrics={"DB CPU avg": 97.0, "I/O wait memtable avg": 24.118, "Write timeouts max": 0.0},
+            ),
+        ],
+    )
+
+    assert table.name == "write - Step Scylla internals"
+    cells = {(result.column, result.row): result.value for result in table.results}
+    assert cells == {
+        ("I/O wait memtable avg", "350000"): 24.118,
+        ("Write timeouts max", "350000"): 0.0,
+        ("window start", "350000"): "00:00:00",
+        ("window duration", "350000"): 600,
+    }
+    units = {column.name: column.unit for column in table.columns}
+    assert units["I/O wait queries avg"] == "ms"
+    assert units["Cache row hit rate max"] == "%"
+
+
 def test_step_resource_usage_table_has_one_row_per_step():
     table = step_resource_usage_table(
         workload="mixed",
@@ -350,11 +414,36 @@ def test_report_step_resource_usage_sends_the_disk_table_after_the_resource_tabl
 
     report(fake_test(monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.9.9.9")])))
 
-    # The disk table is sent last, so Argus shows it at the bottom
+    # The disk table is sent after the resource table, so Argus shows it below
     tables = [call.kwargs["result_table"] for call in submit.call_args_list]
     assert [table.name for table in tables] == ["mixed - Step resource usage", "mixed - Step disk usage"]
     assert ("Disk write IOPS avg", 20000) in {(result.column, result.value) for result in tables[1].results}
     assert not any(result.column.startswith("Disk") for result in tables[0].results)
+
+
+def test_report_step_resource_usage_sends_the_scylla_internals_table_last(monkeypatch):
+    prometheus = FakePrometheus(
+        {
+            CPU_QUERY: [series("10.0.0.1:9100", 97), series("10.0.1.1:9100", 30)],
+            DISK_WRITE_IOPS_QUERY: [series("10.0.0.1:9100", 20000)],
+            READ_TIMEOUTS_QUERY: [series("10.0.0.1", 0)],
+        }
+    )
+    monkeypatch.setattr(
+        "performance_regression_gradual_grow_throughput.PrometheusDBStats", lambda host, **kwargs: prometheus
+    )
+    submit = MagicMock()
+    monkeypatch.setattr("performance_regression_gradual_grow_throughput.submit_results_to_argus", submit)
+
+    report(fake_test(monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.9.9.9")])))
+
+    tables = [call.kwargs["result_table"] for call in submit.call_args_list]
+    assert [table.name for table in tables] == [
+        "mixed - Step resource usage",
+        "mixed - Step disk usage",
+        "mixed - Step Scylla internals",
+    ]
+    assert ("Read timeouts avg", 0) in {(result.column, result.value) for result in tables[2].results}
 
 
 def test_report_step_resource_usage_without_disk_data_sends_no_disk_table(monkeypatch):
@@ -422,6 +511,7 @@ def test_report_step_resource_usage_never_fails_the_test(monkeypatch):
     [
         (perf_step_metrics.PerfStepResourceUsageResult, perf_step_metrics.STEP_METRICS),
         (perf_step_metrics.PerfStepDiskUsageResult, perf_step_metrics.STEP_DISK_METRICS),
+        (perf_step_metrics.PerfStepScyllaInternalsResult, perf_step_metrics.STEP_SCYLLA_METRICS),
     ],
 )
 def test_step_metrics_columns_match_the_table(table_class, metrics):

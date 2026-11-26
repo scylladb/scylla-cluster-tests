@@ -18,11 +18,13 @@ from sdcm.utils.perf_step_metrics import (
     PROMETHEUS_REQUEST_TIMEOUT_SEC,
     STEP_DISK_METRICS,
     STEP_METRICS,
+    STEP_SCYLLA_METRICS,
     StepResourceUsage,
     collect_step_metrics,
     roles_by_address,
     step_disk_usage_table,
     step_resource_usage_table,
+    step_scylla_internals_table,
     step_window,
 )
 
@@ -463,7 +465,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return {step: {"step": step, "legend": "", "cycles": []}}
 
     def report_step_resource_usage(self, workload_type: str, step: str, start: float, end: float) -> None:
-        """Send the step's CPU, reactor utilization and data disk usage, from the monitor's Prometheus, to Argus.
+        """Send the step's CPU, disk usage and Scylla internals, from the monitor's Prometheus, to Argus.
 
         The tables are sent again with the rows of all the steps so far: Argus shows them below the
         steps' tables, and a test that fails in a later step still has the rows of the earlier ones.
@@ -480,7 +482,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )
             roles = roles_by_address(db_nodes=self.db_cluster.nodes, loader_nodes=self.loaders.nodes)
             metrics, failed_queries = collect_step_metrics(
-                prometheus=prometheus, window=window, roles=roles, metrics=STEP_METRICS + STEP_DISK_METRICS
+                prometheus=prometheus,
+                window=window,
+                roles=roles,
+                metrics=STEP_METRICS + STEP_DISK_METRICS + STEP_SCYLLA_METRICS,
             )
             for column, exc in failed_queries.items():
                 TestFrameworkEvent(
@@ -492,7 +497,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 ).publish_or_dump(default_logger=self.log)
             self.log.info("Step %s resource usage (window %s, trimmed: %s): %s", step, window, window.trimmed, metrics)
             self._steps_resource_usage.append(StepResourceUsage(step=step, window=window, metrics=metrics))
-            for make_table in (step_resource_usage_table, step_disk_usage_table):
+            for make_table in (step_resource_usage_table, step_disk_usage_table, step_scylla_internals_table):
                 if (table := make_table(workload=workload_type, steps=self._steps_resource_usage)).results:
                     submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=table)
         except Exception as exc:  # noqa: BLE001
