@@ -99,14 +99,14 @@ issues two query families:
 > This whole block is **best-effort** — skipped entirely when there is no monitoring set. It
 > feeds the local JSON and the Argus screenshots, not the pass/fail decision.
 
-### 2.3 Per-step resource usage — `sdcm/utils/perf_step_metrics.py`
+### 2.3 Per-step resource and disk usage — `sdcm/utils/perf_step_metrics.py`
 
 The perf steps tests (`performance_regression_gradual_grow_throughput.py`, cassandra-stress and
-latte alike) send one more Argus table per run, `<workload> - Step resource usage`, with one row
-per step, below the steps' tables. After every step the table is sent again with the rows of all the
-steps so far: Argus shows a run's tables in the order their cells were written, and a test that fails
-in a later step keeps the rows of the earlier ones. It tells a step capped by the loaders from one
-capped by Scylla:
+latte alike) send two more Argus tables per run, `<workload> - Step resource usage` and, below it,
+`<workload> - Step disk usage`, each with one row per step, below the steps' tables. After every
+step both tables are sent again with the rows of all the steps so far: Argus shows a run's tables in
+the order their cells were written, and a test that fails in a later step keeps the rows of the
+earlier ones. The resource table tells a step capped by the loaders from one capped by Scylla:
 
 | Columns | Query, per node |
 |---|---|
@@ -125,9 +125,9 @@ capped by Scylla:
   counted from its start, before the loaders launch, and its last 60 seconds, where the loaders
   end at different moments. A step no longer than twice the warm-up plus 60 seconds is used
   whole; 0 disables the cut.
-- `report_step_resource_usage` runs after every step, also after a failed one. It is
-  best-effort: a query with no data leaves its columns out, and any failure, a failed query
-  included, is a WARNING `TestFrameworkEvent`, never a failed test. Each Prometheus request
+- `report_step_resource_usage` runs after every step, also after a failed one, and sends both
+  tables. It is best-effort: a query with no data leaves its columns out, and any failure, a
+  failed query included, is a WARNING `TestFrameworkEvent`, never a failed test. Each Prometheus request
   times out after 30 seconds, so a silent monitor does not hold the next step. A window shorter
   than two node_exporter scrapes (about two minutes) has no CPU columns. Values are sent with
   `Status.UNSET` and have no validation rules.
@@ -137,6 +137,29 @@ capped by Scylla:
 - DB CPU is not a measure of Scylla's load: Seastar busy-polls on its idle shards, so the DB
   nodes' CPU stays near 100% at any rate under load (97% on both steps of a write run, with
   reactor utilization 70% and 94%). Use DB reactor utilization for Scylla's load.
+
+The disk table has the DB nodes' Scylla data disk, from node_exporter's diskstats:
+
+| Columns | Query, per node, on the data device |
+|---|---|
+| `Disk read` / `Disk write` `avg` / `max` (MB/s) | `rate(node_disk_read_bytes_total[<window>s])` / `node_disk_written_bytes_total`, / 1e6 |
+| `Disk read IOPS` / `Disk write IOPS` | `rate(node_disk_reads_completed_total)` / `node_disk_writes_completed_total` |
+| `Disk queue depth` | `rate(node_disk_io_time_weighted_seconds_total)`: the average number of requests in flight |
+| `Disk read latency` / `Disk write latency` (ms) | `1000 * rate(node_disk_read_time_seconds_total) / rate(node_disk_reads_completed_total)`, and the write counters: the average time of one request |
+| `window start`, `window duration` | as in the resource table |
+
+- The data device is the one mounted at `/var/lib/scylla`
+  (`node_filesystem_size_bytes{mountpoint="/var/lib/scylla"}`): `nvme0n1` on a single-disk node,
+  `md0` on a RAID of several. Each disk query is joined to it on `instance` and `device`. A device
+  name can't pick it: on AWS the instance-store disk is `nvme0n1` on the DB nodes but the root disk
+  on the loaders, and the root filesystem is reported as `/dev/root`. The loaders and the monitor
+  have no such mount, so they are left out.
+- A node with no reads in the window has no read latency (0/0), and a backend whose nodes have no
+  data mount sends no disk table.
+- Reading it: a latency and a queue depth that grow from step to step while the IOPS and the MB/s
+  stop growing mean the disk is the limit. For scale, a write run on 3 `i8g.4xlarge` gave
+  14.5K write IOPS, 1.8 GB/s, queue depth 2.9 and 0.1 ms at 350K op/s, and 20.3K, 2.5 GB/s, 3.9
+  and 0.13 ms unthrottled.
 
 ---
 

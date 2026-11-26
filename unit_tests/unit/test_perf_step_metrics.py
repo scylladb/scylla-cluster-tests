@@ -1,4 +1,5 @@
 import re
+import urllib.parse
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -9,8 +10,13 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils import perf_step_metrics
 from sdcm.utils.perf_step_metrics import (
     CPU_QUERY,
+    DISK_QUEUE_DEPTH_QUERY,
+    DISK_READ_LATENCY_QUERY,
+    DISK_READ_MBPS_QUERY,
+    DISK_WRITE_IOPS_QUERY,
     PROMETHEUS_REQUEST_TIMEOUT_SEC,
     REACTOR_UTILIZATION_QUERY,
+    STEP_DISK_METRICS,
     STEP_TAIL_SEC,
     StepResourceUsage,
     StepWindow,
@@ -18,6 +24,7 @@ from sdcm.utils.perf_step_metrics import (
     instance_host,
     roles_by_address,
     series_average,
+    step_disk_usage_table,
     step_resource_usage_table,
     step_window,
     summarize_by_role,
@@ -48,6 +55,7 @@ class FakePrometheus:
         self.calls = []
 
     def query(self, query, start, end):
+        query = urllib.parse.unquote(query)  # the query reaches the URL quoted, as PrometheusDBStats needs
         self.calls.append((query, start, end))
         template = re.sub(r"\[\d+s\]", "[${window}s]", query)
         if template in self.failing:
@@ -159,6 +167,85 @@ def test_collect_step_metrics_keeps_the_other_metrics_when_one_query_fails():
     assert isinstance(failures["DB reactor utilization"], ConnectionError)
 
 
+def test_disk_queries_use_only_the_scylla_data_device():
+    for metric in STEP_DISK_METRICS:
+        assert metric.role == "db"
+        assert '{mountpoint="/var/lib/scylla"}' in metric.query
+        assert metric.query.count("rate(") == metric.query.count("on (instance, device) group_left ()")
+
+
+def test_collect_step_metrics_sends_the_queries_url_encoded():
+    prometheus = MagicMock()
+    prometheus.query.return_value = []
+
+    collect_step_metrics(prometheus=prometheus, window=StepWindow(0, 600, True), roles={}, metrics=STEP_DISK_METRICS)
+
+    for call in prometheus.query.call_args_list:
+        query = call.args[0]
+        # A raw '+' (in '+ 1' and '/dev/(.+)') is a space in a URL: Prometheus answered 400 Bad Request
+        assert "+" not in query and " " not in query
+        assert urllib.parse.unquote(query) in {metric.query.replace("${window}", "600") for metric in STEP_DISK_METRICS}
+
+
+def test_collect_step_metrics_rounds_each_disk_metric_by_its_digits():
+    roles = {"10.0.0.1": "db", "10.0.0.2": "db", "10.0.1.1": "loader"}
+    prometheus = FakePrometheus(
+        {
+            DISK_READ_MBPS_QUERY: [series("10.0.0.1:9100", 900.04), series("10.0.0.2:9100", 950.06)],
+            DISK_WRITE_IOPS_QUERY: [series("10.0.0.1:9100", 14321.6), series("10.0.0.2:9100", 14800.2)],
+            DISK_QUEUE_DEPTH_QUERY: [series("10.0.0.1:9100", 2.914), series("10.0.0.2:9100", 3.006)],
+            # A node without reads in the window: 0/0, NaN, left out of the mean
+            DISK_READ_LATENCY_QUERY: [series("10.0.0.1:9100", 0.2034), series("10.0.0.2:9100", "NaN")],
+        }
+    )
+
+    metrics, failures = collect_step_metrics(
+        prometheus=prometheus, window=StepWindow(0, 600, True), roles=roles, metrics=STEP_DISK_METRICS
+    )
+
+    assert failures == {}
+    assert metrics == {
+        "Disk read avg": 925.0,
+        "Disk read max": 950.1,
+        "Disk write IOPS avg": 14561.0,
+        "Disk write IOPS max": 14800.0,
+        "Disk queue depth avg": 2.96,
+        "Disk queue depth max": 3.01,
+        "Disk read latency avg": 0.203,
+        "Disk read latency max": 0.203,
+    }
+    # Only the disk queries, each over the whole window
+    assert len(prometheus.calls) == len(STEP_DISK_METRICS)
+    assert all("[600s]" in query and "${window}" not in query for query, _, _ in prometheus.calls)
+
+
+def test_step_disk_usage_table_has_only_its_columns_and_the_steps_with_disk_data():
+    table = step_disk_usage_table(
+        workload="write",
+        steps=[
+            StepResourceUsage(step="150000", window=StepWindow(0, 1500, True), metrics={"DB CPU avg": 40.0}),
+            StepResourceUsage(
+                step="unthrottled",
+                window=StepWindow(3600, 4200, False),
+                metrics={"DB CPU avg": 97.0, "Disk write avg": 2550.3, "Disk write latency max": 0.131},
+            ),
+        ],
+    )
+
+    assert table.name == "write - Step disk usage"
+    cells = {(result.column, result.row): result.value for result in table.results}
+    assert cells == {
+        ("Disk write avg", "unthrottled"): 2550.3,
+        ("Disk write latency max", "unthrottled"): 0.131,
+        ("window start", "unthrottled"): "01:00:00",
+        ("window duration", "unthrottled"): 600,
+    }
+    units = {column.name: column.unit for column in table.columns}
+    assert units["Disk write avg"] == "MB/s"
+    assert units["Disk write IOPS max"] == "ops/s"
+    assert units["Disk write latency avg"] == "ms"
+
+
 def test_step_resource_usage_table_has_one_row_per_step():
     table = step_resource_usage_table(
         workload="mixed",
@@ -248,6 +335,41 @@ def test_report_step_resource_usage_sends_the_rows_of_all_steps_so_far(monkeypat
     assert sent_rows == [{"150000"}, {"150000", "unthrottled"}]
 
 
+def test_report_step_resource_usage_sends_the_disk_table_after_the_resource_table(monkeypatch):
+    prometheus = FakePrometheus(
+        {
+            CPU_QUERY: [series("10.0.0.1:9100", 97), series("10.0.1.1:9100", 30)],
+            DISK_WRITE_IOPS_QUERY: [series("10.0.0.1:9100", 20000)],
+        }
+    )
+    monkeypatch.setattr(
+        "performance_regression_gradual_grow_throughput.PrometheusDBStats", lambda host, **kwargs: prometheus
+    )
+    submit = MagicMock()
+    monkeypatch.setattr("performance_regression_gradual_grow_throughput.submit_results_to_argus", submit)
+
+    report(fake_test(monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.9.9.9")])))
+
+    # The disk table is sent last, so Argus shows it at the bottom
+    tables = [call.kwargs["result_table"] for call in submit.call_args_list]
+    assert [table.name for table in tables] == ["mixed - Step resource usage", "mixed - Step disk usage"]
+    assert ("Disk write IOPS avg", 20000) in {(result.column, result.value) for result in tables[1].results}
+    assert not any(result.column.startswith("Disk") for result in tables[0].results)
+
+
+def test_report_step_resource_usage_without_disk_data_sends_no_disk_table(monkeypatch):
+    prometheus = FakePrometheus({CPU_QUERY: [series("10.0.0.1:9100", 80), series("10.0.1.1:9100", 30)]})
+    monkeypatch.setattr(
+        "performance_regression_gradual_grow_throughput.PrometheusDBStats", lambda host, **kwargs: prometheus
+    )
+    submit = MagicMock()
+    monkeypatch.setattr("performance_regression_gradual_grow_throughput.submit_results_to_argus", submit)
+
+    report(fake_test(monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.9.9.9")])))
+
+    assert [call.kwargs["result_table"].name for call in submit.call_args_list] == ["mixed - Step resource usage"]
+
+
 def test_report_step_resource_usage_bounds_the_prometheus_requests(monkeypatch):
     prometheus = MagicMock(return_value=FakePrometheus({}))
     monkeypatch.setattr("performance_regression_gradual_grow_throughput.PrometheusDBStats", prometheus)
@@ -295,10 +417,19 @@ def test_report_step_resource_usage_never_fails_the_test(monkeypatch):
     event.return_value.publish_or_dump.assert_called_once()
 
 
-def test_step_metrics_columns_match_the_table():
-    columns = {column.name for column in perf_step_metrics.PerfStepResourceUsageResult().columns}
-    for metric in perf_step_metrics.STEP_METRICS:
-        assert {f"{metric.column} avg", f"{metric.column} max"} <= columns
+@pytest.mark.parametrize(
+    "table_class, metrics",
+    [
+        (perf_step_metrics.PerfStepResourceUsageResult, perf_step_metrics.STEP_METRICS),
+        (perf_step_metrics.PerfStepDiskUsageResult, perf_step_metrics.STEP_DISK_METRICS),
+    ],
+)
+def test_step_metrics_columns_match_the_table(table_class, metrics):
+    columns = {column.name for column in table_class().columns}
+    assert columns == {f"{metric.column} {stat}" for metric in metrics for stat in ("avg", "max")} | {
+        "window start",
+        "window duration",
+    }
 
 
 def test_run_step_records_the_load_time_without_the_decorator_work(monkeypatch):

@@ -10,16 +10,18 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2026 ScyllaDB
-"""Per-step resource usage of the perf steps tests, from the monitor's Prometheus, for Argus.
+"""Per-step resource and disk usage of the perf steps tests, from the monitor's Prometheus, for Argus.
 
 For each step, every query below gives each node's average over the step's window, and every node
 role (DB, loader) reports the mean of its nodes' averages and the highest one: the hottest node,
 not a single-sample spike. That is enough to tell a step capped by the loaders (loader CPU near
-100%) from one capped by Scylla (reactor utilization near 100%).
+100%) from one capped by Scylla (reactor utilization near 100%), and the disk table tells whether
+Scylla's data disk is the limit.
 """
 
 import logging
 import statistics
+import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
@@ -42,6 +44,39 @@ PROMETHEUS_REQUEST_TIMEOUT_SEC = 30
 CPU_QUERY = '100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[${window}s])))'
 REACTOR_UTILIZATION_QUERY = "avg by (instance) (avg_over_time(scylla_reactor_utilization[${window}s]))"
 
+# Scylla's data disk: the device mounted at /var/lib/scylla, as node_exporter's diskstats names it
+# ('nvme0n1', 'md0'). Device names alone can't pick it: on AWS the instance-store disk is 'nvme0n1'
+# on some nodes and the EBS root on others, and the root filesystem is reported as '/dev/root'.
+SCYLLA_DATA_DEVICE = (
+    'label_replace(max by (instance, device) (node_filesystem_size_bytes{mountpoint="/var/lib/scylla"}), '
+    '"device", "$1", "device", "/dev/(.+)")'
+)
+
+
+def data_disk_rate(counter: str) -> str:
+    """Each node's rate of a node_disk counter over the window, on Scylla's data device only."""
+    return (
+        f"sum by (instance) (rate({counter}[${{window}}s]) "
+        f"* on (instance, device) group_left () (0 * {SCYLLA_DATA_DEVICE} + 1))"
+    )
+
+
+DISK_READ_MBPS_QUERY = f"{data_disk_rate('node_disk_read_bytes_total')} / 1e6"
+DISK_WRITE_MBPS_QUERY = f"{data_disk_rate('node_disk_written_bytes_total')} / 1e6"
+DISK_READ_IOPS_QUERY = data_disk_rate("node_disk_reads_completed_total")
+DISK_WRITE_IOPS_QUERY = data_disk_rate("node_disk_writes_completed_total")
+# The average number of requests in flight: the time all of them spent, per second
+DISK_QUEUE_DEPTH_QUERY = data_disk_rate("node_disk_io_time_weighted_seconds_total")
+# The average time of one request: the time they spent over their count
+DISK_READ_LATENCY_QUERY = (
+    f"1000 * {data_disk_rate('node_disk_read_time_seconds_total')} "
+    f"/ {data_disk_rate('node_disk_reads_completed_total')}"
+)
+DISK_WRITE_LATENCY_QUERY = (
+    f"1000 * {data_disk_rate('node_disk_write_time_seconds_total')} "
+    f"/ {data_disk_rate('node_disk_writes_completed_total')}"
+)
+
 
 @dataclass(frozen=True)
 class StepMetric:
@@ -50,6 +85,8 @@ class StepMetric:
     column: str
     query: str
     role: str
+    unit: str = "%"
+    digits: int = 1  # rounding of the values
 
 
 STEP_METRICS = (
@@ -59,6 +96,16 @@ STEP_METRICS = (
     StepMetric(column="DB CPU", query=CPU_QUERY, role="db"),
     StepMetric(column="DB reactor utilization", query=REACTOR_UTILIZATION_QUERY, role="db"),
     StepMetric(column="Loader CPU", query=CPU_QUERY, role="loader"),
+)
+
+STEP_DISK_METRICS = (
+    StepMetric(column="Disk read", query=DISK_READ_MBPS_QUERY, role="db", unit="MB/s"),
+    StepMetric(column="Disk write", query=DISK_WRITE_MBPS_QUERY, role="db", unit="MB/s"),
+    StepMetric(column="Disk read IOPS", query=DISK_READ_IOPS_QUERY, role="db", unit="ops/s", digits=0),
+    StepMetric(column="Disk write IOPS", query=DISK_WRITE_IOPS_QUERY, role="db", unit="ops/s", digits=0),
+    StepMetric(column="Disk queue depth", query=DISK_QUEUE_DEPTH_QUERY, role="db", unit="", digits=2),
+    StepMetric(column="Disk read latency", query=DISK_READ_LATENCY_QUERY, role="db", unit="ms", digits=3),
+    StepMetric(column="Disk write latency", query=DISK_WRITE_LATENCY_QUERY, role="db", unit="ms", digits=3),
 )
 
 
@@ -136,9 +183,12 @@ def summarize_by_role(series: list[dict], roles: dict[str, str], role: str) -> t
 
 
 def collect_step_metrics(
-    prometheus: PrometheusDBStats, window: StepWindow, roles: dict[str, str]
+    prometheus: PrometheusDBStats,
+    window: StepWindow,
+    roles: dict[str, str],
+    metrics: Iterable[StepMetric] = STEP_METRICS,
 ) -> tuple[dict[str, float], dict[str, Exception]]:
-    """Run every STEP_METRICS query over the window.
+    """Run the query of each of 'metrics' over the window.
 
     Returns the values, {'<column> avg': value, '<column> max': value}, and the error of each metric
     whose query failed, by column, for the caller to report. A query that fails or returns no series
@@ -149,9 +199,10 @@ def collect_step_metrics(
     failures = {}
     series_by_query = {}
     errors_by_query = {}
-    for metric in STEP_METRICS:
+    for metric in metrics:
         if metric.query not in series_by_query:
-            query = metric.query.replace("${window}", str(window.duration))
+            # PrometheusDBStats puts the query in the URL as is: unencoded, a '+' would be read as a space
+            query = urllib.parse.quote(metric.query.replace("${window}", str(window.duration)))
             try:
                 # A range query from the window's end to itself: one sample, the average over the window
                 series_by_query[metric.query] = prometheus.query(query, window.end, window.end) or []
@@ -166,50 +217,83 @@ def collect_step_metrics(
         if summary is None:
             LOGGER.warning("Step metrics: no '%s' data for the %s nodes", metric.column, metric.role)
             continue
-        results[f"{metric.column} avg"], results[f"{metric.column} max"] = (round(value, 1) for value in summary)
+        results[f"{metric.column} avg"], results[f"{metric.column} max"] = (
+            round(value, metric.digits) for value in summary
+        )
     return results, failures
+
+
+def metric_columns(metrics: Iterable[StepMetric]) -> list[ColumnMetadata]:
+    return [
+        ColumnMetadata(name=f"{metric.column} {stat}", unit=metric.unit, type=ResultType.FLOAT)
+        for metric in metrics
+        for stat in ("avg", "max")
+    ] + [
+        ColumnMetadata(name="window start", unit="", type=ResultType.TEXT),
+        ColumnMetadata(name="window duration", unit="HH:MM:SS", type=ResultType.DURATION),
+    ]
 
 
 class PerfStepResourceUsageResult(StaticGenericResultTable):
     class Meta:
         name = ""  # set per workload, one table per run with one row per step
         description = ""
-        Columns = [
-            column
-            for metric in STEP_METRICS
-            for column in (
-                ColumnMetadata(name=f"{metric.column} avg", unit="%", type=ResultType.FLOAT),
-                ColumnMetadata(name=f"{metric.column} max", unit="%", type=ResultType.FLOAT),
-            )
-        ] + [
-            ColumnMetadata(name="window start", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="window duration", unit="HH:MM:SS", type=ResultType.DURATION),
-        ]
+        Columns = metric_columns(STEP_METRICS)
+
+
+class PerfStepDiskUsageResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # set per workload, one table per run with one row per step
+        description = ""
+        Columns = metric_columns(STEP_DISK_METRICS)
 
 
 @dataclass(frozen=True)
 class StepResourceUsage:
+    """The values of one step, of the metrics of both tables."""
+
     step: str
     window: StepWindow
     metrics: dict[str, float]
 
 
-def step_resource_usage_table(workload: str, steps: Iterable[StepResourceUsage]):
-    """A table with one row per step.
+def _steps_table(table: StaticGenericResultTable, steps: Iterable[StepResourceUsage]):
+    """Fill a table with one row per step that has values of the table's own columns.
 
     Argus overwrites the cells sent again and shows a run's tables in the order of their cells' write
     time, so sending the table with all its rows after every step keeps it below the steps' tables.
     """
+    columns = {column.name for column in table.columns}
+    for usage in steps:
+        values = {column: value for column, value in usage.metrics.items() if column in columns}
+        if not values:  # no row for a step without data, e.g. a backend whose nodes have no data mount
+            continue
+        for column, value in values.items():
+            table.add_result(column=column, row=usage.step, value=value, status=Status.UNSET)
+        window_start = datetime.fromtimestamp(usage.window.start, tz=timezone.utc).strftime("%H:%M:%S")
+        table.add_result(column="window start", row=usage.step, value=window_start, status=Status.UNSET)
+        table.add_result(column="window duration", row=usage.step, value=usage.window.duration, status=Status.UNSET)
+    return table
+
+
+def step_resource_usage_table(workload: str, steps: Iterable[StepResourceUsage]):
+    """The DB and loader CPU and reactor utilization, one row per step."""
     table = PerfStepResourceUsageResult()
     table.name = f"{workload} - Step resource usage"
     table.description = (
         f"{workload} workload - per-step DB and loader CPU and reactor utilization: the mean and the hottest "
         f"node's average over each step, without its first minutes and its last {STEP_TAIL_SEC}s"
     )
-    for usage in steps:
-        for column, value in usage.metrics.items():
-            table.add_result(column=column, row=usage.step, value=value, status=Status.UNSET)
-        window_start = datetime.fromtimestamp(usage.window.start, tz=timezone.utc).strftime("%H:%M:%S")
-        table.add_result(column="window start", row=usage.step, value=window_start, status=Status.UNSET)
-        table.add_result(column="window duration", row=usage.step, value=usage.window.duration, status=Status.UNSET)
-    return table
+    return _steps_table(table, steps)
+
+
+def step_disk_usage_table(workload: str, steps: Iterable[StepResourceUsage]):
+    """The DB nodes' Scylla data disk throughput, IOPS, queue depth and latency, one row per step."""
+    table = PerfStepDiskUsageResult()
+    table.name = f"{workload} - Step disk usage"
+    table.description = (
+        f"{workload} workload - per-step throughput, IOPS, queue depth and request latency of the DB nodes' "
+        f"Scylla data disk (mounted at /var/lib/scylla): the mean and the busiest node's average over each "
+        f"step, without its first minutes and its last {STEP_TAIL_SEC}s"
+    )
+    return _steps_table(table, steps)
