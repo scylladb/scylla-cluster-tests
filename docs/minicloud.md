@@ -527,8 +527,9 @@ Two things only a long-lived agent needs, both by design:
 
 - **Reclaim at build start, not at the end.** The previous failure's logs stay on the box for
   post-mortem, which is one of the few genuine advantages of a static agent. The AMI cache
-  (`~/.cache/minicloud/amis`) is never swept - it is tens of GiB and tens of minutes to rebuild,
-  and it is the entire economic case for the agent.
+  (`~/.cache/minicloud/amis`) is swept only lightly: an image leaves it after 14 days without
+  use, or when the cache is over 50 GiB, least recently used first. An image is tens of minutes
+  to rebuild, and the cache is the entire economic case for the agent.
 - **Preflight in one pass.** A misconfigured agent reports every problem at once rather than one
   per build, and it runs before Argus registration and the hydra pull so a bad agent costs
   seconds instead of twenty minutes.
@@ -574,6 +575,12 @@ Under `jenkins-pipelines/oss/minicloud/`:
 | `minicloud-provision-test` | 3-node provision + write smoke + non-disruptive nemesis |
 | `minicloud-provision-test-azure` | the same provision test on the Azure backend, pinned URN, lab agent |
 | `longevity-minicloud-10gb-1h` | a regular longevity test-case end to end |
+
+Under `jenkins-pipelines/oss/artifacts/minicloud/`:
+
+| job | covers |
+|---|---|
+| `artifacts-<os>-minicloud` | eight lab copies of the daily `.rpm`/`.deb` artifacts jobs of master, on the lab hosts of label `minicloud-kvm-builders-pkg-artifacts`. scylla-pkg starts them with the cloud jobs (SCT-998) |
 
 Job knobs: `minicloud_docker` selects the image for one run
 (`-s minicloud_docker=ghcr.io/scylladb/minicloud:master-<sha>` via `staging_trigger.py`) - the

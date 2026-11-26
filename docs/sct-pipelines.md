@@ -172,6 +172,12 @@ label is decided at pipeline-definition time, and `params` is empty on build #1 
 parameters-loading build these pipelines abort anyway - so a parameter only takes effect from
 build #2 onward, falling back to the jenkinsfile value before that.
 
+**`host_wait_limit_minutes` (artifactsPipeline, jenkinsfile and job parameter)** limits the time
+a build waits for a free agent with its label (`vars/nodeWithWaitLimit.groovy`). After the limit
+the build ends `NOT_BUILT` and its description says that no host was free. It is off by default.
+`0` switches it off for one build and an empty value takes the jenkinsfile value. A value that
+is not a number fails the build at its start. The lab copies of the artifacts jobs set 720.
+
 For minicloud specifically - which needs a KVM-capable agent for the local topology - see
 [minicloud](./minicloud.md). For the cloud sct-runner mechanics, see
 [sct-runners](./sct-runners.md).
