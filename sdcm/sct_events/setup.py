@@ -183,27 +183,17 @@ def enable_default_filters(sct_config: SCTConfiguration):
             regex=r".*init - Could not start Prometheus API server.*Cannot assign requested address",
         ).publish()
 
-    if sct_config.get("new_scylla_repo") or sct_config.get("new_version"):
-        # scylladb/scylla-enterprise#3814
-        # scylladb/scylla-enterprise#3092
-        # skip audit related issue when upgrading from older versions it's default in
-        # TODO: remove when branch 2022.2 is deprecated
-        EventsSeverityChangerFilter(
-            new_severity=Severity.WARNING,
-            event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex=r".*audit - Unexpected exception when writing login.*"
-            r"Cannot achieve consistency level for cl ONE",
-        ).publish()
-
     # Audit writes can briefly fail with unavailable_exception during transient cluster
     # disruptions. This is expected and should not fail the test.
     # Decided to do a global ignore instead of ignoring on all of the nemesis
+    # Since 2026.4 the exception class name is not logged, only its message.
     # https://scylladb.atlassian.net/browse/SCT-518
+    # https://scylladb.atlassian.net/browse/SCT-1362
     # https://scylladb.atlassian.net/browse/SCYLLADB-706
     EventsSeverityChangerFilter(
         new_severity=Severity.WARNING,
         event_class=DatabaseLogEvent,
-        regex=r".*audit - Unexpected exception when writing.*unavailable_exception.*",
+        regex=r".*audit - Unexpected exception when writing.*(?:unavailable_exception|Cannot achieve consistency level)",
     ).publish()
 
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: supressed").publish()

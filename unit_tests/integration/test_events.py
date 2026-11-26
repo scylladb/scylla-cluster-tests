@@ -21,6 +21,13 @@ from sdcm.sct_events.setup import enable_default_filters
 from sdcm.utils.context_managers import environment
 from unit_tests.lib.real_events import RealEventsTest
 
+AUDIT_UNAVAILABLE_LINE = (
+    "2026-11-24T21:40:00.851 db-node-12  !ERR | scylla[7022]  [shard 1:sl:d] audit - Unexpected exception when "
+    "writing login log with: node_ip [2a05:d01c:964:7d02:98ec:ba25:af49:b87a]:0 "
+    "client_ip [2a05:d018:12e3:f000:6de7:6245:94a3:6344%0]:0 username cassandra error false "
+    "exception Cannot achieve consistency level for cl ONE. Requires 1, alive 0"
+)
+
 
 class TestSctEventsIntegration(RealEventsTest):
     @pytest.mark.integration
@@ -30,7 +37,7 @@ class TestSctEventsIntegration(RealEventsTest):
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=7):
+        with self.wait_for_n_events(self.get_events_logger(), count=8):
             DatabaseLogEvent.BACKTRACE().add_info(
                 node="A",
                 line_number=22,
@@ -80,6 +87,8 @@ class TestSctEventsIntegration(RealEventsTest):
                 "std::runtime_error (exception exceptions::unavailable_exception (Cannot achieve consistency level for cl ONE. Requires 1, alive 0))",
             ).publish()
 
+            DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=AUDIT_UNAVAILABLE_LINE).publish()
+
         log_content = self.get_event_log_file("events.log")
 
         assert "other back trace" in log_content
@@ -88,12 +97,14 @@ class TestSctEventsIntegration(RealEventsTest):
         warnings_log_content = self.get_event_log_file("warning.log")
         assert "data_dictionary::no_such_column_family" in warnings_log_content
         assert "Authentication error" in warnings_log_content
-        assert "Unexpected exception when writing login log" in warnings_log_content
+        assert "exceptions::unavailable_exception" in warnings_log_content
+        assert AUDIT_UNAVAILABLE_LINE in warnings_log_content
 
         error_log_content = self.get_event_log_file("error.log")
         assert "data_dictionary::no_such_column_family" not in error_log_content
         assert "Authentication error" not in error_log_content
-        assert "Unexpected exception when writing login log" not in error_log_content
+        assert "exceptions::unavailable_exception" not in error_log_content
+        assert AUDIT_UNAVAILABLE_LINE not in error_log_content
         assert "topology change coordinator fiber got error" not in error_log_content
 
     @pytest.mark.integration
