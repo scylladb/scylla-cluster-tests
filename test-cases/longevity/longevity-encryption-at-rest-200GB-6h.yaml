@@ -25,7 +25,10 @@ run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", 
 n_db_nodes: 6
 n_loaders: 2
 
-instance_type_db: 'i4i.2xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
+  local_disk_gb: '>=1500'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'

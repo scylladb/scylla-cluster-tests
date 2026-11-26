@@ -33,16 +33,20 @@ stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 
 
 n_db_nodes: 3
 simulated_racks: 3
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+  local_disk_gb: '>=370'
 
 nemesis_add_node_cnt: 3
 nemesis_grow_shrink_instance_type: 'i4i.4xlarge'
 
 n_loaders: 3
-instance_type_loader: 'c6i.2xlarge'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
 
 n_monitor_nodes: 1
-instance_type_monitor: 't3.large'
 
 nemesis_class_name: "SisyphusMonkey"
 nemesis_selector: 'GrowShrinkClusterNemesis'

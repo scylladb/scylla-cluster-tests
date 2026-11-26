@@ -32,7 +32,11 @@ round_robin: true
 n_db_nodes: 3
 n_loaders: 4
 
-instance_type_db: 'i4i.4xlarge'
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides 96 GB (12 GB/OCPU); other clouds still pick >=128 naturally.
+  memory: '>=96'
+  local_disk_gb: '>=3000'
 
 nemesis_class_name: 'NoOpMonkey'
 user_prefix: 'ics-space-amplification'

@@ -18,7 +18,10 @@ stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 n_db_nodes: 6
 n_loaders: 1
 
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+  local_disk_gb: '>=370'
 
 root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operation.log that can't be disabled
 

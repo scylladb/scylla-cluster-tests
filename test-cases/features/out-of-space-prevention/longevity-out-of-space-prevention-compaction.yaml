@@ -32,7 +32,10 @@ stress_cmd_w: [
 
 n_db_nodes: 3
 simulated_racks: 3
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+  local_disk_gb: '>=370'
 n_loaders: 3
 
 user_prefix: 'oos-test'
