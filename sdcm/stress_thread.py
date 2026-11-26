@@ -224,14 +224,27 @@ class CassandraStressThread(DockerBasedStressThread):
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
-    def set_driver_version_in_cmd(self, stress_cmd: str) -> str:
-        if not self.is_driver_4x:
+    def set_driver_version_in_cmd(self, stress_cmd: str, cmd_runner) -> str:
+        if self.is_driver_4x:
+            driver = "4x"
+        elif self._supports_driver_3x_keyword(cmd_runner):
+            driver = "3x"
+        else:
             return stress_cmd
 
-        if " native " in stress_cmd:
-            return stress_cmd.replace(" native ", " 4x ", 1)
+        if re.search(r"(?<!\S)[34]x(?!\S)", stress_cmd):
+            return stress_cmd
 
-        return stress_cmd.replace("-mode", "-mode 4x", 1)
+        if re.search(r"(?<!\S)native(?!\S)", stress_cmd):
+            return re.sub(r"(?<!\S)native(?!\S)", driver, stress_cmd, count=1)
+
+        if "-mode" in stress_cmd:
+            return stress_cmd.replace("-mode", f"-mode {driver}", 1)
+
+        if driver == "3x":
+            return f"{stress_cmd} -mode cql3 3x"
+
+        return stress_cmd
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
@@ -249,7 +262,7 @@ class CassandraStressThread(DockerBasedStressThread):
 
         stress_cmd = self.adjust_cmd_keyspace_name(stress_cmd, keyspace_idx)
         stress_cmd = self.adjust_cmd_compaction_strategy(stress_cmd)
-        stress_cmd = self.set_driver_version_in_cmd(stress_cmd)
+        stress_cmd = self.set_driver_version_in_cmd(stress_cmd, cmd_runner)
 
         credentials = self.loader_set.get_db_auth()
         if credentials and "user=" not in stress_cmd:
@@ -294,6 +307,18 @@ class CassandraStressThread(DockerBasedStressThread):
         findings = re.findall(r" *\[([\w-]+?)[=?]*] *", result)
         _cache[option] = findings
         return findings
+
+    def _supports_driver_3x_keyword(self, loader, _cache={}):  # noqa: B006
+        # A release that knows `3x` selects driver 4.x for `native`, so driver 3.x needs `3x`.
+        # An older release rejects `3x` and selects driver 3.x for `native`.
+        if "driver-3x" in _cache:
+            return _cache["driver-3x"]
+        try:
+            result = loader.run(cmd="cassandra-stress help -mode", timeout=self.timeout, ignore_status=True).stdout
+        except Exception:  # noqa: BLE001
+            return False
+        _cache["driver-3x"] = bool(re.search(r"(?<![\w.])3x\b", result))
+        return _cache["driver-3x"]
 
     @staticmethod
     def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # noqa: B006

@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+from types import SimpleNamespace
+
 import pytest
 
 from sdcm.stress_thread import (
@@ -343,3 +345,113 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
     assert extract_gemini_seed(gemini_cmd) == expected_seed
+
+
+# --- set_driver_version_in_cmd tests ---
+
+CS_HELP_WITH_3X = "native or 4x: the Java driver 4.x (default), 3x: the Java driver 3.x (deprecated)"
+CS_HELP_WITHOUT_3X = "native: the Java driver 3.x, 4x: the Java driver 4.x"
+
+
+class _HelpRunner:
+    def __init__(self, help_output):
+        self.help_output = help_output
+        self.commands = []
+
+    def run(self, cmd, timeout=None, ignore_status=False):
+        self.commands.append(cmd)
+        return SimpleNamespace(stdout=self.help_output)
+
+
+@pytest.fixture
+def driver_stub():
+    CassandraStressThread._supports_driver_3x_keyword.__defaults__[0].clear()
+
+    def make(driver_version):
+        stub = object.__new__(CassandraStressThread)
+        stub.params = {"c_s_driver_version": driver_version}
+        stub.timeout = 60
+        return stub
+
+    yield make
+    CassandraStressThread._supports_driver_3x_keyword.__defaults__[0].clear()
+
+
+@pytest.mark.parametrize(
+    "driver_version, help_output, stress_cmd, expected",
+    (
+        pytest.param(
+            "3",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -mode cql3 native -rate threads=4",
+            "cassandra-stress write n=10 -mode cql3 3x -rate threads=4",
+            id="driver3-native-becomes-3x",
+        ),
+        pytest.param(
+            "3",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -mode cql3 native",
+            "cassandra-stress write n=10 -mode cql3 3x",
+            id="driver3-native-at-end-becomes-3x",
+        ),
+        pytest.param(
+            "3",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -mode cql3 -rate threads=4",
+            "cassandra-stress write n=10 -mode 3x cql3 -rate threads=4",
+            id="driver3-mode-without-driver-gets-3x",
+        ),
+        pytest.param(
+            "3",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -rate threads=4",
+            "cassandra-stress write n=10 -rate threads=4 -mode cql3 3x",
+            id="driver3-without-mode-gets-3x",
+        ),
+        pytest.param(
+            "3",
+            CS_HELP_WITHOUT_3X,
+            "cassandra-stress write n=10 -mode cql3 native -rate threads=4",
+            "cassandra-stress write n=10 -mode cql3 native -rate threads=4",
+            id="driver3-old-release-keeps-native",
+        ),
+        pytest.param(
+            "3",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -mode cql3 4x -rate threads=4",
+            "cassandra-stress write n=10 -mode cql3 4x -rate threads=4",
+            id="explicit-driver-is-kept",
+        ),
+        pytest.param(
+            "4",
+            CS_HELP_WITH_3X,
+            "cassandra-stress write n=10 -mode cql3 native -rate threads=4",
+            "cassandra-stress write n=10 -mode cql3 4x -rate threads=4",
+            id="driver4-native-becomes-4x",
+        ),
+        pytest.param(
+            "4",
+            CS_HELP_WITHOUT_3X,
+            "cassandra-stress write n=10 -mode cql3 -rate threads=4",
+            "cassandra-stress write n=10 -mode 4x cql3 -rate threads=4",
+            id="driver4-mode-without-driver-gets-4x",
+        ),
+    ),
+)
+def test_set_driver_version_in_cmd(driver_stub, driver_version, help_output, stress_cmd, expected):
+    stub = driver_stub(driver_version)
+    assert stub.set_driver_version_in_cmd(stress_cmd, _HelpRunner(help_output)) == expected
+
+
+def test_driver4_does_not_probe_the_help_output(driver_stub):
+    runner = _HelpRunner(CS_HELP_WITH_3X)
+    driver_stub("4").set_driver_version_in_cmd("cassandra-stress write -mode cql3 native", runner)
+    assert runner.commands == []
+
+
+def test_the_3x_probe_runs_once(driver_stub):
+    runner = _HelpRunner(CS_HELP_WITH_3X)
+    stub = driver_stub("3")
+    stub.set_driver_version_in_cmd("cassandra-stress write -mode cql3 native", runner)
+    stub.set_driver_version_in_cmd("cassandra-stress read -mode cql3 native", runner)
+    assert runner.commands == ["cassandra-stress help -mode"]
