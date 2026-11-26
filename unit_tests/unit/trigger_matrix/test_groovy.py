@@ -34,7 +34,7 @@ TRIGGERS_DIR = Path(__file__).parents[3] / "configurations" / "triggers"
 
 
 @pytest.fixture(autouse=True)
-def _no_upstream_env(monkeypatch):
+def no_upstream_env(monkeypatch):
     """Default to "not running under Jenkins" so tests opt in to the upstream-cause branch.
 
     The unit tests themselves run as a Jenkins job, which sets JOB_NAME and BUILD_NUMBER, so
@@ -47,23 +47,24 @@ def _no_upstream_env(monkeypatch):
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("plain", "plain"),
-        ("it's", r"it\'s"),
-        (r"back\slash", r"back\\slash"),
+        pytest.param("plain", "plain", id="plain"),
+        pytest.param("it's", r"it\'s", id="single-quote"),
+        pytest.param(r"back\slash", r"back\\slash", id="backslash"),
         # a backslash already followed by a quote must not end up escaping the escape
-        (r"mix\'ed", r"mix\\\'ed"),
-        ("", ""),
+        pytest.param(r"mix\'ed", r"mix\\\'ed", id="backslash-before-quote"),
+        pytest.param("", "", id="empty"),
         # order matters: escaping quotes first would double-escape the backslashes it introduces
-        ("\\", "\\\\"),
-        ("'", "\\'"),
+        pytest.param("\\", "\\\\", id="lone-backslash"),
+        pytest.param("'", "\\'", id="lone-quote"),
         # a single-quoted Groovy literal cannot span lines
-        ("A=1\nB=2", r"A=1\nB=2"),
-        ("A=1\r\nB=2", r"A=1\r\nB=2"),
+        pytest.param("A=1\nB=2", r"A=1\nB=2", id="newline"),
+        pytest.param("A=1\r\nB=2", r"A=1\r\nB=2", id="crlf"),
         # a backslash followed by an n is not a line break, and stays a backslash
-        (r"A=1\nB=2", r"A=1\\nB=2"),
+        pytest.param(r"A=1\nB=2", r"A=1\\nB=2", id="literal-backslash-n"),
     ],
 )
 def test_escape_groovy_string(raw, expected):
+    """_escape_groovy_string escapes quotes, backslashes and line breaks for a single-quoted Groovy literal."""
     assert _escape_groovy_string(raw) == expected
 
 
@@ -209,6 +210,7 @@ def test_escape_groovy_string(raw, expected):
     ],
 )
 def test_trigger_script_content(monkeypatch, job, params, env, kwargs, included, excluded):
+    """_build_trigger_groovy emits the expected Groovy fragments and leaves out the excluded ones."""
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     script = _build_trigger_groovy(job, params, **kwargs)
@@ -218,8 +220,11 @@ def test_trigger_script_content(monkeypatch, job, params, env, kwargs, included,
         assert text not in script
 
 
-@pytest.mark.parametrize("return_queue_url", [False, True])
-@pytest.mark.parametrize("params", [{}, {"a": "1"}])
+@pytest.mark.parametrize(
+    "return_queue_url",
+    [pytest.param(False, id="job-url-mode"), pytest.param(True, id="queue-url-mode")],
+)
+@pytest.mark.parametrize("params", [pytest.param({}, id="no-parameters"), pytest.param({"a": "1"}, id="one-parameter")])
 def test_braces_are_balanced(return_queue_url, params):
     """Guards the f-string's doubled braces: an undoubled one unbalances the script."""
     script = _build_trigger_groovy("job", params, return_queue_url=return_queue_url)

@@ -22,7 +22,8 @@ import pytest
 from sdcm.cluster import BaseNode, BaseScyllaCluster
 
 
-def _node(mounts: str = "") -> BaseNode:
+def make_node(mounts: str = "") -> BaseNode:
+    """Build a mock node whose /proc/mounts shows ``mounts`` and whose scylla_setup is the real one."""
     node = MagicMock(spec=BaseNode)
     node.log = logging.getLogger("test_node")
     node.parent_cluster = MagicMock()
@@ -44,7 +45,7 @@ def _node(mounts: str = "") -> BaseNode:
 
 def test_scylla_setup_without_disks_skips_the_raid_setup():
     """The root filesystem holds /var/lib/scylla, so it is no mount point to check."""
-    node = _node(mounts="/dev/nvme0n1p4 / xfs rw 0 0\n")
+    node = make_node(mounts="/dev/nvme0n1p4 / xfs rw 0 0\n")
 
     node.scylla_setup([], "eth0")
 
@@ -54,7 +55,8 @@ def test_scylla_setup_without_disks_skips_the_raid_setup():
 
 
 def test_scylla_setup_with_disks_sets_them_up_and_checks_the_mount():
-    node = _node(mounts="/dev/md0 /var/lib/scylla xfs rw 0 0\n")
+    """With data disks, scylla_setup runs the RAID setup and /var/lib/scylla is mounted."""
+    node = make_node(mounts="/dev/md0 /var/lib/scylla xfs rw 0 0\n")
 
     node.scylla_setup(["/dev/nvme1n1", "/dev/nvme2n1"], "eth0")
 
@@ -65,7 +67,8 @@ def test_scylla_setup_with_disks_sets_them_up_and_checks_the_mount():
 
 
 def test_scylla_setup_with_disks_still_fails_when_scylla_dir_is_not_mounted():
-    node = _node(mounts="/dev/nvme0n1p4 / xfs rw 0 0\n")
+    """With data disks but no /var/lib/scylla mount, scylla_setup raises AssertionError."""
+    node = make_node(mounts="/dev/nvme0n1p4 / xfs rw 0 0\n")
 
     with pytest.raises(AssertionError, match="RAID setup failed"):
         node.scylla_setup(["/dev/nvme1n1"], "eth0")
@@ -79,6 +82,7 @@ def test_scylla_setup_with_disks_still_fails_when_scylla_dir_is_not_mounted():
     ],
 )
 def test_node_setup_passes_the_disks_to_scylla_setup(no_raid, expected_disks):
+    """_scylla_post_install passes no disks when scylla_setup_no_raid is set, else the detected ones."""
     node = MagicMock()
     node.parent_cluster.params.get.side_effect = {"scylla_setup_no_raid": no_raid}.get
     node.detect_disks.return_value = ["/dev/nvme1n1"]

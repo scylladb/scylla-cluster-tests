@@ -5,6 +5,7 @@ from sdcm.utils.jenkins_builder_labels import GROOVY_LABELS_FILE, builder_labels
 
 
 def test_builder_labels_from_repo_groovy():
+    """builder_labels expands the repo groovy file into concrete builder labels, one per GCE project."""
     groovy_text = GROOVY_LABELS_FILE.read_text()
     labels = builder_labels(groovy_text)
 
@@ -17,6 +18,7 @@ def test_builder_labels_from_repo_groovy():
 
 
 def test_unserved_labels_needs_a_node_or_a_cloud():
+    """unserved_labels reports only labels with neither a connected node nor a cloud."""
     answers = {
         "has-cloud": {"nodes": [], "clouds": [{}]},
         "has-node": {"nodes": [{"nodeName": "n1"}], "clouds": []},

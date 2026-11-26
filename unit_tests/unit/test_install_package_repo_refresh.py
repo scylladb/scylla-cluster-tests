@@ -28,7 +28,8 @@ from sdcm.provision.common.utils import update_repo_cache
 from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 
 
-def _fake_node(rhel_like: bool = False, sles: bool = False) -> MagicMock:
+def fake_node(rhel_like: bool = False, sles: bool = False) -> MagicMock:
+    """Return a node mock with the given distro family and no Kubernetes."""
     node = MagicMock()
     node.distro.is_rhel_like = rhel_like
     node.distro.is_sles = sles
@@ -36,7 +37,8 @@ def _fake_node(rhel_like: bool = False, sles: bool = False) -> MagicMock:
     return node
 
 
-def _sudo_cmds(node: MagicMock) -> list[str]:
+def sudo_cmds(node: MagicMock) -> list[str]:
+    """Return the command strings passed to node.remoter.sudo, in call order."""
     return [call.args[0] for call in node.remoter.sudo.call_args_list]
 
 
@@ -53,25 +55,29 @@ def test_boot_time_vector_script_refreshes_the_repo_cache():
 
 @patch("sdcm.utils.decorators.time.sleep")
 def test_failed_apt_install_refreshes_the_lists_before_the_retry(_sleep):
-    node = _fake_node()
+    """A failed apt-get install runs apt-get update before retrying the same install."""
+    node = fake_node()
     node.remoter.sudo.side_effect = [UnexpectedExit(MagicMock()), MagicMock(), MagicMock()]
 
     BaseNode.install_package(node, "rsync")
 
-    install, update, retried_install = _sudo_cmds(node)
+    install, update, retried_install = sudo_cmds(node)
     assert "install -y rsync" in install
     assert "apt-get" in update and " update" in update
     assert retried_install == install
 
 
-@pytest.mark.parametrize(("rhel_like", "sles"), [(True, False), (False, True)])
+@pytest.mark.parametrize(
+    ("rhel_like", "sles"),
+    [pytest.param(True, False, id="rhel-like"), pytest.param(False, True, id="sles")],
+)
 @patch("sdcm.utils.decorators.time.sleep")
 def test_failed_rpm_or_zypper_install_does_not_upgrade_the_system(_sleep, rhel_like, sles):
     """Their `update_cmd` is a system upgrade, not a metadata refresh."""
-    node = _fake_node(rhel_like=rhel_like, sles=sles)
+    node = fake_node(rhel_like=rhel_like, sles=sles)
     node.remoter.run.return_value = MagicMock(ok=True)
     node.remoter.sudo.side_effect = [UnexpectedExit(MagicMock()), MagicMock()]
 
     BaseNode.install_package(node, "rsync")
 
-    assert all("install -y rsync" in cmd for cmd in _sudo_cmds(node))
+    assert all("install -y rsync" in cmd for cmd in sudo_cmds(node))

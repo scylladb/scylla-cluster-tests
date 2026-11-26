@@ -113,6 +113,7 @@ instances: []
 
 @pytest.fixture()
 def aws_yaml_file(tmp_path: Path) -> Path:
+    """aws_yaml_file provides aws.yaml in tmp_path, holding AWS_YAML."""
     p = tmp_path / "aws.yaml"
     p.write_text(AWS_YAML)
     return p
@@ -120,6 +121,7 @@ def aws_yaml_file(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def multi_cloud_dir(tmp_path: Path) -> Path:
+    """multi_cloud_dir provides tmp_path holding aws.yaml, gce.yaml and sizing_config.yaml."""
     (tmp_path / "aws.yaml").write_text(AWS_YAML)
     (tmp_path / "gce.yaml").write_text(GCE_YAML)
     (tmp_path / "sizing_config.yaml").write_text(SIZING_CONFIG_YAML)
@@ -127,11 +129,13 @@ def multi_cloud_dir(tmp_path: Path) -> Path:
 
 
 def test_from_file_loads_instances(aws_yaml_file: Path):
+    """from_file reads every instance in the YAML file."""
     catalog = InstanceCatalog.from_file(aws_yaml_file)
     assert len(catalog.instances) == 3
 
 
 def test_from_file_instance_fields(aws_yaml_file: Path):
+    """from_file maps each YAML key onto the InstanceTypeInfo fields."""
     catalog = InstanceCatalog.from_file(aws_yaml_file)
     large = next(i for i in catalog.instances if i.instance_type == "i8g.large")
     assert large.cloud == "aws"
@@ -145,17 +149,20 @@ def test_from_file_instance_fields(aws_yaml_file: Path):
 
 
 def test_from_file_price_per_hour_set(aws_yaml_file: Path):
+    """from_file keeps a numeric price_per_hour."""
     catalog = InstanceCatalog.from_file(aws_yaml_file)
     xlarge = next(i for i in catalog.instances if i.instance_type == "i8g.xlarge")
     assert xlarge.price_per_hour == pytest.approx(0.499)
 
 
 def test_from_file_cloud_defaults(aws_yaml_file: Path):
+    """from_file leaves cloud_defaults empty when the file has none."""
     catalog = InstanceCatalog.from_file(aws_yaml_file)
     assert catalog.cloud_defaults == {}
 
 
 def test_from_file_preferred_families(aws_yaml_file: Path):
+    """from_file leaves preferred_families empty when the file has none."""
     catalog = InstanceCatalog.from_file(aws_yaml_file)
     assert catalog.preferred_families == {}
 
@@ -168,6 +175,7 @@ def test_from_file_preferred_families(aws_yaml_file: Path):
     ],
 )
 def test_from_file_empty_catalog(tmp_path: Path, yaml_content: str, filename: str):
+    """from_file returns no instances when the file has no instances or an empty list."""
     p = tmp_path / filename
     p.write_text(yaml_content)
     catalog = InstanceCatalog.from_file(p)
@@ -175,22 +183,26 @@ def test_from_file_empty_catalog(tmp_path: Path, yaml_content: str, filename: st
 
 
 def test_from_file_missing_file_raises(tmp_path: Path):
+    """from_file raises FileNotFoundError for a missing file."""
     with pytest.raises(FileNotFoundError):
         InstanceCatalog.from_file(tmp_path / "nonexistent.yaml")
 
 
 def test_from_directory_merges_instances(multi_cloud_dir: Path):
+    """from_directory merges the instances of every YAML file."""
     catalog = InstanceCatalog.from_directory(multi_cloud_dir)
     assert len(catalog.instances) == 4  # 3 aws + 1 gce
 
 
 def test_from_directory_merges_cloud_defaults(multi_cloud_dir: Path):
+    """from_directory merges cloud_defaults keyed by cloud."""
     catalog = InstanceCatalog.from_directory(multi_cloud_dir)
     assert catalog.cloud_defaults["aws"]["arch"] == "arm64"
     assert catalog.cloud_defaults["gce"]["arch"] == "x86_64"
 
 
 def test_from_directory_merges_preferred_families(multi_cloud_dir: Path):
+    """from_directory merges preferred_families per role and cloud."""
     catalog = InstanceCatalog.from_directory(multi_cloud_dir)
     assert "aws" in catalog.preferred_families["db"]
     assert "gce" in catalog.preferred_families["db"]
@@ -198,6 +210,7 @@ def test_from_directory_merges_preferred_families(multi_cloud_dir: Path):
 
 
 def test_from_directory_empty_dir(tmp_path: Path):
+    """from_directory returns an empty catalog for a directory without YAML files."""
     catalog = InstanceCatalog.from_directory(tmp_path)
     assert catalog.instances == []
     assert catalog.preferred_families == {}
@@ -213,6 +226,7 @@ def test_from_directory_empty_dir(tmp_path: Path):
     ],
 )
 def test_get_instances_filters_by_cloud(multi_cloud_dir: Path, cloud: str, expected_count: int):
+    """get_instances returns only the instances of the requested cloud."""
     catalog = InstanceCatalog.from_directory(multi_cloud_dir)
     result = catalog.get_instances(cloud)
     assert len(result) == expected_count
@@ -230,6 +244,7 @@ def test_get_instances_filters_by_cloud(multi_cloud_dir: Path, cloud: str, expec
     ],
 )
 def test_get_instances_by_family(multi_cloud_dir: Path, cloud: str, family: str, expected_count: int):
+    """get_instances_by_family returns only the instances of the given cloud and family."""
     catalog = InstanceCatalog.from_directory(multi_cloud_dir)
     result = catalog.get_instances_by_family(cloud, family)
     assert len(result) == expected_count
@@ -237,6 +252,7 @@ def test_get_instances_by_family(multi_cloud_dir: Path, cloud: str, family: str,
 
 
 def test_real_azure_catalog_excludes_scsi_only_dpdsv5():
+    """The shipped Azure catalog omits the SCSI-only Dpdsv5 sizes."""
     # Dpdsv5 (Ampere Altra) exposes local disk via SCSI (not NVMe), so it must not
     # appear in the Azure pricing/sizing catalog
     catalog_dir = Path(__file__).parents[2] / "data" / "instance_catalog"
@@ -246,6 +262,7 @@ def test_real_azure_catalog_excludes_scsi_only_dpdsv5():
 
 
 def test_instance_type_info_is_dataclass():
+    """InstanceTypeInfo keeps its instance type and defaults price_per_hour to None."""
     info = InstanceTypeInfo(
         instance_type="t3.micro",
         cloud="aws",
@@ -262,13 +279,27 @@ def test_instance_type_info_is_dataclass():
 
 @pytest.mark.parametrize(
     "vcpus, expected",
-    [(2, 4), (8, 4), (16, 4), (32, 4), (48, 4), (64, 4), (80, 4), (96, 8), (128, 8), (224, 8)],
+    [
+        pytest.param(2, 4, id="2-vcpus"),
+        pytest.param(8, 4, id="8-vcpus"),
+        pytest.param(16, 4, id="16-vcpus"),
+        pytest.param(32, 4, id="32-vcpus"),
+        pytest.param(48, 4, id="48-vcpus"),
+        pytest.param(64, 4, id="64-vcpus"),
+        pytest.param(80, 4, id="80-vcpus"),
+        pytest.param(96, 8, id="96-vcpus"),
+        pytest.param(128, 8, id="128-vcpus"),
+        pytest.param(224, 8, id="224-vcpus"),
+    ],
 )
 def test_gce_local_ssd_disk_count_stays_within_the_allowed_set(vcpus, expected):
+    """gce_local_ssd_disk_count returns the expected SSD count for each vCPU size."""
     assert gce_local_ssd_disk_count(vcpus) == expected
 
 
 def test_every_gce_local_ssd_entry_declares_a_legal_disk_count():
+    """Every shipped GCE local-SSD instance has a legal disk count and a matching local_disk_gb."""
+
     def allowed(vcpus):
         if vcpus <= 16:
             return {1, 2, 4, 8, 16, 24}

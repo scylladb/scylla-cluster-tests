@@ -17,16 +17,21 @@ from unit_tests.lib.mock_remoter import MockRemoter
 
 
 class FakeNode(BaseNode):
+    """BaseNode with a given remoter and log dir, and SSH always up."""
+
     def __init__(self, remoter, logdir):
         self.remoter = remoter
         Path(logdir).mkdir(parents=True, exist_ok=True)
         self.logdir = logdir
 
     def wait_ssh_up(self, verbose=False, timeout=60):
+        """Report SSH as up without connecting."""
         return True
 
 
 class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
+    """Systemd export thread that records its results for comparison with expected JSON."""
+
     lookup_period = 0
 
     def __init__(self, node: "BaseNode", max_core_upload_limit: int):
@@ -34,7 +39,7 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
         super().__init__(node, max_core_upload_limit)
 
     def publish_event(self, core_info: CoreDumpInfo):
-        pass
+        """Drop the event: the tests do not check published events."""
 
     def _localize_results(self):
         output = {"exception": self.exception}
@@ -47,17 +52,22 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
         return output
 
     def get_results(self) -> dict:
+        """Return the found, in_progress, completed and uploaded cores as plain data."""
         return Pickler.to_data(self._localize_results())
 
     @staticmethod
     def load_expected_results(filepath: str) -> dict:
+        """Load the expected results pickled or serialized at filepath."""
         return Pickler.load_data_from_file(filepath)
 
     def save_results(self, filepath):
+        """Save the results to filepath, for regenerating expected files."""
         return Pickler.save_to_file(filepath, self._localize_results())
 
 
 class CoredumpExportFileTestThread(CoredumpExportFileThread):
+    """File-based export thread that records its results for comparison with expected JSON."""
+
     lookup_period = 0
     checkup_time_core_to_complete = 0
 
@@ -66,7 +76,7 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
         super().__init__(node, max_core_upload_limit, coredump_directories)
 
     def publish_event(self, core_info: CoreDumpInfo):
-        pass
+        """Drop the event: the tests do not check published events."""
 
     def _localize_results(self):
         output = {}
@@ -79,18 +89,22 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
         return output
 
     def get_results(self) -> dict:
+        """Return the found, in_progress, completed and uploaded cores as plain data."""
         return Pickler.to_data(self._localize_results())
 
     @staticmethod
     def load_expected_results(filepath: str) -> dict:
+        """Load the expected results pickled or serialized at filepath."""
         return Pickler.load_data_from_file(filepath)
 
     def save_results(self, filepath):
+        """Save the results to filepath, for regenerating expected files."""
         return Pickler.save_to_file(filepath, self._localize_results())
 
 
 @pytest.fixture(autouse=True)
 def fake_signed_upload_url(monkeypatch):
+    """Replace the KeyStore-backed URL signer with a fake signed URL for every test."""
     monkeypatch.setattr(
         "sdcm.coredump.sign_coredump_upload_url",
         lambda blob_name: f"https://storage.googleapis.com/scylla-sct-coredumps/{blob_name}?X-Goog-Signature=fake",
@@ -99,6 +113,8 @@ def fake_signed_upload_url(monkeypatch):
 
 @pytest.fixture
 def systemd_coredump_thread_factory(test_data_dir, tmp_path):
+    """Factory of systemd export threads whose remoter replays the test case's recorded responses."""
+
     def make_thread(test_name: str) -> CoredumpExportSystemdTestThread:
         return CoredumpExportSystemdTestThread(
             FakeNode(
@@ -113,6 +129,8 @@ def systemd_coredump_thread_factory(test_data_dir, tmp_path):
 
 @pytest.fixture
 def systemd_exception_coredump_thread_factory(systemd_coredump_thread_factory):
+    """Factory of systemd export threads that stop after 2 exceptions."""
+
     def make_thread(test_name: str) -> CoredumpExportSystemdTestThread:
         coredump_thread = systemd_coredump_thread_factory(test_name)
         coredump_thread.max_coredump_thread_exceptions = 2
@@ -123,6 +141,8 @@ def systemd_exception_coredump_thread_factory(systemd_coredump_thread_factory):
 
 @pytest.fixture
 def file_coredump_thread_factory(test_data_dir, tmp_path):
+    """Factory of file-based export threads whose remoter replays the test case's recorded responses."""
+
     def make_thread(test_name: str) -> CoredumpExportFileTestThread:
         return CoredumpExportFileTestThread(
             FakeNode(
@@ -141,6 +161,7 @@ def file_coredump_thread_factory(test_data_dir, tmp_path):
 def run_coredump_export_case(
     test_data_dir: Path, test_data_folder: str, coredump_thread: CoredumpThreadBase, test_name: str
 ):
+    """Run the thread for a second and assert each result group matches the expected JSON."""
     coredump_thread.start()
     time.sleep(1)
     coredump_thread.stop()
@@ -160,6 +181,29 @@ def run_coredump_export_case(
             ) from exc
 
 
+def systemd_thread(journal_since: str | None, coredumpctl_output: str = "") -> CoredumpExportSystemdThread:
+    """Systemd thread on a MagicMock node with journal_since set and one scylla pid listed by coredumpctl."""
+    node = MagicMock(journal_since=journal_since)
+    node.remoter.run.return_value = MagicMock(ok=True, stdout=coredumpctl_output, stderr="")
+    node.remoter.sudo.return_value = MagicMock(ok=True, stdout='[{"pid": 1234, "exe": "/usr/bin/scylla"}]', stderr="")
+    thread = CoredumpExportSystemdThread(node=node, max_core_upload_limit=1)
+    thread.__dict__["systemd_version"] = 258
+    return thread
+
+
+def upload_thread() -> CoredumpExportSystemdThread:
+    """Systemd thread on a MagicMock node that records the config files it sends."""
+    thread = CoredumpExportSystemdThread(node=MagicMock(), max_core_upload_limit=1)
+    thread.sent_config = []
+    thread.node.remoter.send_files.side_effect = lambda src, dst: thread.sent_config.append(Path(src).read_text())
+    return thread
+
+
+def make_core(thread) -> CoreDumpInfo:
+    """Core of pid 1 on the thread's node, stored in systemd's coredump dir."""
+    return CoreDumpInfo(pid="1", node=thread.node, corefile="/var/lib/systemd/coredump/core.scylla.1.zst")
+
+
 @pytest.mark.usefixtures("events")
 @pytest.mark.parametrize(
     "test_name",
@@ -169,6 +213,7 @@ def run_coredump_export_case(
     ],
 )
 def test_coredump_export_systemd_exception_case(test_data_dir, systemd_exception_coredump_thread_factory, test_name):
+    """Systemd export matches the expected results with and without reaching the exception limit."""
     coredump_thread = systemd_exception_coredump_thread_factory(test_name)
     run_coredump_export_case(test_data_dir, "systemd", coredump_thread, test_name)
 
@@ -184,6 +229,7 @@ def test_coredump_export_systemd_exception_case(test_data_dir, systemd_exception
     ],
 )
 def test_coredump_export_systemd_case(test_data_dir, systemd_coredump_thread_factory, test_name):
+    """Systemd export matches the expected results for successful and failing uploads and listings."""
     coredump_thread = systemd_coredump_thread_factory(test_name)
     run_coredump_export_case(test_data_dir, "systemd", coredump_thread, test_name)
 
@@ -198,6 +244,7 @@ def test_coredump_export_systemd_case(test_data_dir, systemd_coredump_thread_fac
     ],
 )
 def test_coredump_export_file_case(test_data_dir, file_coredump_thread_factory, test_name):
+    """File-based export matches the expected results for successful and failing uploads and listings."""
     coredump_thread = file_coredump_thread_factory(test_name)
     run_coredump_export_case(test_data_dir, "filebased", coredump_thread, test_name)
 
@@ -211,22 +258,12 @@ def test_coredump_export_file_case(test_data_dir, file_coredump_thread_factory, 
     ],
 )
 def test_is_pigz_installed_command(distro, expected_cmd, expected_kwargs):
+    """_is_pigz_installed runs the package query matching the node's distro, ignoring its exit status."""
     node = MagicMock(distro=distro)
     thread = CoredumpExportSystemdThread(node=node, max_core_upload_limit=1)
 
     assert thread._is_pigz_installed
-    node.remoter.run.assert_called_once()
-    assert node.remoter.run.call_args.args == (expected_cmd,)
-    assert node.remoter.run.call_args.kwargs == expected_kwargs
-
-
-def _systemd_thread(journal_since: str | None, coredumpctl_output: str = "") -> CoredumpExportSystemdThread:
-    node = MagicMock(journal_since=journal_since)
-    node.remoter.run.return_value = MagicMock(ok=True, stdout=coredumpctl_output, stderr="")
-    node.remoter.sudo.return_value = MagicMock(ok=True, stdout='[{"pid": 1234, "exe": "/usr/bin/scylla"}]', stderr="")
-    thread = CoredumpExportSystemdThread(node=node, max_core_upload_limit=1)
-    thread.__dict__["systemd_version"] = 258
-    return thread
+    node.remoter.run.assert_called_once_with(expected_cmd, **expected_kwargs)
 
 
 @pytest.mark.parametrize(
@@ -238,7 +275,7 @@ def _systemd_thread(journal_since: str | None, coredumpctl_output: str = "") -> 
 )
 def test_cores_are_looked_up_since_the_run_started(journal_since, expected_option):
     """A bare-metal host keeps the cores of earlier runs and other jobs: only this run's are reported."""
-    thread = _systemd_thread(journal_since)
+    thread = systemd_thread(journal_since)
 
     thread.get_list_of_cores_json()
     thread._get_core_by_pid("1234")
@@ -248,46 +285,35 @@ def test_cores_are_looked_up_since_the_run_started(journal_since, expected_optio
         f"sudo coredumpctl{expected_option} -q --json=short",
         f"sudo coredumpctl info{expected_option} --no-pager --no-legend 1234",
     ]
-    thread.node.remoter.sudo.assert_called_once()
-    assert thread.node.remoter.sudo.call_args.args == (f"coredumpctl list{expected_option} 1234 -q --json=short",)
+    thread.node.remoter.sudo.assert_called_once_with(
+        f"coredumpctl list{expected_option} 1234 -q --json=short", verbose=False, ignore_status=True
+    )
 
 
 def test_no_core_since_the_run_started_is_no_core():
     """Coredumpctl exits 1, with no JSON, when no core matches --since."""
-    thread = _systemd_thread("@1791969271")
+    thread = systemd_thread("@1791969271")
     thread.node.remoter.run.return_value = MagicMock(ok=False, stdout="", stderr="No coredumps found.")
 
     assert thread.get_list_of_cores_json() == []
 
 
-def _upload_thread() -> CoredumpExportSystemdThread:
-    thread = CoredumpExportSystemdThread(node=MagicMock(), max_core_upload_limit=1)
-    thread.sent_config = []
-    thread.node.remoter.send_files.side_effect = lambda src, dst: thread.sent_config.append(Path(src).read_text())
-    return thread
-
-
-def _core(thread) -> CoreDumpInfo:
-    return CoreDumpInfo(pid="1", node=thread.node, corefile="/var/lib/systemd/coredump/core.scylla.1.zst")
-
-
 @pytest.mark.parametrize(
     "error",
     [
-        NoCredentialsError(),
-        PartialCredentialsError(provider="env", cred_var="AWS_SECRET_ACCESS_KEY"),
-        ClientError({"Error": {"Code": "AccessDeniedException"}}, "GetSecretValue"),
-        ClientError({"Error": {"Code": "InternalServiceError"}}, "GetSecretValue"),
+        pytest.param(NoCredentialsError(), id="no-credentials"),
+        pytest.param(
+            PartialCredentialsError(provider="env", cred_var="AWS_SECRET_ACCESS_KEY"), id="partial-credentials"
+        ),
+        pytest.param(ClientError({"Error": {"Code": "AccessDeniedException"}}, "GetSecretValue"), id="other-account"),
+        pytest.param(ClientError({"Error": {"Code": "InternalServiceError"}}, "GetSecretValue"), id="keystore-error"),
     ],
-    ids=["no-credentials", "partial-credentials", "other-account", "keystore-error"],
 )
 def test_upload_without_signed_url_falls_back_to_public_bucket(monkeypatch, error):
-    def sign(blob_name):
-        raise error
-
-    monkeypatch.setattr("sdcm.coredump.sign_coredump_upload_url", sign)
-    thread = _upload_thread()
-    core = _core(thread)
+    """When URL signing fails, the upload goes to the public bucket and the core is downloadable from it."""
+    monkeypatch.setattr("sdcm.coredump.sign_coredump_upload_url", MagicMock(side_effect=error))
+    thread = upload_thread()
+    core = make_core(thread)
 
     thread._upload_coredump(core)
 
@@ -297,9 +323,10 @@ def test_upload_without_signed_url_falls_back_to_public_bucket(monkeypatch, erro
 
 
 def test_signed_url_stays_out_of_the_command():
-    thread = _upload_thread()
+    """The signed URL goes to a curl config file sent to the node, never into the shell command."""
+    thread = upload_thread()
 
-    thread._upload_coredump(_core(thread))
+    thread._upload_coredump(make_core(thread))
 
     assert thread.sent_config == [
         'url = "https://storage.googleapis.com/scylla-sct-coredumps/core.scylla.1./core.scylla.1.zst'
@@ -312,6 +339,7 @@ def test_signed_url_stays_out_of_the_command():
 
 
 def test_signed_url_ignores_gce_endpoint_override(monkeypatch):
+    """A GCE_ENDPOINT_URL override does not reach the storage client that signs coredump URLs."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:5000")
     monkeypatch.setattr(gce_utils, "KeyStore", lambda: MagicMock(get_json=lambda name: {"project_id": "p"}))
     monkeypatch.setattr(gce_utils.service_account.Credentials, "from_service_account_info", MagicMock())
@@ -324,6 +352,7 @@ def test_signed_url_ignores_gce_endpoint_override(monkeypatch):
 
 
 def test_configure_coredump_bucket_rerun_does_not_duplicate(monkeypatch):
+    """Running configure_coredump_bucket twice leaves one IAM binding per role and one lifecycle rule set."""
     policy = MagicMock(bindings=[{"role": "roles/storage.admin", "members": {"user:owner@scylladb.com"}}])
     bucket = MagicMock(location="US-EAST1")
     bucket.get_iam_policy.return_value = policy
@@ -353,13 +382,13 @@ def test_configure_coredump_bucket_rerun_does_not_duplicate(monkeypatch):
 @pytest.mark.parametrize(
     "args",
     [
-        ["--coredump-retention-days", "7"],
-        ["--coredump-coldline-after-days", "0"],
-        ["--coredump-coldline-after-days", "90"],
+        pytest.param(["--coredump-retention-days", "7"], id="retention-deletes-cores"),
+        pytest.param(["--coredump-coldline-after-days", "0"], id="coldline-zero"),
+        pytest.param(["--coredump-coldline-after-days", "90"], id="coldline-not-below-retention"),
     ],
-    ids=["retention-deletes-cores", "coldline-zero", "coldline-not-below-retention"],
 )
 def test_prepare_global_resources_rejects_unsafe_retention(monkeypatch, args):
+    """prepare_global_resources exits with usage error 2 and does not configure the bucket for unsafe retention."""
     configure = MagicMock()
     monkeypatch.setattr(sct, "configure_coredump_bucket", configure)
 

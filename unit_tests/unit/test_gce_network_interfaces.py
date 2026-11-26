@@ -38,21 +38,48 @@ from sdcm.utils.gce_utils import (
 PROJECT_ID = "sct-project"
 NETWORK_NAME = "qa-vpc"
 NETWORK_URL = f"projects/{PROJECT_ID}/global/networks/{NETWORK_NAME}"
+BUILDER_SOURCES = {"jenkins": ["192.0.2.10/32"], "office": ["198.51.100.10/32"]}
 
 
-@pytest.fixture(name="network_provider")
-def fixture_network_provider() -> NetworkProvider:
+@pytest.fixture
+def network_provider() -> NetworkProvider:
+    """NetworkProvider for the test project and network."""
     return NetworkProvider(project_id=PROJECT_ID, network_name=NETWORK_NAME)
 
 
 def new_region(region_name: str | None = None) -> GceRegion:
+    """Return a GceRegion built without __init__, with region_name set when given."""
     region = GceRegion.__new__(GceRegion)
     if region_name is not None:
         region.region_name = region_name
     return region
 
 
+def firewall_rule(**overrides):
+    """Return a builder ingress Firewall rule; overrides replace defaults, None fields are dropped."""
+    base = dict(
+        name="r",
+        direction="INGRESS",
+        priority=100,
+        source_ranges=["1.2.3.4/32"],
+        allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["22"])],
+        target_tags=["sct-builder"],
+    )
+    fields = base | overrides
+    return Firewall(**{key: value for key, value in fields.items() if value is not None})
+
+
+def firewall_region() -> GceRegion:
+    """Return a GceRegion with a mocked firewall client and network, for builder firewall tests."""
+    region = new_region()
+    region.project = PROJECT_ID
+    region.firewall_client = MagicMock()
+    region.__dict__["network"] = MagicMock(self_link="net-link")
+    return region
+
+
 def test_single_nic_keeps_public_access_and_no_subnetwork(network_provider):
+    """A single NIC keeps the public IP and gets no explicit subnetwork."""
     interfaces = build_network_interfaces(network_provider=network_provider, region="us-east1", count=1)
     assert len(interfaces) == 1
     assert interfaces[0].network == NETWORK_URL
@@ -61,6 +88,7 @@ def test_single_nic_keeps_public_access_and_no_subnetwork(network_provider):
 
 
 def test_two_nics_attach_public_access_to_primary_only(network_provider):
+    """Two NICs: the public IP stays on the primary interface only."""
     interfaces = build_network_interfaces(network_provider=network_provider, region="us-east1", count=2)
     assert len(interfaces) == 2
     assert len(interfaces[0].access_configs) == 1, "public IP must stay on the primary interface"
@@ -68,6 +96,7 @@ def test_two_nics_attach_public_access_to_primary_only(network_provider):
 
 
 def test_secondary_nic_uses_same_network_and_dedicated_subnetwork(network_provider):
+    """The secondary NIC joins the primary's network on its dedicated subnetwork."""
     interfaces = build_network_interfaces(network_provider=network_provider, region="us-central1", count=2)
     assert interfaces[1].network == interfaces[0].network, "both NICs live in the same VPC network"
     assert interfaces[1].subnetwork == f"projects/{PROJECT_ID}/regions/us-central1/subnetworks/{NETWORK_NAME}-nic1"
@@ -82,7 +111,13 @@ def test_more_nics_than_prepared_subnets_are_rejected():
 
 @pytest.mark.parametrize(
     ("vcpus", "expected"),
-    [(1, 2), (2, 2), (4, 4), (8, 8), (16, 8)],
+    [
+        pytest.param(1, 2, id="1-vcpu-floor"),
+        pytest.param(2, 2, id="2-vcpus"),
+        pytest.param(4, 4, id="4-vcpus"),
+        pytest.param(8, 8, id="8-vcpus"),
+        pytest.param(16, 8, id="16-vcpus-cap"),
+    ],
 )
 def test_max_network_interfaces_follows_gce_rule(vcpus, expected):
     """GCE allows one NIC per vCPU, never fewer than 2 and never more than 8."""
@@ -92,9 +127,9 @@ def test_max_network_interfaces_follows_gce_rule(vcpus, expected):
 @pytest.mark.parametrize(
     ("ipv4", "expected_mac"),
     [
-        ("10.128.0.2", "42:01:0a:80:00:02"),
-        ("10.100.1.255", "42:01:0a:64:01:ff"),
-        ("192.168.0.1", "42:01:c0:a8:00:01"),
+        pytest.param("10.128.0.2", "42:01:0a:80:00:02", id="auto-mode-range"),
+        pytest.param("10.100.1.255", "42:01:0a:64:01:ff", id="secondary-range"),
+        pytest.param("192.168.0.1", "42:01:c0:a8:00:01", id="private-192-168"),
     ],
 )
 def test_gce_mac_address_is_derived_from_private_ipv4(ipv4, expected_mac):
@@ -102,16 +137,28 @@ def test_gce_mac_address_is_derived_from_private_ipv4(ipv4, expected_mac):
     assert gce_mac_address_for_ipv4(ipv4) == expected_mac
 
 
-@pytest.mark.parametrize("ipv4", ["not-an-ip", "10.1.2.999", None])
+@pytest.mark.parametrize(
+    "ipv4",
+    [
+        pytest.param("not-an-ip", id="not-an-ip"),
+        pytest.param("10.1.2.999", id="octet-out-of-range"),
+        pytest.param(None, id="none"),
+    ],
+)
 def test_gce_mac_address_rejects_malformed_ipv4(ipv4):
+    """gce_mac_address_for_ipv4 returns None for an invalid or missing IPv4."""
     assert gce_mac_address_for_ipv4(ipv4) is None
 
 
 @pytest.mark.parametrize(
     ("region_name", "expected_cidr"),
-    [("us-east1", "10.100.0.0/24"), ("europe-west1", "10.100.6.0/24")],
+    [
+        pytest.param("us-east1", "10.100.0.0/24", id="us-east1"),
+        pytest.param("europe-west1", "10.100.6.0/24", id="europe-west1"),
+    ],
 )
 def test_secondary_subnet_cidr_is_stable_per_region(region_name, expected_cidr):
+    """secondary_subnet_cidr maps each region to its reserved CIDR."""
     region = new_region(region_name)
     assert region.secondary_subnet_cidr == expected_cidr
 
@@ -132,6 +179,7 @@ def test_secondary_subnet_cidrs_do_not_overlap_or_clash_with_auto_mode():
 
 
 def test_secondary_subnet_cidr_rejects_unmapped_region():
+    """secondary_subnet_cidr raises RuntimeError for a region with no reserved CIDR."""
     region = new_region("mars-north3")
     with pytest.raises(RuntimeError, match="no CIDR reserved"):
         _ = region.secondary_subnet_cidr
@@ -150,47 +198,28 @@ def test_bootstrap_subnet_name_matches_what_the_provisioner_looks_up(network_pro
 
 
 def test_secondary_nic_routing_script_is_valid_bash(tmp_path):
+    """SECONDARY_NIC_ROUTING_SCRIPT passes the bash syntax check."""
     script = tmp_path / "sct-secondary-nic-routing.sh"
     script.write_text(SECONDARY_NIC_ROUTING_SCRIPT)
     result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, f"script has bash syntax errors: {result.stderr}"
 
 
-BUILDER_SOURCES = {"jenkins": ["192.0.2.10/32"], "office": ["198.51.100.10/32"]}
-
-
-def _rule(**overrides):
-    base = dict(
-        name="r",
-        direction="INGRESS",
-        priority=100,
-        source_ranges=["1.2.3.4/32"],
-        allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["22"])],
-        target_tags=["sct-builder"],
-    )
-    fields = base | overrides
-    return Firewall(**{key: value for key, value in fields.items() if value is not None})
-
-
 def test_firewall_needs_patch_detects_priority_and_target_tags():
-    assert not firewall_needs_patch(_rule(), _rule())
-    assert firewall_needs_patch(_rule(priority=1000), _rule())
-    assert firewall_needs_patch(_rule(target_tags=[]), _rule())
-    assert firewall_needs_patch(_rule(allowed=[], denied=[compute_v1.Denied(I_p_protocol="all")]), _rule())
+    """firewall_needs_patch flags drift in priority, target tags and allow/deny rules."""
+    assert not firewall_needs_patch(firewall_rule(), firewall_rule())
+    assert firewall_needs_patch(firewall_rule(priority=1000), firewall_rule())
+    assert firewall_needs_patch(firewall_rule(target_tags=[]), firewall_rule())
+    assert firewall_needs_patch(
+        firewall_rule(allowed=[], denied=[compute_v1.Denied(I_p_protocol="all")]), firewall_rule()
+    )
     # a live rule at the API default must equal a desired rule that never set a priority
-    assert not firewall_needs_patch(_rule(priority=1000), _rule(priority=None))
-
-
-def _firewall_region():
-    region = new_region()
-    region.project = PROJECT_ID
-    region.firewall_client = MagicMock()
-    region.__dict__["network"] = MagicMock(self_link="net-link")
-    return region
+    assert not firewall_needs_patch(firewall_rule(priority=1000), firewall_rule(priority=None))
 
 
 def test_builder_firewall_applies_allows_before_deny_and_waits():
-    region = _firewall_region()
+    """configure_builder_firewall inserts tagged allow rules before the deny-all rule and waits for each one."""
+    region = firewall_region()
     with patch("sdcm.utils.gce_region.wait_for_extended_operation") as wait:
         region.configure_builder_firewall(BUILDER_SOURCES)
 
@@ -206,7 +235,8 @@ def test_builder_firewall_applies_allows_before_deny_and_waits():
 
 
 def test_stale_ssh_rule_kept_when_its_replacement_is_missing():
-    region = _firewall_region()
+    """delete_stale_firewall_rules keeps an SSH rule whose replacement rule is missing."""
+    region = firewall_region()
     region.firewall_client.get.side_effect = google.api_core.exceptions.NotFound("no such rule")
 
     region.delete_stale_firewall_rules()

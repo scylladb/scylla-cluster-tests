@@ -18,11 +18,12 @@ from unit_tests.unit.nemesis import make_mock_node, sudo_commands
 pytestmark = pytest.mark.usefixtures("events")
 
 
-def _working_node(runner):
+def get_working_node(runner):
+    """Return the verification node that ``runner.node_allocator.run_nemesis`` yields."""
     return runner.node_allocator.run_nemesis.return_value.__enter__.return_value
 
 
-def _instant_wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=None, **kwargs):
+def instant_wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=None, **kwargs):
     """A same-contract, non-blocking stand-in for sdcm.wait.wait_for: evaluates ``func``
     once instead of retrying for real (up to 600s) wall-clock seconds, so tests that
     exercise the timeout/failure branch don't have to actually wait it out.
@@ -31,6 +32,43 @@ def _instant_wait_for(func, step=1, text=None, timeout=None, throw_exc=True, sto
     if not result and throw_exc:
         raise WaitForTimeoutError(text or "mock timeout")
     return result
+
+
+@pytest.fixture()
+def runner(base_runner):
+    """``base_runner`` wired for a successful node-ban walk-through: two
+    same-rack/dc nodes, a working (verification) node that reports the target
+    as DOWN then REMOVED, and the GitHub issue lookup (SkipPerIssues) stubbed
+    out so no real network call is made.
+    """
+    target = base_runner.target_node
+    peer = base_runner.cluster.data_nodes[1]
+    target.dc_idx = 0
+    peer.dc_idx = 0
+
+    target.raft = MagicMock(is_consistent_topology_changes_enabled=True)
+    target.host_id = "host-1"
+    target.ip_address = "10.0.0.1"
+    target.follow_system_log.return_value = iter(["received notification of being banned from the cluster"])
+    target.db_up.return_value = False
+    target.remoter.run.return_value = MagicMock(ok=False, stdout="")  # scylla no longer running once banned
+    target.parent_cluster.get_nodetool_status.return_value = {"dc1": {}}  # target no longer listed -> removed
+
+    base_runner.termination_event = threading.Event()
+    base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
+    base_runner._remove_node_add_node = MagicMock()
+    base_runner.cluster.params = MagicMock(artifact_scylla_version=None)
+    base_runner.cluster.params.get.return_value = None  # rack_aware_loader off -> no rack switch
+    base_runner.loaders = MagicMock()
+    base_runner.loaders.nodes = []
+
+    base_runner.node_allocator = MagicMock()
+    working_node = base_runner.node_allocator.run_nemesis.return_value.__enter__.return_value
+    working_node.parent_cluster.get_nodetool_status.return_value = {target.ip_address: {"state": "DN"}}
+    base_runner.node_allocator.run_nemesis.return_value.__exit__.return_value = False
+
+    with patch("sdcm.utils.issues.SkipPerIssues.get_issue_details", return_value=None):
+        yield base_runner
 
 
 # ---------------------------------------------------------------------------
@@ -73,49 +111,18 @@ def test_switch_target_node_to_another_rack(base_runner):
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
-def runner(base_runner):
-    """``base_runner`` wired for a successful node-ban walk-through: two
-    same-rack/dc nodes, a working (verification) node that reports the target
-    as DOWN then REMOVED, and the GitHub issue lookup (SkipPerIssues) stubbed
-    out so no real network call is made.
-    """
-    target = base_runner.target_node
-    peer = base_runner.cluster.data_nodes[1]
-    target.dc_idx = 0
-    peer.dc_idx = 0
-
-    target.raft = MagicMock(is_consistent_topology_changes_enabled=True)
-    target.host_id = "host-1"
-    target.ip_address = "10.0.0.1"
-    target.follow_system_log.return_value = iter(["received notification of being banned from the cluster"])
-    target.db_up.return_value = False
-    target.remoter.run.return_value = MagicMock(ok=False, stdout="")  # scylla no longer running once banned
-    target.parent_cluster.get_nodetool_status.return_value = {"dc1": {}}  # target no longer listed -> removed
-
-    base_runner.termination_event = threading.Event()
-    base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
-    base_runner._remove_node_add_node = MagicMock()
-    base_runner.cluster.params = MagicMock(artifact_scylla_version=None)
-    base_runner.cluster.params.get.return_value = None  # rack_aware_loader off -> no rack switch
-    base_runner.loaders = MagicMock()
-    base_runner.loaders.nodes = []
-
-    base_runner.node_allocator = MagicMock()
-    working_node = base_runner.node_allocator.run_nemesis.return_value.__enter__.return_value
-    working_node.parent_cluster.get_nodetool_status.return_value = {target.ip_address: {"state": "DN"}}
-    base_runner.node_allocator.run_nemesis.return_value.__exit__.return_value = False
-
-    with patch("sdcm.utils.issues.SkipPerIssues.get_issue_details", return_value=None):
-        yield base_runner
-
-
 # ---------------------------------------------------------------------------
 # refuse_connection_from_banned_node — guard clauses
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("nemesis_class", [IsolateNodeWithProcessSignalNemesis, IsolateNodeWithIptableRuleNemesis])
+@pytest.mark.parametrize(
+    "nemesis_class",
+    [
+        pytest.param(IsolateNodeWithProcessSignalNemesis, id="sigstop"),
+        pytest.param(IsolateNodeWithIptableRuleNemesis, id="iptables"),
+    ],
+)
 def test_precheck_skips_when_raft_topology_changes_disabled(runner, nemesis_class):
     """precheck() must return a skip reason when consistent-topology-changes raft feature is off,
     for both the SIGSTOP and iptables variants, since they share the same guard.
@@ -127,7 +134,13 @@ def test_precheck_skips_when_raft_topology_changes_disabled(runner, nemesis_clas
     assert reason == "Raft feature: consistent-topology-changes is not enabled"
 
 
-@pytest.mark.parametrize("nemesis_class", [IsolateNodeWithProcessSignalNemesis, IsolateNodeWithIptableRuleNemesis])
+@pytest.mark.parametrize(
+    "nemesis_class",
+    [
+        pytest.param(IsolateNodeWithProcessSignalNemesis, id="sigstop"),
+        pytest.param(IsolateNodeWithIptableRuleNemesis, id="iptables"),
+    ],
+)
 def test_precheck_skips_on_kubernetes(runner, nemesis_class):
     """precheck() must return a skip reason on kubernetes, which isn't supported yet,
     for both the SIGSTOP and iptables variants, since they share the same guard.
@@ -139,7 +152,13 @@ def test_precheck_skips_on_kubernetes(runner, nemesis_class):
     assert reason == "Skip test for K8S because no supported yet"
 
 
-@pytest.mark.parametrize("nemesis_class", [IsolateNodeWithProcessSignalNemesis, IsolateNodeWithIptableRuleNemesis])
+@pytest.mark.parametrize(
+    "nemesis_class",
+    [
+        pytest.param(IsolateNodeWithProcessSignalNemesis, id="sigstop"),
+        pytest.param(IsolateNodeWithIptableRuleNemesis, id="iptables"),
+    ],
+)
 def test_precheck_passes_when_conditions_are_met(runner, nemesis_class):
     """precheck() must return None once raft topology-changes are enabled and it's not k8s."""
     assert nemesis_class(runner).precheck(runner.target_node) is None
@@ -195,7 +214,7 @@ def test_kill_nemesis_during_removal_skips_finalizer_cleanup(runner):
     cleanup behavior — that's what proves the `is not KillNemesis` branch actually matters,
     rather than both tests merely observing "the finalizer never ran".
     """
-    working_node = _working_node(runner)
+    working_node = get_working_node(runner)
     working_node.run_nodetool.side_effect = KillNemesis()
 
     with pytest.raises(KillNemesis):
@@ -209,7 +228,7 @@ def test_cleanup_failure_during_kill_skips_remove_add(runner):
     manager cleanup raises while that happens, the new exception replaces KillNemesis.
     The finalizer must still skip _remove_node_add_node, because the event is set.
     """
-    working_node = _working_node(runner)
+    working_node = get_working_node(runner)
 
     def _kill_nemesis(*_, **__):
         runner.termination_event.set()
@@ -233,7 +252,7 @@ def test_generic_exception_during_removal_still_runs_finalizer_cleanup_and_rerai
     but with a plain exception: the finalizer must still perform its best-effort cleanup
     via _remove_node_add_node, and the original exception must still propagate.
     """
-    working_node = _working_node(runner)
+    working_node = get_working_node(runner)
     working_node.run_nodetool.side_effect = RuntimeError("removenode failed unexpectedly")
 
     with pytest.raises(RuntimeError, match="removenode failed unexpectedly"):
@@ -280,7 +299,7 @@ def test_raises_when_ban_notification_pattern_not_found(mock_wait_for, runner):
     'received notification of being banned' pattern, even though the node was
     otherwise successfully banned and removed.
     """
-    mock_wait_for.side_effect = _instant_wait_for
+    mock_wait_for.side_effect = instant_wait_for
     runner.target_node.follow_system_log.return_value = iter([])  # no ban notification ever logged
 
     with pytest.raises(AssertionError, match="Ban notification patterns were not found"):
@@ -306,7 +325,7 @@ def test_iptables_path_blocks_and_unblocks_every_scylla_port(runner):
         for table, action in (("iptables", "A"), ("iptables", "D"), ("ip6tables", "A"), ("ip6tables", "D")):
             assert commands.count(f"{table} -{action} INPUT -p tcp --dport {port} -j DROP") == 1
 
-    working_node = _working_node(runner)
+    working_node = get_working_node(runner)
     working_node.run_nodetool.assert_called_once_with("removenode host-1", retry=0, long_running=True)
     runner._remove_node_add_node.assert_called_once_with(
         verification_node=working_node,
@@ -338,7 +357,11 @@ def test_loader_unblock_is_skipped_when_removal_destroyed_the_target_node(runner
 
     IsolateNodeWithIptableRuleNemesis(runner).disrupt()
 
-    runner._remove_node_add_node.assert_called_once()
+    runner._remove_node_add_node.assert_called_once_with(
+        verification_node=get_working_node(runner),
+        node_to_remove=target,
+        remove_node_host_id="host-1",
+    )
     commands = sudo_commands(target_remoter)
     for port in (9042, 9142, 19042, 19142):
         rule = f"INPUT -s 10.0.0.2 -p tcp --dport {port} -j DROP"
@@ -370,5 +393,5 @@ def test_sigstop_path_pauses_scylla_and_only_blocks_gossip_ports_during_removal(
     for port in (9042, 9142, 19042, 19142):
         assert f"iptables -A INPUT -p tcp --dport {port} -j DROP" not in commands
 
-    working_node = _working_node(runner)
+    working_node = get_working_node(runner)
     working_node.run_nodetool.assert_called_once_with("removenode host-1", retry=0, long_running=True)

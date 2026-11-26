@@ -15,7 +15,7 @@ from click.testing import CliRunner
 
 from sct_sizing import sizing_preview
 
-_MINIMAL_CONFIG = "unit_tests/test_configs/minimal_test_case.yaml"
+MINIMAL_CONFIG = "unit_tests/test_configs/minimal_test_case.yaml"
 
 
 def test_sizing_preview_merges_dot_and_double_underscore_env_overrides(monkeypatch):
@@ -24,7 +24,7 @@ def test_sizing_preview_merges_dot_and_double_underscore_env_overrides(monkeypat
     monkeypatch.setenv("SCT_SIZING_DB__memory", "32")
 
     runner = CliRunner()
-    result = runner.invoke(sizing_preview, [_MINIMAL_CONFIG])
+    result = runner.invoke(sizing_preview, [MINIMAL_CONFIG])
 
     assert result.exit_code == 0, result.output
     assert "sizing_db (env-var)" in result.output
@@ -33,7 +33,7 @@ def test_sizing_preview_merges_dot_and_double_underscore_env_overrides(monkeypat
 def test_sizing_preview_sums_multi_dc_node_counts(tmp_path):
     """A multi-DC n_db_nodes list is summed across DCs."""
     config = tmp_path / "multi_dc.yaml"
-    config.write_text(f"{open(_MINIMAL_CONFIG).read()}\nn_db_nodes: [3, 2]\n")
+    config.write_text(f"{open(MINIMAL_CONFIG).read()}\nn_db_nodes: [3, 2]\n")
 
     runner = CliRunner()
     result = runner.invoke(sizing_preview, [str(config)])

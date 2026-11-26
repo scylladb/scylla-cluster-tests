@@ -19,7 +19,7 @@ from sdcm.nemesis.monkey.network import (
     run_commands_wait_and_cleanup,
 )
 
-_MODULE = "sdcm.nemesis.monkey.network"
+MODULE = "sdcm.nemesis.monkey.network"
 
 pytestmark = pytest.mark.usefixtures("events")
 
@@ -201,10 +201,12 @@ def test_run_commands(node, log, start_cmds, cleanup_cmds, side_effects, expecte
     )
     assert node.remoter.run.call_count == expected_run_count
     if expect_error_logged:
-        log.error.assert_called_once()
+        log.error.assert_called_once_with(
+            f"Test: failed to execute start command {start_cmds[0]} on node {node} due to the following error: fail"
+        )
 
 
-@patch(f"{_MODULE}.time")
+@patch(f"{MODULE}.time")
 def test_run_commands_waits_between_start_commands(mock_time, node, log):
     """Verify time.sleep is called with the configured wait_time between start and cleanup phases."""
     run_commands_wait_and_cleanup(
@@ -228,7 +230,7 @@ def test_rate_limit_returns_none_when_no_monitoring(runner):
     assert get_rate_limit_for_network_disruption(runner.monitoring_set, runner.target_node, runner.random) is None
 
 
-@patch(f"{_MODULE}.PrometheusDBStats")
+@patch(f"{MODULE}.PrometheusDBStats")
 def test_rate_limit_returns_string_with_suffix(mock_prom_class, runner):
     """Verify rate limit queries Prometheus and returns a value with mbps or kbps suffix."""
     runner.random.randrange.side_effect = lambda a, b: 42
@@ -311,10 +313,10 @@ def test_raises_when_tc_not_installed(runner, monkey_class):
         pytest.param(RejectThriftNetworkMonkey, ["9160"], id="thrift"),
     ],
 )
-@patch(f"{_MODULE}.run_commands_wait_and_cleanup")
-@patch(f"{_MODULE}.iptables_randomly_get_disrupting_target", return_value=("dropped", "DROP"))
-@patch(f"{_MODULE}.iptables_randomly_get_random_matching_rule", return_value=("every packet", ""))
-@patch(f"{_MODULE}.install_iptables")
+@patch(f"{MODULE}.run_commands_wait_and_cleanup")
+@patch(f"{MODULE}.iptables_randomly_get_disrupting_target", return_value=("dropped", "DROP"))
+@patch(f"{MODULE}.iptables_randomly_get_random_matching_rule", return_value=("every packet", ""))
+@patch(f"{MODULE}.install_iptables")
 def test_iptables_monkey_targets_correct_ports(
     mock_install,
     mock_rule,

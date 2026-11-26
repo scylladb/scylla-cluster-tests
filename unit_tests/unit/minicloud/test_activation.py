@@ -23,12 +23,24 @@ from sdcm.utils.minicloud.endpoint import (
 from unit_tests.unit.minicloud.conftest import _patch_probe_session
 
 
+@pytest.fixture
+def fresh_azure_service(monkeypatch):
+    """AzureService is a process-wide singleton: start each test from a new one"""
+    Singleton._instances.pop(AzureService, None)
+    monkeypatch.setattr(AzureService, "_real_cloud_instance", None, raising=False)
+    monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
+    yield
+    Singleton._instances.pop(AzureService, None)
+
+
 def test_is_minicloud_active_from_aws_endpoint_url(monkeypatch):
+    """is_minicloud_active is true when AWS_ENDPOINT_URL points at localhost."""
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:5000")
     assert is_minicloud_active() is True
 
 
 def test_is_minicloud_active_from_sct_env(monkeypatch):
+    """is_minicloud_active is true when SCT_MINICLOUD_ENDPOINT_URL is set."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     assert is_minicloud_active() is True
 
@@ -46,25 +58,30 @@ def test_is_minicloud_active_from_params():
 
 
 def test_is_minicloud_inactive_for_empty_params():
+    """Empty params or an empty minicloud_endpoint_url do not activate minicloud."""
     assert is_minicloud_active(params={}) is False
     assert is_minicloud_active(params={"minicloud_endpoint_url": ""}) is False
 
 
 def test_minicloud_endpoint_env_beats_params(monkeypatch):
+    """SCT_MINICLOUD_ENDPOINT_URL overrides the minicloud_endpoint_url param."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:7000")
     assert get_minicloud_endpoint(params={"minicloud_endpoint_url": "http://localhost:6000"}) == "http://localhost:7000"
 
 
 def test_is_minicloud_inactive_by_default():
+    """Without any endpoint setting, minicloud is inactive."""
     assert is_minicloud_active() is False
 
 
 def test_is_minicloud_inactive_for_real_aws_endpoint(monkeypatch):
+    """A real AWS endpoint URL does not activate minicloud."""
     monkeypatch.setenv("AWS_ENDPOINT_URL", "https://ec2.us-east-1.amazonaws.com")
     assert is_minicloud_active() is False
 
 
 def test_get_minicloud_endpoint_from_env(monkeypatch):
+    """get_minicloud_endpoint returns the localhost AWS_ENDPOINT_URL."""
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:9999")
     assert get_minicloud_endpoint() == "http://localhost:9999"
 
@@ -87,10 +104,12 @@ def test_get_minicloud_endpoint_from_gce_env(monkeypatch):
 
 
 def test_get_minicloud_endpoint_default():
+    """Without any override, the endpoint defaults to localhost on MINICLOUD_PORT."""
     assert get_minicloud_endpoint() == f"http://localhost:{MINICLOUD_PORT}"
 
 
 def test_check_minicloud_reachability_success():
+    """A 200 DescribeVpcs probe response means minicloud is reachable."""
     mock_response = MagicMock()
     mock_response.status_code = 200
     patcher, session = _patch_probe_session(response=mock_response)
@@ -100,27 +119,27 @@ def test_check_minicloud_reachability_success():
 
 
 def test_check_minicloud_reachability_400_is_unhealthy():
+    """An HTTP 400 probe response raises RuntimeError naming the status."""
     mock_response = MagicMock()
     mock_response.status_code = 400
     mock_response.text = "<Error><Code>UnsupportedOperation</Code></Error>"
     patcher, _ = _patch_probe_session(response=mock_response)
-    with patcher:
-        with pytest.raises(RuntimeError, match="HTTP 400"):
-            check_minicloud_reachability("http://localhost:5000")
+    with patcher, pytest.raises(RuntimeError, match="HTTP 400"):
+        check_minicloud_reachability("http://localhost:5000")
 
 
 def test_check_minicloud_reachability_connection_error():
+    """A refused connection raises RuntimeError saying minicloud is not reachable."""
     patcher, _ = _patch_probe_session(side_effect=requests.ConnectionError("refused"))
-    with patcher:
-        with pytest.raises(RuntimeError, match="minicloud is not reachable"):
-            check_minicloud_reachability("http://localhost:5000")
+    with patcher, pytest.raises(RuntimeError, match="minicloud is not reachable"):
+        check_minicloud_reachability("http://localhost:5000")
 
 
 def test_check_minicloud_reachability_timeout():
+    """A probe timeout raises RuntimeError."""
     patcher, _ = _patch_probe_session(side_effect=requests.Timeout("timed out"))
-    with patcher:
-        with pytest.raises(RuntimeError, match="timed out"):
-            check_minicloud_reachability("http://localhost:5000")
+    with patcher, pytest.raises(RuntimeError, match="timed out"):
+        check_minicloud_reachability("http://localhost:5000")
 
 
 def test_check_minicloud_reachability_other_requests_errors_are_runtime_errors():
@@ -130,12 +149,12 @@ def test_check_minicloud_reachability_other_requests_errors_are_runtime_errors()
     would bypass ensure_minicloud_ready's retry loop and abort the run.
     """
     patcher, _ = _patch_probe_session(side_effect=requests.exceptions.InvalidURL("bad url"))
-    with patcher:
-        with pytest.raises(RuntimeError, match="probe against"):
-            check_minicloud_reachability("http://localhost:5000")
+    with patcher, pytest.raises(RuntimeError, match="probe against"):
+        check_minicloud_reachability("http://localhost:5000")
 
 
 def test_validate_minicloud_params_accepts_overlay_values():
+    """Params set by the minicloud overlay pass validation."""
     validate_minicloud_params(
         params={
             "instance_provision": "on_demand",
@@ -159,6 +178,7 @@ def test_validate_minicloud_params_rejects_missing_overlay():
 
 
 def test_validate_minicloud_params_allows_kms_on_minicloud_backends_only():
+    """KMS stays enabled on the aws, gce and azure backends but is refused on gce-siren."""
     params = {
         "instance_provision": "on_demand",
         "ip_ssh_connections": "private",
@@ -172,34 +192,28 @@ def test_validate_minicloud_params_allows_kms_on_minicloud_backends_only():
 
 
 def test_set_endpoint_env_exports_azure_vars_for_azure_backend():
+    """set_minicloud_endpoint_env exports the Azure, CA bundle and AWS endpoint variables."""
     set_minicloud_endpoint_env("http://localhost:5000", "azure", ca_bundle="/tmp/bundle.pem")
     assert os.environ["AZURE_ENDPOINT_URL"] == "https://localhost:5443"
     assert os.environ["REQUESTS_CA_BUNDLE"] == "/tmp/bundle.pem"
     assert os.environ["AWS_ENDPOINT_URL"] == "http://localhost:5000"
 
 
-@pytest.fixture
-def fresh_azure_service(monkeypatch):
-    """AzureService is a process-wide singleton: start each test from a new one"""
-    Singleton._instances.pop(AzureService, None)
-    monkeypatch.setattr(AzureService, "_real_cloud_instance", None, raising=False)
-    monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
-    yield
-    Singleton._instances.pop(AzureService, None)
-
-
 @pytest.mark.parametrize(
-    "client_property, client_class",
+    "client_property, client_class, takes_subscription_id",
     [
-        ("compute", "ComputeManagementClient"),
-        ("network", "NetworkManagementClient"),
-        ("resource", "ResourceManagementClient"),
-        ("keyvault", "KeyVaultManagementClient"),
-        ("subscription", "SubscriptionClient"),
-        ("resource_graph", "ResourceGraphClient"),
+        pytest.param("compute", "ComputeManagementClient", True, id="compute"),
+        pytest.param("network", "NetworkManagementClient", True, id="network"),
+        pytest.param("resource", "ResourceManagementClient", True, id="resource"),
+        pytest.param("keyvault", "KeyVaultManagementClient", True, id="keyvault"),
+        pytest.param("subscription", "SubscriptionClient", False, id="subscription"),
+        pytest.param("resource_graph", "ResourceGraphClient", False, id="resource-graph"),
     ],
 )
-def test_every_arm_client_is_redirected(fresh_azure_service, monkeypatch, client_property, client_class):
+def test_every_arm_client_is_redirected(
+    fresh_azure_service, monkeypatch, client_property, client_class, takes_subscription_id
+):
+    """Every ARM client property is built against the minicloud endpoint with the fake credential."""
     monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
     with (
         patch("sdcm.utils.azure_utils.KeyStore") as keystore,
@@ -215,13 +229,18 @@ def test_every_arm_client_is_redirected(fresh_azure_service, monkeypatch, client
         authority="https://localhost:5443",
         disable_instance_discovery=True,
     )
-    client.assert_called_once()
-    assert client.call_args.kwargs["credential"] is credential.return_value
-    assert client.call_args.kwargs["base_url"] == "https://localhost:5443"
-    assert client.call_args.kwargs["credential_scopes"] == ["https://localhost:5443/.default"]
+    expected = {
+        "credential": credential.return_value,
+        "base_url": "https://localhost:5443",
+        "credential_scopes": ["https://localhost:5443/.default"],
+    }
+    if takes_subscription_id:
+        expected["subscription_id"] = "00000000-0000-0000-0000-000000000000"
+    client.assert_called_once_with(**expected)
 
 
 def test_guard_refuses_arm_clients_before_activation(fresh_azure_service, monkeypatch):
+    """An ARM client on an azure run with minicloud active but no AZURE_ENDPOINT_URL is refused before KeyStore is used."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     with (

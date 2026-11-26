@@ -22,121 +22,125 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.nemesis import DisruptionEvent
 
 
-class TestHealthCheckSkip:
-    """Test suite for health check optimization."""
+@pytest.fixture
+def skipped_nemesis_event():
+    """Skipped nemesis event with a reason set."""
+    event = DisruptionEvent(
+        nemesis_name="TestNemesis",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+    event.skip(skip_reason="Test condition not met")
+    return event
 
-    @pytest.fixture
-    def skipped_nemesis_event(self):
-        """Create a skipped nemesis event."""
-        event = DisruptionEvent(
-            nemesis_name="TestNemesis",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
-        event.skip(skip_reason="Test condition not met")
-        return event
 
-    @pytest.fixture
-    def executed_nemesis_event(self):
-        """Create a successfully executed nemesis event."""
-        event = DisruptionEvent(
-            nemesis_name="TestNemesis",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
-        # Don't call skip() - this simulates an executed nemesis
-        return event
+@pytest.fixture
+def executed_nemesis_event():
+    """Nemesis event that was not skipped, as if the nemesis ran."""
+    event = DisruptionEvent(
+        nemesis_name="TestNemesis",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+    # Don't call skip() - this simulates an executed nemesis
+    return event
 
-    def test_skip_condition_true_when_nemesis_skipped(self, skipped_nemesis_event):
-        """Test that skip condition evaluates to True when nemesis was skipped."""
-        # This tests the core logic: should_skip = (event exists and event.is_skipped)
-        last_nemesis_event = skipped_nemesis_event
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
 
-        assert should_skip is True
-        assert last_nemesis_event.nemesis_name == "TestNemesis"
-        assert last_nemesis_event.skip_reason == "Test condition not met"
+def test_skip_condition_true_when_nemesis_skipped(skipped_nemesis_event):
+    """Skip condition is True when the previous nemesis was skipped, so the health check is skipped."""
+    # This tests the core logic: should_skip = (event exists and event.is_skipped)
+    last_nemesis_event = skipped_nemesis_event
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
 
-    def test_skip_condition_false_when_nemesis_executed(self, executed_nemesis_event):
-        """Test that skip condition evaluates to False when nemesis was executed."""
-        # This tests the core logic: should_skip = (event exists and event.is_skipped)
-        last_nemesis_event = executed_nemesis_event
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
+    assert should_skip is True
+    assert last_nemesis_event.nemesis_name == "TestNemesis"
+    assert last_nemesis_event.skip_reason == "Test condition not met"
 
-        assert not should_skip
 
-    def test_skip_condition_false_when_no_previous_nemesis(self):
-        """Test that skip condition evaluates to falsy when there is no previous nemesis."""
-        # This tests the core logic: should_skip = (event exists and event.is_skipped)
-        last_nemesis_event = None
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
+def test_skip_condition_false_when_nemesis_executed(executed_nemesis_event):
+    """Skip condition is False when the previous nemesis ran, so the health check runs."""
+    # This tests the core logic: should_skip = (event exists and event.is_skipped)
+    last_nemesis_event = executed_nemesis_event
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
 
-        # When last_nemesis_event is None, the expression evaluates to None (falsy)
-        assert not should_skip
+    assert not should_skip
 
-    def test_nemesis_event_is_skipped_property(self, skipped_nemesis_event, executed_nemesis_event):
-        """Test that nemesis event is_skipped property works correctly."""
-        # Skipped event
-        assert skipped_nemesis_event.is_skipped is True
-        assert skipped_nemesis_event.skip_reason == "Test condition not met"
 
-        # Executed event
-        assert executed_nemesis_event.is_skipped is False
-        assert executed_nemesis_event.skip_reason == ""
+def test_skip_condition_false_when_no_previous_nemesis():
+    """Skip condition is falsy when there is no previous nemesis, so the health check runs."""
+    # This tests the core logic: should_skip = (event exists and event.is_skipped)
+    last_nemesis_event = None
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
 
-    def test_multiple_nemesis_cycles_with_mixed_skip_states(self):
-        """Test skip condition across multiple nemesis cycles with varying skip states."""
-        # First nemesis: executed
-        event1 = DisruptionEvent(
-            nemesis_name="Nemesis1",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
-        last_nemesis_event = event1
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
-        assert not should_skip  # Health check should run
+    # When last_nemesis_event is None, the expression evaluates to None (falsy)
+    assert not should_skip
 
-        # Second nemesis: skipped
-        event2 = DisruptionEvent(
-            nemesis_name="Nemesis2",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
-        event2.skip(skip_reason="Resource unavailable")
-        last_nemesis_event = event2
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
-        assert should_skip is True  # Health check should be skipped
 
-        # Third nemesis: executed
-        event3 = DisruptionEvent(
-            nemesis_name="Nemesis3",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
-        last_nemesis_event = event3
-        should_skip = last_nemesis_event and last_nemesis_event.is_skipped
-        assert not should_skip  # Health check should run
+def test_nemesis_event_is_skipped_property(skipped_nemesis_event, executed_nemesis_event):
+    """is_skipped and skip_reason reflect whether skip() was called on the event."""
+    # Skipped event
+    assert skipped_nemesis_event.is_skipped is True
+    assert skipped_nemesis_event.skip_reason == "Test condition not met"
 
-    def test_skip_reason_captured_correctly(self):
-        """Test that skip reason is properly captured and accessible."""
-        event = DisruptionEvent(
-            nemesis_name="TestNemesis",
-            node="test_node",
-            severity=Severity.NORMAL,
-            publish_event=False,
-        )
+    # Executed event
+    assert executed_nemesis_event.is_skipped is False
+    assert executed_nemesis_event.skip_reason == ""
 
-        # Initially not skipped
-        assert event.is_skipped is False
-        assert event.skip_reason == ""
 
-        # After calling skip()
-        skip_reason = "Unsupported Scylla version"
-        event.skip(skip_reason=skip_reason)
-        assert event.is_skipped is True
-        assert event.skip_reason == skip_reason
+def test_multiple_nemesis_cycles_with_mixed_skip_states():
+    """Skip condition follows the most recent nemesis across cycles with mixed skip states."""
+    # First nemesis: executed
+    event1 = DisruptionEvent(
+        nemesis_name="Nemesis1",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+    last_nemesis_event = event1
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
+    assert not should_skip  # Health check should run
+
+    # Second nemesis: skipped
+    event2 = DisruptionEvent(
+        nemesis_name="Nemesis2",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+    event2.skip(skip_reason="Resource unavailable")
+    last_nemesis_event = event2
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
+    assert should_skip is True  # Health check should be skipped
+
+    # Third nemesis: executed
+    event3 = DisruptionEvent(
+        nemesis_name="Nemesis3",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+    last_nemesis_event = event3
+    should_skip = last_nemesis_event and last_nemesis_event.is_skipped
+    assert not should_skip  # Health check should run
+
+
+def test_skip_reason_captured_correctly():
+    """skip() stores the reason and marks the event as skipped."""
+    event = DisruptionEvent(
+        nemesis_name="TestNemesis",
+        node="test_node",
+        severity=Severity.NORMAL,
+        publish_event=False,
+    )
+
+    # Initially not skipped
+    assert event.is_skipped is False
+    assert event.skip_reason == ""
+
+    # After calling skip()
+    skip_reason = "Unsupported Scylla version"
+    event.skip(skip_reason=skip_reason)
+    assert event.is_skipped is True
+    assert event.skip_reason == skip_reason

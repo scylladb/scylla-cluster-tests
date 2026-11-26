@@ -26,7 +26,7 @@ import pytest
 from unit_tests.lib.fake_docker_cluster import DummyScyllaDockerCluster
 
 
-def _make_mock_node():
+def make_mock_node():
     """Create a mock node with the attributes node_setup reads."""
     node = MagicMock()
     node.rack = 0
@@ -44,7 +44,7 @@ def test_reuse_skips_full_setup(tmp_path):
         logdir=tmp_path,
         reuse_cluster=True,
     )
-    node = _make_mock_node()
+    node = make_mock_node()
 
     with patch.object(cluster, "_reuse_cluster_setup") as mock_reuse_setup:
         cluster.node_setup(node)
@@ -64,7 +64,7 @@ def test_reuse_skips_certs_when_not_configured(tmp_path):
         logdir=tmp_path,
         reuse_cluster=True,
     )
-    node = _make_mock_node()
+    node = make_mock_node()
 
     with (
         patch.object(cluster, "_reuse_cluster_setup"),
@@ -75,7 +75,10 @@ def test_reuse_skips_certs_when_not_configured(tmp_path):
     mock_gen_certs.assert_not_called()
 
 
-@pytest.mark.parametrize("encrypt_param", ["server_encrypt", "client_encrypt"])
+@pytest.mark.parametrize(
+    "encrypt_param",
+    [pytest.param("server_encrypt", id="server"), pytest.param("client_encrypt", id="client")],
+)
 def test_reuse_generates_certs_when_missing(tmp_path, encrypt_param):
     """When encryption is enabled and the DB cert is missing,
     _generate_db_node_certs and install_client_certificate must be called.
@@ -85,7 +88,7 @@ def test_reuse_generates_certs_when_missing(tmp_path, encrypt_param):
         logdir=tmp_path,
         reuse_cluster=True,
     )
-    node = _make_mock_node()
+    node = make_mock_node()
     # Make ssl_conf_dir / TLSAssets.DB_CERT return a Path whose .exists() is False
     fake_ssl_dir = MagicMock(spec=Path)
     cert_path = MagicMock()
@@ -104,7 +107,10 @@ def test_reuse_generates_certs_when_missing(tmp_path, encrypt_param):
     mock_install_cert.assert_called_once_with(node.remoter, node.ip_address, force=True)
 
 
-@pytest.mark.parametrize("encrypt_param", ["server_encrypt", "client_encrypt"])
+@pytest.mark.parametrize(
+    "encrypt_param",
+    [pytest.param("server_encrypt", id="server"), pytest.param("client_encrypt", id="client")],
+)
 def test_reuse_skips_certs_when_already_present(tmp_path, encrypt_param):
     """When encryption is enabled but the DB cert already exists,
     _generate_db_node_certs must not be called.
@@ -114,7 +120,7 @@ def test_reuse_skips_certs_when_already_present(tmp_path, encrypt_param):
         logdir=tmp_path,
         reuse_cluster=True,
     )
-    node = _make_mock_node()
+    node = make_mock_node()
     fake_ssl_dir = MagicMock(spec=Path)
     cert_path = MagicMock()
     cert_path.exists.return_value = True
@@ -130,7 +136,10 @@ def test_reuse_skips_certs_when_already_present(tmp_path, encrypt_param):
     mock_gen_certs.assert_not_called()
 
 
-@pytest.mark.parametrize("simulated_racks_value", [0, 2])
+@pytest.mark.parametrize(
+    "simulated_racks_value",
+    [pytest.param(0, id="no-racks"), pytest.param(2, id="two-racks")],
+)
 def test_normal_setup_when_not_reusing(tmp_path, simulated_racks_value):
     """When REUSE_CLUSTER is False, node_setup must call is_scylla_installed
     and proceed with the full setup path for both simulated_racks=0 and
@@ -143,7 +152,7 @@ def test_normal_setup_when_not_reusing(tmp_path, simulated_racks_value):
         logdir=tmp_path,
         reuse_cluster=False,
     )
-    node = _make_mock_node()
+    node = make_mock_node()
     node.is_scylla_installed.return_value = True
 
     with patch.object(cluster, "_reuse_cluster_setup") as mock_reuse_setup:
@@ -151,5 +160,5 @@ def test_normal_setup_when_not_reusing(tmp_path, simulated_racks_value):
 
     mock_reuse_setup.assert_not_called()
     node.is_scylla_installed.assert_called_once_with(raise_if_not_installed=True)
-    node.config_setup.assert_called_once()
+    node.config_setup.assert_called_once_with(append_scylla_args=cluster.get_scylla_args())
     node.restart_scylla.assert_called_once_with(verify_up_before=True)

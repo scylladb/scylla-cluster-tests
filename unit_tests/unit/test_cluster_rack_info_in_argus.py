@@ -56,6 +56,7 @@ class StartedNode(NodetoolDummyNode):
 
     @property
     def ip_address(self):
+        """The IP address of the node, which is its name in the fake cluster."""
         return self.name
 
     def reported_names(self):
@@ -72,14 +73,15 @@ class StartedScyllaCluster(DummyScyllaCluster):
 
     # The real `node_setup` and `node_startup` install, configure and start Scylla over SSH.
     def node_setup(self, node, **_):
-        pass
+        """Skip the Scylla setup of the node."""
 
     def node_startup(self, node, **_):
+        """Mark Scylla as up on the node without starting it."""
         node._db_up = True
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, timeout=None):
-        pass
+        """No-op wait, wrapped so the real UN check and the Argus reports run."""
 
 
 @pytest.fixture

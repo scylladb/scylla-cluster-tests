@@ -31,15 +31,77 @@ from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 
 PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-regression.yaml"
 
+RETIRED_X86_JOBS = [
+    pytest.param("scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes", id="throughput-vnodes"),
+    pytest.param(
+        "scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes", id="throughput-write-vnodes"
+    ),
+    pytest.param("scylla-enterprise-perf-regression-latency-650gb-with-nemesis", id="latency-nemesis"),
+    pytest.param("scylla-enterprise-perf-regression-predefined-throughput-steps-tablets", id="throughput-tablets"),
+    pytest.param(
+        "scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets", id="throughput-write-tablets"
+    ),
+    pytest.param(
+        "scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets", id="rolling-upgrade-tablets"
+    ),
+    pytest.param("scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets", id="latency-nemesis-tablets"),
+]
+
+RETIRED_X86_JOB_NAMES = [param.values[0] for param in RETIRED_X86_JOBS]
+
+# Every 2024.x / 2025.x minor the trigger can be fired for, GA and rc alike.
+RETIRED_VERSIONS = [
+    pytest.param("2024.1:latest", "2024.1.15-0.20250115.abc", id="2024.1"),
+    pytest.param("2024.2:latest", "2024.2.11-0.20250320.abc", id="2024.2"),
+    pytest.param("2025.1:latest", "2025.1.3-0.20250525.abc", id="2025.1"),
+    pytest.param("2025.1:latest", "2025.1.3-rc1-0.20250525.abc", id="2025.1-rc1"),
+    pytest.param("2025.2:latest", "2025.2.2-0.20250825.abc", id="2025.2"),
+    pytest.param("2025.3:latest", "2025.3.5-0.20251025.abc", id="2025.3"),
+    pytest.param("2025.4:latest", "2025.4.1-0.20260125.abc", id="2025.4"),
+    pytest.param("2025.4:latest", "2025.4.1-rc1-0.20260125.abc", id="2025.4-rc1"),
+]
+
+LIVE_VERSIONS = [
+    pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", id="2026.1"),
+    pytest.param("master:latest", "2026.3.0~dev-0.20260525.abc", id="master"),
+]
+
+MICROBENCHMARK_VARIANTS = ("x86_64", "x86_64-write", "arm64", "arm64-write")
+
 
 def write_matrix(tmp_path, data) -> Path:
+    """Write data as a YAML matrix file in tmp_path and return its path."""
     path = tmp_path / "matrix.yaml"
     path.write_text(yaml.dump(data))
     return path
 
 
+def microbenchmark_jobs(tool: str) -> set[str]:
+    """Return the job names of the four microbenchmark variants of tool."""
+    return {f"scylla-enterprise-{tool}-weekly-microbenchmark_{variant}" for variant in MICROBENCHMARK_VARIANTS}
+
+
+def release_microbenchmark_cases():
+    """Return the release versions with the expected perf-cql-raw and perf-alternator selection."""
+    return [
+        *(pytest.param(*version.values, False, False, id=version.id) for version in RETIRED_VERSIONS),
+        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", False, False, id="2026.1"),
+        pytest.param("2025.1.16", "2025.1.16", False, False, id="2025.1.16-promote-release"),
+        pytest.param("2026.2:latest", "2026.2.1-0.20261025.abc", True, False, id="2026.2"),
+        pytest.param("2026.2.12", "2026.2.12", True, False, id="2026.2.12-promote-release"),
+        pytest.param("2026.3:latest", "2026.3.1-0.20261025.abc", True, False, id="2026.3"),
+        pytest.param("2026.3.4", "2026.3.4", True, False, id="2026.3.4-promote-release"),
+        pytest.param("2026.4:latest", "2026.4.1-0.20261025.abc", True, True, id="2026.4"),
+        pytest.param("2026.4.0-rc2", "2026.4.0-rc2", True, True, id="2026.4.0-rc2-promote-release"),
+        pytest.param("2026.4.2", "2026.4.2", True, True, id="2026.4.2-promote-release"),
+        pytest.param("2027.1.0-rc2", "2027.1.0-rc2", True, True, id="next-release"),
+        pytest.param("master:latest", "2027.1.0~dev-0.20261025.abc", True, True, id="master-manual-run"),
+    ]
+
+
 @pytest.fixture()
 def perf_config(tmp_path):
+    """Synthetic perf-regression matrix with master, GCE and rolling-upgrade jobs."""
     path = write_matrix(
         tmp_path,
         {
@@ -87,10 +149,18 @@ def perf_config(tmp_path):
 
 @pytest.fixture()
 def production_perf_config():
+    """The production perf-regression.yaml matrix."""
     return load_matrix_config(PERF_YAML)
 
 
+@pytest.fixture()
+def production_pgo_config():
+    """The production pgo-offline-installer.yaml matrix."""
+    return load_matrix_config(PERF_YAML.parent / "pgo-offline-installer.yaml")
+
+
 def test_master_2weeks_selects_expected_jobs(perf_config):
+    """master:latest with the master-2weeks selector picks only the i8g tablets job."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="master:latest",
@@ -103,6 +173,7 @@ def test_master_2weeks_selects_expected_jobs(perf_config):
 
 
 def test_gce_custom_monthly_with_master_selects_latte(perf_config):
+    """The gce-custom-monthly selector on master selects both GCE latte jobs."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="master:latest",
@@ -114,6 +185,7 @@ def test_gce_custom_monthly_with_master_selects_latte(perf_config):
 
 
 def test_gce_custom_monthly_non_rc_excluded(perf_config):
+    """A non-rc 2025.1 release does not select the rc1-only GCE latte jobs."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="2025.1:latest",
@@ -124,6 +196,7 @@ def test_gce_custom_monthly_non_rc_excluded(perf_config):
 
 
 def test_gce_custom_monthly_rc1_included(perf_config):
+    """An rc1 release of 2026.1 selects both GCE latte jobs."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="2026.1:latest",
@@ -131,42 +204,6 @@ def test_gce_custom_monthly_rc1_included(perf_config):
         labels_selector="gce-custom-monthly",
     )
     assert len(result) == 2
-
-
-RETIRED_X86_JOBS = [
-    pytest.param("scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes", id="throughput-vnodes"),
-    pytest.param(
-        "scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes", id="throughput-write-vnodes"
-    ),
-    pytest.param("scylla-enterprise-perf-regression-latency-650gb-with-nemesis", id="latency-nemesis"),
-    pytest.param("scylla-enterprise-perf-regression-predefined-throughput-steps-tablets", id="throughput-tablets"),
-    pytest.param(
-        "scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets", id="throughput-write-tablets"
-    ),
-    pytest.param(
-        "scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets", id="rolling-upgrade-tablets"
-    ),
-    pytest.param("scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets", id="latency-nemesis-tablets"),
-]
-
-RETIRED_X86_JOB_NAMES = [param.values[0] for param in RETIRED_X86_JOBS]
-
-# Every 2024.x / 2025.x minor the trigger can be fired for, GA and rc alike.
-RETIRED_VERSIONS = [
-    pytest.param("2024.1:latest", "2024.1.15-0.20250115.abc", id="2024.1"),
-    pytest.param("2024.2:latest", "2024.2.11-0.20250320.abc", id="2024.2"),
-    pytest.param("2025.1:latest", "2025.1.3-0.20250525.abc", id="2025.1"),
-    pytest.param("2025.1:latest", "2025.1.3-rc1-0.20250525.abc", id="2025.1-rc1"),
-    pytest.param("2025.2:latest", "2025.2.2-0.20250825.abc", id="2025.2"),
-    pytest.param("2025.3:latest", "2025.3.5-0.20251025.abc", id="2025.3"),
-    pytest.param("2025.4:latest", "2025.4.1-0.20260125.abc", id="2025.4"),
-    pytest.param("2025.4:latest", "2025.4.1-rc1-0.20260125.abc", id="2025.4-rc1"),
-]
-
-LIVE_VERSIONS = [
-    pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", id="2026.1"),
-    pytest.param("master:latest", "2026.3.0~dev-0.20260525.abc", id="master"),
-]
 
 
 @pytest.mark.parametrize("job_name", RETIRED_X86_JOBS)
@@ -221,34 +258,9 @@ def test_2024_and_2025_releases_keep_microbenchmarks_only(production_perf_config
         )
 
 
-MICROBENCHMARK_VARIANTS = ("x86_64", "x86_64-write", "arm64", "arm64-write")
-
-
-def microbenchmark_jobs(tool: str) -> set[str]:
-    return {f"scylla-enterprise-{tool}-weekly-microbenchmark_{variant}" for variant in MICROBENCHMARK_VARIANTS}
-
-
-@pytest.fixture()
-def production_pgo_config():
-    return load_matrix_config(PERF_YAML.parent / "pgo-offline-installer.yaml")
-
-
 @pytest.mark.parametrize(
     "scylla_version,resolved_version,cql_raw,alternator",
-    [
-        *(pytest.param(*version.values, False, False, id=version.id) for version in RETIRED_VERSIONS),
-        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", False, False, id="2026.1"),
-        pytest.param("2025.1.16", "2025.1.16", False, False, id="2025.1.16-promote-release"),
-        pytest.param("2026.2:latest", "2026.2.1-0.20261025.abc", True, False, id="2026.2"),
-        pytest.param("2026.2.12", "2026.2.12", True, False, id="2026.2.12-promote-release"),
-        pytest.param("2026.3:latest", "2026.3.1-0.20261025.abc", True, False, id="2026.3"),
-        pytest.param("2026.3.4", "2026.3.4", True, False, id="2026.3.4-promote-release"),
-        pytest.param("2026.4:latest", "2026.4.1-0.20261025.abc", True, True, id="2026.4"),
-        pytest.param("2026.4.0-rc2", "2026.4.0-rc2", True, True, id="2026.4.0-rc2-promote-release"),
-        pytest.param("2026.4.2", "2026.4.2", True, True, id="2026.4.2-promote-release"),
-        pytest.param("2027.1.0-rc2", "2027.1.0-rc2", True, True, id="next-release"),
-        pytest.param("master:latest", "2027.1.0~dev-0.20261025.abc", True, True, id="master-manual-run"),
-    ],
+    release_microbenchmark_cases(),
 )
 def test_releases_that_select_the_in_process_server_microbenchmarks(
     production_perf_config, scylla_version, resolved_version, cql_raw, alternator
@@ -290,7 +302,13 @@ def test_perf_alternator_entry_equals_the_cql_raw_entry(request, config_fixture,
     assert (alternator["arch"] == "aarch64") == variant.startswith("arm64")
 
 
-@pytest.mark.parametrize("labels_selector,arch_suffix", [("pgo-x86", "x86_64"), ("pgo-arm", "arm64")])
+@pytest.mark.parametrize(
+    "labels_selector,arch_suffix",
+    [
+        pytest.param("pgo-x86", "x86_64", id="pgo-x86"),
+        pytest.param("pgo-arm", "arm64", id="pgo-arm"),
+    ],
+)
 def test_pgo_trigger_selects_perf_alternator(production_pgo_config, labels_selector, arch_suffix):
     """A PGO build runs the perf-alternator microbenchmarks of its architecture, as it runs cql-raw."""
     selected = {

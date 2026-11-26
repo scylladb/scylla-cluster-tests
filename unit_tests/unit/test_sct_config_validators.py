@@ -142,26 +142,28 @@ def test_str_or_list_or_eval_invalid(value, error_fragment):
 @pytest.mark.parametrize(
     "input_val,expected",
     [
-        (None, None),
-        ({"key": "val"}, {"key": "val"}),
-        ("{'a': 1}", {"a": 1}),
-        ('{"b": 2}', {"b": 2}),
-        ("key: value", {"key": "value"}),
+        pytest.param(None, None, id="none"),
+        pytest.param({"key": "val"}, {"key": "val"}, id="dict"),
+        pytest.param("{'a': 1}", {"a": 1}, id="python-dict-str"),
+        pytest.param('{"b": 2}', {"b": 2}, id="json-dict-str"),
+        pytest.param("key: value", {"key": "value"}, id="yaml-str"),
     ],
 )
 def test_dict_or_str_valid(input_val, expected):
+    """dict_or_str returns dicts as-is and parses dict-like strings (Python, JSON, YAML)."""
     assert dict_or_str(input_val) == expected
 
 
 @pytest.mark.parametrize(
     "input_val",
     [
-        "[1, 2]",
-        "3",
-        "plain string",
+        pytest.param("[1, 2]", id="list-str"),
+        pytest.param("3", id="int-str"),
+        pytest.param("plain string", id="plain-str"),
     ],
 )
 def test_dict_or_str_invalid(input_val):
+    """dict_or_str raises ValueError when the string does not parse to a dict."""
     with pytest.raises(ValueError):
         dict_or_str(input_val)
 
@@ -174,15 +176,16 @@ def test_dict_or_str_invalid(input_val):
 @pytest.mark.parametrize(
     "input_val,expected",
     [
-        (None, []),
-        ([], []),
-        (["cassandra-stress write"], ["cassandra-stress write"]),
-        (["cmd1", "cmd2"], ["cmd1", "cmd2"]),
+        pytest.param(None, [], id="none"),
+        pytest.param([], [], id="empty-list"),
+        pytest.param(["cassandra-stress write"], ["cassandra-stress write"], id="single-cmd-list"),
+        pytest.param(["cmd1", "cmd2"], ["cmd1", "cmd2"], id="two-cmd-list"),
         # scalar string (e.g. gemini_cmd) must become a one-element list
-        ("gemini --duration 10m", ["gemini --duration 10m"]),
+        pytest.param("gemini --duration 10m", ["gemini --duration 10m"], id="scalar-str-wrapped"),
     ],
 )
 def test_as_list(input_val, expected):
+    """_as_list normalises None, scalar strings and lists into a list of commands."""
     assert SCTConfiguration._as_list(input_val) == expected
 
 
@@ -220,7 +223,15 @@ def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("value", [1.0, 0.68, 0.5, 0.01])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(1.0, id="upper-bound"),
+        pytest.param(0.68, id="typical"),
+        pytest.param(0.5, id="half"),
+        pytest.param(0.01, id="near-zero"),
+    ],
+)
 def test_effective_compression_ratio_valid(monkeypatch, value):
     """effective_compression_ratio accepts values in (0, 1.0]."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
@@ -236,10 +247,10 @@ def test_effective_compression_ratio_valid(monkeypatch, value):
 @pytest.mark.parametrize(
     "value, expected_match",
     [
-        (0, "greater than 0"),
-        (-0.5, "greater than 0"),
-        (1.1, "less than or equal to 1"),
-        (2.0, "less than or equal to 1"),
+        pytest.param(0, "greater than 0", id="zero"),
+        pytest.param(-0.5, "greater than 0", id="negative"),
+        pytest.param(1.1, "less than or equal to 1", id="just-above-one"),
+        pytest.param(2.0, "less than or equal to 1", id="two"),
     ],
 )
 def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match):
@@ -255,6 +266,7 @@ def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match)
 
 
 def test_stress_template_context_accepts_dict(monkeypatch):
+    """stress_template_context keeps a dict from SCT_STRESS_TEMPLATE_CONTEXT as-is."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -266,6 +278,7 @@ def test_stress_template_context_accepts_dict(monkeypatch):
 
 
 def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    """stress_template_context parses a YAML string from SCT_STRESS_TEMPLATE_CONTEXT into a dict."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -276,17 +289,49 @@ def test_stress_template_context_accepts_yaml_string(monkeypatch):
     assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
 
 
-@pytest.mark.parametrize("value", ["y", "Yes", "T", "true", "ON", "1", " true "])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("y", id="y"),
+        pytest.param("Yes", id="Yes"),
+        pytest.param("T", id="T"),
+        pytest.param("true", id="true"),
+        pytest.param("ON", id="ON"),
+        pytest.param("1", id="one"),
+        pytest.param(" true ", id="padded-true"),
+    ],
+)
 def test_strtobool_accepts_truthy_spellings(value):
+    """Truthy spellings, in any case or padding, make strtobool return True."""
     assert strtobool(value) is True
 
 
-@pytest.mark.parametrize("value", ["n", "No", "F", "false", "OFF", "0", " false "])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("n", id="n"),
+        pytest.param("No", id="No"),
+        pytest.param("F", id="F"),
+        pytest.param("false", id="false"),
+        pytest.param("OFF", id="OFF"),
+        pytest.param("0", id="zero"),
+        pytest.param(" false ", id="padded-false"),
+    ],
+)
 def test_strtobool_accepts_falsy_spellings(value):
+    """Falsy spellings, in any case or padding, make strtobool return False."""
     assert strtobool(value) is False
 
 
-@pytest.mark.parametrize("value", ["maybe", "", "2", "truthy"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("maybe", id="word"),
+        pytest.param("", id="empty"),
+        pytest.param("2", id="out-of-range-int"),
+        pytest.param("truthy", id="truthy-prefix"),
+    ],
+)
 def test_strtobool_rejects_anything_else(value):
     """Same contract as the distutils version it replaces -- ValueError, not a silent False."""
     with pytest.raises(ValueError, match="invalid truth value"):

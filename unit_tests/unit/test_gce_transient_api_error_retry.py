@@ -70,11 +70,18 @@ def make_operation(refresh_results: list) -> tuple[extended_operation.ExtendedOp
 
 
 def done_operation(error_code: int = 0, error_message: str = "") -> FakeOperation:
+    """Build a DONE FakeOperation, failing with `error_code` and `error_message` when given."""
     return FakeOperation(status="DONE", error_code=error_code, error_message=error_message, done=True)
+
+
+def make_instance(fingerprint: str) -> compute_v1.Instance:
+    """Build a db-node instance labelled keep-action=terminate with the given label fingerprint."""
+    return compute_v1.Instance(name="db-node-0-1", labels={"keep-action": "terminate"}, label_fingerprint=fingerprint)
 
 
 @pytest.mark.parametrize("transient_error", TRANSIENT_ERRORS, ids=lambda err: type(err).__name__)
 def test_transient_poll_error_is_retried_until_the_operation_completes(transient_error) -> None:
+    """A transient poll error is retried, and the operation completes once a later poll succeeds."""
     operation, refresh = make_operation([transient_error, transient_error, done_operation()])
 
     assert wait_for_extended_operation(operation, "instance creation", timeout=30) is None
@@ -82,6 +89,7 @@ def test_transient_poll_error_is_retried_until_the_operation_completes(transient
 
 
 def test_non_transient_poll_error_fails_immediately() -> None:
+    """A non-transient poll error (403) is raised at once, without a retry."""
     operation, refresh = make_operation([exceptions.Forbidden("403 Permission denied."), done_operation()])
 
     with pytest.raises(exceptions.Forbidden):
@@ -90,13 +98,13 @@ def test_non_transient_poll_error_fails_immediately() -> None:
 
 
 def test_exhausted_transient_retry_reports_the_underlying_gce_error() -> None:
+    """Once the retry deadline passes, the TimeoutError names the operation and the GCE error."""
     error = exceptions.ServiceUnavailable("503 Authentication backend unavailable.")
     operation, _ = make_operation([error] * 50)
 
-    with pytest.raises(TimeoutError) as exc_info:
-        # a 0s retry deadline lets the first poll run and then refuses to retry it
-        with patch.object(gce_utils, "GCE_OPERATION_RETRY_TIMEOUT", 0.0):
-            wait_for_extended_operation(operation, "setting labels on db-node-1", timeout=30)
+    # a 0s retry deadline lets the first poll run and then refuses to retry it
+    with pytest.raises(TimeoutError) as exc_info, patch.object(gce_utils, "GCE_OPERATION_RETRY_TIMEOUT", 0.0):
+        wait_for_extended_operation(operation, "setting labels on db-node-1", timeout=30)
 
     message = str(exc_info.value)
     assert "setting labels on db-node-1" in message
@@ -105,6 +113,7 @@ def test_exhausted_transient_retry_reports_the_underlying_gce_error() -> None:
 
 
 def test_operation_failing_with_an_error_code_still_raises() -> None:
+    """An operation that finishes with an error code raises the matching GCE exception."""
     operation, _ = make_operation([done_operation(error_code=400, error_message="Invalid machine type.")])
 
     with pytest.raises(exceptions.BadRequest, match="Invalid machine type."):
@@ -112,6 +121,7 @@ def test_operation_failing_with_an_error_code_still_raises() -> None:
 
 
 def test_successful_operation_is_not_retried() -> None:
+    """A successful operation is polled once and not retried."""
     operation, refresh = make_operation([done_operation()])
 
     assert wait_for_extended_operation(operation, "instance creation", timeout=30) is None
@@ -121,17 +131,19 @@ def test_successful_operation_is_not_retried() -> None:
 @pytest.mark.parametrize(
     ("operation_timeout", "expected"),
     [
-        (None, GCE_OPERATION_RETRY_TIMEOUT),
-        (30, 30),
-        (600, GCE_OPERATION_RETRY_TIMEOUT),
+        pytest.param(None, GCE_OPERATION_RETRY_TIMEOUT, id="no-timeout"),
+        pytest.param(30, 30, id="timeout-below-cap"),
+        pytest.param(600, GCE_OPERATION_RETRY_TIMEOUT, id="timeout-above-cap"),
     ],
 )
 def test_retry_deadline_never_outlives_the_operation_timeout(operation_timeout, expected) -> None:
+    """The retry deadline is capped by the operation timeout and defaults to the GCE retry timeout."""
     assert gce_operation_poll_retry(operation_timeout).timeout == expected
 
 
 @pytest.mark.parametrize("transient_error", TRANSIENT_ERRORS, ids=lambda err: type(err).__name__)
 def test_retry_predicate_matches_only_transient_errors(transient_error) -> None:
+    """The retry predicate matches the transient GCE errors and rejects 403 and 404."""
     predicate = gce_operation_poll_retry()._predicate
 
     assert predicate(transient_error)
@@ -139,17 +151,14 @@ def test_retry_predicate_matches_only_transient_errors(transient_error) -> None:
     assert not predicate(exceptions.NotFound("404 Instance not found."))
 
 
-def make_instance(fingerprint: str) -> compute_v1.Instance:
-    return compute_v1.Instance(name="db-node-0-1", labels={"keep-action": "terminate"}, label_fingerprint=fingerprint)
-
-
 @patch("sdcm.utils.gce_utils.wait_for_extended_operation", return_value=None)
 def test_set_labels_retries_transient_error_with_a_fresh_fingerprint(mock_wait) -> None:
     """The SCT-417 scenario: the node exists, only its keep-alive labelling failed transiently."""
     instances_client = MagicMock()
+    labelled_operation = MagicMock()
     instances_client.set_labels.side_effect = [
         exceptions.ServiceUnavailable("503 Authentication backend unavailable."),
-        MagicMock(),
+        labelled_operation,
     ]
     instances_client.get.return_value = make_instance("fingerprint-2")
 
@@ -174,16 +183,17 @@ def test_set_labels_retries_transient_error_with_a_fresh_fingerprint(mock_wait) 
         "keep-action": "terminate",
         "keep": "12",
     }
-    mock_wait.assert_called_once()
+    mock_wait.assert_called_once_with(labelled_operation, "setting labels on db-node-0-1")
 
 
 @patch("sdcm.utils.gce_utils.wait_for_extended_operation", return_value=None)
 def test_set_labels_replays_a_stale_fingerprint_rejection(mock_wait) -> None:
     """A 503 whose request did reach GCE comes back as 412 on the replay - re-read and try again."""
     instances_client = MagicMock()
+    labelled_operation = MagicMock()
     instances_client.set_labels.side_effect = [
         exceptions.PreconditionFailed("412 Labels fingerprint does not match."),
-        MagicMock(),
+        labelled_operation,
     ]
     instances_client.get.return_value = make_instance("fingerprint-2")
 
@@ -196,11 +206,12 @@ def test_set_labels_replays_a_stale_fingerprint_rejection(mock_wait) -> None:
     )
 
     assert instances_client.set_labels.call_count == 2
-    mock_wait.assert_called_once()
+    mock_wait.assert_called_once_with(labelled_operation, "setting labels on db-node-0-1")
 
 
 @patch("sdcm.utils.gce_utils.wait_for_extended_operation", return_value=None)
 def test_set_labels_gives_up_after_the_configured_attempts(mock_wait) -> None:
+    """gce_set_labels stops after GCE_SET_LABELS_RETRIES transient failures and re-raises the last one."""
     instances_client = MagicMock()
     instances_client.set_labels.side_effect = exceptions.ServiceUnavailable("503 Authentication backend unavailable.")
     instances_client.get.return_value = make_instance("fingerprint-2")
@@ -220,6 +231,7 @@ def test_set_labels_gives_up_after_the_configured_attempts(mock_wait) -> None:
 
 @patch("sdcm.utils.gce_utils.wait_for_extended_operation", return_value=None)
 def test_set_labels_does_not_retry_a_non_transient_error(mock_wait) -> None:
+    """A 403 from set_labels is raised at once, without a retry or a re-read of the instance."""
     instances_client = MagicMock()
     instances_client.set_labels.side_effect = exceptions.Forbidden("403 Permission denied.")
 

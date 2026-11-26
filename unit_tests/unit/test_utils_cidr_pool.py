@@ -22,6 +22,7 @@ DEFAULT_SC_CIDR = "172.31.0.0/24"
 
 
 def test_init_with_defaults():
+    """CidrPoolManager() uses the Scylla Cloud /16 base, /24 subnets and reserves 172.31.0.0/24."""
     manager = CidrPoolManager()
     assert str(manager.cidr_base) == "172.31.0.0/16"
     assert manager.subnet_size == 24
@@ -29,12 +30,14 @@ def test_init_with_defaults():
 
 
 def test_init_with_custom_parameters():
+    """Explicit cidr_base and subnet_size override the defaults."""
     manager = CidrPoolManager(cidr_base="10.0.0.0/8", subnet_size=20)
     assert str(manager.cidr_base) == "10.0.0.0/8"
     assert manager.subnet_size == 20
 
 
 def test_generate_next_cidr():
+    """_generate_next_cidr returns a /24 inside the base that avoids used and reserved ranges."""
     manager = CidrPoolManager()
     used_cidrs = {"172.31.1.0/24", "172.31.2.0/24", "172.31.3.0/24"}
 
@@ -48,6 +51,7 @@ def test_generate_next_cidr():
 
 
 def test_generate_next_cidr_exhausted_pool():
+    """_generate_next_cidr returns None when every subnet is used."""
     manager = CidrPoolManager(cidr_base="192.168.0.0/30", subnet_size=32)
 
     all_possible_subnets = set()
@@ -59,17 +63,20 @@ def test_generate_next_cidr_exhausted_pool():
 
 
 def test_init_with_invalid_cidr():
+    """CidrPoolManager rejects a malformed cidr_base with ValueError."""
     with pytest.raises(ValueError):
         CidrPoolManager(cidr_base="not-a-cidr")
 
 
 def test_generate_next_cidr_invalid_subnet_config():
+    """_generate_next_cidr raises CidrAllocationError when subnet_size is larger than the base prefix."""
     with pytest.raises(CidrAllocationError):
         CidrPoolManager(cidr_base="192.168.1.0/24", subnet_size=16)._generate_next_cidr(set())
 
 
 @patch("sdcm.utils.cidr_pool.AwsRegion")
 def test_get_available_cidr_aws(mock_aws_region):
+    """get_available_cidr on AWS queries the region's VPC peering routes and returns a free /24."""
     mock_region_instance = Mock()
     mock_region_instance.get_vpc_peering_routes.return_value = ["172.31.1.0/24", "172.31.2.0/24"]
     mock_aws_region.return_value = mock_region_instance
@@ -84,11 +91,12 @@ def test_get_available_cidr_aws(mock_aws_region):
     assert result not in ["172.31.1.0/24", "172.31.2.0/24", "172.31.0.0/24"]
 
     mock_aws_region.assert_called_once_with("us-east-1")
-    mock_region_instance.get_vpc_peering_routes.assert_called_once()
+    mock_region_instance.get_vpc_peering_routes.assert_called_once_with()
 
 
 @patch("sdcm.utils.cidr_pool.GceRegion")
 def test_get_available_cidr_gce(mock_gce_region):
+    """get_available_cidr on GCE queries the region's peering routes and returns a free /24."""
     mock_region_instance = Mock()
     mock_region_instance.get_peering_routes.return_value = ["172.31.3.0/24", "172.31.4.0/24"]
     mock_gce_region.return_value = mock_region_instance
@@ -103,11 +111,12 @@ def test_get_available_cidr_gce(mock_gce_region):
     assert result not in ["172.31.3.0/24", "172.31.4.0/24", "172.31.0.0/24"]
 
     mock_gce_region.assert_called_once_with("us-central1")
-    mock_region_instance.get_peering_routes.assert_called_once()
+    mock_region_instance.get_peering_routes.assert_called_once_with()
 
 
 @patch("sdcm.utils.cidr_pool.AwsRegion")
 def test_no_available_cidrs_to_get(mock_aws_region):
+    """get_available_cidr raises CidrAllocationError naming the provider and region when no block is free."""
     mock_region_instance = Mock()
     mock_region_instance.get_vpc_peering_routes.return_value = []
     mock_aws_region.return_value = mock_region_instance

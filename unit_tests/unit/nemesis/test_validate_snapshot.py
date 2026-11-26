@@ -17,7 +17,8 @@ SnapshotDetails = namedtuple("SnapshotDetails", ["keyspace_name", "table_name"])
 IndexRow = namedtuple("IndexRow", ["keyspace_name", "index_name"])
 
 
-def _make_runner(scylla_version, ks_cf, index_rows=()):
+def make_runner(scylla_version, ks_cf, index_rows=()):
+    """Build a TestRunner whose cluster lists ks_cf and whose CQL session returns index_rows."""
     runner = TestRunner()
     runner.target_node.scylla_version = scylla_version
     runner.cluster.get_any_ks_cf_list.return_value = ks_cf
@@ -35,7 +36,7 @@ def _make_runner(scylla_version, ks_cf, index_rows=()):
 
 def test_validate_snapshot_pre_2026_2_expects_index_suffix():
     """Before the Scylla change, the backing view keeps its "_index" suffix."""
-    runner = _make_runner(
+    runner = make_runner(
         scylla_version="2026.1.5",
         ks_cf=["sec_index.users", "sec_index.users_address_ind_index"],
     )
@@ -49,7 +50,7 @@ def test_validate_snapshot_pre_2026_2_expects_index_suffix():
 
 def test_validate_snapshot_2026_2_plus_normalizes_index_backing_view_name():
     """From 2026.2.0 on, listsnapshots reports the logical index name instead."""
-    runner = _make_runner(
+    runner = make_runner(
         scylla_version="2026.2.3",
         ks_cf=["sec_index.users", "sec_index.users_address_ind_index"],
         index_rows=[IndexRow("sec_index", "users_address_ind")],
@@ -64,7 +65,7 @@ def test_validate_snapshot_2026_2_plus_normalizes_index_backing_view_name():
 
 def test_validate_snapshot_2026_2_plus_real_mismatch_still_raises():
     """Normalization must not mask a genuinely missing table in the snapshot."""
-    runner = _make_runner(
+    runner = make_runner(
         scylla_version="2026.2.3",
         ks_cf=["sec_index.users", "sec_index.users_address_ind_index"],
         index_rows=[IndexRow("sec_index", "users_address_ind")],
@@ -81,7 +82,7 @@ def test_validate_snapshot_2026_2_plus_unrelated_index_named_view_untouched():
     normalization matches on exact (keyspace, backing-view name) pairs rather
     than renaming anything that ends with "_index".
     """
-    runner = _make_runner(
+    runner = make_runner(
         scylla_version="2026.2.3",
         ks_cf=["sec_index.users", "sec_index.users_by_email_index", "sec_index.users_address_ind_index"],
         index_rows=[IndexRow("sec_index", "users_address_ind")],
@@ -96,7 +97,7 @@ def test_validate_snapshot_2026_2_plus_unrelated_index_named_view_untouched():
 
 def test_validate_snapshot_2026_2_plus_kc_snapshot_normalizes_index_backing_view_name():
     """Normalization also applies when the snapshot was taken with "-kc <keyspace>"."""
-    runner = _make_runner(
+    runner = make_runner(
         scylla_version="2026.2.3",
         ks_cf=["sec_index.users", "sec_index.users_address_ind_index", "other_ks.tbl"],
         index_rows=[IndexRow("sec_index", "users_address_ind")],
@@ -110,7 +111,7 @@ def test_validate_snapshot_2026_2_plus_kc_snapshot_normalizes_index_backing_view
 
 def test_validate_snapshot_cf_snapshot_skips_table_listing():
     """A "-cf" snapshot takes the expected tables from the command, so the cluster-wide listing is not needed."""
-    runner = _make_runner(scylla_version="2026.2.3", ks_cf=[])
+    runner = make_runner(scylla_version="2026.2.3", ks_cf=[])
     snapshot_content = [SnapshotDetails("ks", "t1"), SnapshotDetails("ks", "t2")]
     NemesisRunner._validate_snapshot(runner, nodetool_cmd="snapshot ks -cf t1,t2", snapshot_content=snapshot_content)
     runner.cluster.get_any_ks_cf_list.assert_not_called()
@@ -118,6 +119,6 @@ def test_validate_snapshot_cf_snapshot_skips_table_listing():
 
 def test_validate_snapshot_skips_tables_without_sstable_folder():
     """Tables without a data folder, like virtual tables, are not expected in the snapshot."""
-    runner = _make_runner(scylla_version="2026.2.3", ks_cf=["ks.t1", "ks.virtual"])
+    runner = make_runner(scylla_version="2026.2.3", ks_cf=["ks.t1", "ks.virtual"])
     runner.target_node.get_tables_with_sstable_folder.return_value = {"ks.t1"}
     NemesisRunner._validate_snapshot(runner, nodetool_cmd="snapshot", snapshot_content=[SnapshotDetails("ks", "t1")])

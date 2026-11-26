@@ -27,17 +27,18 @@ ROLLING_UPGRADE_YAML = Path(__file__).parents[3] / "configurations" / "triggers"
 @pytest.mark.parametrize(
     "version,expected",
     [
-        ("master:latest", "master"),
-        ("branch-2025.4:latest", "branch-2025.4"),
-        ("2025.4", "2025.4"),
-        ("2025.4.1-0.20250601.abc123def456-1", "2025.4"),
-        ("2026.2.0~dev-0.20260322.f51126483167", "2026.2"),
-        ("2026.4.0-rc1", "2026.4"),
-        ("master", "master"),
-        ("", ""),
+        pytest.param("master:latest", "master", id="master-latest"),
+        pytest.param("branch-2025.4:latest", "branch-2025.4", id="branch-latest"),
+        pytest.param("2025.4", "2025.4", id="bare-release"),
+        pytest.param("2025.4.1-0.20250601.abc123def456-1", "2025.4", id="full-build-tag"),
+        pytest.param("2026.2.0~dev-0.20260322.f51126483167", "2026.2", id="dev-build-tag"),
+        pytest.param("2026.4.0-rc1", "2026.4", id="rc-tag"),
+        pytest.param("master", "master", id="bare-master"),
+        pytest.param("", "", id="empty"),
     ],
 )
 def test_extract_branch_from_version(version, expected):
+    """_extract_branch_from_version returns the branch segment of a scylla version string."""
     assert _extract_branch_from_version(version) == expected
 
 
@@ -101,6 +102,7 @@ def test_branch_id_template_resolved_in_params(scylla_version, expected_repo):
 
 
 def test_branch_template_resolved_in_params():
+    """{branch} in new_scylla_repo resolves to master for a master:latest version."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -117,6 +119,7 @@ def test_branch_template_resolved_in_params():
 
 
 def test_branch_template_from_simple_version():
+    """{branch} in new_scylla_repo resolves to a bare release version."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -130,6 +133,7 @@ def test_branch_template_from_simple_version():
 
 
 def test_branch_template_from_full_version_tag():
+    """{branch} in new_scylla_repo resolves to the release branch of a full build version tag."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
@@ -143,6 +147,7 @@ def test_branch_template_from_full_version_tag():
 
 
 def test_no_template_no_change():
+    """new_scylla_repo without placeholders is passed through unchanged."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
@@ -156,6 +161,7 @@ def test_no_template_no_change():
 
 
 def test_cli_override_wins_over_template():
+    """A new_scylla_repo CLI override replaces the template from the matrix."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -169,6 +175,7 @@ def test_cli_override_wins_over_template():
 
 
 def test_empty_version_no_resolution():
+    """An empty scylla_version leaves the {branch} placeholder unresolved."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -182,6 +189,7 @@ def test_empty_version_no_resolution():
 
 
 def test_rolling_upgrade_yaml_loads():
+    """rolling-upgrade.yaml loads with its three expected cron schedules."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     assert len(config.jobs) > 0
     # Two biweekly cron lines, both at Saturday 06:00 UTC (SCT-716), and the every-Friday
@@ -194,12 +202,14 @@ def test_rolling_upgrade_yaml_loads():
 
 
 def test_all_jobs_have_new_scylla_repo():
+    """Every job in rolling-upgrade.yaml defines new_scylla_repo."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     for job in config.jobs:
         assert "new_scylla_repo" in job.params, f"Job {job.job_name} missing new_scylla_repo param"
 
 
 def test_weekly_label_filter():
+    """The weekly and weekly-minicloud labels together select at least nine rolling-upgrade jobs."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     weekly_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly")
     minicloud_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly-minicloud")

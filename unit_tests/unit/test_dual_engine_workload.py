@@ -29,6 +29,7 @@ from sdcm.stress.latte_thread import find_latte_fn_names
 
 @pytest.fixture(scope="module")
 def dual_engine_config():
+    """Parsed logstor_lsm_dual_60_40.yaml, shared by all tests in the module."""
     config_path = pathlib.Path(sct_abs_path("configurations/performance/logstor_lsm_dual_60_40.yaml"))
     with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)

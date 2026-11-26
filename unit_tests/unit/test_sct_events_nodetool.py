@@ -16,6 +16,7 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 
 
 def test_nodetool_cmd_no_options():
+    """NodetoolEvent without options renders the begin and end lines with the command and node."""
     event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=False)
     event.event_id = "3c8e2362-a987-4eff-953f-9cd1ad2017e5"
     event.begin_event()
@@ -33,6 +34,7 @@ def test_nodetool_cmd_no_options():
 
 
 def test_nodetool_cmd_with_options():
+    """NodetoolEvent with options renders them in the string and computes duration from the event timestamp."""
     begin_event_timestamp = 1623596860.1202102
     event = NodetoolEvent(
         nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
@@ -59,6 +61,7 @@ def test_nodetool_cmd_with_options():
 
 
 def test_nodetool_failure():
+    """A failed NodetoolEvent end renders the errors and the traceback after the command line."""
     event = NodetoolEvent(
         nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
         node="1.0.0.121",
@@ -81,6 +84,7 @@ def test_nodetool_failure():
 
 
 def test_nodetool_serialization_to_json():
+    """NodetoolEvent serializes to a non-empty JSON string after begin_event."""
     event = NodetoolEvent(
         nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
         node="1.0.0.121",

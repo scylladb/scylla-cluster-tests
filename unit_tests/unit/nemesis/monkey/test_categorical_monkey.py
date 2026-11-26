@@ -28,7 +28,7 @@ def categorical_runner():
     return build
 
 
-def _member_named(nemesis, name):
+def member_named(nemesis, name):
     """Find the disruption_distribution population member with the given class name."""
     population, _ = nemesis.disruption_distribution
     return next(member for member in population if member.__class__.__name__ == name)
@@ -37,12 +37,13 @@ def _member_named(nemesis, name):
 @pytest.mark.parametrize(
     "dist, output",
     [
-        ({"CustomNemesisA": 1}, "called test function a\n"),
-        ({"CustomNemesisC": 0.5}, "called test function c\n"),
-        ({"CustomNemesisAD": 1, "CustomNemesisA": 0}, "called test function d\n"),
+        pytest.param({"CustomNemesisA": 1}, "called test function a\n", id="single-member"),
+        pytest.param({"CustomNemesisC": 0.5}, "called test function c\n", id="fractional-weight"),
+        pytest.param({"CustomNemesisAD": 1, "CustomNemesisA": 0}, "called test function d\n", id="zero-weight-sibling"),
     ],
 )
 def test_categorical_monkey_simple(dist, output, capsys):
+    """select_next_nemesis() picks the weighted member and its disrupt() runs."""
     nemesis = FakeCategorialMonkey(FakeTester(), None, dist, default_weight=0)
     method = nemesis.select_next_nemesis()
 
@@ -61,7 +62,7 @@ def test_categorical_monkey_precheck_prunes_distribution(events_function_scope):
     keeping them zipped, and leaves the runnable member's weight untouched.
     """
     nemesis = FakeCategorialMonkey(FakeTester(), None, {"CustomNemesisA": 1, "CustomNemesisC": 2}, default_weight=0)
-    _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
+    member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 
     excluded = nemesis.precheck_nemesis()
 
@@ -75,8 +76,8 @@ def test_categorical_monkey_precheck_prunes_distribution(events_function_scope):
 def test_categorical_monkey_precheck_all_excluded(events_function_scope):
     """When every member is excluded, the distribution ends up empty on both sides."""
     nemesis = FakeCategorialMonkey(FakeTester(), None, {"CustomNemesisA": 1, "CustomNemesisC": 2}, default_weight=0)
-    _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
-    _member_named(nemesis, "CustomNemesisC").precheck = MagicMock(return_value="also not feasible")
+    member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
+    member_named(nemesis, "CustomNemesisC").precheck = MagicMock(return_value="also not feasible")
 
     excluded = nemesis.precheck_nemesis()
 
@@ -95,7 +96,7 @@ def test_categorical_monkey_run_all_pruned_emits_critical_and_stops(categorical_
     the whole distribution, instead of select_next_nemesis() hitting its bare assert.
     """
     nemesis = categorical_runner({"CustomNemesisA": 1})
-    _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
+    member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 
     nemesis.run(cycles_count=5)
 
@@ -114,7 +115,7 @@ def test_categorical_monkey_run_partial_prune_runs_survivors_without_critical(
 ):
     """A partial prune keeps the runnable member selectable and runs it, no CRITICAL event."""
     nemesis = categorical_runner({"CustomNemesisA": 1, "CustomNemesisC": 1})
-    _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
+    member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 
     nemesis.run(cycles_count=1)
 

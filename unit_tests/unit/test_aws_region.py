@@ -19,8 +19,9 @@ from botocore.exceptions import ClientError
 from sdcm.utils.aws_region import AwsRegion
 
 
-@pytest.fixture(name="aws_region")
-def aws_region_fixture():
+@pytest.fixture
+def aws_region():
+    """AwsRegion for us-east-1 with boto3 and the region list patched; the EC2 client mock is ``_mock_ec2``."""
     with (
         patch("sdcm.utils.aws_region.boto3.client", return_value=MagicMock()) as mock_client,
         patch("sdcm.utils.aws_region.boto3.resource"),
@@ -31,14 +32,16 @@ def aws_region_fixture():
         yield region
 
 
-def _set_offerings(region: AwsRegion, offerings: list[tuple[str, str]]) -> None:
+def set_offerings(region: AwsRegion, offerings: list[tuple[str, str]]) -> None:
+    """Make describe_instance_type_offerings return the given (zone, instance type) pairs."""
     region._mock_ec2.describe_instance_type_offerings.return_value = {
         "InstanceTypeOfferings": [{"Location": loc, "InstanceType": itype} for loc, itype in offerings]
     }
 
 
 def test_get_common_availability_zones_intersection(aws_region):
-    _set_offerings(
+    """get_common_availability_zones returns only the AZs that offer every requested instance type."""
+    set_offerings(
         aws_region,
         [
             ("us-east-1a", "i4i.large"),
@@ -56,12 +59,13 @@ def test_get_common_availability_zones_intersection(aws_region):
 @pytest.mark.parametrize(
     "preferred_azs,expected_prefix",
     [
-        (["us-east-1d"], ["us-east-1d"]),
-        (["us-east-1d", "us-east-1b"], ["us-east-1d", "us-east-1b"]),
+        pytest.param(["us-east-1d"], ["us-east-1d"], id="one-preferred"),
+        pytest.param(["us-east-1d", "us-east-1b"], ["us-east-1d", "us-east-1b"], id="two-preferred"),
     ],
 )
 def test_get_common_availability_zones_preferred_first(aws_region, preferred_azs, expected_prefix):
-    _set_offerings(
+    """get_common_availability_zones lists the preferred AZs first, in the given order."""
+    set_offerings(
         aws_region,
         [
             ("us-east-1a", "i4i.large"),
@@ -75,7 +79,8 @@ def test_get_common_availability_zones_preferred_first(aws_region, preferred_azs
 
 
 def test_get_common_availability_zones_empty_when_no_overlap(aws_region):
-    _set_offerings(
+    """get_common_availability_zones returns an empty list when no AZ offers every requested type."""
+    set_offerings(
         aws_region,
         [
             ("us-east-1a", "i4i.large"),
@@ -86,7 +91,8 @@ def test_get_common_availability_zones_empty_when_no_overlap(aws_region):
 
 
 def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region):
-    _set_offerings(
+    """get_common_availability_zones drops a preferred AZ that does not offer the instance type."""
+    set_offerings(
         aws_region,
         [
             ("us-east-1a", "i4i.large"),
@@ -101,6 +107,7 @@ def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region)
 
 
 def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
+    """configure_backup_storage accepts BucketAlreadyOwnedByYou and still sets the lifecycle rule."""
     for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
         monkeypatch.delenv(var, raising=False)
     with (
@@ -133,6 +140,7 @@ def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
 
 
 def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region):
+    """ensure_builder_security_group tags an existing builder group with keep=alive."""
     group = MagicMock(ip_permissions=[])
     aws_region._mock_ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-builder"}]}
     aws_region.resource.SecurityGroup.return_value = group
@@ -142,6 +150,7 @@ def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region)
 
 
 def test_configure_skips_builder_group_under_minicloud(aws_region, monkeypatch):
+    """configure() under minicloud skips the builder security group and never reads the keystore."""
     aws_region._is_minicloud = True
     for name in (
         "update_sct_key_pair",

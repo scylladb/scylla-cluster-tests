@@ -19,12 +19,14 @@ from sdcm.utils.get_username import get_username
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
+    """Clear the build-user variables and pin getpass.getuser to "jenkins"."""
     for var in ("BUILD_USER_REQUESTED_BY", "BUILD_USER_EMAIL", "BUILD_USER_ID", "GIT_USER_EMAIL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(get_username_module.getpass, "getuser", lambda: "jenkins")
 
 
 def test_requested_by_wins_over_promoter(monkeypatch):
+    """BUILD_USER_REQUESTED_BY is reported even when promoter variables are set."""
     monkeypatch.setenv("BUILD_USER_REQUESTED_BY", "cezar.moise")
     monkeypatch.setenv("BUILD_USER_EMAIL", "github-promoter@scylladb.com")
     monkeypatch.setenv("BUILD_USER_ID", "scylladb-promoter")
@@ -34,18 +36,23 @@ def test_requested_by_wins_over_promoter(monkeypatch):
 @pytest.mark.parametrize(
     "env",
     [
-        {"BUILD_USER_EMAIL": "github-promoter@scylladb.com", "BUILD_USER_ID": "scylladb-promoter"},
-        {"BUILD_USER_ID": "[scylladb-promoter]"},
-        {"BUILD_USER_REQUESTED_BY": "scylladb-promoter"},
+        pytest.param(
+            {"BUILD_USER_EMAIL": "github-promoter@scylladb.com", "BUILD_USER_ID": "scylladb-promoter"},
+            id="promoter-email-and-id",
+        ),
+        pytest.param({"BUILD_USER_ID": "[scylladb-promoter]"}, id="bracketed-promoter-id"),
+        pytest.param({"BUILD_USER_REQUESTED_BY": "scylladb-promoter"}, id="requested-by-promoter"),
     ],
 )
 def test_service_users_are_never_reported(monkeypatch, env):
+    """Service-account build users fall back to the OS user instead of being reported."""
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     assert get_username() == "jenkins"
 
 
 def test_regular_jenkins_user(monkeypatch):
+    """A personal Jenkins build user is reported by the local part of their email."""
     monkeypatch.setenv("BUILD_USER_EMAIL", "cezar.moise@scylladb.com")
     monkeypatch.setenv("BUILD_USER_ID", "cezar.moise@scylladb.com")
     assert get_username() == "cezar.moise"

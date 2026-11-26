@@ -21,6 +21,7 @@ import pytest
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 SSTABLE = "/var/lib/scylla/data/keyspace1/standard1-abcd/me-1-big-Data.db"
+TABLE_DIR = "/var/lib/scylla/data/keyspace1/standard1-abcd"
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ def sstable_utils_with_mock_status(sstable_utils, monkeypatch):
 
 
 def result(ok=True, stdout="", stderr="", exit_status=0):
+    """Build a mock remoter result with the given ok flag, output and exit status."""
     res = MagicMock()
     res.ok = ok
     res.stdout = stdout
@@ -192,8 +194,6 @@ def test_batch_status_raises_on_unusable_dump(node, sstable_utils, stdout, expec
 # ---------------------------------------------------------------------------
 # get_sstables
 # ---------------------------------------------------------------------------
-
-TABLE_DIR = "/var/lib/scylla/data/keyspace1/standard1-abcd"
 
 
 def test_get_sstables_skips_sstables_without_toc(node, sstable_utils):

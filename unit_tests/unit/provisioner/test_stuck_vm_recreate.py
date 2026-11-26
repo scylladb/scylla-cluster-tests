@@ -34,19 +34,20 @@ from unit_tests.unit.provisioner.fake_azure_service import FakeVirtualMachines, 
 
 
 @pytest.fixture(autouse=True)
-def _no_nic_propagation_sleep():
+def no_nic_propagation_sleep():
     """Skip NIC propagation sleep so recreate attempts stay fast in tests."""
     with patch("sdcm.provision.azure.network_interface_provider.time.sleep"):
         yield
 
 
-def _make_provisioner(
+def make_provisioner(
     azure_service,
     recreate_attempts: int = 2,
     timeout: float = 0.5,
     poll: float = 0.01,
     total_timeout: float = 1000.0,
 ):
+    """Build an Azure provisioner with short stuck-VM timeouts."""
     provisioner = provisioner_factory.create_provisioner(
         backend="azure",
         test_id=str(uuid.uuid4()),
@@ -62,7 +63,8 @@ def _make_provisioner(
     return provisioner
 
 
-def _definition(name: str) -> InstanceDefinition:
+def definition(name: str) -> InstanceDefinition:
+    """Return a scylla-db InstanceDefinition named name."""
     return InstanceDefinition(
         name=name,
         image_id="OpenLogic:CentOS:7_9:latest",
@@ -75,95 +77,19 @@ def _definition(name: str) -> InstanceDefinition:
     )
 
 
-def _stuck_events(events, severity_name: str) -> list[str]:
+def stuck_events(events, severity_name: str) -> list[str]:
+    """Return the InstanceProvisionStuckEvent lines logged with severity_name."""
     by_category = events.get_events_by_category()
     return [line for line in by_category.get(severity_name, []) if "InstanceProvisionStuckEvent" in line]
 
 
-def test_slow_but_recovering_vm_is_not_recreated(azure_service):
-    """A VM that recovers before the timeout must not be deleted/recreated."""
-    FakeVirtualMachines.set_provision_script("node-slow", [VMCreateBehavior(stuck=True, recover_after_polls=3)])
-    provisioner = _make_provisioner(azure_service)
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        instances = provisioner.get_or_create_instances([_definition("node-slow")])
-    assert [instance.name for instance in instances] == ["node-slow"]
-    delete_spy.assert_not_called()
-
-
-def test_stuck_vm_is_recreated_and_succeeds(azure_service, events_function_scope):
-    """A stuck VM is deleted and recreated on fresh capacity, then succeeds - no redeploy."""
-    FakeVirtualMachines.set_provision_script("node-stuck", [VMCreateBehavior(stuck=True), VMCreateBehavior()])
-    provisioner = _make_provisioner(azure_service, recreate_attempts=2)
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        instances = provisioner.get_or_create_instances([_definition("node-stuck")])
-
-    assert [instance.name for instance in instances] == ["node-stuck"]
-    delete_spy.assert_called_once_with("node-stuck")
-    assert len(_stuck_events(events_function_scope, "NORMAL")) == 1
-    assert _stuck_events(events_function_scope, "WARNING") == []
-
-
-def test_two_stuck_vms_recovered_within_single_shared_wait(azure_service):
-    """Two stuck VMs are polled under one shared deadline, not one full timeout each."""
-    FakeVirtualMachines.set_provision_script("node-a", [VMCreateBehavior(stuck=True, recover_after_polls=2)])
-    FakeVirtualMachines.set_provision_script("node-b", [VMCreateBehavior(stuck=True, recover_after_polls=2)])
-    provisioner = _make_provisioner(azure_service)
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        instances = provisioner.get_or_create_instances([_definition("node-a"), _definition("node-b")])
-    assert sorted(instance.name for instance in instances) == ["node-a", "node-b"]
-    delete_spy.assert_not_called()
-
-
-def test_only_stuck_vm_in_mixed_batch_is_recreated(azure_service, events_function_scope):
-    FakeVirtualMachines.set_provision_script("node-bad", [VMCreateBehavior(stuck=True)])
-    provisioner = _make_provisioner(azure_service, recreate_attempts=2)
-    definitions = [_definition("node-good-1"), _definition("node-bad"), _definition("node-good-2")]
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        instances = provisioner.get_or_create_instances(definitions)
-
-    assert sorted(instance.name for instance in instances) == ["node-bad", "node-good-1", "node-good-2"]
-    delete_spy.assert_called_once_with("node-bad")
-    assert len(_stuck_events(events_function_scope, "NORMAL")) == 1
-
-
-def test_permanently_stuck_vm_raises_unrecoverable_after_configured_attempts(azure_service, events_function_scope):
-    FakeVirtualMachines.set_provision_script("node-dead", default=VMCreateBehavior(stuck=True))
-    provisioner = _make_provisioner(azure_service, recreate_attempts=2)
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        with pytest.raises(ProvisionUnrecoverableError) as exc_info:
-            provisioner.get_or_create_instances([_definition("node-dead")])
-
-    assert not isinstance(exc_info.value, ProvisionError)
-    assert delete_spy.call_count == 2
-    assert len(_stuck_events(events_function_scope, "NORMAL")) == 2
-    warnings = _stuck_events(events_function_scope, "WARNING")
-    assert len(warnings) == 1
-    assert "recovery attempts" in warnings[0]
-
-
-def test_recovery_gives_up_when_total_timeout_exhausted(azure_service, events_function_scope):
-    """SCT-632: recovery stops at the total-time budget even with recreate attempts remaining."""
-    FakeVirtualMachines.set_provision_script("node-dead", default=VMCreateBehavior(stuck=True))
-    provisioner = _make_provisioner(azure_service, recreate_attempts=100, total_timeout=0)
-    started = time.monotonic()
-    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        with pytest.raises(ProvisionUnrecoverableError):
-            provisioner.get_or_create_instances([_definition("node-dead")])
-    elapsed = time.monotonic() - started
-
-    delete_spy.assert_not_called()
-    assert elapsed < 5, "budget-exhausted give-up must not wait out the per-VM stuck timeout"
-    warnings = _stuck_events(events_function_scope, "WARNING")
-    assert len(warnings) == 1
-    assert "budget" in warnings[0]
-
-
-def _spot_termination_events(events) -> list[str]:
+def spot_termination_events(events) -> list[str]:
+    """Return the SpotTerminationEvent lines logged as CRITICAL."""
     by_category = events.get_events_by_category()
     return [line for line in by_category.get("CRITICAL", []) if "SpotTerminationEvent" in line]
 
 
-def _vm_provider_with_vanishing_vm(azure_service, vm_name: str, timeout: float = 0.5, poll: float = 0.01):
+def vm_provider_with_vanishing_vm(azure_service, vm_name: str, timeout: float = 0.5, poll: float = 0.01):
     """Create a VM that reports Creating then vanishes (404) - an Azure spot eviction during provisioning."""
     resource_group = f"SCT-{uuid.uuid4()}-eastus"
     azure_service.resource.resource_groups.create_or_update(resource_group, {"location": "eastus"})
@@ -179,20 +105,104 @@ def _vm_provider_with_vanishing_vm(azure_service, vm_name: str, timeout: float =
     return provider
 
 
+def test_slow_but_recovering_vm_is_not_recreated(azure_service):
+    """A VM that recovers before the timeout must not be deleted/recreated."""
+    FakeVirtualMachines.set_provision_script("node-slow", [VMCreateBehavior(stuck=True, recover_after_polls=3)])
+    provisioner = make_provisioner(azure_service)
+    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
+        instances = provisioner.get_or_create_instances([definition("node-slow")])
+    assert [instance.name for instance in instances] == ["node-slow"]
+    delete_spy.assert_not_called()
+
+
+def test_stuck_vm_is_recreated_and_succeeds(azure_service, events_function_scope):
+    """A stuck VM is deleted and recreated on fresh capacity, then succeeds - no redeploy."""
+    FakeVirtualMachines.set_provision_script("node-stuck", [VMCreateBehavior(stuck=True), VMCreateBehavior()])
+    provisioner = make_provisioner(azure_service, recreate_attempts=2)
+    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
+        instances = provisioner.get_or_create_instances([definition("node-stuck")])
+
+    assert [instance.name for instance in instances] == ["node-stuck"]
+    delete_spy.assert_called_once_with("node-stuck")
+    assert len(stuck_events(events_function_scope, "NORMAL")) == 1
+    assert stuck_events(events_function_scope, "WARNING") == []
+
+
+def test_two_stuck_vms_recovered_within_single_shared_wait(azure_service):
+    """Two stuck VMs are polled under one shared deadline, not one full timeout each."""
+    FakeVirtualMachines.set_provision_script("node-a", [VMCreateBehavior(stuck=True, recover_after_polls=2)])
+    FakeVirtualMachines.set_provision_script("node-b", [VMCreateBehavior(stuck=True, recover_after_polls=2)])
+    provisioner = make_provisioner(azure_service)
+    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
+        instances = provisioner.get_or_create_instances([definition("node-a"), definition("node-b")])
+    assert sorted(instance.name for instance in instances) == ["node-a", "node-b"]
+    delete_spy.assert_not_called()
+
+
+def test_only_stuck_vm_in_mixed_batch_is_recreated(azure_service, events_function_scope):
+    """Only the stuck VM in a mixed batch is deleted and recreated; healthy VMs are kept."""
+    FakeVirtualMachines.set_provision_script("node-bad", [VMCreateBehavior(stuck=True)])
+    provisioner = make_provisioner(azure_service, recreate_attempts=2)
+    definitions = [definition("node-good-1"), definition("node-bad"), definition("node-good-2")]
+    with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
+        instances = provisioner.get_or_create_instances(definitions)
+
+    assert sorted(instance.name for instance in instances) == ["node-bad", "node-good-1", "node-good-2"]
+    delete_spy.assert_called_once_with("node-bad")
+    assert len(stuck_events(events_function_scope, "NORMAL")) == 1
+
+
+def test_permanently_stuck_vm_raises_unrecoverable_after_configured_attempts(azure_service, events_function_scope):
+    """A VM that stays stuck raises ProvisionUnrecoverableError after the configured recreate attempts."""
+    FakeVirtualMachines.set_provision_script("node-dead", default=VMCreateBehavior(stuck=True))
+    provisioner = make_provisioner(azure_service, recreate_attempts=2)
+    with (
+        patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy,
+        pytest.raises(ProvisionUnrecoverableError) as exc_info,
+    ):
+        provisioner.get_or_create_instances([definition("node-dead")])
+
+    assert not isinstance(exc_info.value, ProvisionError)
+    assert delete_spy.call_count == 2
+    assert len(stuck_events(events_function_scope, "NORMAL")) == 2
+    warnings = stuck_events(events_function_scope, "WARNING")
+    assert len(warnings) == 1
+    assert "recovery attempts" in warnings[0]
+
+
+def test_recovery_gives_up_when_total_timeout_exhausted(azure_service, events_function_scope):
+    """SCT-632: recovery stops at the total-time budget even with recreate attempts remaining."""
+    FakeVirtualMachines.set_provision_script("node-dead", default=VMCreateBehavior(stuck=True))
+    provisioner = make_provisioner(azure_service, recreate_attempts=100, total_timeout=0)
+    started = time.monotonic()
+    with (
+        patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy,
+        pytest.raises(ProvisionUnrecoverableError),
+    ):
+        provisioner.get_or_create_instances([definition("node-dead")])
+    elapsed = time.monotonic() - started
+
+    delete_spy.assert_not_called()
+    assert elapsed < 5, "budget-exhausted give-up must not wait out the per-VM stuck timeout"
+    warnings = stuck_events(events_function_scope, "WARNING")
+    assert len(warnings) == 1
+    assert "budget" in warnings[0]
+
+
 def test_vanishing_spot_vm_raises_preempted_and_publishes_spot_termination(azure_service, events_function_scope):
     """A spot VM removed by Azure mid-provisioning (404) must raise OperationPreemptedError and a SpotTerminationEvent."""
-    provider = _vm_provider_with_vanishing_vm(azure_service, "node-evicted")
+    provider = vm_provider_with_vanishing_vm(azure_service, "node-evicted")
     with pytest.raises(OperationPreemptedError):
         provider._wait_all_provisioned(["node-evicted"], PricingModel.SPOT, deadline=None)
-    assert len(_spot_termination_events(events_function_scope)) == 1
+    assert len(spot_termination_events(events_function_scope)) == 1
 
 
 def test_vanishing_on_demand_vm_is_not_treated_as_eviction(azure_service, events_function_scope):
     """A non-spot VM that 404s mid-provisioning is not an eviction: the 404 propagates, no SpotTerminationEvent."""
-    provider = _vm_provider_with_vanishing_vm(azure_service, "node-gone")
+    provider = vm_provider_with_vanishing_vm(azure_service, "node-gone")
     with pytest.raises(ResourceNotFoundError):
         provider._wait_all_provisioned(["node-gone"], PricingModel.ON_DEMAND, deadline=None)
-    assert _spot_termination_events(events_function_scope) == []
+    assert spot_termination_events(events_function_scope) == []
 
 
 def test_transient_poll_error_does_not_abort_batch(azure_service):
@@ -200,9 +210,9 @@ def test_transient_poll_error_does_not_abort_batch(azure_service):
     FakeVirtualMachines.set_provision_script(
         "node-flaky", [VMCreateBehavior(stuck=True, recover_after_polls=2, transient_error_polls=1)]
     )
-    provisioner = _make_provisioner(azure_service)
+    provisioner = make_provisioner(azure_service)
     with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:
-        instances = provisioner.get_or_create_instances([_definition("node-flaky")])
+        instances = provisioner.get_or_create_instances([definition("node-flaky")])
     assert [instance.name for instance in instances] == ["node-flaky"]
     delete_spy.assert_not_called()
 

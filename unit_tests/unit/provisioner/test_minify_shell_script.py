@@ -27,11 +27,46 @@ from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder, ScyllaU
 EC2_USER_DATA_LIMIT = 16384
 
 
-def _run(script: str) -> subprocess.CompletedProcess:
+def run_script(script: str) -> subprocess.CompletedProcess:
+    """Run script with bash -e and capture its output."""
     return subprocess.run(["bash", "-e", "-c", script], capture_output=True, text=True, check=False)
 
 
+class FakeParams(dict):
+    """SCT params dict whose get() falls back to the default, like the real params object."""
+
+    def get(self, key, default=None):
+        """Return the value of key, or default when key is missing."""
+        return super().get(key, default)
+
+
+def scylla_user_data(params, test_config, install_docker):
+    """Build the ScyllaUserDataBuilder boot script of a loader with the agent on."""
+    return ScyllaUserDataBuilder.model_construct(
+        params=params,
+        cluster_name="longevity-test-cust-time-loader-set-03290f28",
+        user_data_format_version="3",
+        syslog_host_port=("10.4.12.200", 49153),
+        test_config=test_config,
+        install_docker=install_docker,
+        install_agent=True,
+    ).to_string()
+
+
+def instance_user_data(params, test_config, install_docker):
+    """Build the AWSInstanceUserDataBuilder boot script of a loader or monitor with the agent on."""
+    return AWSInstanceUserDataBuilder.model_construct(
+        params=params,
+        syslog_host_port=("10.4.12.200", 49153),
+        test_config=test_config,
+        aws_additional_interface=False,
+        install_docker=install_docker,
+        install_agent=True,
+    ).to_string()
+
+
 def test_heredoc_bodies_reach_the_file_byte_for_byte(tmp_path):
+    """Heredoc bodies, including tab-indented <<- ones, are written to the file unchanged."""
     body = "sources:\n    journald:\n        type: journald\n\n# a YAML comment, not a shell one\n"
     script = dedent(f"""
         # write the config
@@ -45,7 +80,7 @@ def test_heredoc_bodies_reach_the_file_byte_for_byte(tmp_path):
         echo done
     """).replace("{body}", body)
 
-    result = _run(minify_shell_script(script))
+    result = run_script(minify_shell_script(script))
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "done\n"
@@ -54,23 +89,33 @@ def test_heredoc_bodies_reach_the_file_byte_for_byte(tmp_path):
 
 
 def test_keeps_hash_signs_which_are_not_comments():
+    """minify_shell_script strips comments but keeps # inside words and after $#."""
     script = dedent("""
         set -- a b
         echo "$# # not a comment"
         echo $#  # a comment
     """)
 
-    result = _run(minify_shell_script(script))
+    result = run_script(minify_shell_script(script))
 
     assert result.stdout == "2 # not a comment\n2\n"
 
 
 def test_keeps_the_shebang():
+    """minify_shell_script keeps the shebang line and drops the comment after it."""
     assert minify_shell_script("#!/bin/bash\n# comment\necho x\n") == "#!/bin/bash\necho x\n"
 
 
-@pytest.mark.parametrize("logs_transport", ["vector", "syslog-ng", "libssh2"])
+@pytest.mark.parametrize(
+    "logs_transport",
+    [
+        pytest.param("vector", id="vector"),
+        pytest.param("syslog-ng", id="syslog-ng"),
+        pytest.param("libssh2", id="libssh2"),
+    ],
+)
 def test_aws_boot_script_is_valid_bash(logs_transport):
+    """The AWS configuration script passes bash -n for each logs transport."""
     script = AWSConfigurationScriptBuilder(
         syslog_host_port=("10.0.0.1", 49153),
         logs_transport=logs_transport,
@@ -83,40 +128,12 @@ def test_aws_boot_script_is_valid_bash(logs_transport):
     assert result.returncode == 0, result.stderr
 
 
-class _Params(dict):
-    def get(self, key, default=None):
-        return super().get(key, default)
-
-
-def _scylla_user_data(params, test_config, install_docker):
-    return ScyllaUserDataBuilder.model_construct(
-        params=params,
-        cluster_name="longevity-test-cust-time-loader-set-03290f28",
-        user_data_format_version="3",
-        syslog_host_port=("10.4.12.200", 49153),
-        test_config=test_config,
-        install_docker=install_docker,
-        install_agent=True,
-    ).to_string()
-
-
-def _instance_user_data(params, test_config, install_docker):
-    return AWSInstanceUserDataBuilder.model_construct(
-        params=params,
-        syslog_host_port=("10.4.12.200", 49153),
-        test_config=test_config,
-        aws_additional_interface=False,
-        install_docker=install_docker,
-        install_agent=True,
-    ).to_string()
-
-
 @pytest.mark.parametrize(
     "build_user_data,install_docker",
     [
-        pytest.param(_scylla_user_data, True, id="sct-runner-provisioned-loader"),
-        pytest.param(_instance_user_data, True, id="provision-resources-loader"),
-        pytest.param(_instance_user_data, False, id="provision-resources-monitor"),
+        pytest.param(scylla_user_data, True, id="sct-runner-provisioned-loader"),
+        pytest.param(instance_user_data, True, id="provision-resources-loader"),
+        pytest.param(instance_user_data, False, id="provision-resources-monitor"),
     ],
 )
 def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled(build_user_data, install_docker):
@@ -125,7 +142,7 @@ def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled(build_user_dat
     Both AWS paths: the cluster classes of the test itself, and `provision-resources`, which builds
     loaders and monitors with `AWSInstanceUserDataBuilder`.
     """
-    params = _Params(
+    params = FakeParams(
         data_volume_disk_num=0,
         raid_level=0,
         logs_transport="vector",

@@ -24,12 +24,16 @@ from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 
 
 class ExampleUserDataObject(UserDataObject):
+    """UserDataObject with one package and a multi-line script."""
+
     @property
     def packages_to_install(self) -> set[str]:
+        """Package installed by this object."""
         return {"some-pkg-to-install"}
 
     @property
     def script_to_run(self) -> str:
+        """Multi-line script run by this object."""
         return """
         Some script
         that spans multiple lines
@@ -37,36 +41,50 @@ class ExampleUserDataObject(UserDataObject):
 
 
 class AnotherExampleUserDataObject(UserDataObject):
+    """UserDataObject with another package and a short script."""
+
     @property
     def packages_to_install(self) -> set[str]:
+        """Package installed by this object."""
         return {"another-pkg-to-install"}
 
     @property
     def script_to_run(self) -> str:
+        """Short script run by this object."""
         return """
         Just another script
         """
 
 
 class EmptyScriptUserDataObject(UserDataObject):
+    """UserDataObject with packages and no script."""
+
     @property
     def packages_to_install(self) -> set[str]:
+        """Two packages installed by this object."""
         return {"pkg-from-empty", "another-pkg-to-install"}
 
 
 class ScyllaImageUserDataObject(UserDataObject):
+    """UserDataObject that adds the scylla-machine-image JSON part."""
+
     @property
     def scylla_machine_image_json(self) -> str:
+        """scylla-machine-image JSON that disables start on first boot."""
         return json.dumps({"start_scylla_on_first_boot": False})
 
 
 class NotApplicableUserDataObject(UserDataObject):
+    """UserDataObject that never applies."""
+
     @property
     def is_applicable(self) -> bool:
+        """Never applicable."""
         return False
 
 
 def test_user_data_builder_generates_valid_yaml_from_single_user_data_object():
+    """build_user_data_yaml writes the package, the script file and its runcmd for one object."""
     user_data_object_1 = ExampleUserDataObject()
 
     builder = UserDataBuilder(user_data_objects=[user_data_object_1])
@@ -88,6 +106,7 @@ def test_user_data_builder_generates_valid_yaml_from_single_user_data_object():
 
 
 def test_user_data_can_merge_user_data_objects_yaml():
+    """Packages and scripts of several objects merge; an object with an empty script adds no file."""
     user_data_object_1 = ExampleUserDataObject()
     user_data_object_2 = AnotherExampleUserDataObject()
     user_data_object_3 = EmptyScriptUserDataObject()
@@ -106,6 +125,7 @@ def test_user_data_can_merge_user_data_objects_yaml():
 
 
 def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
+    """With no user data objects the YAML has no packages or files, only the done-marker runcmd."""
     builder = UserDataBuilder(user_data_objects=[])
     user_data_yaml = builder.build_user_data_yaml()
     loaded_yaml = yaml.safe_load(user_data_yaml)
@@ -127,6 +147,7 @@ def test_apt_configuration_bounds_retries():
 
 
 def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
+    """Objects that are not applicable add no packages or files, only the done-marker runcmd."""
     builder = UserDataBuilder(user_data_objects=[NotApplicableUserDataObject()])
     user_data_yaml = builder.build_user_data_yaml()
     loaded_yaml = yaml.safe_load(user_data_yaml)
@@ -139,13 +160,15 @@ def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
 @pytest.mark.parametrize(
     "node_type,backend,expected",
     [
-        ("scylla-db", "azure", True),
-        ("oracle-db", "azure", True),  # azure oracle nodes need the agent enabled too
-        ("loader", "azure", False),
-        ("oracle-db", "aws", False),
+        pytest.param("scylla-db", "azure", True, id="scylla-db-azure"),
+        # azure oracle nodes need the agent enabled too
+        pytest.param("oracle-db", "azure", True, id="oracle-db-azure"),
+        pytest.param("loader", "azure", False, id="loader-azure"),
+        pytest.param("oracle-db", "aws", False, id="oracle-db-aws"),
     ],
 )
 def test_walinuxagent_applicability(node_type, backend, expected):
+    """EnableWaLinuxAgent applies only to Azure database nodes."""
     user_data_object = EnableWaLinuxAgent(
         test_config=None,
         params={"cluster_backend": backend},
@@ -156,8 +179,15 @@ def test_walinuxagent_applicability(node_type, backend, expected):
     assert user_data_object.is_applicable is expected
 
 
-@pytest.mark.parametrize("with_scylla_image_json", [True, False], ids=["scylla-db", "loader"])
+@pytest.mark.parametrize(
+    "with_scylla_image_json",
+    [
+        pytest.param(True, id="scylla-db"),
+        pytest.param(False, id="loader"),
+    ],
+)
 def test_mime_user_data_carries_the_cloud_config_compressed(with_scylla_image_json):
+    """The cloud-config is gzipped in the MIME multipart; the scylla JSON part stays plain text."""
     user_data_objects = [ExampleUserDataObject()]
     if with_scylla_image_json:
         user_data_objects.append(ScyllaImageUserDataObject())
@@ -178,8 +208,16 @@ def test_mime_user_data_carries_the_cloud_config_compressed(with_scylla_image_js
     assert not parts
 
 
-@pytest.mark.parametrize("content", ["echo no shebang\n", "packages: []\n", "\n#!/bin/bash\n"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("echo no shebang\n", id="no-shebang"),
+        pytest.param("packages: []\n", id="yaml-content"),
+        pytest.param("\n#!/bin/bash\n", id="shebang-not-on-first-line"),
+    ],
+)
 def test_gzipped_part_refuses_content_cloud_init_would_skip(content):
+    """gzipped_mime_part rejects content that cloud-init would skip after unpacking."""
     # unpacked, the part has no MIME type left: cloud-init only runs it by its first line
     with pytest.raises(ValueError, match="first line"):
         gzipped_mime_part(content, filename="user-script.txt")

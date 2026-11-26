@@ -19,17 +19,19 @@ import pytest
 from click.testing import CliRunner
 from ssh2.exceptions import AuthenticationError
 
+from argus.common.enums import TestStatus as ArgusStatus  # not "Test*", pytest would try to collect it
+from sct import _verify_runner_ssh, create_runner_instance, provision_resources
 from sdcm.remote.base import RetryableNetworkException
 from sdcm.remote.libssh2_client.exceptions import ConnectTimeout, FailedToRunCommand
 
 
-def _remoter_error(ssh_error: Exception) -> RetryableNetworkException:
+def remoter_error(ssh_error: Exception) -> RetryableNetworkException:
     """Build the error that 'remoter.run()' raises when the SSH connection fails."""
     return RetryableNetworkException(str(ssh_error), original=FailedToRunCommand(MagicMock(), ssh_error))
 
 
 def test_provision_resources_sends_error_event_to_argus():
-    """Test that provision_resources sends error event to Argus on failure."""
+    """provision_resources sends a CRITICAL event, sets TEST_ERROR and finalizes the run in Argus on failure."""
     # Mock the necessary components
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
@@ -61,7 +63,6 @@ def test_provision_resources_sends_error_event_to_argus():
         # SCT_CLUSTER_BACKEND is set via --backend flag, no env var needed
 
         # Use Click's CliRunner to invoke the command
-        from sct import provision_resources  # noqa: PLC0415
 
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
@@ -70,7 +71,7 @@ def test_provision_resources_sends_error_event_to_argus():
         assert result.exit_code == 1
 
         # Verify argus_client was initialized
-        test_config_instance.init_argus_client.assert_called_once()
+        test_config_instance.init_argus_client.assert_called_once_with(mock_params)
 
         # Verify submit_event was called
         assert mock_argus_client.submit_event.called
@@ -87,21 +88,21 @@ def test_provision_resources_sends_error_event_to_argus():
         assert "Failed to provision aws resources" in event_payload["message"]
 
         # Verify TEST_ERROR status was set
-        mock_argus_client.set_sct_run_status.assert_called_once()
+        mock_argus_client.set_sct_run_status.assert_called_once_with(ArgusStatus.TEST_ERROR)
 
         # Verify the run was finalized
-        mock_argus_client.finalize_sct_run.assert_called_once()
+        mock_argus_client.finalize_sct_run.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
     "tunnel_env_val,expected_use_tunnel",
     [
-        ("true", True),
-        ("false", False),
+        pytest.param("true", True, id="tunnel-on"),
+        pytest.param("false", False, id="tunnel-off"),
     ],
 )
 def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, tunnel_env_val, expected_use_tunnel):
-    """Test that provision_resources reports to Argus when init_and_verify_sct_config fails.
+    """provision_resources reports a config init failure to Argus.
 
     This covers the scenario where the unified package download fails with 404,
     raising a FileNotFoundError before provisioning even begins.
@@ -135,8 +136,6 @@ def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, t
         mock_argus_client = MagicMock()
         mock_get_argus_client.return_value = mock_argus_client
 
-        from sct import provision_resources  # noqa: PLC0415
-
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
 
@@ -168,14 +167,14 @@ def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, t
         assert "Failed to provision aws resources" in event_payload["message"]
 
         # Verify TEST_ERROR status was set
-        mock_argus_client.set_sct_run_status.assert_called_once()
+        mock_argus_client.set_sct_run_status.assert_called_once_with(ArgusStatus.TEST_ERROR)
 
         # Verify the run was finalized
-        mock_argus_client.finalize_sct_run.assert_called_once()
+        mock_argus_client.finalize_sct_run.assert_called_once_with()
 
 
 def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
-    """Test that Argus reporting is skipped when no test_id is available."""
+    """Argus reporting is skipped when no test_id is available."""
     monkeypatch.delenv("SCT_TEST_ID", raising=False)
 
     with (
@@ -190,8 +189,6 @@ def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
         mock_argus_client = MagicMock()
         test_config_instance.argus_client.return_value = mock_argus_client
         mock_test_config.return_value = test_config_instance
-
-        from sct import provision_resources  # noqa: PLC0415
 
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
@@ -244,8 +241,6 @@ def test_create_runner_instance_reports_creation_failure_to_argus(
         mock_argus_client = MagicMock()
         mock_test_config.return_value.argus_client.return_value = mock_argus_client
 
-        from sct import create_runner_instance  # noqa: PLC0415
-
         result = CliRunner().invoke(
             create_runner_instance,
             ["--cloud-provider", "aws", "--region", "us-east-1", "--test-id", "runner-test-id", "--duration", "60"],
@@ -256,8 +251,8 @@ def test_create_runner_instance_reports_creation_failure_to_argus(
     assert event_payload["run_id"] == "runner-test-id"
     assert event_payload["severity"] == "CRITICAL"
     assert f"Failed to provision aws SCT runner: {expected_error}" in event_payload["message"]
-    mock_argus_client.set_sct_run_status.assert_called_once()
-    mock_argus_client.finalize_sct_run.assert_called_once()
+    mock_argus_client.set_sct_run_status.assert_called_once_with(ArgusStatus.TEST_ERROR)
+    mock_argus_client.finalize_sct_run.assert_called_once_with()
 
 
 def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_path):
@@ -283,11 +278,9 @@ def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_pa
         sct_runner = mock_get_sct_runner.return_value
         sct_runner.get_instance_public_ip.return_value = "10.0.0.1"
         # ssh2-python raises it with no message
-        sct_runner.get_remoter.return_value.run.side_effect = _remoter_error(AuthenticationError())
+        sct_runner.get_remoter.return_value.run.side_effect = remoter_error(AuthenticationError())
         mock_argus_client = MagicMock()
         mock_test_config.return_value.argus_client.return_value = mock_argus_client
-
-        from sct import create_runner_instance  # noqa: PLC0415
 
         result = CliRunner().invoke(
             create_runner_instance,
@@ -302,15 +295,13 @@ def test_create_runner_instance_reports_ssh_failure_to_argus(monkeypatch, tmp_pa
         "Failed to provision oci SCT runner: RuntimeError: Unable to SSH to the SCT runner at 10.0.0.1: "
         "the runner refused the SSH key (AuthenticationError)"
     ) in event_payload["message"]
-    mock_argus_client.set_sct_run_status.assert_called_once()
+    mock_argus_client.set_sct_run_status.assert_called_once_with(ArgusStatus.TEST_ERROR)
 
 
 def test_verify_runner_ssh_does_not_retry_unreachable_runner():
     """An unreachable runner already used the whole connect timeout, so it fails at once."""
     remoter = MagicMock()
-    remoter.run.side_effect = _remoter_error(ConnectTimeout("Failed to connect in 240 seconds"))
-
-    from sct import _verify_runner_ssh  # noqa: PLC0415
+    remoter.run.side_effect = remoter_error(ConnectTimeout("Failed to connect in 240 seconds"))
 
     with patch("sct.time.sleep") as mock_sleep, pytest.raises(RuntimeError, match="ConnectTimeout"):
         _verify_runner_ssh(remoter=remoter, host="10.0.0.1")
@@ -322,9 +313,7 @@ def test_verify_runner_ssh_does_not_retry_unreachable_runner():
 def test_verify_runner_ssh_retries_failed_login():
     """A login that fails once, right after the runner comes up, passes on the next attempt."""
     remoter = MagicMock()
-    remoter.run.side_effect = [_remoter_error(AuthenticationError()), MagicMock()]
-
-    from sct import _verify_runner_ssh  # noqa: PLC0415
+    remoter.run.side_effect = [remoter_error(AuthenticationError()), MagicMock()]
 
     with patch("sct.time.sleep") as mock_sleep:
         _verify_runner_ssh(remoter=remoter, host="10.0.0.1")

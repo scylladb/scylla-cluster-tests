@@ -6,9 +6,111 @@ from unittest.mock import MagicMock, patch
 import oci
 import pytest
 
-from sdcm.provision.oci.virtual_machine_provider import VirtualMachineProvider
+from sdcm.provision.oci.virtual_machine_provider import AZ_FALLBACK_ROUND_DELAY, VirtualMachineProvider
 from sdcm.provision.provisioner import PricingModel, ProvisionError
 from sdcm.utils.oci_utils import MIN_BOOT_VOLUME_SIZE_IN_GBS, build_image_source_details
+
+# --- availability domain fallback ---
+
+AVAILABILITY_DOMAINS = [
+    SimpleNamespace(name="ewbj:US-ASHBURN-AD-1"),
+    SimpleNamespace(name="ewbj:US-ASHBURN-AD-2"),
+    SimpleNamespace(name="ewbj:US-ASHBURN-AD-3"),
+]
+AD_1, AD_2, AD_3 = (ad.name for ad in AVAILABILITY_DOMAINS)
+OUT_OF_CAPACITY = oci.exceptions.ServiceError(500, "InternalError", {}, "Out of host capacity.")
+
+
+def oci_instance(display_name: str, availability_domain: str, test_id: str = "test-id") -> SimpleNamespace:
+    """Return a RUNNING instance summary in availability_domain, tagged with test_id."""
+    return SimpleNamespace(
+        display_name=display_name,
+        availability_domain=availability_domain,
+        lifecycle_state="RUNNING",
+        defined_tags={"sct": {"TestId": test_id}},
+    )
+
+
+ALL_REGION_INSTANCES = [
+    oci_instance("db-node-1", "ewbj:US-ASHBURN-AD-1"),
+    oci_instance("db-node-2", "ewbj:US-ASHBURN-AD-2"),
+    oci_instance("db-node-3", "ewbj:US-ASHBURN-AD-3"),
+    oci_instance("monitor-node-1", "ewbj:US-ASHBURN-AD-1"),
+]
+
+
+def make_provider(az: str) -> VirtualMachineProvider:
+    """Return a provider scoped to az, whose identity client lists AVAILABILITY_DOMAINS."""
+    provider = VirtualMachineProvider(
+        _compartment_id="ocid1.compartment.oc1..example",
+        _region="us-ashburn-1",
+        _az=az,
+    )
+    provider._identity_client.list_availability_domains.return_value = SimpleNamespace(data=AVAILABILITY_DOMAINS)
+    return provider
+
+
+@pytest.fixture()
+def fallback_provider_factory():
+    """Builds providers for the "a,b,c" AZs whose compute client launches by the `launch_instance` mock."""
+    with (
+        patch("sdcm.utils.oci_utils.OciService.get_compute_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_identity_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_network_client", return_value=MagicMock()),
+        patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock()),
+        patch("oci.pagination.list_call_get_all_results", return_value=SimpleNamespace(data=[])),
+        patch.object(VirtualMachineProvider, "_wait_for_state", side_effect=lambda instance_id, state: instance_id),
+        patch("sdcm.provision.oci.virtual_machine_provider.time.sleep") as mock_sleep,
+    ):
+
+        def make(az_fallback: bool, launch_results: list) -> VirtualMachineProvider:
+            provider = VirtualMachineProvider(
+                _compartment_id="ocid1.compartment.oc1..example", _region="us-ashburn-1", _az="a,b,c"
+            )
+            provider._az_fallback = az_fallback
+            provider._identity_client.list_availability_domains.return_value = SimpleNamespace(
+                data=AVAILABILITY_DOMAINS
+            )
+            provider._compute_client.launch_instance.side_effect = [
+                result if isinstance(result, Exception) else SimpleNamespace(data=SimpleNamespace(id=result))
+                for result in launch_results
+            ]
+            provider.sleep = mock_sleep
+            return provider
+
+        yield make
+
+
+def db_definition(node_index: int = 1, **kwargs) -> SimpleNamespace:
+    """Return a DB node definition for node_index; kwargs are added as extra fields."""
+    return SimpleNamespace(
+        name=f"db-node-{node_index}",
+        image_id="ocid1.image.oc1..example",
+        root_disk_size=50,
+        type="VM.Standard3.Flex:4:32",
+        tags={"NodeIndex": str(node_index), "NodeType": "scylla-db"},
+        rack_index=None,
+        ssh_key=SimpleNamespace(name="test-key", public_key=b"ssh-ed25519 AAAATEST"),
+        user_name="scyllaadm",
+        user_data=None,
+        use_public_ip=False,
+        **kwargs,
+    )
+
+
+def provision(
+    provider: VirtualMachineProvider, definition: SimpleNamespace, pricing_model: PricingModel = PricingModel.SPOT
+):
+    """Provision definition through the provider with a mocked region and the given pricing model."""
+    return provider._provision_instance(oci_region=MagicMock(), definition=definition, pricing_model=pricing_model)
+
+
+def launched_availability_domains(provider: VirtualMachineProvider) -> list[str]:
+    """Return the availability domain of each launch_instance call, in call order."""
+    return [call.args[0].availability_domain for call in provider._compute_client.launch_instance.call_args_list]
+
+
+# --- VNIC and private DNS ---
 
 
 @patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock())
@@ -176,38 +278,7 @@ def test_provision_instance_sends_boot_volume_size_to_oci(
     assert launch_details.image_id is None
 
 
-AVAILABILITY_DOMAINS = [
-    SimpleNamespace(name="ewbj:US-ASHBURN-AD-1"),
-    SimpleNamespace(name="ewbj:US-ASHBURN-AD-2"),
-    SimpleNamespace(name="ewbj:US-ASHBURN-AD-3"),
-]
-
-
-def _oci_instance(display_name: str, availability_domain: str, test_id: str = "test-id") -> SimpleNamespace:
-    return SimpleNamespace(
-        display_name=display_name,
-        availability_domain=availability_domain,
-        lifecycle_state="RUNNING",
-        defined_tags={"sct": {"TestId": test_id}},
-    )
-
-
-ALL_REGION_INSTANCES = [
-    _oci_instance("db-node-1", "ewbj:US-ASHBURN-AD-1"),
-    _oci_instance("db-node-2", "ewbj:US-ASHBURN-AD-2"),
-    _oci_instance("db-node-3", "ewbj:US-ASHBURN-AD-3"),
-    _oci_instance("monitor-node-1", "ewbj:US-ASHBURN-AD-1"),
-]
-
-
-def _make_provider(az: str) -> VirtualMachineProvider:
-    provider = VirtualMachineProvider(
-        _compartment_id="ocid1.compartment.oc1..example",
-        _region="us-ashburn-1",
-        _az=az,
-    )
-    provider._identity_client.list_availability_domains.return_value = SimpleNamespace(data=AVAILABILITY_DOMAINS)
-    return provider
+# --- instance listing by availability domain ---
 
 
 @pytest.mark.parametrize(
@@ -240,7 +311,7 @@ def test_list_instances_is_scoped_to_the_provider_availability_domains(
     region reports every node of the test, and callers merging provisioners (i.e. the log collector)
     end up collecting each node once per AD in use, racing for the same remote archive paths.
     """
-    provider = _make_provider(az)
+    provider = make_provider(az)
 
     instances = provider.list_instances(test_id="test-id")
 
@@ -262,7 +333,7 @@ def test_per_availability_domain_providers_report_each_instance_once(
 ) -> None:
     """Test that providers of all the region's ADs together report every instance exactly once."""
     reported = [
-        inst.display_name for az in ("1", "2", "3") for inst in _make_provider(az).list_instances(test_id="test-id")
+        inst.display_name for az in ("1", "2", "3") for inst in make_provider(az).list_instances(test_id="test-id")
     ]
 
     assert sorted(reported) == ["db-node-1", "db-node-2", "db-node-3", "monitor-node-1"]
@@ -281,7 +352,7 @@ def test_list_instances_keeps_the_whole_region_when_az_cannot_be_resolved(
     mock_pagination,
 ) -> None:
     """Test that an unresolvable AZ degrades to no filtering instead of hiding nodes from collection."""
-    provider = _make_provider("no-such-zone")
+    provider = make_provider("no-such-zone")
 
     instances = provider.list_instances(test_id="test-id")
 
@@ -290,68 +361,14 @@ def test_list_instances_keeps_the_whole_region_when_az_cannot_be_resolved(
 
 # --- availability domain fallback ---
 
-AD_1, AD_2, AD_3 = (ad.name for ad in AVAILABILITY_DOMAINS)
-OUT_OF_CAPACITY = oci.exceptions.ServiceError(500, "InternalError", {}, "Out of host capacity.")
 
-
-@pytest.fixture()
-def fallback_provider_factory():
-    """Builds providers for the "a,b,c" AZs whose compute client launches by the `launch_instance` mock."""
-    with (
-        patch("sdcm.utils.oci_utils.OciService.get_compute_client", return_value=MagicMock()),
-        patch("sdcm.utils.oci_utils.OciService.get_identity_client", return_value=MagicMock()),
-        patch("sdcm.utils.oci_utils.OciService.get_network_client", return_value=MagicMock()),
-        patch("sdcm.utils.oci_utils.OciService.get_block_storage_client", return_value=MagicMock()),
-        patch("oci.pagination.list_call_get_all_results", return_value=SimpleNamespace(data=[])),
-        patch.object(VirtualMachineProvider, "_wait_for_state", side_effect=lambda instance_id, state: instance_id),
-        patch("sdcm.provision.oci.virtual_machine_provider.time.sleep") as mock_sleep,
-    ):
-
-        def make(az_fallback: bool, launch_results: list) -> VirtualMachineProvider:
-            provider = VirtualMachineProvider(
-                _compartment_id="ocid1.compartment.oc1..example", _region="us-ashburn-1", _az="a,b,c"
-            )
-            provider._az_fallback = az_fallback
-            provider._identity_client.list_availability_domains.return_value = SimpleNamespace(
-                data=AVAILABILITY_DOMAINS
-            )
-            provider._compute_client.launch_instance.side_effect = [
-                result if isinstance(result, Exception) else SimpleNamespace(data=SimpleNamespace(id=result))
-                for result in launch_results
-            ]
-            provider.sleep = mock_sleep
-            return provider
-
-        yield make
-
-
-def _db_definition(node_index: int = 1, **kwargs) -> SimpleNamespace:
-    return SimpleNamespace(
-        name=f"db-node-{node_index}",
-        image_id="ocid1.image.oc1..example",
-        root_disk_size=50,
-        type="VM.Standard3.Flex:4:32",
-        tags={"NodeIndex": str(node_index), "NodeType": "scylla-db"},
-        rack_index=None,
-        ssh_key=SimpleNamespace(name="test-key", public_key=b"ssh-ed25519 AAAATEST"),
-        user_name="scyllaadm",
-        user_data=None,
-        use_public_ip=False,
-        **kwargs,
-    )
-
-
-def _provision(
-    provider: VirtualMachineProvider, definition: SimpleNamespace, pricing_model: PricingModel = PricingModel.SPOT
-):
-    return provider._provision_instance(oci_region=MagicMock(), definition=definition, pricing_model=pricing_model)
-
-
-def _launched_availability_domains(provider: VirtualMachineProvider) -> list[str]:
-    return [call.args[0].availability_domain for call in provider._compute_client.launch_instance.call_args_list]
-
-
-@pytest.mark.parametrize("pricing_model", [PricingModel.SPOT, PricingModel.ON_DEMAND])
+@pytest.mark.parametrize(
+    "pricing_model",
+    [
+        pytest.param(PricingModel.SPOT, id="spot"),
+        pytest.param(PricingModel.ON_DEMAND, id="on-demand"),
+    ],
+)
 def test_without_az_fallback_capacity_error_fails_in_the_node_availability_domain(
     fallback_provider_factory, pricing_model
 ):
@@ -359,20 +376,26 @@ def test_without_az_fallback_capacity_error_fails_in_the_node_availability_domai
     provider = fallback_provider_factory(az_fallback=False, launch_results=[OUT_OF_CAPACITY])
 
     with pytest.raises(ProvisionError, match="Out of host capacity"):
-        _provision(provider, _db_definition(node_index=2), pricing_model=pricing_model)
+        provision(provider, db_definition(node_index=2), pricing_model=pricing_model)
 
-    assert _launched_availability_domains(provider) == [AD_2]
+    assert launched_availability_domains(provider) == [AD_2]
     assert "retry_strategy" not in provider._compute_client.launch_instance.call_args.kwargs
 
 
-@pytest.mark.parametrize("pricing_model", [PricingModel.SPOT, PricingModel.ON_DEMAND])
+@pytest.mark.parametrize(
+    "pricing_model",
+    [
+        pytest.param(PricingModel.SPOT, id="spot"),
+        pytest.param(PricingModel.ON_DEMAND, id="on-demand"),
+    ],
+)
 def test_az_fallback_launches_in_the_next_availability_domain_with_capacity(fallback_provider_factory, pricing_model):
     """PR-16985 build 1: no spot capacity in PHX-AD-1 while the other ADs had it."""
     provider = fallback_provider_factory(az_fallback=True, launch_results=[OUT_OF_CAPACITY, "ocid1.instance.ad3"])
 
-    assert _provision(provider, _db_definition(node_index=2), pricing_model=pricing_model) == "ocid1.instance.ad3"
+    assert provision(provider, db_definition(node_index=2), pricing_model=pricing_model) == "ocid1.instance.ad3"
 
-    assert _launched_availability_domains(provider) == [AD_2, AD_3]
+    assert launched_availability_domains(provider) == [AD_2, AD_3]
     retry_strategy = provider._compute_client.launch_instance.call_args.kwargs["retry_strategy"]
     assert isinstance(retry_strategy, oci.retry.NoneRetryStrategy), "an exhausted AD must not take SDK retries"
 
@@ -381,32 +404,34 @@ def test_az_fallback_goes_over_the_availability_domains_in_rounds(fallback_provi
     """PR-16982 build 1: no spot capacity in any AD at one moment."""
     provider = fallback_provider_factory(az_fallback=True, launch_results=[OUT_OF_CAPACITY] * 3 + ["ocid1.instance"])
 
-    assert _provision(provider, _db_definition(node_index=1)) == "ocid1.instance"
+    assert provision(provider, db_definition(node_index=1)) == "ocid1.instance"
 
-    assert _launched_availability_domains(provider) == [AD_1, AD_2, AD_3, AD_1]
-    provider.sleep.assert_called_once()
+    assert launched_availability_domains(provider) == [AD_1, AD_2, AD_3, AD_1]
+    provider.sleep.assert_called_once_with(AZ_FALLBACK_ROUND_DELAY)
 
 
 def test_az_fallback_gives_up_after_the_timeout(fallback_provider_factory):
+    """Fallback stops after the timeout with ProvisionError, having tried every AD once."""
     provider = fallback_provider_factory(az_fallback=True, launch_results=[OUT_OF_CAPACITY] * 3)
 
     with (
         patch("sdcm.provision.oci.virtual_machine_provider.AZ_FALLBACK_TIMEOUT", 0),
         pytest.raises(ProvisionError, match="No capacity for db-node-1"),
     ):
-        _provision(provider, _db_definition(node_index=1))
+        provision(provider, db_definition(node_index=1))
 
-    assert _launched_availability_domains(provider) == [AD_1, AD_2, AD_3]
+    assert launched_availability_domains(provider) == [AD_1, AD_2, AD_3]
 
 
 def test_az_fallback_does_not_retry_configuration_errors(fallback_provider_factory):
+    """A non-capacity launch error fails at once, without trying the next AD."""
     invalid_parameter = oci.exceptions.ServiceError(400, "InvalidParameter", {}, "Invalid shape.")
     provider = fallback_provider_factory(az_fallback=True, launch_results=[invalid_parameter])
 
     with pytest.raises(ProvisionError, match="Invalid shape"):
-        _provision(provider, _db_definition(node_index=1))
+        provision(provider, db_definition(node_index=1))
 
-    assert _launched_availability_domains(provider) == [AD_1]
+    assert launched_availability_domains(provider) == [AD_1]
 
 
 def test_az_fallback_moves_the_data_volumes_with_the_instance(fallback_provider_factory):
@@ -419,14 +444,14 @@ def test_az_fallback_moves_the_data_volumes_with_the_instance(fallback_provider_
         return SimpleNamespace(data=SimpleNamespace(id=volume_id))
 
     provider._bs_client.create_volume.side_effect = create_volume
-    definition = _db_definition(
+    definition = db_definition(
         node_index=1, data_volume_disk_num=1, data_volume_disk_size=50, data_volume_disk_type="ultra"
     )
 
     with patch.object(
         VirtualMachineProvider, "_wait_for_volume_state", side_effect=lambda vol_id, state: SimpleNamespace(id=vol_id)
     ):
-        _provision(provider, definition)
+        provision(provider, definition)
 
     assert created_volumes == {"vol-0": AD_1, "vol-1": AD_2}
     provider._bs_client.delete_volume.assert_called_once_with("vol-0")

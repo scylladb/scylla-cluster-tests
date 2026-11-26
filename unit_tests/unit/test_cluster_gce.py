@@ -22,14 +22,24 @@ from sdcm.cluster_gce import GCECluster, gce_instance_node_index
 from sdcm.cluster_k8s.gke import MonitorSetGKE
 
 
-def _instance(name: str, zone: str) -> MagicMock:
+def make_instance(name: str, zone: str) -> MagicMock:
+    """Build a GCE instance mock living in the given zone."""
     instance = MagicMock()
     instance.name = name
     instance.zone = f"projects/test-project/zones/{zone}"
     return instance
 
 
-def _cluster(zone_letters: list[str], region: str = "us-east1") -> MagicMock:
+def make_instance_with_index(name: str, node_index: str | None) -> MagicMock:
+    """Build a GCE instance mock whose metadata carries NodeIndex, or none when node_index is None."""
+    instance = make_instance(name, "us-east1-a")
+    items = [] if node_index is None else [Items(key="NodeIndex", value=node_index)]
+    instance.metadata = Metadata(items=items)
+    return instance
+
+
+def make_cluster(zone_letters: list[str], region: str = "us-east1") -> MagicMock:
+    """Build a GCECluster mock whose params and provisioner hold the given zone letters in region."""
     cluster = MagicMock(spec=GCECluster)
     cluster.log = MagicMock()
     cluster.params = MagicMock()
@@ -51,14 +61,14 @@ def _cluster(zone_letters: list[str], region: str = "us-east1") -> MagicMock:
 )
 def test_instances_in_az_buckets_by_configured_zone_order(az_idx, expected):
     """Each rack must see only the instances living in its own zone."""
-    cluster = _cluster(["a", "b", "c"])
+    cluster = make_cluster(["a", "b", "c"])
     instances = [
-        _instance("db-1", "us-east1-a"),
-        _instance("db-2", "us-east1-b"),
-        _instance("db-3", "us-east1-c"),
-        _instance("db-4", "us-east1-a"),
-        _instance("db-5", "us-east1-b"),
-        _instance("db-6", "us-east1-c"),
+        make_instance("db-1", "us-east1-a"),
+        make_instance("db-2", "us-east1-b"),
+        make_instance("db-3", "us-east1-c"),
+        make_instance("db-4", "us-east1-a"),
+        make_instance("db-5", "us-east1-b"),
+        make_instance("db-6", "us-east1-c"),
     ]
 
     found = GCECluster._instances_in_az(cluster, instances, az_idx, 0)
@@ -73,12 +83,12 @@ def test_instances_in_az_keeps_rack_positions_when_an_earlier_zone_is_empty():
     labelling every node with a rack it does not live in - and leaving rack 2 to re-create the
     instances the other racks already took.
     """
-    cluster = _cluster(["a", "b", "c"])
+    cluster = make_cluster(["a", "b", "c"])
     instances = [
-        _instance("db-2", "us-east1-b"),
-        _instance("db-5", "us-east1-b"),
-        _instance("db-3", "us-east1-c"),
-        _instance("db-6", "us-east1-c"),
+        make_instance("db-2", "us-east1-b"),
+        make_instance("db-5", "us-east1-b"),
+        make_instance("db-3", "us-east1-c"),
+        make_instance("db-6", "us-east1-c"),
     ]
 
     assert GCECluster._instances_in_az(cluster, instances, 0, 0) == []
@@ -88,8 +98,8 @@ def test_instances_in_az_keeps_rack_positions_when_an_earlier_zone_is_empty():
 
 def test_instances_in_az_puts_unconfigured_zones_after_the_configured_racks():
     """A zone outside the configured set gets its own position and never displaces a rack."""
-    cluster = _cluster(["a", "b"])
-    instances = [_instance("db-1", "us-east1-a"), _instance("db-2", "us-east1-d")]
+    cluster = make_cluster(["a", "b"])
+    instances = [make_instance("db-1", "us-east1-a"), make_instance("db-2", "us-east1-d")]
 
     assert [i.name for i in GCECluster._instances_in_az(cluster, instances, 0, 0)] == ["db-1"]
     assert GCECluster._instances_in_az(cluster, instances, 1, 0) == []
@@ -97,26 +107,27 @@ def test_instances_in_az_puts_unconfigured_zones_after_the_configured_racks():
 
 
 def test_instances_in_az_returns_nothing_for_a_zone_without_instances():
-    cluster = _cluster(["a", "b", "c"])
+    """A zone with no instance in the DC yields an empty rack, not a neighbour zone's nodes."""
+    cluster = make_cluster(["a", "b", "c"])
 
-    assert GCECluster._instances_in_az(cluster, [_instance("db-1", "us-east1-a")], 2, 0) == []
+    assert GCECluster._instances_in_az(cluster, [make_instance("db-1", "us-east1-a")], 2, 0) == []
 
 
 @pytest.mark.parametrize("zone_letters", [["a"], ["c"]], ids=["configured-az", "resolved-az"])
 def test_instances_in_az_is_a_no_op_for_a_single_rack(zone_letters):
     """With one rack there is nothing to split: every instance of the DC belongs to it."""
-    cluster = _cluster(zone_letters)
-    instances = [_instance("db-1", "us-east1-a"), _instance("db-2", "us-east1-b")]
+    cluster = make_cluster(zone_letters)
+    instances = [make_instance("db-1", "us-east1-a"), make_instance("db-2", "us-east1-b")]
 
     assert GCECluster._instances_in_az(cluster, instances, 0, 0) == instances
 
 
 def test_instances_in_az_follows_the_provisioner_not_the_raw_param():
     """The rack order must come from the DC's provisioner, which holds the resolved zones."""
-    cluster = _cluster(["b", "c"])
+    cluster = make_cluster(["b", "c"])
     # the raw param still names the pre-resolve zones
     cluster.params.get.side_effect = lambda key, *a, **kw: {"availability_zone": "a,b"}.get(key)
-    instances = [_instance("db-1", "us-east1-b"), _instance("db-2", "us-east1-c")]
+    instances = [make_instance("db-1", "us-east1-b"), make_instance("db-2", "us-east1-c")]
 
     assert [i.name for i in GCECluster._instances_in_az(cluster, instances, 0, 0)] == ["db-1"]
     assert [i.name for i in GCECluster._instances_in_az(cluster, instances, 1, 0)] == ["db-2"]
@@ -124,13 +135,13 @@ def test_instances_in_az_follows_the_provisioner_not_the_raw_param():
 
 def test_get_instances_by_name_searches_every_zone_of_the_region():
     """A multi-AZ cluster spreads nodes over zones, so the search cannot be pinned to one zone."""
-    cluster = _cluster(["a", "b", "c"])
-    wanted = _instance("db-3", "us-east1-c")
+    cluster = make_cluster(["a", "b", "c"])
+    wanted = make_instance("db-3", "us-east1-c")
     cluster._gce_service = MagicMock()
     cluster._gce_service.aggregated_list.return_value = [
-        ("zones/us-east1-a", MagicMock(instances=[_instance("db-1", "us-east1-a")])),
+        ("zones/us-east1-a", MagicMock(instances=[make_instance("db-1", "us-east1-a")])),
         ("zones/us-east1-c", MagicMock(instances=[wanted])),
-        ("zones/us-west1-c", MagicMock(instances=[_instance("db-3", "us-west1-c")])),
+        ("zones/us-west1-c", MagicMock(instances=[make_instance("db-3", "us-west1-c")])),
     ]
     cluster.project = "test-project"
 
@@ -138,26 +149,20 @@ def test_get_instances_by_name_searches_every_zone_of_the_region():
 
 
 def test_get_instances_by_name_ignores_other_regions():
-    cluster = _cluster(["a"], region="us-east1")
+    """A same-named instance in another region of the project is not a match."""
+    cluster = make_cluster(["a"], region="us-east1")
     cluster._gce_service = MagicMock()
     cluster._gce_service.aggregated_list.return_value = [
-        ("zones/us-east10-a", MagicMock(instances=[_instance("db-1", "us-east10-a")])),
+        ("zones/us-east10-a", MagicMock(instances=[make_instance("db-1", "us-east10-a")])),
     ]
     cluster.project = "test-project"
 
     assert GCECluster._get_instances_by_name(cluster, name="db-1", dc_idx=0) is None
 
 
-def _instance_with_index(name: str, node_index: str | None) -> MagicMock:
-    instance = _instance(name, "us-east1-a")
-    items = [] if node_index is None else [Items(key="NodeIndex", value=node_index)]
-    instance.metadata = Metadata(items=items)
-    return instance
-
-
 def test_instances_are_sorted_by_numeric_node_index():
     """NodeIndex is a string in GCE metadata: sorted as text, node 10 would come before node 4."""
-    instances = [_instance_with_index(f"db-{index}", str(index)) for index in (10, 2, 4, 1, 7)]
+    instances = [make_instance_with_index(f"db-{index}", str(index)) for index in (10, 2, 4, 1, 7)]
 
     assert sorted(instances, key=gce_instance_node_index) == [
         instances[3],
@@ -171,8 +176,8 @@ def test_instances_are_sorted_by_numeric_node_index():
 @pytest.mark.parametrize("node_index", [pytest.param(None, id="missing"), pytest.param("not-a-number", id="garbage")])
 def test_instance_without_usable_node_index_sorts_first(node_index):
     """A missing or unparsable NodeIndex must not blow up the comparison against numeric ones."""
-    broken = _instance_with_index("db-broken", node_index)
-    numbered = _instance_with_index("db-1", "1")
+    broken = make_instance_with_index("db-broken", node_index)
+    numbered = make_instance_with_index("db-1", "1")
 
     assert sorted([numbered, broken], key=gce_instance_node_index) == [broken, numbered]
 
@@ -192,7 +197,7 @@ def test_get_instances_skips_a_stopped_vm():
     ]
     client = MagicMock()
     client.aggregated_list.return_value = [("zones/us-east1-b", MagicMock(instances=instances))]
-    cluster = _cluster(["b"])
+    cluster = make_cluster(["b"])
     cluster.test_config.test_id.return_value = "t1"
     cluster.node_type = "scylla-db"
     cluster.nodes = []

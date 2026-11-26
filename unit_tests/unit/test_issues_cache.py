@@ -27,179 +27,16 @@ from utils.issues_cache.github import MARKER, Reconciler, check_guards, gh_api, 
 from utils.issues_cache.refs import extract_python, extract_yaml, normalize
 
 
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        ("https://github.com/scylladb/scylladb/issues/123", "scylladb/scylladb#123"),
-        ("https://github.com/scylladb/scylla-manager/pull/7", "scylladb/scylla-manager#7"),
-        ("scylladb/scylla-enterprise#4246", "scylladb/scylla-enterprise#4246"),
-        ("scylladb/scylla#55", "scylladb/scylla#55"),  # repo kept as written: readers key files by it
-        (" jira:scylladb-42 ", "jira:SCYLLADB-42"),
-        ("https://scylladb.atlassian.net/browse/SCT-420", "jira:SCT-420"),
-        ("1234", None),  # bare numbers are not refs: no active branch uses them
-        ("#1234", None),
-        ("see https://github.com/scylladb/scylladb/issues/1", None),  # not a whole-string ref
-        ("hello", None),
-    ],
-)
-def test_normalize(value, expected):
-    assert normalize(value) == expected
-
-
-def test_extract_python_finds_full_forms_in_any_literal():
-    source = """
-SKIP = ["https://github.com/scylladb/scylla-manager/issues/3829"]
-
-def f(params):
-    if SkipPerIssues("scylladb/scylladb#18180", params):
-        pass
-    decorate_with_context_if_issues_open(ctx, issue_refs=["scylladb/scylla-enterprise#9"])
-    other_call("1234")
-    x = "jira:SCT-7"
-"""
-    assert extract_python(source) == (
-        {"scylladb/scylla-manager#3829", "scylladb/scylladb#18180", "scylladb/scylla-enterprise#9", "jira:SCT-7"},
-        [],
-    )
-
-
-def test_extract_python_reports_refs_built_at_runtime(caplog):
-    source = """
-SkipPerIssues(f"scylladb/scylladb#{n}", params)
-SkipPerIssues("https://github.com/scylladb/scylladb/issues/" + str(n), params)
-SkipPerIssues("jira:%s" % key, params)
-SkipPerIssues("scylladb/scylladb#{}".format(n), params)
-SkipPerIssues(f"jira:SCT-{n}", params)
-SkipPerIssues("scylladb/scylladb#%(n)s" % v, params)
-SkipPerIssues(f"https://github.com/scylladb/{repo}/issues/{n}", params)
-log(f"node {name}: done", "%s nodes" % n, "{} up".format(n), "%5d%% done" % n)
-"""
-    assert extract_python(source, "master:a.py") == (set(), [2, 3, 4, 5, 6, 7, 8])
-    assert "master:a.py:2: issue ref built at runtime" in caplog.text
-
-
-def test_extract_python_warns_and_skips_syntax_errors(caplog):
-    assert extract_python("def (:", "master:sdcm/broken.py") == (set(), [])
-    assert "skipping master:sdcm/broken.py" in caplog.text
-
-
-def test_extract_yaml():
-    source = """
-reactor_stall:
-  - keyword: "foo"
-    issue: https://github.com/scylladb/scylladb/issues/14582
-  - keyword: bar
-    issue: 'jira:SCYLLADB-1'
-"""
-    assert extract_yaml(source) == {"scylladb/scylladb#14582", "jira:SCYLLADB-1"}
-
-
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
-
-
-def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
-    repo = tmp_path / "repo"
-    (repo / "sdcm").mkdir(parents=True)
-    (repo / "unit_tests").mkdir()
-    (repo / "sdcm" / "a.py").write_text(
-        'SkipPerIssues("scylladb/scylladb#1", p)\nURL = "https://github.com/pytest-dev/pytest/issues/5"\n'
-        'SkipPerIssues(f"scylladb/scylladb#{n}", p)\n'
-    )
-    (repo / "unit_tests" / "test_a.py").write_text('SkipPerIssues("scylladb/scylladb#2", p)\n')
-    (repo / ".github").mkdir()
-    (repo / ".github" / "labels.py").write_text('URL = f"https://api.github.com/repos/{repo}/issues/{n}/labels"\n')
-    _git(repo, "init", "-q")
-    _git(repo, "add", ".")
-    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
-    _git(repo, "update-ref", "refs/remotes/origin/master", "HEAD")
-    _git(repo, "update-ref", "refs/remotes/origin/feature-x", "HEAD")
-    out = tmp_path / "refs" / "sct.json"
-
-    main(["scan", "--repo-dir", str(repo), "--out", str(out)])
-
-    manifest = json.loads(out.read_text())
-    assert set(manifest) == {"version", "repo", "label", "label_description", "generated_at", "refs", "unresolved"}
-    assert manifest["version"] == 1
-    assert manifest["label"] == "used-by-sct"
-    # unit_tests/, .github/ and third-party orgs are excluded; feature-x doesn't match the branch pattern
-    assert manifest["refs"] == {"scylladb/scylladb#1": [{"branch": "master", "file": "sdcm/a.py"}]}
-    assert manifest["unresolved"] == ["master:sdcm/a.py:3"]
-
-
-def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
-    states = {
-        "scylladb/contract-repo#5": {"state": "open", "labels": ["sct-2026.1-skip", "P1"], "title": "a, b"},
-        "scylladb/contract-repo#3": {"state": "merged", "labels": [], "title": 'say "hi"'},
-    }
-    write_csvs(tmp_path, states)
-
-    def get_file_contents(key):
-        return (tmp_path / key.removeprefix("issues/")).read_bytes()
-
-    cache = CachedGitHubIssues()
-    monkeypatch.setattr(cache.storage, "get_file_contents", get_file_contents)
-    issues = cache.get_repo("scylladb", "contract-repo")
-
-    assert issues[5].state == "open"
-    assert issues[5].labels == ["sct-2026.1-skip", "P1"]
-    assert issues[5].title == "a, b"
-    assert issues[3].state == "merged"
-    assert (tmp_path / "pull-requests" / "scylladb_contract-repo.csv").read_text() == ""
-
-
-@pytest.mark.parametrize(
-    "union,previous,failed,ok",
-    [(100, 0, 0, True), (60, 100, 0, True), (40, 100, 0, False), (100, 100, 21, False), (100, 100, 20, True)],
-)
-def test_guards(union, previous, failed, ok):
-    if ok:
-        check_guards(union, previous, failed)
-    else:
-        with pytest.raises(SystemExit):
-            check_guards(union, previous, failed)
-
-
-def test_accept_shrink_skips_only_the_shrink_guard():
-    check_guards(40, 100, 0, accept_shrink=True)
-    with pytest.raises(SystemExit):
-        check_guards(40, 100, 20, accept_shrink=True)
-
-
-@pytest.mark.parametrize(
-    "returncode,stdout,stderr,paginate,expected",
-    [
-        (0, '{"state": "open"}', "", False, (200, {"state": "open"})),
-        (0, "", "", False, (200, None)),  # e.g. DELETE with an empty reply
-        (0, '[[{"id": 1}], [{"id": 2}]]', "", True, (200, [{"id": 1}, {"id": 2}])),  # --slurp pages
-        (1, "", "gh: Not Found (HTTP 404)", False, (404, None)),
-        (1, "", "error connecting to api.github.com", False, (0, None)),
-    ],
-)
-def test_gh_api_reads_status_and_flattens_pages(monkeypatch, returncode, stdout, stderr, paginate, expected):
-    calls = []
-
-    def fake_run(cmd, **kwargs):
-        calls.append((cmd, kwargs.get("input")))
-        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
-
-    monkeypatch.setattr(github.subprocess, "run", fake_run)
-
-    assert gh_api("POST", "/repos/o/r/issues/1/labels", {"labels": ["x"]}, paginate=paginate) == expected
-    cmd, stdin = calls[0]
-    assert cmd[:5] == ["gh", "api", "--method", "POST", "/repos/o/r/issues/1/labels"]
-    assert ("--paginate" in cmd) is paginate
-    assert json.loads(stdin) == {"labels": ["x"]}
-
-
 class FakeGitHub:
     """Stands in for `gh_api`: answers the reads, records the writes."""
 
     def __init__(self, can_label: bool, comments: list | None = None, write_status: int = 201):
+        """Configure label permission, existing comments and the status returned by writes."""
         self.can_label, self.comments, self.write_status = can_label, comments or [], write_status
         self.writes: list[tuple] = []
 
     def __call__(self, method, path, body=None, paginate=False):
+        """Answer GET reads from the configured state and record every other call as a write."""
         if method == "GET" and path.startswith("/repos/") and path.count("/") == 3:
             return 200, {"permissions": {"triage": self.can_label}}
         if method == "GET" and path == "/user":
@@ -217,100 +54,8 @@ LABEL_META = {
 }
 
 
-def test_reconcile_labels_add_and_remove_only_managed_labels():
-    gh = FakeGitHub(can_label=True)
-    rec = Reconciler(gh, "on", LABEL_META, {})
-
-    rec.reconcile("scylladb/scylladb#1", {"used-by-sct": ["master"]}, ["used-by-dtest", "P1"])
-
-    assert gh.writes == [
-        ("POST", "/repos/scylladb/scylladb/issues/1/labels", {"labels": ["used-by-sct"]}),
-        ("PATCH", "/repos/scylladb/scylladb/labels/used-by-sct", {"color": "c5def5", "description": "SCT"}),
-        ("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None),
-    ]
-
-
-def test_reconcile_dry_run_writes_nothing():
-    gh = FakeGitHub(can_label=False)
-    rec = Reconciler(gh, "dry-run", LABEL_META, {})
-
-    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-
-    assert gh.writes == []
-    assert rec.plan == ["scylladb/siren#1: add marker comment"]
-    assert rec.state == {}
-
-
-def test_reconcile_one_comment_edited_in_place():
-    gh = FakeGitHub(can_label=False)
-    state = {}
-    rec = Reconciler(gh, "on", LABEL_META, state)
-
-    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])  # unchanged: no write
-    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"], "used-by-dtest": ["next"]}, [])
-    rec.reconcile("scylladb/siren#1", {}, [])
-
-    assert [(m, p) for m, p, _ in gh.writes] == [
-        ("POST", "/repos/scylladb/siren/issues/1/comments"),
-        ("PATCH", "/repos/scylladb/siren/issues/comments/77"),
-        ("PATCH", "/repos/scylladb/siren/issues/comments/77"),
-    ]
-    assert "used-by-dtest" in gh.writes[1][2]["body"]
-    assert "No longer used" in gh.writes[2][2]["body"]
-    assert all(MARKER in body["body"] for _, _, body in gh.writes)
-
-
-def test_reconcile_reuses_existing_marker_comment_when_state_is_lost():
-    comments = [{"id": i, "body": "chatter", "user": {"login": "someone"}} for i in range(150)]
-    comments.append({"id": 999, "body": f"{MARKER}\nold", "user": {"login": "bot"}})
-    gh = FakeGitHub(can_label=False, comments=comments)
-
-    Reconciler(gh, "on", LABEL_META, {}).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-
-    assert [(m, p) for m, p, _ in gh.writes] == [("PATCH", "/repos/scylladb/siren/issues/comments/999")]
-
-
-def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
-    gh = FakeGitHub(can_label=True)
-    meta = {"used-by-sct": LABEL_META["used-by-sct"]}  # dtest's manifest is gone
-    rec = Reconciler(gh, "on", meta, {}, managed={"used-by-dtest"})
-
-    rec.reconcile("scylladb/scylladb#1", {}, ["used-by-dtest", "P1"])
-
-    assert gh.writes == [("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None)]
-
-
-def test_fetch_states_records_the_canonical_repo():
-    def fake_gh(method, path, body=None, paginate=False):
-        return 200, {
-            "state": "open",
-            "labels": [],
-            "title": "t",
-            "repository_url": "https://api.github.com/repos/scylladb/scylladb",
-        }
-
-    states, failed = github.fetch_states(fake_gh, ["scylladb/scylla#5"])
-
-    assert states["scylladb/scylla#5"]["repo"] == "scylladb/scylladb"
-    assert failed == {}
-
-
-def test_reconcile_failed_comment_is_retried_next_run():
-    state = {}
-    Reconciler(FakeGitHub(can_label=False, write_status=403), "on", LABEL_META, state).reconcile(
-        "scylladb/siren#1", {"used-by-sct": ["master"]}, []
-    )
-    assert state == {}
-
-    gh = FakeGitHub(can_label=False)
-    Reconciler(gh, "on", LABEL_META, state).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
-    assert [(m, p) for m, p, _ in gh.writes] == [("POST", "/repos/scylladb/siren/issues/1/comments")]
-    assert state["scylladb/siren#1"]["comment_id"] == 77
-
-
-def _refresh_runner(tmp_path, monkeypatch, previous_refs, referenced=("scylladb/scylladb#1",)):
-    """Run `refresh-github` against a fake GitHub; the manifest references `referenced` (#1)."""
+def refresh_runner(tmp_path, monkeypatch, previous_refs, referenced=("scylladb/scylladb#1",)):
+    """Return (fake GitHub state, run callable) for `refresh-github`; the manifest references `referenced` (#1)."""
     gh = SimpleNamespace(
         down=set(), down_status=502, write_status=200, writes=[], repo_status=200, labels=["used-by-sct"]
     )
@@ -353,9 +98,307 @@ def _refresh_runner(tmp_path, monkeypatch, previous_refs, referenced=("scylladb/
 DROPPED_DELETE = ("DELETE", "/repos/scylladb/scylladb/issues/2/labels/used-by-sct")
 
 
-@pytest.mark.parametrize("first_run", ["fetch fails", "removal fails", "dry-run"])
+def git_run(repo: Path, *args: str) -> None:
+    """Run a git command in `repo`, failing on a non-zero exit."""
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        pytest.param("https://github.com/scylladb/scylladb/issues/123", "scylladb/scylladb#123", id="github-issue-url"),
+        pytest.param(
+            "https://github.com/scylladb/scylla-manager/pull/7", "scylladb/scylla-manager#7", id="github-pr-url"
+        ),
+        pytest.param("scylladb/scylla-enterprise#4246", "scylladb/scylla-enterprise#4246", id="enterprise-short-form"),
+        pytest.param(
+            "scylladb/scylla#55", "scylladb/scylla#55", id="repo-kept-as-written"
+        ),  # repo kept as written: readers key files by it
+        pytest.param(" jira:scylladb-42 ", "jira:SCYLLADB-42", id="jira-key-uppercased"),
+        pytest.param("https://scylladb.atlassian.net/browse/SCT-420", "jira:SCT-420", id="jira-browse-url"),
+        pytest.param("1234", None, id="bare-number"),  # bare numbers are not refs: no active branch uses them
+        pytest.param("#1234", None, id="hash-number"),
+        pytest.param(
+            "see https://github.com/scylladb/scylladb/issues/1", None, id="embedded-url"
+        ),  # not a whole-string ref
+        pytest.param("hello", None, id="plain-word"),
+    ],
+)
+def test_normalize(value, expected):
+    """Refs normalize to a canonical key; anything but a whole-string ref gives None."""
+    assert normalize(value) == expected
+
+
+def test_extract_python_finds_full_forms_in_any_literal():
+    """Full-form refs are extracted from any string literal, short bare numbers are ignored."""
+    source = """
+SKIP = ["https://github.com/scylladb/scylla-manager/issues/3829"]
+
+def f(params):
+    if SkipPerIssues("scylladb/scylladb#18180", params):
+        pass
+    decorate_with_context_if_issues_open(ctx, issue_refs=["scylladb/scylla-enterprise#9"])
+    other_call("1234")
+    x = "jira:SCT-7"
+"""
+    assert extract_python(source) == (
+        {"scylladb/scylla-manager#3829", "scylladb/scylladb#18180", "scylladb/scylla-enterprise#9", "jira:SCT-7"},
+        [],
+    )
+
+
+def test_extract_python_reports_refs_built_at_runtime(caplog):
+    """Refs built by f-string, concat or formatting are reported by line, not extracted."""
+    source = """
+SkipPerIssues(f"scylladb/scylladb#{n}", params)
+SkipPerIssues("https://github.com/scylladb/scylladb/issues/" + str(n), params)
+SkipPerIssues("jira:%s" % key, params)
+SkipPerIssues("scylladb/scylladb#{}".format(n), params)
+SkipPerIssues(f"jira:SCT-{n}", params)
+SkipPerIssues("scylladb/scylladb#%(n)s" % v, params)
+SkipPerIssues(f"https://github.com/scylladb/{repo}/issues/{n}", params)
+log(f"node {name}: done", "%s nodes" % n, "{} up".format(n), "%5d%% done" % n)
+"""
+    assert extract_python(source, "master:a.py") == (set(), [2, 3, 4, 5, 6, 7, 8])
+    assert "master:a.py:2: issue ref built at runtime" in caplog.text
+
+
+def test_extract_python_warns_and_skips_syntax_errors(caplog):
+    """A file with a syntax error is skipped with a warning."""
+    assert extract_python("def (:", "master:sdcm/broken.py") == (set(), [])
+    assert "skipping master:sdcm/broken.py" in caplog.text
+
+
+def test_extract_yaml():
+    """Issue refs are extracted from yaml `issue:` values."""
+    source = """
+reactor_stall:
+  - keyword: "foo"
+    issue: https://github.com/scylladb/scylladb/issues/14582
+  - keyword: bar
+    issue: 'jira:SCYLLADB-1'
+"""
+    assert extract_yaml(source) == {"scylladb/scylladb#14582", "jira:SCYLLADB-1"}
+
+
+def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
+    """`scan` writes a manifest of refs from matching branches, excluding tests and third-party orgs."""
+    repo = tmp_path / "repo"
+    (repo / "sdcm").mkdir(parents=True)
+    (repo / "unit_tests").mkdir()
+    (repo / "sdcm" / "a.py").write_text(
+        'SkipPerIssues("scylladb/scylladb#1", p)\nURL = "https://github.com/pytest-dev/pytest/issues/5"\n'
+        'SkipPerIssues(f"scylladb/scylladb#{n}", p)\n'
+    )
+    (repo / "unit_tests" / "test_a.py").write_text('SkipPerIssues("scylladb/scylladb#2", p)\n')
+    (repo / ".github").mkdir()
+    (repo / ".github" / "labels.py").write_text('URL = f"https://api.github.com/repos/{repo}/issues/{n}/labels"\n')
+    git_run(repo, "init", "-q")
+    git_run(repo, "add", ".")
+    git_run(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+    git_run(repo, "update-ref", "refs/remotes/origin/master", "HEAD")
+    git_run(repo, "update-ref", "refs/remotes/origin/feature-x", "HEAD")
+    out = tmp_path / "refs" / "sct.json"
+
+    main(["scan", "--repo-dir", str(repo), "--out", str(out)])
+
+    manifest = json.loads(out.read_text())
+    assert set(manifest) == {"version", "repo", "label", "label_description", "generated_at", "refs", "unresolved"}
+    assert manifest["version"] == 1
+    assert manifest["label"] == "used-by-sct"
+    # unit_tests/, .github/ and third-party orgs are excluded; feature-x doesn't match the branch pattern
+    assert manifest["refs"] == {"scylladb/scylladb#1": [{"branch": "master", "file": "sdcm/a.py"}]}
+    assert manifest["unresolved"] == ["master:sdcm/a.py:3"]
+
+
+def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
+    """CSVs from write_csvs are readable by CachedGitHubIssues."""
+    states = {
+        "scylladb/contract-repo#5": {"state": "open", "labels": ["sct-2026.1-skip", "P1"], "title": "a, b"},
+        "scylladb/contract-repo#3": {"state": "merged", "labels": [], "title": 'say "hi"'},
+    }
+    write_csvs(tmp_path, states)
+
+    def get_file_contents(key):
+        return (tmp_path / key.removeprefix("issues/")).read_bytes()
+
+    cache = CachedGitHubIssues()
+    monkeypatch.setattr(cache.storage, "get_file_contents", get_file_contents)
+    issues = cache.get_repo("scylladb", "contract-repo")
+
+    assert issues[5].state == "open"
+    assert issues[5].labels == ["sct-2026.1-skip", "P1"]
+    assert issues[5].title == "a, b"
+    assert issues[3].state == "merged"
+    assert (tmp_path / "pull-requests" / "scylladb_contract-repo.csv").read_text() == ""
+
+
+@pytest.mark.parametrize(
+    "union,previous,failed,ok",
+    [
+        pytest.param(100, 0, 0, True, id="no-previous"),
+        pytest.param(60, 100, 0, True, id="shrink-within-limit"),
+        pytest.param(40, 100, 0, False, id="shrink-too-deep"),
+        pytest.param(100, 100, 21, False, id="failures-over-limit"),
+        pytest.param(100, 100, 20, True, id="failures-at-limit"),
+    ],
+)
+def test_guards(union, previous, failed, ok):
+    """Guards pass or exit depending on the shrink and the fetch-failure ratio."""
+    if ok:
+        check_guards(union, previous, failed)
+    else:
+        with pytest.raises(SystemExit):
+            check_guards(union, previous, failed)
+
+
+def test_accept_shrink_skips_only_the_shrink_guard():
+    """accept_shrink skips the shrink guard but not the failure guard."""
+    check_guards(40, 100, 0, accept_shrink=True)
+    with pytest.raises(SystemExit):
+        check_guards(40, 100, 20, accept_shrink=True)
+
+
+@pytest.mark.parametrize(
+    "returncode,stdout,stderr,paginate,expected",
+    [
+        pytest.param(0, '{"state": "open"}', "", False, (200, {"state": "open"}), id="json-object"),
+        pytest.param(0, "", "", False, (200, None), id="empty-reply"),  # e.g. DELETE with an empty reply
+        pytest.param(
+            0, '[[{"id": 1}], [{"id": 2}]]', "", True, (200, [{"id": 1}, {"id": 2}]), id="paginated-pages"
+        ),  # --slurp pages
+        pytest.param(1, "", "gh: Not Found (HTTP 404)", False, (404, None), id="http-404"),
+        pytest.param(1, "", "error connecting to api.github.com", False, (0, None), id="connection-error"),
+    ],
+)
+def test_gh_api_reads_status_and_flattens_pages(monkeypatch, returncode, stdout, stderr, paginate, expected):
+    """gh_api returns the HTTP status and parsed body, flattening paginated pages."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs.get("input")))
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+    monkeypatch.setattr(github.subprocess, "run", fake_run)
+
+    assert gh_api("POST", "/repos/o/r/issues/1/labels", {"labels": ["x"]}, paginate=paginate) == expected
+    cmd, stdin = calls[0]
+    assert cmd[:5] == ["gh", "api", "--method", "POST", "/repos/o/r/issues/1/labels"]
+    assert ("--paginate" in cmd) is paginate
+    assert json.loads(stdin) == {"labels": ["x"]}
+
+
+def test_reconcile_labels_add_and_remove_only_managed_labels():
+    """Reconcile adds the wanted label and removes only managed ones."""
+    gh = FakeGitHub(can_label=True)
+    rec = Reconciler(gh, "on", LABEL_META, {})
+
+    rec.reconcile("scylladb/scylladb#1", {"used-by-sct": ["master"]}, ["used-by-dtest", "P1"])
+
+    assert gh.writes == [
+        ("POST", "/repos/scylladb/scylladb/issues/1/labels", {"labels": ["used-by-sct"]}),
+        ("PATCH", "/repos/scylladb/scylladb/labels/used-by-sct", {"color": "c5def5", "description": "SCT"}),
+        ("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None),
+    ]
+
+
+def test_reconcile_dry_run_writes_nothing():
+    """Dry-run reconcile only plans the marker comment."""
+    gh = FakeGitHub(can_label=False)
+    rec = Reconciler(gh, "dry-run", LABEL_META, {})
+
+    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+
+    assert gh.writes == []
+    assert rec.plan == ["scylladb/siren#1: add marker comment"]
+    assert rec.state == {}
+
+
+def test_reconcile_one_comment_edited_in_place():
+    """One marker comment is created, then edited in place on changes."""
+    gh = FakeGitHub(can_label=False)
+    state = {}
+    rec = Reconciler(gh, "on", LABEL_META, state)
+
+    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])  # unchanged: no write
+    rec.reconcile("scylladb/siren#1", {"used-by-sct": ["master"], "used-by-dtest": ["next"]}, [])
+    rec.reconcile("scylladb/siren#1", {}, [])
+
+    assert [(m, p) for m, p, _ in gh.writes] == [
+        ("POST", "/repos/scylladb/siren/issues/1/comments"),
+        ("PATCH", "/repos/scylladb/siren/issues/comments/77"),
+        ("PATCH", "/repos/scylladb/siren/issues/comments/77"),
+    ]
+    assert "used-by-dtest" in gh.writes[1][2]["body"]
+    assert "No longer used" in gh.writes[2][2]["body"]
+    assert all(MARKER in body["body"] for _, _, body in gh.writes)
+
+
+def test_reconcile_reuses_existing_marker_comment_when_state_is_lost():
+    """An existing marker comment is found among many and reused."""
+    comments = [{"id": i, "body": "chatter", "user": {"login": "someone"}} for i in range(150)]
+    comments.append({"id": 999, "body": f"{MARKER}\nold", "user": {"login": "bot"}})
+    gh = FakeGitHub(can_label=False, comments=comments)
+
+    Reconciler(gh, "on", LABEL_META, {}).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+
+    assert [(m, p) for m, p, _ in gh.writes] == [("PATCH", "/repos/scylladb/siren/issues/comments/999")]
+
+
+def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
+    """Labels of a vanished manifest are removed."""
+    gh = FakeGitHub(can_label=True)
+    meta = {"used-by-sct": LABEL_META["used-by-sct"]}  # dtest's manifest is gone
+    rec = Reconciler(gh, "on", meta, {}, managed={"used-by-dtest"})
+
+    rec.reconcile("scylladb/scylladb#1", {}, ["used-by-dtest", "P1"])
+
+    assert gh.writes == [("DELETE", "/repos/scylladb/scylladb/issues/1/labels/used-by-dtest", None)]
+
+
+def test_fetch_states_records_the_canonical_repo():
+    """fetch_states records the canonical repo from repository_url."""
+
+    def fake_gh(method, path, body=None, paginate=False):
+        return 200, {
+            "state": "open",
+            "labels": [],
+            "title": "t",
+            "repository_url": "https://api.github.com/repos/scylladb/scylladb",
+        }
+
+    states, failed = github.fetch_states(fake_gh, ["scylladb/scylla#5"])
+
+    assert states["scylladb/scylla#5"]["repo"] == "scylladb/scylladb"
+    assert failed == {}
+
+
+def test_reconcile_failed_comment_is_retried_next_run():
+    """A failed comment write leaves no state, so the next run retries it."""
+    state = {}
+    Reconciler(FakeGitHub(can_label=False, write_status=403), "on", LABEL_META, state).reconcile(
+        "scylladb/siren#1", {"used-by-sct": ["master"]}, []
+    )
+    assert state == {}
+
+    gh = FakeGitHub(can_label=False)
+    Reconciler(gh, "on", LABEL_META, state).reconcile("scylladb/siren#1", {"used-by-sct": ["master"]}, [])
+    assert [(m, p) for m, p, _ in gh.writes] == [("POST", "/repos/scylladb/siren/issues/1/comments")]
+    assert state["scylladb/siren#1"]["comment_id"] == 77
+
+
+@pytest.mark.parametrize(
+    "first_run",
+    [
+        pytest.param("fetch fails", id="fetch-fails"),
+        pytest.param("removal fails", id="removal-fails"),
+        pytest.param("dry-run", id="dry-run"),
+    ],
+)
 def test_refresh_keeps_a_dropped_ref_until_its_marker_is_removed(tmp_path, monkeypatch, first_run):
-    gh, run = _refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
+    """A dropped ref is retried until its label is removed, whatever made the first run fail."""
+    gh, run = refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
     if first_run == "fetch fails":
         gh.down = {"2"}
     elif first_run == "removal fails":
@@ -371,10 +414,10 @@ def test_refresh_keeps_a_dropped_ref_until_its_marker_is_removed(tmp_path, monke
     assert state["retry"] == {}
 
 
-@pytest.mark.parametrize("status", [404, 410])
+@pytest.mark.parametrize("status", [pytest.param(404, id="not-found"), pytest.param(410, id="gone")])
 def test_refresh_forgets_a_dropped_ref_that_is_gone(tmp_path, monkeypatch, status):
     """A deleted or no-longer-visible item has no marker we could remove: don't refetch it forever."""
-    gh, run = _refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
+    gh, run = refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
     gh.down, gh.down_status = {"2"}, status
 
     state = run(labels="dry-run")
@@ -386,7 +429,7 @@ def test_refresh_forgets_a_dropped_ref_that_is_gone(tmp_path, monkeypatch, statu
 def test_retried_refs_dont_count_for_the_shrink_guard(tmp_path, monkeypatch):
     """After an accepted shrink, unreachable dropped refs must not block the next run."""
     previous = [f"scylladb/scylladb#{n}" for n in range(1, 6)]
-    gh, run = _refresh_runner(tmp_path, monkeypatch, previous)
+    gh, run = refresh_runner(tmp_path, monkeypatch, previous)
     gh.down = {"2", "3", "4", "5"}
 
     run("--accept-shrink")
@@ -399,7 +442,7 @@ def test_retried_refs_dont_count_for_the_shrink_guard(tmp_path, monkeypatch):
 def test_refresh_a_failed_fetch_keeps_the_last_good_row(tmp_path, monkeypatch):
     """One 5xx must not drop a row, or the whole CSV of a repo with a single ref."""
     refs = [f"scylladb/scylladb#{n}" for n in range(1, 6)]
-    gh, run = _refresh_runner(tmp_path, monkeypatch, refs, referenced=refs)
+    gh, run = refresh_runner(tmp_path, monkeypatch, refs, referenced=refs)
     run(labels="off")
     gh.down = {"1"}  # 1 of 5 failed: under the 20% guard, so the refresh writes the CSVs
 
@@ -412,7 +455,7 @@ def test_refresh_a_failed_fetch_keeps_the_last_good_row(tmp_path, monkeypatch):
 def test_refresh_drops_a_row_carried_for_too_long(tmp_path, monkeypatch, caplog):
     """A deleted issue or a repo the token lost must not keep its last state forever."""
     refs = [f"scylladb/scylladb#{n}" for n in range(1, 6)]
-    gh, run = _refresh_runner(tmp_path, monkeypatch, refs, referenced=refs)
+    gh, run = refresh_runner(tmp_path, monkeypatch, refs, referenced=refs)
     run(labels="off")
     gh.down = {"1"}
 
@@ -429,7 +472,7 @@ def test_refresh_drops_a_row_carried_for_too_long(tmp_path, monkeypatch, caplog)
 
 def test_refresh_reconciles_the_aliases_of_one_issue_together(tmp_path, monkeypatch):
     """`scylladb/scylla#5` and `scylladb/scylladb#5` are one issue: neither may remove the other's label."""
-    gh, run = _refresh_runner(tmp_path, monkeypatch, [], referenced=("scylladb/scylla#5",))
+    gh, run = refresh_runner(tmp_path, monkeypatch, [], referenced=("scylladb/scylla#5",))
     dtest = {"version": 1, "repo": "scylladb/scylla-dtest", "label": "used-by-dtest", "label_description": "dtest"}
     dtest["refs"] = {"scylladb/scylladb#5": [{"branch": "next", "file": "t.py"}]}
     (tmp_path / "refs" / "dtest.json").write_text(json.dumps(dtest))
@@ -449,7 +492,7 @@ def test_refresh_reconciles_the_aliases_of_one_issue_together(tmp_path, monkeypa
 
 def test_refresh_skips_a_repo_whose_permissions_cant_be_read(tmp_path, monkeypatch):
     """A 5xx on GET /repos/... must not fall back to a marker comment on every item."""
-    gh, run = _refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
+    gh, run = refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
     gh.repo_status = 502
 
     state = run()
@@ -460,6 +503,7 @@ def test_refresh_skips_a_repo_whose_permissions_cant_be_read(tmp_path, monkeypat
 
 
 def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
+    """Compare exits non-zero and logs diffs, missing refs, unresolved refs and new coverage."""
     new, old = tmp_path / "new", tmp_path / "old"
     write_csvs(
         new,
@@ -490,6 +534,7 @@ def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
 
 
 def test_compare_passes_on_new_coverage_only(tmp_path):
+    """Compare passes when the new cache only adds coverage."""
     new, old = tmp_path / "new", tmp_path / "old"
     write_csvs(new, {"scylladb/r#1": {"state": "open", "labels": [], "title": "t"}})
     old.mkdir()

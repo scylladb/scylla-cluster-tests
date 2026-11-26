@@ -29,17 +29,19 @@ JENKINSFILE = """longevityPipeline(
 """
 
 
-def _git(repo, *args):
+def git_run(repo, *args):
+    """Run a git command in repo and fail the test if it errors."""
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
 
 
-def _commit_tree(repo, instance_type_db):
+def commit_tree(repo, instance_type_db):
+    """Commit the job's jenkinsfile and a test-case yaml with instance_type_db to repo."""
     (repo / "jenkins-pipelines/oss/tier1").mkdir(parents=True, exist_ok=True)
     (repo / "jenkins-pipelines/oss/tier1/mv-si.jenkinsfile").write_text(JENKINSFILE)
     (repo / "test-cases").mkdir(exist_ok=True)
     (repo / "test-cases/mv-si.yaml").write_text(yaml.dump({"instance_type_db": instance_type_db}))
-    _git(repo, "add", "-A")
-    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", instance_type_db)
+    git_run(repo, "add", "-A")
+    git_run(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", instance_type_db)
 
 
 @pytest.fixture
@@ -47,23 +49,25 @@ def repo(tmp_path, monkeypatch):
     """A repo where the job runs Graviton on master and x86 on branch-2026.1."""
     repo = tmp_path / "sct"
     repo.mkdir()
-    _git(repo, "init", "-q")
-    _commit_tree(repo, "i4i.4xlarge")
-    _git(repo, "update-ref", "refs/remotes/origin/branch-2026.1", "HEAD")
-    _commit_tree(repo, "i8g.4xlarge")
-    _git(repo, "update-ref", "refs/remotes/origin/master", "HEAD")
+    git_run(repo, "init", "-q")
+    commit_tree(repo, "i4i.4xlarge")
+    git_run(repo, "update-ref", "refs/remotes/origin/branch-2026.1", "HEAD")
+    commit_tree(repo, "i8g.4xlarge")
+    git_run(repo, "update-ref", "refs/remotes/origin/master", "HEAD")
     monkeypatch.chdir(repo)
     return repo
 
 
-def _matrix(tmp_path, *jobs):
+def matrix_files(tmp_path, *jobs):
+    """Write a tier1 matrix file holding jobs and return it as a one-item list."""
     path = tmp_path / "tier1.yaml"
     path.write_text(yaml.dump({"jobs": list(jobs)}))
     return [path]
 
 
 def test_drift_is_reported_only_for_releases_whose_branch_disagrees(repo, tmp_path):
-    matrix = _matrix(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws"})
+    """Drift is reported only for the release whose branch arch differs from master."""
+    matrix = matrix_files(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws"})
 
     report = audit_matrices(matrix, ["master", "2026.1"])
 
@@ -72,8 +76,9 @@ def test_drift_is_reported_only_for_releases_whose_branch_disagrees(repo, tmp_pa
 
 
 def test_entries_split_by_release_have_no_drift(repo, tmp_path):
+    """Entries split by include_versions and exclude_versions match each release arch, so no drift is reported."""
     job = {"job_name": "tier1/mv-si-test", "backend": "aws"}
-    matrix = _matrix(
+    matrix = matrix_files(
         tmp_path,
         {**job, "arch": "x86_64", "include_versions": ["2026.1"]},
         {**job, "arch": "aarch64", "exclude_versions": ["2026.1"]},
@@ -86,7 +91,8 @@ def test_entries_split_by_release_have_no_drift(repo, tmp_path):
 
 
 def test_job_without_a_jenkinsfile_is_reported_unchecked(repo, tmp_path):
-    matrix = _matrix(tmp_path, {"job_name": "tier1/not-there-test", "backend": "aws"})
+    """A job with no jenkinsfile is listed as unchecked instead of drifting."""
+    matrix = matrix_files(tmp_path, {"job_name": "tier1/not-there-test", "backend": "aws"})
 
     report = audit_matrices(matrix, ["master"])
 
@@ -97,7 +103,8 @@ def test_job_without_a_jenkinsfile_is_reported_unchecked(repo, tmp_path):
 
 
 def test_release_without_a_branch_is_skipped(repo, tmp_path):
-    matrix = _matrix(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws", "arch": "aarch64"})
+    """A release with no origin branch is dropped from the audited versions."""
+    matrix = matrix_files(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws", "arch": "aarch64"})
 
     report = audit_matrices(matrix, ["master", "2099.1"])
 
@@ -106,6 +113,7 @@ def test_release_without_a_branch_is_skipped(repo, tmp_path):
 
 
 def test_drift_email_lists_each_entry():
+    """send_arch_audit_email sends one subject and a content line per drift entry."""
     report = AuditReport(
         drifts=[ArchDrift("tier1", "tier1/mv-si-test", "x86_64", "aarch64", "i8g.4xlarge", ["master", "2026.3"])],
         versions=["master", "2026.3"],

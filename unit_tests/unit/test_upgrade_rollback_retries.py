@@ -20,7 +20,7 @@ UpgradeTest.__test__ = False
 pytestmark = pytest.mark.usefixtures("events")
 
 
-def _build_fake_self(*, upgrade_rollback_mode, orig_ver, new_ver):
+def build_fake_self(*, upgrade_rollback_mode, orig_ver, new_ver):
     """Build a MagicMock standing in for ``self`` in ``UpgradeTest._rollback_node``."""
     fake_self = MagicMock()
     fake_self.upgrade_rollback_mode = upgrade_rollback_mode
@@ -49,7 +49,7 @@ def _run_side_effect(orig_ver, new_ver):
     return _side_effect
 
 
-def _build_fake_node(*, is_rhel_like, orig_ver, new_ver):
+def build_fake_node(*, is_rhel_like, orig_ver, new_ver):
     """Build a MagicMock standing in for ``node`` in ``UpgradeTest._rollback_node``."""
     fake_node = MagicMock()
     fake_node.name = "node1"
@@ -72,8 +72,8 @@ def _package_manager_calls(fake_node):
 
 def test_rollback_node_yum_downgrade_passes_retry_and_timeout():
     """The exact SCT-704 failure site: 'sudo yum downgrade scylla\\* -y' must retry."""
-    fake_self = _build_fake_self(upgrade_rollback_mode=None, orig_ver="5.4.0", new_ver="6.0.0")
-    fake_node = _build_fake_node(is_rhel_like=True, orig_ver="5.4.0", new_ver="6.0.0")
+    fake_self = build_fake_self(upgrade_rollback_mode=None, orig_ver="5.4.0", new_ver="6.0.0")
+    fake_node = build_fake_node(is_rhel_like=True, orig_ver="5.4.0", new_ver="6.0.0")
 
     UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
 
@@ -82,8 +82,8 @@ def test_rollback_node_yum_downgrade_passes_retry_and_timeout():
 
 def test_rollback_node_minor_release_fails_when_version_unchanged():
     """The minor-release downgrade must not hide a rollback that left the node on the same version."""
-    fake_self = _build_fake_self(upgrade_rollback_mode=None, orig_ver="2026.1.5-0.20261101.abc", new_ver="2026.1.9")
-    fake_node = _build_fake_node(
+    fake_self = build_fake_self(upgrade_rollback_mode=None, orig_ver="2026.1.5-0.20261101.abc", new_ver="2026.1.9")
+    fake_node = build_fake_node(
         is_rhel_like=True, orig_ver="2026.1.9-0.20261115.def", new_ver="2026.1.9-0.20261115.def"
     )
 
@@ -111,8 +111,8 @@ def test_rollback_node_package_commands_are_retried(upgrade_rollback_mode, is_rh
     timeout=600; plain ``remove`` commands don't download anything and aren't
     expected to carry a timeout.
     """
-    fake_self = _build_fake_self(upgrade_rollback_mode=upgrade_rollback_mode, orig_ver=orig_ver, new_ver=new_ver)
-    fake_node = _build_fake_node(is_rhel_like=is_rhel_like, orig_ver=orig_ver, new_ver=new_ver)
+    fake_self = build_fake_self(upgrade_rollback_mode=upgrade_rollback_mode, orig_ver=orig_ver, new_ver=new_ver)
+    fake_node = build_fake_node(is_rhel_like=is_rhel_like, orig_ver=orig_ver, new_ver=new_ver)
 
     UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
 

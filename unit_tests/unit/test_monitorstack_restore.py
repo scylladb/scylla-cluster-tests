@@ -26,67 +26,12 @@ from sdcm.monitorstack.restore import (
 )
 
 
-def _annotations_dir(tmp_path):
-    addons_dir = tmp_path / "sct_monitoring_addons"
-    addons_dir.mkdir()
-    return addons_dir
-
-
-@pytest.mark.parametrize(
-    "make_annotations_file",
-    [
-        pytest.param(lambda addons_dir: None, id="missing"),
-        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text(""), id="empty"),
-        pytest.param(
-            lambda addons_dir: (addons_dir / "annotations.json").write_text("{not valid json"), id="malformed"
-        ),
-        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("null"), id="null"),
-        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("{}"), id="object"),
-        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text('"just a string"'), id="string"),
-    ],
-)
-def test_restore_annotations_data_returns_false_without_raising(tmp_path, make_annotations_file):
-    """A missing, empty, malformed, or non-list annotations.json must not raise, and must not upload anything."""
-    addons_dir = _annotations_dir(tmp_path)
-    make_annotations_file(addons_dir)
-
-    with patch("sdcm.monitorstack.restore.create_retry_session") as mock_create_retry_session:
-        result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
-
-    assert result is False
-    mock_create_retry_session.assert_not_called()
-    mock_create_retry_session.return_value.post.assert_not_called()
-
-
-def test_restore_annotations_data_uploads_valid_annotations(tmp_path):
-    """A valid, non-empty annotations.json is loaded and each annotation is uploaded."""
-    addons_dir = _annotations_dir(tmp_path)
-    annotations_file = addons_dir / "annotations.json"
-    annotations_file.write_text('[{"text": "annotation-1"}, {"text": "annotation-2"}]')
-
-    mock_response = MagicMock(status_code=200)
-    mock_session = MagicMock(post=MagicMock(return_value=mock_response))
-    with patch(
-        "sdcm.monitorstack.restore.create_retry_session", return_value=mock_session
-    ) as mock_create_retry_session:
-        result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
-
-    assert result is True
-    mock_create_retry_session.assert_called_once_with(retries=0)
-    assert mock_session.post.call_count == 2
-    for call in mock_session.post.call_args_list:
-        assert call.kwargs["timeout"] == 30
-
-
-def test_restore_grafana_dashboards_and_annotations_succeeds_when_annotations_skipped():
-    """restore_grafana_dashboards_and_annotations must not fail overall when annotations are skipped."""
-    with patch("sdcm.monitorstack.restore.restore_sct_dashboards", return_value=True):
-        with patch("sdcm.monitorstack.restore.restore_annotations_data", return_value=False):
-            result = restore_grafana_dashboards_and_annotations(
-                monitoring_dockers_dir="/some/dir", grafana_docker_port=1234, sct_dashboard_file="dashboard.json"
-            )
-
-    assert result is True
+@pytest.fixture
+def addons_dir(tmp_path):
+    """The sct_monitoring_addons directory under tmp_path, created empty."""
+    addons = tmp_path / "sct_monitoring_addons"
+    addons.mkdir()
+    return addons
 
 
 @pytest.fixture
@@ -108,27 +53,6 @@ def default_ports(monkeypatch):
 
     monkeypatch.setattr(restore, "get_free_port", fake_get_free_port)
     return bound_elsewhere
-
-
-def test_pick_monitoring_stack_ports_uses_defaults_when_nothing_runs(default_ports):
-    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (3000, 6000, 9090)
-
-
-def test_pick_monitoring_stack_ports_skips_half_started_stack(default_ports):
-    """A concurrent restore that has created Prometheus and Alertmanager but not yet Grafana owns the slot."""
-    ports = pick_monitoring_stack_ports(tenants_number=1, occupied_ports={6000, 9090})
-
-    assert ports == (40000, 40001, 40002)
-
-
-def test_pick_monitoring_stack_ports_skips_slot_with_port_bound_by_other_process(default_ports):
-    default_ports.add(3000)
-
-    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (40000, 40001, 40002)
-
-
-def test_pick_monitoring_stack_ports_uses_next_tenant_slot(default_ports):
-    assert pick_monitoring_stack_ports(tenants_number=2, occupied_ports={3000, 6000, 9090}) == (3001, 6001, 9091)
 
 
 @pytest.fixture
@@ -157,6 +81,87 @@ def restore_until_dashboards(monkeypatch):
     return kill
 
 
+@pytest.mark.parametrize(
+    "make_annotations_file",
+    [
+        pytest.param(lambda addons_dir: None, id="missing"),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text(""), id="empty"),
+        pytest.param(
+            lambda addons_dir: (addons_dir / "annotations.json").write_text("{not valid json"), id="malformed"
+        ),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("null"), id="null"),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("{}"), id="object"),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text('"just a string"'), id="string"),
+    ],
+)
+def test_restore_annotations_data_returns_false_without_raising(tmp_path, addons_dir, make_annotations_file):
+    """A missing, empty, malformed, or non-list annotations.json must not raise, and must not upload anything."""
+    make_annotations_file(addons_dir)
+
+    with patch("sdcm.monitorstack.restore.create_retry_session") as mock_create_retry_session:
+        result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
+
+    assert result is False
+    mock_create_retry_session.assert_not_called()
+    mock_create_retry_session.return_value.post.assert_not_called()
+
+
+def test_restore_annotations_data_uploads_valid_annotations(tmp_path, addons_dir):
+    """A valid, non-empty annotations.json is loaded and each annotation is uploaded."""
+    annotations_file = addons_dir / "annotations.json"
+    annotations_file.write_text('[{"text": "annotation-1"}, {"text": "annotation-2"}]')
+
+    mock_response = MagicMock(status_code=200)
+    mock_session = MagicMock(post=MagicMock(return_value=mock_response))
+    with patch(
+        "sdcm.monitorstack.restore.create_retry_session", return_value=mock_session
+    ) as mock_create_retry_session:
+        result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
+
+    assert result is True
+    mock_create_retry_session.assert_called_once_with(retries=0)
+    assert mock_session.post.call_count == 2
+    for call in mock_session.post.call_args_list:
+        assert call.kwargs["timeout"] == 30
+
+
+def test_restore_grafana_dashboards_and_annotations_succeeds_when_annotations_skipped():
+    """restore_grafana_dashboards_and_annotations must not fail overall when annotations are skipped."""
+    with (
+        patch("sdcm.monitorstack.restore.restore_sct_dashboards", return_value=True),
+        patch("sdcm.monitorstack.restore.restore_annotations_data", return_value=False),
+    ):
+        result = restore_grafana_dashboards_and_annotations(
+            monitoring_dockers_dir="/some/dir", grafana_docker_port=1234, sct_dashboard_file="dashboard.json"
+        )
+
+    assert result is True
+
+
+def test_pick_monitoring_stack_ports_uses_defaults_when_nothing_runs(default_ports):
+    """pick_monitoring_stack_ports returns the default ports when no stack is running."""
+    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (3000, 6000, 9090)
+
+
+def test_pick_monitoring_stack_ports_skips_half_started_stack(default_ports):
+    """A concurrent restore that has created Prometheus and Alertmanager but not yet Grafana owns the slot."""
+    ports = pick_monitoring_stack_ports(tenants_number=1, occupied_ports={6000, 9090})
+
+    assert ports == (40000, 40001, 40002)
+
+
+def test_pick_monitoring_stack_ports_skips_slot_with_port_bound_by_other_process(default_ports):
+    """A default slot whose Grafana port is bound by another process is skipped for random ports."""
+    default_ports.add(3000)
+
+    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (40000, 40001, 40002)
+
+
+def test_pick_monitoring_stack_ports_uses_next_tenant_slot(default_ports):
+    """The second tenant takes the next free port slot above the defaults."""
+    assert pick_monitoring_stack_ports(tenants_number=2, occupied_ports={3000, 6000, 9090}) == (3001, 6001, 9091)
+
+
 def test_restore_monitoring_stack_removes_only_its_own_containers_on_failure(monkeypatch, restore_until_dashboards):
     """When the second cluster fails, both stacks this restore started are removed, and nothing else."""
     monkeypatch.setattr(restore, "restore_grafana_dashboards_and_annotations", MagicMock(side_effect=[True, False]))
@@ -169,6 +174,7 @@ def test_restore_monitoring_stack_removes_only_its_own_containers_on_failure(mon
 
 
 def test_restore_monitoring_stack_keeps_containers_on_success(monkeypatch, restore_until_dashboards):
+    """A successful restore returns both clusters and does not remove any container."""
     monkeypatch.setattr(restore, "restore_grafana_dashboards_and_annotations", lambda *_, **__: True)
 
     assert set(restore_monitoring_stack("test-id")) == {"cluster-1", "cluster-2"}

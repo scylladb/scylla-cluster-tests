@@ -12,14 +12,32 @@ from sdcm.cluster_k8s.mini_k8s import (
 )
 
 
+def kind_cluster_spec(host_cpus: str) -> dict:
+    """Return the kind cluster spec that start_k8s_software writes for a host with host_cpus CPUs."""
+    kind = mock.Mock(spec=LocalKindCluster)
+    for name in ("AUXILIARY_POOL_NAME", "SCYLLA_POOL_NAME", "LOADER_POOL_NAME", "MONITORING_POOL_NAME"):
+        setattr(kind, name, getattr(LocalKindCluster, name))
+    kind.params = {"k8s_n_auxiliary_nodes": 1, "n_db_nodes": [3], "n_loaders": [1], "k8s_n_monitor_nodes": 0}
+    kind.host_node.remoter.run.return_value = mock.Mock(stdout=f"{host_cpus}\n")
+    LocalKindCluster.start_k8s_software(kind)
+    script = kind.host_node.remoter.run.call_args.args[0]
+    return yaml.safe_load(script.split("EndOfSpec\n", 1)[1].split("EndOfSpec", 1)[0])
+
+
 @pytest.mark.parametrize(
     "ok,stdout,expected",
     [
-        pytest.param(True, '{"clientVersion": {"gitVersion": "v1.31.4"}, "kustomizeVersion": "v5.4.2"}', "1.31.4"),
+        pytest.param(
+            True,
+            '{"clientVersion": {"gitVersion": "v1.31.4"}, "kustomizeVersion": "v5.4.2"}',
+            "1.31.4",
+            id="kubectl-version-parsed",
+        ),
         pytest.param(False, "", DEFAULT_KUBECTL_VERSION, id="kubectl-missing"),
     ],
 )
 def test_local_kubectl_version(ok, stdout, expected):
+    """local_kubectl_version returns the client version, or the default when kubectl fails."""
     result = mock.Mock(ok=ok, stdout=stdout)
     with mock.patch("sdcm.cluster_k8s.mini_k8s.LOCALRUNNER") as runner:
         runner.run.return_value = result
@@ -35,22 +53,13 @@ def test_local_kubectl_version(ok, stdout, expected):
     ],
 )
 def test_scylla_worker_reserved_cpus(workers, host_cpus, expected):
+    """scylla_worker_reserved_cpus reserves a growing CPU set per worker, or none when CPUs are short."""
     assert [scylla_worker_reserved_cpus(index, workers, host_cpus) for index in range(workers)] == expected
 
 
-def _kind_cluster_spec(host_cpus: str) -> dict:
-    kind = mock.Mock(spec=LocalKindCluster)
-    for name in ("AUXILIARY_POOL_NAME", "SCYLLA_POOL_NAME", "LOADER_POOL_NAME", "MONITORING_POOL_NAME"):
-        setattr(kind, name, getattr(LocalKindCluster, name))
-    kind.params = {"k8s_n_auxiliary_nodes": 1, "n_db_nodes": [3], "n_loaders": [1], "k8s_n_monitor_nodes": 0}
-    kind.host_node.remoter.run.return_value = mock.Mock(stdout=f"{host_cpus}\n")
-    LocalKindCluster.start_k8s_software(kind)
-    script = kind.host_node.remoter.run.call_args.args[0]
-    return yaml.safe_load(script.split("EndOfSpec\n", 1)[1].split("EndOfSpec", 1)[0])
-
-
 def test_kind_spec_reserves_different_cpus_per_scylla_worker():
-    spec = _kind_cluster_spec(host_cpus="16")
+    """Each scylla worker gets its own reserved CPU set and the spec enables the static CPU manager policy."""
+    spec = kind_cluster_spec(host_cpus="16")
     assert "cpuManagerPolicy: static" in spec["kubeadmConfigPatches"][0]
     reserved = {}
     for node in spec["nodes"]:
@@ -69,11 +78,13 @@ def test_kind_spec_reserves_different_cpus_per_scylla_worker():
 
 
 def test_kind_spec_without_enough_cpus_has_no_reserved_cpus():
-    spec = _kind_cluster_spec(host_cpus="3")
+    """With too few host CPUs the spec adds no kubeadm patches to worker nodes."""
+    spec = kind_cluster_spec(host_cpus="3")
     assert not any("kubeadmConfigPatches" in node for node in spec["nodes"] if node["role"] == "worker")
 
 
 def test_kind_load_image_falls_back_to_single_platform_archive():
+    """kind_load_image falls back to saving a linux/amd64 archive when kind load fails."""
     kind = mock.Mock(spec=LocalKindCluster)
     LocalKindCluster.kind_load_image(kind, "docker.io/scylladb/scylla:2026.1")
     cmd = kind.host_node.remoter.run.call_args.args[0]

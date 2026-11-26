@@ -21,6 +21,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class TestClass:
+    """Plain attribute holder used as test data, not collected by pytest."""
+
     __test__ = False  # Mark this class to be not collected by pytest.
 
     def __init__(self, **kwargs):
@@ -35,6 +37,7 @@ class TestClass:
 
 
 def test_magic_list():
+    """MagicList sort_by and group_by order and group items by the given attribute."""
     tmp = MagicList([TestClass(val1=1, val2=2), TestClass(val1=3, val2=5), TestClass(val1=10, val2=0)])
 
     assert repr(tmp.sort_by("val1")) == "[<val1=1,val2=2>, <val1=3,val2=5>, <val1=10,val2=0>]"
@@ -51,6 +54,7 @@ def test_magic_list():
 
 
 def test_get_data_by_path():
+    """get_data_by_path resolves dotted paths through dicts and objects, and returns default for missing keys."""
     data = {"l1_key": {"l2_key": 10}, "l1_instance": TestClass(l2_key=20)}
     assert data.get("l1_key") == get_data_by_path(data, data_path="l1_key")
     assert 10 == get_data_by_path(data, data_path="l1_key.l2_key")

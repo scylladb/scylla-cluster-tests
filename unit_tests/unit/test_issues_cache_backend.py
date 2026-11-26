@@ -26,15 +26,17 @@ import pytest
 from sdcm.utils.issues import CachedGitHubIssues, CachedJiraIssues
 
 
-@pytest.fixture(name="sm_backend_env")
-def fixture_sm_backend_env(monkeypatch):
+@pytest.fixture
+def sm_backend_env(monkeypatch):
     """Put the process on the secretsmanager backend, as a real run would be."""
     monkeypatch.delenv("SCT_KEYSTORE_BACKEND", raising=False)
     yield
 
 
+@pytest.mark.usefixtures("sm_backend_env")
 @pytest.mark.parametrize("cache_class", [CachedJiraIssues, CachedGitHubIssues], ids=["jira", "github"])
-def test_issue_cache_is_pinned_to_s3(cache_class, sm_backend_env):  # noqa: ARG001
+def test_issue_cache_is_pinned_to_s3(cache_class):
+    """The issue cache reads from S3 even when the keystore backend is secretsmanager."""
     assert cache_class().storage._backend == "s3"
 
 

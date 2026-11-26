@@ -12,6 +12,7 @@ KS_CF_LIST = ["ks1.table1", "ks1.table2", "ks2.table3"]
 
 
 def test_new_api_filter_ks_cf_caps_table_count():
+    """_filter_ks_cf keeps at most MAX_NAMES_IN_CMD tables when the upper bound is picked."""
     cmd = NewApiTopPartitionCmd(ks_cf_list=[f"ks.t{i}" for i in range(5000)], random_generator=random.Random())
     # randint picks the upper bound, the most tables allowed
     with mock.patch.object(cmd.random_generator, "randint", side_effect=lambda low, high: high):

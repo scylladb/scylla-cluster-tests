@@ -22,11 +22,13 @@ from sdcm.provision.common.utils import apply_cve_2026_98432_mitigation, minify_
 RULE = "ip protocol tcp ip hdrlength > 5 counter drop"
 
 
-def _boot_script(**kwargs) -> str:
+def boot_script(**kwargs) -> str:
+    """Return the rendered boot script of a ConfigurationScriptBuilder with the given options."""
     return ConfigurationScriptBuilder(syslog_host_port=("127.0.0.1", 5000), **kwargs).to_string()
 
 
 def test_the_mitigation_script_is_valid_bash_after_minify():
+    """The minified mitigation script passes `bash -n`, so the node cannot fail to parse it at boot."""
     subprocess.run(["bash", "-n"], input=minify_shell_script(apply_cve_2026_98432_mitigation()), text=True, check=True)
 
 
@@ -47,13 +49,16 @@ def test_the_unit_runs_before_sysinit_so_cloud_init_cant_deadlock_on_it():
     assert "DefaultDependencies=no" in apply_cve_2026_98432_mitigation()
 
 
-@pytest.mark.parametrize("disable_guest_firewall", [True, False])
+@pytest.mark.parametrize(
+    "disable_guest_firewall",
+    [pytest.param(True, id="guest-firewall-disabled"), pytest.param(False, id="guest-firewall-kept")],
+)
 def test_every_boot_script_installs_it_before_the_rerun_exit(disable_guest_firewall):
     """A node configured before the runner reruns the script and exits early: the rule must come first.
 
     On OCI it must also come after `disable_firewall()`, which disables `nftables.service`.
     """
-    script = _boot_script(disable_guest_firewall=disable_guest_firewall)
+    script = boot_script(disable_guest_firewall=disable_guest_firewall)
 
     assert RULE in script
     assert script.index(RULE) < script.index("exit 0")

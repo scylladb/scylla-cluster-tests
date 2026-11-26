@@ -15,17 +15,18 @@ from sdcm.utils.lint.validator import validate_pipeline
 @pytest.mark.parametrize(
     "pipeline",
     [
-        "azure-released-image",
-        "azure-branched-image",
-        "oci-released-image",
-        "oci-branched-image",
-        "aws-capacity-reservation",
-        "aws-dedicated-host",
+        pytest.param("azure-released-image", id="azure-released-image"),
+        pytest.param("azure-branched-image", id="azure-branched-image"),
+        pytest.param("oci-released-image", id="oci-released-image"),
+        pytest.param("oci-branched-image", id="oci-branched-image"),
+        pytest.param("aws-capacity-reservation", id="aws-capacity-reservation"),
+        pytest.param("aws-dedicated-host", id="aws-dedicated-host"),
     ],
 )
 def test_validate_pipeline_cloud_lookup_never_reaches_the_network(
     pipeline, test_data_dir, remote_connections, restore_root_logger
 ):
+    """validate_pipeline never calls a cloud API, so lint reaches no network for each cloud-lookup pipeline."""
     pipeline_path = test_data_dir / "lint" / f"{pipeline}.jenkinsfile"
     # The capacity-reservation and dedicated-host lookups only run when `test_id` is set. A bare
     # local `sct.py lint-pipelines` leaves it unset; CI runs through `docker/env/hydra.sh`, which

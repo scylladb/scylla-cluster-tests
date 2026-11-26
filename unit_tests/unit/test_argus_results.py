@@ -29,6 +29,7 @@ from sdcm.argus_results import (
 
 
 def test_send_latency_decorator_result_to_argus(test_data_dir):
+    """Latency decorator result is sent as a latency table and a reactor stalls table."""
     argus_mock = MagicMock()
     argus_mock.submit_results = MagicMock()
     result = json.loads((test_data_dir / "latency_decorator_result.json").read_text())
@@ -108,7 +109,10 @@ def test_send_result_to_argus_per_hdr_tag_rows_keep_cycle_prefix():
     assert {cell.row for cell in latency_table.results} == {f"Cycle #3 (HDR tag: {tag})" for tag in tags}
 
 
-@pytest.mark.parametrize("run", [{}, {"test_id": None}], ids=["no-run-registered", "empty-test-id"])
+@pytest.mark.parametrize(
+    "run",
+    [pytest.param({}, id="no-run-registered"), pytest.param({"test_id": None}, id="empty-test-id")],
+)
 def test_send_iotune_results_to_argus_skips_when_no_run(run):
     """In replay-log-only mode get_run() returns an empty payload, it should be skipped, not raise."""
     argus_mock = MagicMock()
@@ -193,7 +197,7 @@ NULL_THRESHOLD_FILES = [
 
 
 @pytest.mark.parametrize("threshold_file", NULL_THRESHOLD_FILES, ids=lambda path: path.name)
-@pytest.mark.parametrize("workload", ["read", "write"])
+@pytest.mark.parametrize("workload", [pytest.param("read", id="read"), pytest.param("write", id="write")])
 def test_null_microbenchmark_thresholds_record_without_validating(threshold_file, workload):
     """A metric with `fixed_limit: null` gets a rule with no limit, so Argus records the result and
     validates nothing. A missing metric would fall back to best_pct=5 instead.

@@ -43,7 +43,7 @@ Status=Up/Down
 
 
 @pytest.fixture(autouse=True)
-def _no_retry_sleep(monkeypatch):
+def no_retry_sleep(monkeypatch):
     """Skip the sleeps between the retries of `retrying` and of the schema agreement check.
 
     Both call `time.sleep` of the `time` module, so one patch covers them.
@@ -51,7 +51,8 @@ def _no_retry_sleep(monkeypatch):
     monkeypatch.setattr("sdcm.utils.decorators.time.sleep", lambda *_, **__: None)
 
 
-def _make_nodes(count):
+def make_nodes(count):
+    """Return `count` mocked nodes named node-0, node-1, ... with their IPs."""
     nodes = []
     for idx in range(count):
         node = MagicMock()
@@ -62,7 +63,7 @@ def _make_nodes(count):
     return nodes
 
 
-def _run_together(barrier, result):
+def run_together(barrier, result):
     """Build a side effect that returns `result` only after all the parties of `barrier` called it."""
 
     def side_effect(*_, **__):
@@ -72,52 +73,65 @@ def _run_together(barrier, result):
     return side_effect
 
 
-# --- wait_for_schema_agreement ---
-
-
-def _gossip_info(nodes, schemas=None):
+def gossip_info(nodes, schemas=None):
+    """Return the gossip info of `nodes`, the schema of each node is `schemas[name]` or v1."""
     schemas = schemas or {}
     return {node: {"schema": schemas.get(node.name, "v1"), "status": "NORMAL", "dc": "dc1"} for node in nodes}
 
 
-def _set_schema_info(nodes, disagreeing=()):
+def set_schema_info(nodes, disagreeing=()):
     """Make every node report the gossip and the peers info, the `disagreeing` ones see two schema versions."""
     for node in nodes:
         schemas = {nodes[0].name: "v2"} if node.name in disagreeing else {}
-        node.get_gossip_info.return_value = _gossip_info(nodes, schemas)
+        node.get_gossip_info.return_value = gossip_info(nodes, schemas)
         node.get_peers_info.return_value = {peer: {"schema_version": "v1"} for peer in nodes if peer is not node}
 
 
+def nodetool_status(nodes, down=()):
+    """Return a `nodetool status` result where every node is UN, except the `down` ones."""
+    rows = [
+        f"{'DN' if node.name in down else 'UN'} {node.ip_address} 202.92 KB 256    ?    "
+        f"7b8f86bf-c70c-4246-a273-{idx:012d} rack1"
+        for idx, node in enumerate(nodes)
+    ]
+    return Result(stdout=NODETOOL_STATUS_HEADER + "\n".join(rows), exited=0)
+
+
+# --- wait_for_schema_agreement ---
+
+
 def test_wait_for_schema_agreement_checks_nodes_concurrently(caplog):
-    nodes = _make_nodes(5)
-    _set_schema_info(nodes)
+    """wait_for_schema_agreement checks all nodes at the same time and logs that the agreement is reached."""
+    nodes = make_nodes(5)
+    set_schema_info(nodes)
     barrier = threading.Barrier(len(nodes), timeout=OVERLAP_TIMEOUT)
     for node in nodes:
-        node.get_gossip_info.side_effect = _run_together(barrier, node.get_gossip_info.return_value)
+        node.get_gossip_info.side_effect = run_together(barrier, node.get_gossip_info.return_value)
 
     with caplog.at_level(logging.DEBUG, logger="dummy_cluster"):
         assert DummyScyllaCluster(nodes).wait_for_schema_agreement() is True
 
     for node in nodes:
-        node.get_gossip_info.assert_called_once()
-        node.get_peers_info.assert_called_once()
+        node.get_gossip_info.assert_called_once_with()
+        node.get_peers_info.assert_called_once_with()
     assert "Schema agreement is reached" in caplog.messages
 
 
 def test_wait_for_schema_agreement_disagreeing_nodes_raise_assertion_error_of_first_node():
-    nodes = _make_nodes(5)
-    _set_schema_info(nodes, disagreeing=("node-1", "node-3"))
+    """The error of the first failed node is raised, even when a later node fails earlier."""
+    nodes = make_nodes(5)
+    set_schema_info(nodes, disagreeing=("node-1", "node-3"))
     node_3_checked = threading.Event()
 
     def node_1_gossip_info():
         # a later node that fails earlier must not replace the error of the first failed node
         if not node_3_checked.wait(OVERLAP_TIMEOUT):
             raise TimeoutError("node-3 was not checked while node-1 was")
-        return _gossip_info(nodes, {"node-0": "v2"})
+        return gossip_info(nodes, {"node-0": "v2"})
 
     def node_3_gossip_info():
         node_3_checked.set()
-        return _gossip_info(nodes, {"node-0": "v2"})
+        return gossip_info(nodes, {"node-0": "v2"})
 
     nodes[1].get_gossip_info.side_effect = node_1_gossip_info
     nodes[3].get_gossip_info.side_effect = node_3_gossip_info
@@ -133,21 +147,13 @@ def test_wait_for_schema_agreement_disagreeing_nodes_raise_assertion_error_of_fi
 # --- wait_all_nodes_un ---
 
 
-def _nodetool_status(nodes, down=()):
-    rows = [
-        f"{'DN' if node.name in down else 'UN'} {node.ip_address} 202.92 KB 256    ?    "
-        f"7b8f86bf-c70c-4246-a273-{idx:012d} rack1"
-        for idx, node in enumerate(nodes)
-    ]
-    return Result(stdout=NODETOOL_STATUS_HEADER + "\n".join(rows), exited=0)
-
-
 def test_wait_all_nodes_un_down_node_raises_cluster_nodes_not_ready():
-    nodes = _make_nodes(4)
+    """wait_all_nodes_un raises ClusterNodesNotReady naming the node that another node sees as down."""
+    nodes = make_nodes(4)
     for node in nodes:
-        node.run_nodetool.return_value = _nodetool_status(nodes)
+        node.run_nodetool.return_value = nodetool_status(nodes)
     # only node-2 sees node-3 as down
-    nodes[2].run_nodetool.return_value = _nodetool_status(nodes, down=("node-3",))
+    nodes[2].run_nodetool.return_value = nodetool_status(nodes, down=("node-3",))
 
     with pytest.raises(ClusterNodesNotReady) as exc_info:
         DummyScyllaCluster(nodes).wait_all_nodes_un()
@@ -157,9 +163,10 @@ def test_wait_all_nodes_un_down_node_raises_cluster_nodes_not_ready():
 
 
 def test_wait_all_nodes_un_unexpected_error_is_not_retried():
-    nodes = _make_nodes(3)
+    """An unexpected nodetool error propagates; only get_nodetool_status retries it."""
+    nodes = make_nodes(3)
     for node in nodes:
-        node.run_nodetool.return_value = _nodetool_status(nodes)
+        node.run_nodetool.return_value = nodetool_status(nodes)
     nodes[1].run_nodetool.side_effect = ConnectionError("ssh is down")
 
     with pytest.raises(ConnectionError, match="ssh is down"):
@@ -170,4 +177,5 @@ def test_wait_all_nodes_un_unexpected_error_is_not_retried():
 
 
 def test_wait_all_nodes_un_no_nodes_does_nothing():
+    """wait_all_nodes_un on a cluster without nodes returns without error."""
     DummyScyllaCluster([]).wait_all_nodes_un()

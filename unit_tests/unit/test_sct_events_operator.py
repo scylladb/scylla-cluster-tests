@@ -20,6 +20,7 @@ from sdcm.sct_events.operator import ScyllaOperatorLogEvent
 
 
 def test_scylla_operator_log_event_tls_handshake_error():
+    """TLS_HANDSHAKE_ERROR matches the operator log line and renders its timestamp and str."""
     log_record = (
         "I0628 15:53:02.269804       1 operator/operator.go:133] http: TLS handshake error from 172.17.0.1:50882: EOF"
     )
@@ -53,6 +54,7 @@ def test_scylla_operator_log_event_tls_handshake_error():
 
 
 def test_scylla_operator_log_event_operator_started_info():
+    """OPERATOR_STARTED_INFO matches the controller start log line and renders its timestamp and str."""
     log_record = 'I0628 16:07:43.572294       1 scyllacluster/controller.go:203] "Starting controller" controller="ScyllaCluster"'
     event = ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO()
     pattern = re.compile(event.regex, re.IGNORECASE)
@@ -84,6 +86,7 @@ def test_scylla_operator_log_event_operator_started_info():
 
 
 def test_scylla_operator_log_event_wrong_scheduled_info():
+    """WRONG_SCHEDULED_PODS matches the not-allowed-pod log line and renders its str."""
     log_record = (
         "I0830 12:35:39              Not allowed pods are scheduled on Scylla node found: kube-proxy-7kjnf "
         "(ip-10-0-1-200.eu-north-1.compute.internal node)"

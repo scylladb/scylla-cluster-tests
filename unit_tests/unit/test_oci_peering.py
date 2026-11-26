@@ -14,7 +14,15 @@
 """Unit tests for OCI VCN peering (sdcm.utils.oci_peering) and OciRegion DRG methods."""
 
 from ipaddress import ip_network
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import ANY, MagicMock, PropertyMock, patch
+
+from oci.core.models import (
+    ConnectRemotePeeringConnectionsDetails,
+    CreateDrgDetails,
+    CreateRemotePeeringConnectionDetails,
+    IngressSecurityRule,
+    UpdateSecurityListDetails,
+)
 
 from sdcm.utils.oci_peering import OciVcnPeering
 from sdcm.utils.oci_region import OciRegion
@@ -114,13 +122,25 @@ def test_peering_connection_connects_rpcs_when_not_peered(
 
     origin.get_or_create_rpc.assert_called_once_with("us-phoenix-1")
     target.get_or_create_rpc.assert_called_once_with("us-ashburn-1")
-    origin.network_client.connect_remote_peering_connections.assert_called_once()
+    origin.network_client.connect_remote_peering_connections.assert_called_once_with(
+        remote_peering_connection_id="ocid1.rpc.origin",
+        connect_remote_peering_connections_details=ConnectRemotePeeringConnectionsDetails(
+            peer_id="ocid1.rpc.target",
+            peer_region_name="us-phoenix-1",
+        ),
+    )
     call_kwargs = origin.network_client.connect_remote_peering_connections.call_args
     assert call_kwargs.kwargs["remote_peering_connection_id"] == "ocid1.rpc.origin"
     connect_details = call_kwargs.kwargs["connect_remote_peering_connections_details"]
     assert connect_details.peer_id == "ocid1.rpc.target"
     assert connect_details.peer_region_name == "us-phoenix-1"
-    mock_wait.assert_called_once()
+    mock_wait.assert_called_once_with(
+        origin.network_client,
+        origin.network_client.get_remote_peering_connection.return_value,
+        evaluate_response=ANY,
+        max_wait_seconds=300,
+        max_interval_seconds=10,
+    )
     assert mock_drg_att.call_count == 2
 
 
@@ -239,10 +259,26 @@ def test_drg_create_when_none_exists(mock_network, mock_comp, mock_paginator, mo
 
     assert drg.id == "ocid1.drg.oc1..new"
     assert drg.lifecycle_state == "AVAILABLE"
-    region.network_client.create_drg.assert_called_once()
-    region.network_client.get_drg.assert_called_once()
-    mock_paginator.assert_called_once()
-    mock_wait.assert_called_once()
+    region.network_client.create_drg.assert_called_once_with(
+        CreateDrgDetails(
+            compartment_id="ocid1.compartment.oc1..test",
+            display_name="SCT-2-drg",
+            freeform_tags={"Name": "SCT-2-drg", "Owner": "tester"},
+        )
+    )
+    region.network_client.get_drg.assert_called_once_with("ocid1.drg.oc1..new")
+    mock_paginator.assert_called_once_with(
+        region.network_client.list_drgs,
+        yield_mode="record",
+        compartment_id="ocid1.compartment.oc1..test",
+    )
+    mock_wait.assert_called_once_with(
+        region.network_client,
+        region.network_client.get_drg.return_value,
+        evaluate_response=ANY,
+        max_wait_seconds=300,
+        max_interval_seconds=10,
+    )
 
 
 @patch("sdcm.utils.oci_region.get_username", return_value="tester")
@@ -265,7 +301,11 @@ def test_drg_find_existing(mock_network, mock_comp, mock_paginator, mock_user):
     assert drg.id == "ocid1.drg.oc1..existing"
     assert drg.display_name == "SCT-2-drg"
     region.network_client.create_drg.assert_not_called()
-    mock_paginator.assert_called_once()
+    mock_paginator.assert_called_once_with(
+        region.network_client.list_drgs,
+        yield_mode="record",
+        compartment_id="ocid1.compartment.oc1..test",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -305,13 +345,30 @@ def test_rpc_create_when_none_exists(mock_network, mock_drg, mock_comp, mock_pag
 
     assert rpc.id == "ocid1.rpc.oc1..new"
     assert rpc.lifecycle_state == "AVAILABLE"
-    region.network_client.create_remote_peering_connection.assert_called_once()
+    region.network_client.create_remote_peering_connection.assert_called_once_with(
+        CreateRemotePeeringConnectionDetails(
+            compartment_id="ocid1.compartment.oc1..test",
+            drg_id="ocid1.drg.oc1..existing",
+            display_name="SCT-2-rpc-us-phoenix-1",
+        )
+    )
     create_details = region.network_client.create_remote_peering_connection.call_args.args[0]
     assert create_details.display_name == "SCT-2-rpc-us-phoenix-1"
     assert create_details.drg_id == "ocid1.drg.oc1..existing"
     assert create_details.compartment_id == "ocid1.compartment.oc1..test"
-    mock_paginator.assert_called_once()
-    mock_wait.assert_called_once()
+    mock_paginator.assert_called_once_with(
+        region.network_client.list_remote_peering_connections,
+        yield_mode="record",
+        compartment_id="ocid1.compartment.oc1..test",
+        drg_id="ocid1.drg.oc1..existing",
+    )
+    mock_wait.assert_called_once_with(
+        region.network_client,
+        region.network_client.get_remote_peering_connection.return_value,
+        evaluate_response=ANY,
+        max_wait_seconds=300,
+        max_interval_seconds=10,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +475,18 @@ def test_allow_cross_vcn_traffic_adds_rule(mock_network, mock_sl):
 
     region.allow_cross_vcn_traffic("10.1.0.0/16")
 
-    region.network_client.update_security_list.assert_called_once()
+    region.network_client.update_security_list.assert_called_once_with(
+        "ocid1.sl.oc1..fake",
+        UpdateSecurityListDetails(
+            ingress_security_rules=[
+                IngressSecurityRule(
+                    protocol="all",
+                    source="10.1.0.0/16",
+                    description="Allow all traffic from peer VCN 10.1.0.0/16",
+                )
+            ]
+        ),
+    )
     update_args = region.network_client.update_security_list.call_args
     assert update_args.args[0] == "ocid1.sl.oc1..fake"
     updated_details = update_args.args[1]

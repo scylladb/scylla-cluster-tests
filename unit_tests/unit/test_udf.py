@@ -60,6 +60,7 @@ MOCK_WASM_UDF_VALS = {
 
 
 def test_create_udf_instance():
+    """UDF stores each constructor field as an attribute."""
     udf = UDF(**MOCK_LUA_UDF_VALS)
 
     for key, value in MOCK_LUA_UDF_VALS.items():
@@ -67,6 +68,7 @@ def test_create_udf_instance():
 
 
 def test_get_create_query_from_udf():
+    """get_create_query builds a plain CREATE FUNCTION statement when create_or_replace is False."""
     expected_query = (
         "CREATE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT "
         "RETURNS int LANGUAGE lua AS 'return #var'"
@@ -78,6 +80,7 @@ def test_get_create_query_from_udf():
 
 
 def test_get_create_or_replace_query_from_udf():
+    """get_create_query builds a CREATE OR REPLACE FUNCTION statement by default."""
     expected_query = (
         "CREATE OR REPLACE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT "
         "RETURNS int LANGUAGE lua AS 'return #var'"
@@ -89,6 +92,7 @@ def test_get_create_or_replace_query_from_udf():
 
 
 def test_creating_udf_with_missing_required_argument():
+    """UDF rejects a None value for each required field, naming the field in the error."""
     required_arg_names = ["name", "args", "called_on_null_input_returns", "return_type", "script"]
 
     for arg_name in required_arg_names:
@@ -100,6 +104,7 @@ def test_creating_udf_with_missing_required_argument():
 
 
 def test_creating_udf_class_with_invalid_language():
+    """UDF rejects a language outside the supported set."""
     udf_vals = MOCK_LUA_UDF_VALS.copy()
     udf_vals.update({"language": "Java"})
 
@@ -108,6 +113,7 @@ def test_creating_udf_class_with_invalid_language():
 
 
 def test_loading_udfs_with_lua_scripts():
+    """UDF.from_yaml loads the bundled Lua UDF script with the expected fields."""
     expected_vals = MOCK_LUA_UDF_VALS.copy()
 
     udf_yaml_filename = "./sdcm/utils/udf_scripts/lua_var_length_counter.yaml"
@@ -120,6 +126,7 @@ def test_loading_udfs_with_lua_scripts():
 
 
 def test_loading_udfs_with_wasm_scripts():
+    """UDF.from_yaml loads the bundled WASM UDF script with the expected fields."""
     expected_vals = MOCK_WASM_UDF_VALS.copy()
 
     udf_yaml_filename = "./sdcm/utils/udf_scripts/wasm_plus.yaml"
@@ -132,6 +139,7 @@ def test_loading_udfs_with_wasm_scripts():
 
 
 def test_load_all_udfs():
+    """Every UDF loaded from sdcm/utils/udf_scripts has all required fields set."""
     assert len(UDFS.keys()) > 1, "UDF count was not greater than 1."
     for udf in UDFS.values():
         assert udf.name

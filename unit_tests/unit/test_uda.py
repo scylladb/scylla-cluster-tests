@@ -46,6 +46,7 @@ TEST_UDFS = {
 
 
 def test_create_uda_instance():
+    """UDA is constructed from its UDF parts and initial condition."""
     new_uda = UDA(
         name="my_uda",
         args="int",
@@ -60,6 +61,7 @@ def test_create_uda_instance():
 
 
 def test_get_create_query_string():
+    """get_create_query_string renders a CREATE AGGREGATE statement for the keyspace."""
     expected_create_query_string = (
         "CREATE AGGREGATE testing.my_uda(int) "
         "SFUNC my_acc "
@@ -84,6 +86,7 @@ def test_get_create_query_string():
 
 
 def test_load_uda_from_yaml(tmp_path):
+    """UDA.from_yaml loads the UDA fields and resolves its UDF names."""
     expected_create_string = (
         "CREATE AGGREGATE testing.my_uda(int) "
         "SFUNC wasm_plus "
@@ -123,6 +126,7 @@ def test_load_uda_from_yaml(tmp_path):
 
 
 def test_load_all_udas():
+    """Every predefined UDA has a name, args, return type and resolved UDFs."""
     assert len(UDFS.keys()) > 1, "UDF count was not greater than 1."
     for uda in UDAS.values():
         assert uda.name

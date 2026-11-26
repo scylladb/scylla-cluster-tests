@@ -17,6 +17,8 @@ from unit_tests.unit.nemesis.fake_cluster import PARAMS, Cluster, FakeTester, No
 
 # Use multiple inheritance to ensure we override registry after Nemesis but before Sisyphus
 class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
+    """SisyphusMonkey with the test nemesis registry, accepting selector and seed keywords."""
+
     def __init__(self, tester_obj, *args, termination_event=None, nemesis_selector=None, nemesis_seed=None, **kwargs):
         super().__init__(
             tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
@@ -25,6 +27,8 @@ class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
 
 @pytest.fixture()
 def get_sisyphus():
+    """Factory building a FakeSisyphusMonkey over a FakeTester with the given params."""
+
     def _create_sisyphus(params=PARAMS):
         return FakeSisyphusMonkey(FakeTester(params=params))
 
@@ -44,6 +48,14 @@ def tester(tmp_path):
     return cluster_tester
 
 
+class CustomNemesisByName(TestNemesisClass):
+    """Override Nemesis with a new disruption tree, built from the given names."""
+
+    def __init__(self, *args, disruptions, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.build_disruptions_by_name(disruptions)
+
+
 @pytest.mark.parametrize("seed", [pytest.param(0, id="seed-zero"), pytest.param(7, id="any-seed")])
 def test_same_seed_yields_same_disruption_order(seed):
     """Two runners built with the same nemesis_seed shuffle the disruptions identically, including
@@ -57,6 +69,7 @@ def test_same_seed_yields_same_disruption_order(seed):
 
 
 def test_disruptions_list(get_sisyphus):
+    """Default params yield the four custom disruptions of the test registry."""
     nemesis = get_sisyphus()
     assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == {
         "CustomNemesisA",
@@ -278,14 +291,6 @@ def test_get_nemesis_class_validates_runner_subclass(tmp_path, nemesis_class_nam
 
     with pytest.raises(ValueError, match=expected_error_match):
         tester.get_nemesis_class()
-
-
-class CustomNemesisByName(TestNemesisClass):
-    """Override Nemesis with a new disruption tree, built from the given names."""
-
-    def __init__(self, *args, disruptions, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(disruptions)
 
 
 @pytest.mark.parametrize(

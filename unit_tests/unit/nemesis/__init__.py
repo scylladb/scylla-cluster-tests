@@ -118,39 +118,53 @@ class TestBaseClass(ABC):
 
 
 class CustomNemesisA(TestBaseClass):
+    """Nemesis stub with flag_a and flag_common set."""
+
     flag_a = True
     flag_common = True
     flag_true = False
 
     def disrupt(self):
+        """Print the marker for CustomNemesisA."""
         print(self.runner.COMMON_STRING + "a")
 
 
 class CustomNemesisB(TestBaseClass):
+    """Nemesis stub with flag_b and flag_common set."""
+
     flag_b = True
     flag_common = True
 
     def disrupt(self):
+        """Print the marker for CustomNemesisB."""
         print(self.runner.COMMON_STRING + "b")
 
 
 class IntermediateNemesis(TestBaseClass, ABC):
+    """Abstract intermediate stub that sets flag_a for its subclasses."""
+
     flag_a = True
 
 
 class CustomNemesisC(CustomNemesisA):
+    """Subclass of CustomNemesisA that adds flag_c."""
+
     flag_c = True
 
     def disrupt(self):
+        """Print the marker for CustomNemesisC."""
         print(self.runner.COMMON_STRING + "c")
 
 
 class CustomNemesisAD(IntermediateNemesis):
+    """Stub under IntermediateNemesis with flag_a, flag_d and flag_common set."""
+
     flag_d = True
     flag_a = True
     flag_common = True
 
     def disrupt(self):
+        """Print the marker for CustomNemesisAD."""
         print(self.runner.COMMON_STRING + "d")
 
 

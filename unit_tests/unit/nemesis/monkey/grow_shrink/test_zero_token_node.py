@@ -24,6 +24,7 @@ def test_adds_then_decommissions_a_zero_node(runner, make_data_node):
 
 
 def test_precheck_passes_with_zero_nodes_enabled(runner):
+    """The nemesis runs when the test enables zero-token nodes."""
     runner.cluster.params = {"use_zero_nodes": True}
 
     assert GrowShrinkZeroTokenNode(runner).precheck(runner.target_node) is None

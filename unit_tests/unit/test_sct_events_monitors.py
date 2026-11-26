@@ -35,6 +35,7 @@ RAW_ALERT = dict(
 
 
 def test_prometheus_alert_manager_event_msgfmt():
+    """str() renders the alert fields and the event survives a pickle round trip."""
     event = PrometheusAlertManagerEvent(raw_alert=RAW_ALERT)
     event.event_id = "536eaf22-3d8f-418a-9381-fe0bcdce7ad9"
     event.publish_event = False
@@ -51,6 +52,7 @@ def test_prometheus_alert_manager_event_msgfmt():
 
 
 def test_prometheus_alert_manager_event_sct_severity():
+    """A valid sct_severity label sets the event severity to CRITICAL."""
     event = PrometheusAlertManagerEvent(raw_alert=dict(labels=dict(sct_severity="CRITICAL")))
     event.publish_event = False
     event.end_event()
@@ -60,6 +62,7 @@ def test_prometheus_alert_manager_event_sct_severity():
 
 
 def test_prometheus_alert_manager_event_sct_severity_wrong():
+    """An unknown sct_severity label falls back to Severity.NORMAL."""
     event = PrometheusAlertManagerEvent(raw_alert=dict(labels=dict(sct_severity="WRONG")))
     event.publish_event = False
     event.end_event()

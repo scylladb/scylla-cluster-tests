@@ -22,10 +22,20 @@ from sdcm.remote.base import shell_script_cmd
 pytestmark = pytest.mark.skipif(not shutil.which("bash"), reason="bash is not available")
 
 
-@pytest.mark.parametrize("logs_transport", ["vector", "syslog-ng"])
-@pytest.mark.parametrize("install_docker", [False, True])
-@pytest.mark.parametrize("vector_journal_from_now", [False, True])
+@pytest.mark.parametrize(
+    "logs_transport",
+    [pytest.param("vector", id="vector"), pytest.param("syslog-ng", id="syslog-ng")],
+)
+@pytest.mark.parametrize(
+    "install_docker",
+    [pytest.param(False, id="no-docker"), pytest.param(True, id="docker")],
+)
+@pytest.mark.parametrize(
+    "vector_journal_from_now",
+    [pytest.param(False, id="journal-from-start"), pytest.param(True, id="journal-from-now")],
+)
 def test_configuration_script_survives_shell_quoting(logs_transport, install_docker, vector_journal_from_now):
+    """The generated node script stays parseable after the single-quote wrapping of shell_script_cmd."""
     script = ConfigurationScriptBuilder(
         syslog_host_port=("10.0.0.1", 5000),
         logs_transport=logs_transport,

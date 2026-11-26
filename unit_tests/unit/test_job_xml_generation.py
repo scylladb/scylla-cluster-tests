@@ -23,6 +23,7 @@ PIPELINES_DIR = SCT_ROOT / "jenkins-pipelines"
 
 @pytest.fixture()
 def jenkins_pipelines():
+    """JenkinsPipelines with KeyStore and the Jenkins client mocked, so no job is created remotely."""
     with (
         patch("utils.build_system.create_test_release_jobs.KeyStore"),
         patch("utils.build_system.create_test_release_jobs.jenkins.Jenkins"),
@@ -40,7 +41,8 @@ def jenkins_pipelines():
         yield jp
 
 
-def _render(jenkins_pipelines, jenkins_file: Path) -> str:
+def render_pipeline_xml(jenkins_pipelines, jenkins_file: Path) -> str:
+    """Return the config XML that create_pipeline_job sends to Jenkins for jenkins_file."""
     jenkins_pipelines.jenkins.create_job.reset_mock()
     jenkins_pipelines.create_pipeline_job(jenkins_file, group_name="")
     return jenkins_pipelines.jenkins.create_job.call_args[0][1]
@@ -65,7 +67,7 @@ def test_markup_in_test_metadata_description_is_escaped(jenkins_pipelines, tmp_p
     jenkins_file.write_text(f"longevityPipeline(\n    test_config: '{test_case.relative_to(tmp_path)}',\n)\n")
 
     with patch("utils.build_system.create_test_release_jobs.get_sct_root_path", return_value=tmp_path):
-        xml_data = _render(jenkins_pipelines, jenkins_file)
+        xml_data = render_pipeline_xml(jenkins_pipelines, jenkins_file)
 
     root = ET.fromstring(xml_data)
     assert "<backend>" in root.find("description").text
@@ -78,7 +80,8 @@ def test_markup_in_test_metadata_description_is_escaped(jenkins_pipelines, tmp_p
     ids=lambda path: str(path.relative_to(PIPELINES_DIR)),
 )
 def test_every_pipeline_renders_valid_xml(jenkins_pipelines, jenkins_file):
-    ET.fromstring(_render(jenkins_pipelines, jenkins_file))
+    """Every jenkins-pipelines jenkinsfile renders to well-formed job XML."""
+    ET.fromstring(render_pipeline_xml(jenkins_pipelines, jenkins_file))
 
 
 def test_tree_walk_continues_past_a_failing_job(jenkins_pipelines, tmp_path, caplog):
@@ -116,4 +119,5 @@ def test_tree_walk_continues_past_a_failing_job(jenkins_pipelines, tmp_path, cap
 
 
 def test_raise_on_failures_is_quiet_when_everything_worked(jenkins_pipelines):
+    """raise_on_failures does nothing when no job failed to be created."""
     jenkins_pipelines.raise_on_failures()

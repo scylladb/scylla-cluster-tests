@@ -29,14 +29,15 @@ class MockCluster:
         self._ips = ips or ["10.0.0.1"]
 
     def get_node_cql_ips(self):
+        """Return the stubbed CQL IPs."""
         return self._ips
 
 
 STRESS_CMD = "--duration=1m --mode=write --concurrency=5 --warmup=0"
 
 
-@pytest.fixture(name="gemini_thread_unit")
-def fixture_gemini_thread_unit(params):
+@pytest.fixture
+def gemini_thread_unit(params):
     """Create a GeminiStressThread without touching real Docker (no integration mark)."""
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = MockCluster(["10.0.0.1"])
@@ -51,6 +52,27 @@ def fixture_gemini_thread_unit(params):
             params=params,
         )
     return thread
+
+
+class FakeDockerNode:
+    """Node stub exposing only a name."""
+
+    def __init__(self, name):
+        self.name = name
+
+
+class FakeDocker:
+    """Docker stub wrapping a FakeDockerNode, as GeminiStressThread.get_results returns."""
+
+    def __init__(self, name):
+        self.node = FakeDockerNode(name)
+
+
+def gemini_summary(tmp_path, name, result):
+    """Write a gemini summary JSON file under tmp_path and return its path."""
+    path = tmp_path / name
+    path.write_text(json.dumps({"result": result}), encoding="utf-8")
+    return str(path)
 
 
 def test_docker_image_name_is_not_none(gemini_thread_unit):
@@ -144,26 +166,11 @@ def test_generate_gemini_command_no_schema_by_default(gemini_thread_unit):
     assert "--schema=" not in cmd, f"--schema should not appear by default: {cmd}"
 
 
-class _FakeDockerNode:
-    def __init__(self, name):
-        self.name = name
-
-
-class _FakeDocker:
-    def __init__(self, name):
-        self.node = _FakeDockerNode(name)
-
-
-def _gemini_summary(tmp_path, name, result):
-    path = tmp_path / name
-    path.write_text(json.dumps({"result": result}), encoding="utf-8")
-    return str(path)
-
-
 def test_parse_results_reports_gemini_error_counters(gemini_thread_unit, tmp_path):
-    summary = _gemini_summary(tmp_path, "clean.json", {"write_errors": 3, "read_errors": 0, "errors": []})
+    """parse_results turns non-zero write/read error counters into ERROR events per loader."""
+    summary = gemini_summary(tmp_path, "clean.json", {"write_errors": 3, "read_errors": 0, "errors": []})
 
-    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
+    with patch.object(GeminiStressThread, "get_results", return_value=[(FakeDocker("loader-1"), None, summary)]):
         results, errors = gemini_thread_unit.parse_results()
 
     assert results == [{"write_errors": 3, "read_errors": 0, "errors": []}]
@@ -172,16 +179,18 @@ def test_parse_results_reports_gemini_error_counters(gemini_thread_unit, tmp_pat
 
 
 def test_parse_results_passes_a_clean_gemini_run(gemini_thread_unit, tmp_path):
-    summary = _gemini_summary(tmp_path, "ok.json", {"write_errors": 0, "read_errors": 0, "errors": []})
+    """parse_results reports no errors when all gemini error counters are zero."""
+    summary = gemini_summary(tmp_path, "ok.json", {"write_errors": 0, "read_errors": 0, "errors": []})
 
-    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
+    with patch.object(GeminiStressThread, "get_results", return_value=[(FakeDocker("loader-1"), None, summary)]):
         results, errors = gemini_thread_unit.parse_results()
 
     assert results and not errors
 
 
 def test_parse_results_reports_a_missing_summary_file(gemini_thread_unit):
-    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, "")]):
+    """parse_results reports an ERROR per loader when no gemini summary file was produced."""
+    with patch.object(GeminiStressThread, "get_results", return_value=[(FakeDocker("loader-1"), None, "")]):
         results, errors = gemini_thread_unit.parse_results()
 
     assert not results
@@ -189,10 +198,11 @@ def test_parse_results_reports_a_missing_summary_file(gemini_thread_unit):
 
 
 def test_parse_results_reports_an_unparsable_summary(gemini_thread_unit, tmp_path):
+    """parse_results reports an ERROR when the gemini summary file is not valid JSON."""
     path = tmp_path / "broken.json"
     path.write_text("not json at all", encoding="utf-8")
 
-    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, str(path))]):
+    with patch.object(GeminiStressThread, "get_results", return_value=[(FakeDocker("loader-1"), None, str(path))]):
         results, errors = gemini_thread_unit.parse_results()
 
     assert not results

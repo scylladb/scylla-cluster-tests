@@ -22,10 +22,12 @@ def make_node(store: str, *free_gb: int) -> MagicMock:
 
 
 def sudo_commands(node: MagicMock) -> list[str]:
+    """Return the command string of each remoter.sudo call made on `node`."""
     return [call.args[0] for call in node.remoter.sudo.call_args_list]
 
 
 def test_enough_space_removes_nothing():
+    """ensure_docker_free_space prunes nothing and probes the image store when space suffices."""
     node = make_node("/var/lib/containerd", 48)
 
     ensure_docker_free_space(node, 10)
@@ -35,6 +37,7 @@ def test_enough_space_removes_nothing():
 
 
 def test_unused_images_are_removed_before_failing():
+    """ensure_docker_free_space prunes unused images when the first df reading is short."""
     node = make_node("/var/lib/docker", 2, 12)
 
     ensure_docker_free_space(node, 10)
@@ -43,6 +46,7 @@ def test_unused_images_are_removed_before_failing():
 
 
 def test_still_short_fails_naming_the_store_and_both_sizes():
+    """ensure_docker_free_space raises NodeSetupFailed naming the store and both sizes when space stays short."""
     node = make_node("/var/lib/containerd", 2, 4)
 
     with pytest.raises(NodeSetupFailed, match=r"/var/lib/containerd has 4GB free, the run needs 10GB"):
@@ -50,6 +54,7 @@ def test_still_short_fails_naming_the_store_and_both_sizes():
 
 
 def test_zero_turns_the_check_off():
+    """A required size of 0 skips both the df probe and the prune."""
     node = MagicMock()
 
     ensure_docker_free_space(node, 0)
@@ -59,6 +64,7 @@ def test_zero_turns_the_check_off():
 
 
 def test_a_store_df_cannot_read_fails_with_dfs_error():
+    """A df failure on the image store propagates as UnexpectedExit."""
     node = make_node("/var/lib/containerd")
     node.remoter.run.side_effect = UnexpectedExit(MagicMock(stderr="df: /var/lib/containerd: No such file"))
 
@@ -69,7 +75,13 @@ def test_a_store_df_cannot_read_fails_with_dfs_error():
 PARAMS = {"docker_min_free_space_gb_loader": 3, "docker_min_free_space_gb_monitor": 10}
 
 
-@pytest.mark.parametrize("first,second", [("loader", "monitor"), ("monitor", "loader")])
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        pytest.param("loader", "monitor", id="loader-first"),
+        pytest.param("monitor", "loader", id="monitor-first"),
+    ],
+)
 def test_a_host_with_two_roles_is_checked_once_against_their_sum(monkeypatch, first, second):
     """Whichever role reaches the host first checks the space of both, before either pulls an image."""
     version_check = MagicMock()
@@ -93,6 +105,7 @@ def test_a_host_with_two_roles_is_checked_once_against_their_sum(monkeypatch, fi
 
 
 def test_a_host_with_one_role_needs_only_its_space(monkeypatch):
+    """A host registered for one role is checked against that role's size and never pruned when it fits."""
     monkeypatch.setattr("sdcm.cluster.ensure_docker_version", MagicMock())
     node = make_node("/var/lib/containerd", 9)
     node.private_ip_address = "10.0.0.8"

@@ -34,17 +34,17 @@ def loader_nodes():
     ]
 
 
-def _loader_rules(commands, action):
+def loader_rules(commands, action):
     """Loader-blocking INPUT rules issued with the given iptables action (``A`` or ``D``)."""
     return [cmd for cmd in commands if cmd and f" -{action} INPUT -s {LOADER_IPS} " in cmd]
 
 
-def _port_block_rules(commands, action):
+def port_block_rules(commands, action):
     """``block_scylla_ports`` DROP rules issued with the given iptables action (``A`` or ``D``)."""
     return [cmd for cmd in commands if cmd and f" -{action} " in cmd]
 
 
-def _destroy(node):
+def destroy_node(node):
     """Apply to ``node`` what ``BaseNode.destroy()`` does to a terminated instance."""
     node.remoter = None
     node.destroyed = True
@@ -133,16 +133,15 @@ def test_block_loaders_payload_kill_nemesis_still_removes_rules(scylla_node, loa
     remoter = scylla_node.remoter
     expected_rules = 2 * len(CQL_PORTS)  # iptables + ip6tables
 
-    with pytest.raises(KillNemesis):
-        with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
-            commands = sudo_commands(remoter)
-            assert len(_loader_rules(commands, "A")) == expected_rules
-            assert len(_loader_rules(commands, "D")) == 0
-            raise KillNemesis()
+    with pytest.raises(KillNemesis), block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
+        commands = sudo_commands(remoter)
+        assert len(loader_rules(commands, "A")) == expected_rules
+        assert len(loader_rules(commands, "D")) == 0
+        raise KillNemesis()
 
     commands = sudo_commands(remoter)
-    assert len(_loader_rules(commands, "A")) == expected_rules
-    assert len(_loader_rules(commands, "D")) == expected_rules
+    assert len(loader_rules(commands, "A")) == expected_rules
+    assert len(loader_rules(commands, "D")) == expected_rules
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
@@ -154,11 +153,11 @@ def test_block_loaders_payload_destroyed_node_skips_cleanup(scylla_node, loader_
     remoter = scylla_node.remoter
 
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
-        _destroy(scylla_node)
+        destroy_node(scylla_node)
 
     commands = sudo_commands(remoter)
-    assert len(_loader_rules(commands, "A")) == 2 * len(CQL_PORTS)  # iptables + ip6tables
-    assert _loader_rules(commands, "D") == []
+    assert len(loader_rules(commands, "A")) == 2 * len(CQL_PORTS)  # iptables + ip6tables
+    assert loader_rules(commands, "D") == []
     scylla_node.stop_service.assert_not_called()
 
 
@@ -169,7 +168,7 @@ def test_block_loaders_payload_destroy_flag_only_skips_cleanup(scylla_node, load
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
         scylla_node.destroyed = True
 
-    assert _loader_rules(sudo_commands(scylla_node.remoter), "D") == []
+    assert loader_rules(sudo_commands(scylla_node.remoter), "D") == []
     scylla_node.remoter.is_up.assert_not_called()
     scylla_node.stop_service.assert_not_called()
 
@@ -183,7 +182,7 @@ def test_block_loaders_payload_unreachable_node_skips_cleanup(scylla_node, loade
     with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
         pass
 
-    assert _loader_rules(sudo_commands(scylla_node.remoter), "D") == []
+    assert loader_rules(sudo_commands(scylla_node.remoter), "D") == []
     scylla_node.stop_service.assert_not_called()
 
 
@@ -217,16 +216,15 @@ def test_block_scylla_ports_kill_nemesis_still_removes_every_rule(scylla_node):
     remoter = scylla_node.remoter
     expected_rules = len(GOSSIP_PORTS) * 2 * 2  # ports x (INPUT/OUTPUT) x (iptables/ip6tables)
 
-    with pytest.raises(KillNemesis):
-        with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
-            commands = sudo_commands(remoter)
-            assert len(_port_block_rules(commands, "A")) == expected_rules
-            assert len(_port_block_rules(commands, "D")) == 0
-            raise KillNemesis()
+    with pytest.raises(KillNemesis), block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
+        commands = sudo_commands(remoter)
+        assert len(port_block_rules(commands, "A")) == expected_rules
+        assert len(port_block_rules(commands, "D")) == 0
+        raise KillNemesis()
 
     commands = sudo_commands(remoter)
-    assert len(_port_block_rules(commands, "A")) == expected_rules
-    assert len(_port_block_rules(commands, "D")) == expected_rules
+    assert len(port_block_rules(commands, "A")) == expected_rules
+    assert len(port_block_rules(commands, "D")) == expected_rules
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
@@ -237,7 +235,7 @@ def test_block_scylla_ports_destroyed_node_skips_cleanup(scylla_node):
     remoter = scylla_node.remoter
 
     with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
-        _destroy(scylla_node)
+        destroy_node(scylla_node)
 
     assert [cmd for cmd in sudo_commands(remoter) if cmd and " -D " in cmd] == []
     scylla_node.stop_service.assert_not_called()
@@ -267,10 +265,9 @@ def test_pause_scylla_with_sigstop_kill_nemesis_still_sends_sigcont(scylla_node)
     """
     remoter = scylla_node.remoter
 
-    with pytest.raises(KillNemesis):
-        with pause_scylla_with_sigstop(scylla_node):
-            assert sudo_commands(remoter) == ["pkill --signal SIGSTOP -e scylla"]
-            raise KillNemesis()
+    with pytest.raises(KillNemesis), pause_scylla_with_sigstop(scylla_node):
+        assert sudo_commands(remoter) == ["pkill --signal SIGSTOP -e scylla"]
+        raise KillNemesis()
 
     assert sudo_commands(remoter) == [
         "pkill --signal SIGSTOP -e scylla",
@@ -285,6 +282,6 @@ def test_pause_scylla_with_sigstop_destroyed_node_skips_sigcont(scylla_node):
     remoter = scylla_node.remoter
 
     with pause_scylla_with_sigstop(scylla_node):
-        _destroy(scylla_node)
+        destroy_node(scylla_node)
 
     assert sudo_commands(remoter) == ["pkill --signal SIGSTOP -e scylla"]

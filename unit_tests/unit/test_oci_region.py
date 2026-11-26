@@ -14,15 +14,25 @@
 """Unit tests for `sdcm.utils.oci_region.OciRegion`."""
 
 from ipaddress import ip_network
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
-from oci.core.models import EgressSecurityRule, IngressSecurityRule, PortRange, TcpOptions
+from oci.core.models import (
+    CreateInternetGatewayDetails,
+    CreateNatGatewayDetails,
+    CreateVcnDetails,
+    EgressSecurityRule,
+    IngressSecurityRule,
+    PortRange,
+    TcpOptions,
+)
 
 from sdcm.utils.oci_region import OciRegion
 
 
-def _make_wait_until_side_effect(expected_state="AVAILABLE"):
+def make_wait_until_side_effect(expected_state="AVAILABLE"):
+    """Return an oci.wait_until stand-in that stamps expected_state on the response data."""
+
     def _fake_wait_until(
         client, response, resource_id=None, evaluate_response=None, max_wait_seconds=None, max_interval_seconds=None
     ):
@@ -35,7 +45,8 @@ def _make_wait_until_side_effect(expected_state="AVAILABLE"):
     return _fake_wait_until
 
 
-def _assert_regional_subnet_create_calls(network_client):
+def assert_regional_subnet_create_calls(network_client):
+    """Assert the private, public and builder regional subnets were created with the expected flags."""
     assert network_client.create_subnet.call_count == 3
     create_details = [call.args[0] for call in network_client.create_subnet.call_args_list]
 
@@ -62,9 +73,77 @@ def _assert_regional_subnet_create_calls(network_client):
         assert len(dns_label) <= 15
 
 
-def _assert_security_list_create_calls(network_client):
+def assert_security_list_create_calls(network_client):
+    """Assert the shared and builder security lists were created."""
     created = {call.args[0].display_name for call in network_client.create_security_list.call_args_list}
     assert created == {"SCT-2-sl", "SCT-2-sl-builder"}
+
+
+def assert_vcn_and_gateway_create_calls(network_client, compartment_id, vcn_id):
+    """Assert the VCN, internet gateway and NAT gateway were each created once with the expected details."""
+    network_client.create_vcn.assert_called_once_with(
+        CreateVcnDetails(
+            cidr_block="10.0.0.0/16",
+            compartment_id=compartment_id,
+            display_name="SCT-2-vcn",
+            dns_label="sct2vcn",
+            freeform_tags={"Name": "SCT-2-vcn", "Owner": "tester"},
+            is_ipv6_enabled=True,
+        )
+    )
+    network_client.create_internet_gateway.assert_called_once_with(
+        CreateInternetGatewayDetails(
+            compartment_id=compartment_id,
+            vcn_id=vcn_id,
+            is_enabled=True,
+            display_name="SCT-2-vcn-igw",
+            freeform_tags={"Name": "SCT-2-vcn-igw", "Owner": "tester"},
+        )
+    )
+    network_client.create_nat_gateway.assert_called_once_with(
+        CreateNatGatewayDetails(
+            compartment_id=compartment_id,
+            vcn_id=vcn_id,
+            block_traffic=False,
+            display_name="SCT-2-vcn-ngw",
+            freeform_tags={"Name": "SCT-2-vcn-ngw", "Owner": "tester"},
+        )
+    )
+
+
+def make_subnet_mock(display_name, subnet_id, ipv6_cidr_blocks):
+    """Build a subnet mock with the given name, id and IPv6 prefixes."""
+    subnet = MagicMock(spec_set=["id", "display_name", "lifecycle_state", "ipv6_cidr_blocks"])
+    subnet.id = subnet_id
+    subnet.display_name = display_name
+    subnet.lifecycle_state = "AVAILABLE"
+    subnet.ipv6_cidr_blocks = ipv6_cidr_blocks
+    return subnet
+
+
+def make_ipv6_region(network_client):
+    """Build an OciRegion with a mocked network client and a VCN that already has an IPv6 CIDR."""
+    with (
+        patch("sdcm.utils.oci_region.OciRegion.network_client", new_callable=PropertyMock) as mock_network,
+        patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock),
+        patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock),
+        patch("sdcm.utils.oci_region.OciRegion.compartment_id", new_callable=PropertyMock) as mock_compartment,
+    ):
+        mock_network.return_value = network_client
+        mock_compartment.return_value = "ocid1.compartment.oc1..test"
+        region = OciRegion("us-ashburn-1")
+        region.__dict__["network_client"] = network_client
+        region.__dict__["compartment_id"] = "ocid1.compartment.oc1..test"
+    region.__dict__["vcn"] = MagicMock(id="ocid1.vcn.oc1..123", display_name="SCT-2-vcn")
+    region._vcn_ipv6_cidr = ip_network("2603:c020:8000:1c00::/56")
+    return region
+
+
+def ipv6_rules(rules):
+    """Keep only the IPv6 rules out of a security list rule set."""
+    return [
+        rule for rule in rules if ":" in (getattr(rule, "source", None) or getattr(rule, "destination", None) or "")
+    ]
 
 
 @patch("sdcm.utils.oci_region.get_builder_ssh_sources", return_value={"jenkins": ["192.0.2.10/32"]})
@@ -95,6 +174,7 @@ def test_configure_network_creates_resources(
     mock_get_username,
     mock_sources,
 ):
+    """configure_network creates the VCN, security lists, gateways and regional subnets."""
     compute_client = MagicMock()
     identity_client = MagicMock()
     network_client = MagicMock()
@@ -102,7 +182,7 @@ def test_configure_network_creates_resources(
     mock_compute.return_value = compute_client
     mock_identity.return_value = identity_client
     mock_network.return_value = network_client
-    mock_wait_until.side_effect = _make_wait_until_side_effect()
+    mock_wait_until.side_effect = make_wait_until_side_effect()
 
     mock_vcn = MagicMock(
         spec_set=["id", "default_route_table_id", "default_dhcp_options_id", "lifecycle_state", "display_name"]
@@ -161,16 +241,12 @@ def test_configure_network_creates_resources(
     region = OciRegion("us-ashburn-1")
     region.configure_network()
 
-    # VCN created
-    network_client.create_vcn.assert_called_once()
+    # VCN, internet gateway and NAT gateway created
+    assert_vcn_and_gateway_create_calls(network_client, "ocid1.compartment.oc1..test", "ocid1.vcn.oc1..123")
     # security lists created: the shared one and the builder one
-    _assert_security_list_create_calls(network_client)
-    # Internet gateway created
-    network_client.create_internet_gateway.assert_called_once()
-    # NAT gateway created
-    network_client.create_nat_gateway.assert_called_once()
+    assert_security_list_create_calls(network_client)
     # private, public and builder subnets are created with expected names and visibility flags
-    _assert_regional_subnet_create_calls(network_client)
+    assert_regional_subnet_create_calls(network_client)
 
 
 @patch("sdcm.utils.oci_region.get_builder_ssh_sources", return_value={"jenkins": ["192.0.2.10/32"]})
@@ -209,7 +285,7 @@ def test_configure_network_with_ipv6(
     mock_compute.return_value = compute_client
     mock_identity.return_value = identity_client
     mock_network.return_value = network_client
-    mock_wait_until.side_effect = _make_wait_until_side_effect()
+    mock_wait_until.side_effect = make_wait_until_side_effect()
 
     # VCN with IPv6 CIDR blocks
     mock_vcn = MagicMock()
@@ -266,16 +342,12 @@ def test_configure_network_with_ipv6(
     region = OciRegion("us-ashburn-1")
     region.configure_network()
 
-    # VCN created
-    network_client.create_vcn.assert_called_once()
+    # VCN, internet gateway and NAT gateway created
+    assert_vcn_and_gateway_create_calls(network_client, "ocid1.compartment.oc1..test", "ocid1.vcn.oc1..123")
     # security lists created with IPv6 rules: the shared one and the builder one
-    _assert_security_list_create_calls(network_client)
-    # Internet gateway created
-    network_client.create_internet_gateway.assert_called_once()
-    # NAT gateway created
-    network_client.create_nat_gateway.assert_called_once()
+    assert_security_list_create_calls(network_client)
     # private, public and builder subnets are created with expected names and visibility flags
-    _assert_regional_subnet_create_calls(network_client)
+    assert_regional_subnet_create_calls(network_client)
 
     # Verify that IPv6 CIDR was cached
     assert region._vcn_ipv6_cidr is not None
@@ -288,6 +360,7 @@ def test_configure_network_with_ipv6(
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_subnet_name_suffix(mock_compute, mock_identity, mock_network, mock_compartment, mock_ads):
+    """subnet_name returns the private name unless the public one is asked for."""
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
     mock_network.return_value = MagicMock()
@@ -304,6 +377,7 @@ def test_subnet_name_suffix(mock_compute, mock_identity, mock_network, mock_comp
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_region_validation(mock_compute, mock_identity, mock_network, mock_compartment):
+    """OciRegion rejects a region missing from SUPPORTED_REGIONS."""
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
     mock_network.return_value = MagicMock()
@@ -318,6 +392,7 @@ def test_region_validation(mock_compute, mock_identity, mock_network, mock_compa
     return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..no-dns", dns_label=None),
 )
 def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
+    """validate_dns_infrastructure raises when the VCN has no DNS label."""
     subnet = MagicMock(
         display_name="SCT-2-subnet-regional-private",
         id="ocid1.subnet.oc1..has-dns",
@@ -327,7 +402,7 @@ def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
     with pytest.raises(ValueError, match="VCN 'SCT-2-vcn'.*has no DNS label"):
         OciRegion("us-ashburn-1").validate_dns_infrastructure(subnet=subnet, public=False)
 
-    mock_vcn.assert_called()
+    assert mock_vcn.call_args_list == [call(), call(), call()]
 
 
 @patch(
@@ -336,22 +411,14 @@ def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
     return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..has-dns", dns_label="vcn1"),
 )
 def test_validate_dns_infrastructure_fails_when_subnet_has_no_dns_label(mock_vcn):
+    """validate_dns_infrastructure raises when the subnet has no DNS label."""
     subnet = MagicMock(display_name="SCT-2-subnet-regional-private", id="ocid1.subnet.oc1..no-dns", dns_label=None)
 
     err_msg_template = "Private subnet 'SCT-2-subnet-regional-private'.*has no DNS label"
     with pytest.raises(ValueError, match=err_msg_template):
         OciRegion("us-ashburn-1").validate_dns_infrastructure(subnet=subnet, public=False)
 
-    mock_vcn.assert_called()
-
-
-def _make_subnet_mock(display_name, subnet_id, ipv6_cidr_blocks):
-    subnet = MagicMock(spec_set=["id", "display_name", "lifecycle_state", "ipv6_cidr_blocks"])
-    subnet.id = subnet_id
-    subnet.display_name = display_name
-    subnet.lifecycle_state = "AVAILABLE"
-    subnet.ipv6_cidr_blocks = ipv6_cidr_blocks
-    return subnet
+    mock_vcn.assert_called_once_with()
 
 
 @patch("sdcm.utils.oci_region.OciRegion.vcn", new_callable=PropertyMock)
@@ -374,12 +441,12 @@ def test_subnet_adds_ipv6_prefix_to_legacy_subnet(
     mock_compartment.return_value = "ocid1.compartment.oc1..test"
     mock_vcn.return_value = MagicMock(id="ocid1.vcn.oc1..123", display_name="SCT-2-vcn")
 
-    legacy_subnet = _make_subnet_mock("SCT-2-subnet-regional-private", "ocid1.subnet.oc1..private", [])
+    legacy_subnet = make_subnet_mock("SCT-2-subnet-regional-private", "ocid1.subnet.oc1..private", [])
     # NOTE: the public subnet already occupies the very first IPv6 prefix of the VCN CIDR
-    public_subnet = _make_subnet_mock(
+    public_subnet = make_subnet_mock(
         "SCT-2-subnet-regional-public", "ocid1.subnet.oc1..public", ["2603:c020:8000:1c00::/64"]
     )
-    upgraded_subnet = _make_subnet_mock(legacy_subnet.display_name, legacy_subnet.id, ["2603:c020:8000:1c01::/64"])
+    upgraded_subnet = make_subnet_mock(legacy_subnet.display_name, legacy_subnet.id, ["2603:c020:8000:1c01::/64"])
     network_client.list_subnets.return_value = MagicMock(data=[legacy_subnet, public_subnet])
 
     region = OciRegion("us-ashburn-1")
@@ -409,6 +476,7 @@ def test_subnet_adds_ipv6_prefix_to_legacy_subnet(
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_subnet_keeps_ipv6_enabled_subnet_intact(mock_compute, mock_identity, mock_network, mock_compartment, mock_vcn):
+    """subnet() returns an existing IPv6-enabled subnet without touching it."""
     network_client = MagicMock()
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
@@ -416,7 +484,7 @@ def test_subnet_keeps_ipv6_enabled_subnet_intact(mock_compute, mock_identity, mo
     mock_compartment.return_value = "ocid1.compartment.oc1..test"
     mock_vcn.return_value = MagicMock(id="ocid1.vcn.oc1..123", display_name="SCT-2-vcn")
 
-    existing_subnet = _make_subnet_mock(
+    existing_subnet = make_subnet_mock(
         "SCT-2-subnet-regional-public", "ocid1.subnet.oc1..public", ["2603:c020:8000:1c00::/64"]
     )
 
@@ -441,6 +509,7 @@ def test_subnet_keeps_ipv6_enabled_subnet_intact(mock_compute, mock_identity, mo
 def test_subnet_skips_ipv6_upgrade_when_vcn_has_no_ipv6(
     mock_compute, mock_identity, mock_network, mock_compartment, mock_vcn
 ):
+    """subnet() adds no IPv6 prefix when the VCN has no IPv6 CIDR."""
     network_client = MagicMock()
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
@@ -448,7 +517,7 @@ def test_subnet_skips_ipv6_upgrade_when_vcn_has_no_ipv6(
     mock_compartment.return_value = "ocid1.compartment.oc1..test"
     mock_vcn.return_value = MagicMock(id="ocid1.vcn.oc1..123", display_name="SCT-2-vcn", ipv6_cidr_blocks=[])
 
-    legacy_subnet = _make_subnet_mock("SCT-2-subnet-regional-private", "ocid1.subnet.oc1..private", [])
+    legacy_subnet = make_subnet_mock("SCT-2-subnet-regional-private", "ocid1.subnet.oc1..private", [])
 
     region = OciRegion("us-ashburn-1")
 
@@ -462,35 +531,10 @@ def test_subnet_skips_ipv6_upgrade_when_vcn_has_no_ipv6(
     network_client.add_ipv6_subnet_cidr.assert_not_called()
 
 
-def _make_ipv6_region(network_client):
-    """Build an OciRegion with a mocked network client and a VCN that already has an IPv6 CIDR."""
-    with (
-        patch("sdcm.utils.oci_region.OciRegion.network_client", new_callable=PropertyMock) as mock_network,
-        patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock),
-        patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock),
-        patch("sdcm.utils.oci_region.OciRegion.compartment_id", new_callable=PropertyMock) as mock_compartment,
-    ):
-        mock_network.return_value = network_client
-        mock_compartment.return_value = "ocid1.compartment.oc1..test"
-        region = OciRegion("us-ashburn-1")
-        region.__dict__["network_client"] = network_client
-        region.__dict__["compartment_id"] = "ocid1.compartment.oc1..test"
-    region.__dict__["vcn"] = MagicMock(id="ocid1.vcn.oc1..123", display_name="SCT-2-vcn")
-    region._vcn_ipv6_cidr = ip_network("2603:c020:8000:1c00::/56")
-    return region
-
-
-def _ipv6_rules(rules):
-    """Keep only the IPv6 rules out of a security list rule set."""
-    return [
-        rule for rule in rules if ":" in (getattr(rule, "source", None) or getattr(rule, "destination", None) or "")
-    ]
-
-
 def test_ensure_security_list_ipv6_adds_ssh_egress_and_intra_vcn_rules():
     """An IPv4-only security list must gain all the IPv6 rules, SSH included."""
     network_client = MagicMock()
-    region = _make_ipv6_region(network_client)
+    region = make_ipv6_region(network_client)
     legacy_sl = MagicMock()
     legacy_sl.id = "ocid1.securitylist.oc1..legacy"
     legacy_sl.display_name = "SCT-2-sl"
@@ -506,10 +550,10 @@ def test_ensure_security_list_ipv6_adds_ssh_egress_and_intra_vcn_rules():
     details = network_client.update_security_list.call_args.args[1]
     # the pre-existing IPv4 rules must be preserved
     assert len(details.ingress_security_rules) == 4
-    ipv6_ingress = _ipv6_rules(details.ingress_security_rules)
+    ipv6_ingress = ipv6_rules(details.ingress_security_rules)
     assert region._ipv6_ssh_ingress_rule() in ipv6_ingress
     assert region._ipv6_intra_vcn_ingress_rule() in ipv6_ingress
-    assert _ipv6_rules(details.egress_security_rules) == [region._ipv6_egress_rule()]
+    assert ipv6_rules(details.egress_security_rules) == [region._ipv6_egress_rule()]
 
 
 def test_ensure_security_list_ipv6_matches_create_security_list():
@@ -519,13 +563,13 @@ def test_ensure_security_list_ipv6_matches_create_security_list():
     apart again, the way the IPv6 SSH rule did.
     """
     create_client = MagicMock()
-    create_region = _make_ipv6_region(create_client)
+    create_region = make_ipv6_region(create_client)
     with patch("oci.wait_until", return_value=MagicMock(data=MagicMock(lifecycle_state="AVAILABLE"))):
         create_region._create_security_list()
     created = create_client.create_security_list.call_args.args[0]
 
     upgrade_client = MagicMock()
-    upgrade_region = _make_ipv6_region(upgrade_client)
+    upgrade_region = make_ipv6_region(upgrade_client)
     ipv4_only_sl = MagicMock()
     ipv4_only_sl.id = "ocid1.securitylist.oc1..legacy"
     ipv4_only_sl.ingress_security_rules = []
@@ -534,14 +578,14 @@ def test_ensure_security_list_ipv6_matches_create_security_list():
     upgrade_region._ensure_security_list_ipv6()
     upgraded = upgrade_client.update_security_list.call_args.args[1]
 
-    assert _ipv6_rules(upgraded.ingress_security_rules) == _ipv6_rules(created.ingress_security_rules)
-    assert _ipv6_rules(upgraded.egress_security_rules) == _ipv6_rules(created.egress_security_rules)
+    assert ipv6_rules(upgraded.ingress_security_rules) == ipv6_rules(created.ingress_security_rules)
+    assert ipv6_rules(upgraded.egress_security_rules) == ipv6_rules(created.egress_security_rules)
 
 
 def test_ensure_security_list_ipv6_skips_update_when_already_configured():
     """A security list which already carries every IPv6 rule must not be updated again."""
     network_client = MagicMock()
-    region = _make_ipv6_region(network_client)
+    region = make_ipv6_region(network_client)
     configured_sl = MagicMock()
     configured_sl.id = "ocid1.securitylist.oc1..configured"
     configured_sl.ingress_security_rules = [
@@ -559,25 +603,28 @@ def test_ensure_security_list_ipv6_skips_update_when_already_configured():
 @pytest.mark.parametrize(
     "rule, expected",
     [
-        (IngressSecurityRule(protocol="6", source="0.0.0.0/0"), False),
+        pytest.param(IngressSecurityRule(protocol="6", source="0.0.0.0/0"), False, id="tcp-ipv4-only"),
         # NOTE: an unrelated rule sourced from '::/0' must not mask the missing SSH rule
-        (IngressSecurityRule(protocol="17", source="::/0"), False),
-        (
+        pytest.param(IngressSecurityRule(protocol="17", source="::/0"), False, id="udp-ipv6-not-ssh"),
+        pytest.param(
             IngressSecurityRule(
                 protocol="6", source="::/0", tcp_options=TcpOptions(destination_port_range=PortRange(min=80, max=80))
             ),
             False,
+            id="tcp-port-80-not-ssh",
         ),
-        (IngressSecurityRule(protocol="all", source="::/0"), True),
+        pytest.param(IngressSecurityRule(protocol="all", source="::/0"), True, id="all-protocols-covers-ssh"),
         # NOTE: no 'tcp_options' means every TCP port, so port 22 is covered
-        (IngressSecurityRule(protocol="6", source="::/0"), True),
-        (
+        pytest.param(IngressSecurityRule(protocol="6", source="::/0"), True, id="tcp-all-ports-covers-ssh"),
+        pytest.param(
             IngressSecurityRule(
                 protocol="6", source="::/0", tcp_options=TcpOptions(destination_port_range=PortRange(min=20, max=25))
             ),
             True,
+            id="tcp-range-20-25-covers-ssh",
         ),
     ],
 )
 def test_has_ipv6_ssh_ingress(rule, expected):
+    """_has_ipv6_ssh_ingress is true only for a rule admitting SSH over IPv6."""
     assert OciRegion._has_ipv6_ssh_ingress([rule]) is expected

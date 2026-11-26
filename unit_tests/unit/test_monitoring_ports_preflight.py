@@ -17,16 +17,19 @@ COCKPIT = (
 
 
 def node_listening(ss_output: str) -> MagicMock:
+    """Return a node whose sudo ss call prints ss_output."""
     node = MagicMock()
     node.remoter.sudo.return_value.stdout = ss_output
     return node
 
 
 def test_free_ports_pass():
+    """ensure_monitoring_ports_free passes when only sshd listens."""
     ensure_monitoring_ports_free(node_listening(SSH_ONLY))
 
 
 def test_taken_port_fails_naming_the_port_service_and_holder_once():
+    """A taken port fails naming its service and holder, reported once for IPv4 and IPv6."""
     with pytest.raises(NodeSetupFailed) as failure:
         ensure_monitoring_ports_free(node_listening(SSH_ONLY + COCKPIT))
 
@@ -36,6 +39,7 @@ def test_taken_port_fails_naming_the_port_service_and_holder_once():
 
 
 def test_a_port_the_stack_opens_besides_the_ui_ones_is_checked_too():
+    """The Alertmanager gossip port 9094 is checked, not only the UI ports."""
     ss_output = 'LISTEN 0 4096 0.0.0.0:9094 0.0.0.0:* users:(("alertmanager",pid=5,fd=3))\n'
 
     with pytest.raises(NodeSetupFailed, match=r"9094 \(Alertmanager gossip\)"):
@@ -43,6 +47,7 @@ def test_a_port_the_stack_opens_besides_the_ui_ones_is_checked_too():
 
 
 def test_every_taken_port_is_reported():
+    """Every taken monitoring port is listed in the failure message."""
     ss_output = COCKPIT + 'LISTEN 0 4096 127.0.0.1:3000 0.0.0.0:* users:(("grafana",pid=7,fd=8))\n'
 
     with pytest.raises(NodeSetupFailed, match=r"9090 \(Prometheus\).*3000 \(Grafana\)"):

@@ -136,8 +136,21 @@ def test_argus_submit_handles_finalize_error_gracefully(nemesis, nemesis_runner)
     assert event.nemesis_status == NemesisStatus.SUCCEEDED
 
     # Both submit and finalize should have been attempted
-    argus_mock.submit_nemesis.assert_called_once()
-    argus_mock.finalize_nemesis.assert_called_once()
+    argus_mock.submit_nemesis.assert_called_once_with(
+        name="CustomTestNemesis",
+        class_name="TestNemesisRunner",
+        start_time=ANY,
+        target_name="Node1",
+        target_ip="127.0.0.1",
+        target_shards=8,
+        description="A simple nemesis for testing.",
+    )
+    argus_mock.finalize_nemesis.assert_called_once_with(
+        name="CustomTestNemesis",
+        start_time=ANY,
+        status=NemesisStatus.SUCCEEDED,
+        message="",
+    )
 
 
 def test_argus_submit_no_client_available(nemesis, nemesis_runner):

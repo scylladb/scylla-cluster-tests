@@ -27,13 +27,18 @@ def held_lock(tmp_path):
     holder.wait()
 
 
-def _run(snippet):
-    # `bash -ce` like the monitor prereqs script; cloud-init uses `bash -cxe`
+def run_snippet(snippet):
+    """Run a snippet with ``bash -ce`` like the monitor prereqs script; cloud-init uses ``bash -cxe``."""
     return subprocess.run(["bash", "-ce", snippet], capture_output=True, text=True, timeout=60, check=False)
 
 
 @pytest.mark.parametrize(
-    "snippet", [apt_lock_wait(), apt_lock_wait(kill_stale=True), rpm_lock_wait()], ids=["apt", "apt-kill-stale", "rpm"]
+    "snippet",
+    [
+        pytest.param(apt_lock_wait(), id="apt"),
+        pytest.param(apt_lock_wait(kill_stale=True), id="apt-kill-stale"),
+        pytest.param(rpm_lock_wait(), id="rpm"),
+    ],
 )
 def test_snippets_are_quote_free(snippet):
     """They get embedded into ``bash -c '...'`` commands and cloud-init scripts."""
@@ -41,19 +46,21 @@ def test_snippets_are_quote_free(snippet):
 
 
 def test_free_lock_passes_silently(tmp_path):
+    """lock_wait on a free lock returns 0 without logging a holder."""
     lock_file = tmp_path / "lock"
     lock_file.touch()
 
-    result = _run(f"{lock_wait('apt', str(lock_file), lock_timeout=2, poll=1)} && echo done")
+    result = run_snippet(f"{lock_wait('apt', str(lock_file), lock_timeout=2, poll=1)} && echo done")
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "done"
 
 
 def test_held_lock_logs_holder_and_keeps_it_without_kill_stale(held_lock):
+    """A held lock is reported with its holder after the timeout, and the holder survives without kill_stale."""
     lock_file, holder = held_lock
 
-    result = _run(f"{lock_wait('apt', str(lock_file), lock_timeout=2, poll=1)} && echo done")
+    result = run_snippet(f"{lock_wait('apt', str(lock_file), lock_timeout=2, poll=1)} && echo done")
 
     assert result.returncode == 0, result.stderr
     assert "apt lock held by:" in result.stdout
@@ -65,11 +72,12 @@ def test_held_lock_logs_holder_and_keeps_it_without_kill_stale(held_lock):
 
 
 def test_held_lock_kill_stale_kills_holder_and_repairs(held_lock, tmp_path):
+    """kill_stale terminates the lock holder and then runs the repair command."""
     lock_file, holder = held_lock
     repaired = tmp_path / "repaired"
 
     snippet = lock_wait("apt", str(lock_file), lock_timeout=2, poll=1, kill_stale=True, repair=f"touch {repaired}")
-    result = _run(f"{snippet} && echo done")
+    result = run_snippet(f"{snippet} && echo done")
 
     assert result.returncode == 0, result.stderr
     assert str(holder.pid) in result.stdout
@@ -80,6 +88,7 @@ def test_held_lock_kill_stale_kills_holder_and_repairs(held_lock, tmp_path):
 
 
 def test_apt_cmd_kill_stale_implies_lock_wait():
+    """apt_cmd with kill_stale waits for the lock, kills stale holders and repairs dpkg without prompts."""
     cmd = apt_cmd("dist-upgrade scylla -y", lock_timeout=240, kill_stale=True)
 
     assert cmd.startswith("bash -c '")
@@ -91,4 +100,5 @@ def test_apt_cmd_kill_stale_implies_lock_wait():
 
 
 def test_apt_cmd_lock_wait_does_not_kill_by_default():
+    """apt_cmd with lock_wait only waits for the lock and never kills holders."""
     assert "fuser -k" not in apt_cmd("update", lock_wait=True)

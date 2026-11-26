@@ -22,6 +22,24 @@ from sdcm.cluster_docker import NodeContainerMixin
 from unit_tests.lib.fake_docker_cluster import DummyScyllaDockerCluster
 
 
+def make_mixin_node(rack=0, node_type="db", simulated_racks=0, seed_ip=None, n_db_nodes=None):
+    """Return a minimal NodeContainerMixin instance with stubbed attributes."""
+    node = object.__new__(NodeContainerMixin)
+    node.rack = rack
+    node.node_type = node_type
+    node.name = f"test-db-node-{rack}"
+    node.node_container_image_tag = "scylladb/scylla-nightly:test"
+    node.parent_cluster = SimpleNamespace(
+        params={
+            "simulated_racks": simulated_racks,
+            "n_db_nodes": n_db_nodes if n_db_nodes is not None else [3],
+            "docker_network": "bridge",
+            "append_scylla_args": "--smp 1",
+        }
+    )
+    return node
+
+
 @pytest.mark.parametrize(
     "racks_count, node_count, expected_racks",
     [
@@ -73,46 +91,23 @@ def test_get_nodes_re_derives_racks(tmp_path):
     assert [n.node_index for n in nodes] == [0, 1, 2, 3, 4]
 
 
-# ---------------------------------------------------------------------------
-# node_container_run_args tests
-# ---------------------------------------------------------------------------
-
-
-def _make_mixin_node(rack=0, node_type="db", simulated_racks=0, seed_ip=None, n_db_nodes=None):
-    """Return a minimal NodeContainerMixin instance with stubbed attributes."""
-    node = object.__new__(NodeContainerMixin)
-    node.rack = rack
-    node.node_type = node_type
-    node.name = f"test-db-node-{rack}"
-    node.node_container_image_tag = "scylladb/scylla-nightly:test"
-    node.parent_cluster = SimpleNamespace(
-        params={
-            "simulated_racks": simulated_racks,
-            "n_db_nodes": n_db_nodes if n_db_nodes is not None else [3],
-            "docker_network": "bridge",
-            "append_scylla_args": "--smp 1",
-        }
-    )
-    return node
-
-
 def test_no_rack_args_when_simulated_racks_zero():
     """simulated_racks=0 → command is None (no seed, no rack args)."""
-    node = _make_mixin_node(rack=0, simulated_racks=0)
+    node = make_mixin_node(rack=0, simulated_racks=0)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is None
 
 
 def test_no_rack_args_when_simulated_racks_one():
     """simulated_racks=1 → not > 1 → command is None."""
-    node = _make_mixin_node(rack=0, simulated_racks=1)
+    node = make_mixin_node(rack=0, simulated_racks=1)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is None
 
 
 def test_rack_args_injected_when_simulated_racks_two():
     """simulated_racks=2, rack=0 → command contains --dc and --rack=RACK0."""
-    node = _make_mixin_node(rack=0, simulated_racks=2)
+    node = make_mixin_node(rack=0, simulated_racks=2)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is not None
     assert "--dc=datacenter1" in result["command"]
@@ -121,7 +116,7 @@ def test_rack_args_injected_when_simulated_racks_two():
 
 def test_rack_index_used_correctly():
     """rack=1 with simulated_racks=3 → command contains --rack=RACK1."""
-    node = _make_mixin_node(rack=1, simulated_racks=3)
+    node = make_mixin_node(rack=1, simulated_racks=3)
     result = node.node_container_run_args(seed_ip=None)
     assert "--rack=RACK1" in result["command"]
     assert "--rack=RACK0" not in result["command"]
@@ -129,7 +124,7 @@ def test_rack_index_used_correctly():
 
 def test_seed_and_rack_combined():
     """When seed_ip is set and simulated_racks=2, command has both --seeds and --rack."""
-    node = _make_mixin_node(rack=0, simulated_racks=2)
+    node = make_mixin_node(rack=0, simulated_racks=2)
     result = node.node_container_run_args(seed_ip="10.0.0.1")
     cmd = result["command"]
     assert '--seeds="10.0.0.1"' in cmd
@@ -139,7 +134,7 @@ def test_seed_and_rack_combined():
 
 def test_seed_only_when_no_simulated_racks():
     """When seed_ip is set but simulated_racks=0, command contains only the seed arg."""
-    node = _make_mixin_node(rack=0, simulated_racks=0)
+    node = make_mixin_node(rack=0, simulated_racks=0)
     result = node.node_container_run_args(seed_ip="10.0.0.2")
     assert result["command"] == '--seeds="10.0.0.2"'
     assert "--rack" not in result["command"]
@@ -147,14 +142,14 @@ def test_seed_only_when_no_simulated_racks():
 
 def test_non_db_node_gets_no_rack_args():
     """Non-db node types must never receive rack args regardless of simulated_racks."""
-    node = _make_mixin_node(rack=0, node_type="loader", simulated_racks=3)
+    node = make_mixin_node(rack=0, node_type="loader", simulated_racks=3)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is None
 
 
 def test_non_db_node_with_no_seed_and_no_racks():
     """Non-db node, no seed, no simulated_racks → command is None."""
-    node = _make_mixin_node(rack=0, node_type="monitor", simulated_racks=0)
+    node = make_mixin_node(rack=0, node_type="monitor", simulated_racks=0)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is None
 
@@ -169,7 +164,7 @@ def test_no_rack_args_for_single_node_cluster(n_db_nodes):
     It cannot span racks, and the snitch auto-resolution leaves `endpoint_snitch` alone, so
     the rack would never be read -- while the argument itself is fatal on a pre-2026.1 image.
     """
-    node = _make_mixin_node(rack=0, simulated_racks=3, n_db_nodes=n_db_nodes)
+    node = make_mixin_node(rack=0, simulated_racks=3, n_db_nodes=n_db_nodes)
     result = node.node_container_run_args(seed_ip=None)
     assert result["command"] is None
 
@@ -180,6 +175,6 @@ def test_rack_args_survive_growing_past_the_configured_racks():
     `_create_nodes` hands out `node_index % racks_count`, so the fourth node of a 3-node,
     3-rack cluster lands back on RACK0.
     """
-    node = _make_mixin_node(rack=0, simulated_racks=3, n_db_nodes=[3])
+    node = make_mixin_node(rack=0, simulated_racks=3, n_db_nodes=[3])
     result = node.node_container_run_args(seed_ip="10.0.0.1")
     assert "--rack=RACK0" in result["command"]

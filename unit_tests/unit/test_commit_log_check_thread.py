@@ -58,6 +58,7 @@ class ShardsNode(BaseNode):
 
     @property
     def is_nonroot_install(self) -> bool:
+        """The stub node is a root install, so the watchdog uses the system config path."""
         return False
 
 
@@ -68,6 +69,7 @@ class FakeSession:
         self.config = config
 
     def execute(self, query: str) -> MagicMock:
+        """Answer a `system.config` query with the configured value of the named option."""
         name = re.search(r"name='(\w+)'", query).group(1)
         return MagicMock(**{"one.return_value.value": self.config[name]})
 
@@ -83,12 +85,14 @@ class FakeDbCluster:
 
     @contextlib.contextmanager
     def cql_connection_patient(self, node, connect_timeout):
+        """Yield a FakeSession for the data node, rejecting any other node."""
         assert node is self.data_nodes[0], "commitlog params must be collected from a data node"
         yield FakeSession(self.config)
 
 
-@pytest.fixture(name="db_cluster")
-def fixture_db_cluster(fake_remoter):
+@pytest.fixture
+def db_cluster(fake_remoter):
+    """FakeDbCluster whose remoter answers the seastar-cpu-map and SCYLLA_ARGS commands of a 14-shard node."""
     fake_remoter.result_map = {
         re.compile(r".*seastar-cpu-map\.sh.*"): Result(stdout=SEASTAR_CPU_MAP_STDOUT, exited=0),
         re.compile(r'.*grep "\^SCYLLA_ARGS=".*'): Result(stdout=SCYLLA_ARGS_STDOUT, exited=0),
@@ -105,6 +109,7 @@ def fixture_db_cluster(fake_remoter):
 
 @contextlib.contextmanager
 def mocked_max_disk_size(value: int = MAX_DISK_SIZE):
+    """Patch RemoteCurlClient so the /commitlog/metrics/max_disk_size call returns `value`."""
     with patch("sdcm.commit_log_check_thread.RemoteCurlClient") as curl_client:
         curl_client.return_value.run_remoter_curl.return_value.stdout = str(value)
         yield curl_client
@@ -136,9 +141,12 @@ def test_commitlog_config_params_reads_max_disk_size_from_a_data_node(db_cluster
 
 def test_commitlog_config_params_no_shards_raises_value_error(db_cluster):
     """A node we cannot get a shard count from must fail loudly instead of dividing by zero."""
-    with patch.object(ShardsNode, "scylla_shards", 0), mocked_max_disk_size():
-        with pytest.raises(ValueError, match="Failed to get number of Scylla shards"):
-            CommitlogConfigParams(db_cluster)
+    with (
+        patch.object(ShardsNode, "scylla_shards", 0),
+        mocked_max_disk_size(),
+        pytest.raises(ValueError, match="Failed to get number of Scylla shards"),
+    ):
+        CommitlogConfigParams(db_cluster)
 
 
 def test_overflow_query_threshold_does_not_flag_a_healthy_shard(db_cluster):

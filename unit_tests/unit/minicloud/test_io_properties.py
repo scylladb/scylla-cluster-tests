@@ -21,6 +21,7 @@ SCYLLA_D = Path("configurations/minicloud/scylla.d")
 
 
 def test_scale_gives_each_guest_its_share():
+    """scale_io_properties gives each guest its share of the host limits, minus the margin."""
     disk = yaml.safe_load(scale_io_properties(HOST, guests=3, margin=0.2))["disks"][0]
     assert disk == {
         "mountpoint": "/var/lib/scylla",
@@ -33,6 +34,7 @@ def test_scale_gives_each_guest_its_share():
 
 
 def test_override_content_scales_only_io_properties_on_minicloud():
+    """override_content scales io_properties.yaml on minicloud and leaves other scylla.d files untouched."""
     with patch("sdcm.utils.minicloud.io_properties.is_minicloud_active", return_value=True):
         scaled = override_content(SCYLLA_D / "io_properties.yaml", HOST, PARAMS)
         io_conf = override_content(SCYLLA_D / "io.conf", "SEASTAR_IO=x\n", PARAMS)
@@ -41,5 +43,6 @@ def test_override_content_scales_only_io_properties_on_minicloud():
 
 
 def test_override_content_leaves_other_runs_alone():
+    """override_content returns io_properties.yaml unchanged when minicloud is not active."""
     with patch("sdcm.utils.minicloud.io_properties.is_minicloud_active", return_value=False):
         assert override_content(SCYLLA_D / "io_properties.yaml", HOST, PARAMS) == HOST

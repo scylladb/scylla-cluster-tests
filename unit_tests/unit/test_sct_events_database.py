@@ -28,8 +28,18 @@ from sdcm.sct_events.database import (
     get_system_error_events_patterns,
 )
 
+NODE_NAME = "db-node-1"
+KS_CF = "ks_cf"
+MSG = "msg"
+
+
+def classify_line(line: str):
+    """Return the first system error event whose pattern matches the log line, or None."""
+    return find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
+
 
 def test_known_system_errors():
+    """Every known system error type is a DatabaseLogEvent subclass."""
     assert issubclass(DatabaseLogEvent.NO_SPACE_ERROR, DatabaseLogEvent)
     assert issubclass(DatabaseLogEvent.UNKNOWN_VERB, DatabaseLogEvent)
     assert issubclass(DatabaseLogEvent.CLIENT_DISCONNECT, DatabaseLogEvent)
@@ -57,6 +67,7 @@ def test_known_system_errors():
 
 
 def test_reactor_stalled_severity():
+    """REACTOR_STALLED is DEBUG below TOLERABLE_REACTOR_STALL and ERROR at or above it."""
     event1 = DatabaseLogEvent.REACTOR_STALLED()
     assert event1.severity == Severity.DEBUG
 
@@ -124,6 +135,7 @@ def test_topology_barrier_stall_line_matching_follows_enabled_flag(enabled, expe
 
 
 def test_kernel_callstack_severity():
+    """KERNEL_CALLSTACK and REACTOR_STALLED lines keep DEBUG severity and record node and line number."""
     event1 = DatabaseLogEvent.KERNEL_CALLSTACK()
     assert event1.severity == Severity.DEBUG
 
@@ -149,6 +161,7 @@ def test_system_error_events_list():
 
 
 def test_disk_error_event():
+    """DISK_ERROR matches only the I/O error line and records its node and line number."""
     disk_error_event = DatabaseLogEvent.DISK_ERROR()
 
     log_lines = """2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !    INFO |  [shard 8] compaction - [Compact keyspace1.standard1 089530c0-87dd-11ec-8382-519d84e34cb0] Compacting [/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287128-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287112-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-290136-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-291192-big-Data.db:level=1:origin=compaction]
@@ -173,6 +186,7 @@ def test_disk_error_event():
 
 
 def test_too_long_queue_accumulated_event():
+    """TOO_LONG_QUEUE_ACCUMULATED matches the queue line and records its node and line number."""
     too_long_queue_accumulated_error_event = DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED()
 
     log_lines = """Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)
@@ -230,10 +244,6 @@ def test_find_log_event_no_match_returns_none():
     assert find_log_event(patterns, "all fine") is None
 
 
-def _classify(line: str):
-    return find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
-
-
 def test_system_error_events_partitioned_by_log_level():
     """INFO must sit after every WARNING/NORMAL/DEBUG subevent and before every ERROR/CRITICAL one.
 
@@ -258,7 +268,7 @@ def test_info_level_runtime_error_line_is_suppressed():
         "[shard 0: gms] rpc - client 10.0.0.9:7000: ignoring error response: seastar::rpc::remote_verb_error "
         "(std::runtime_error (Got stream_blob_cmd::error from peer 7336616b-4533-4c59-a3d1-f6d825de4d8a))"
     )
-    event = _classify(line)
+    event = classify_line(line)
     assert event.type == DatabaseLogEvent.INFO.type
     assert event.severity == Severity.SUPPRESS
 
@@ -270,17 +280,18 @@ def test_raft_transfer_snapshot_not_implemented_line_is_suppressed():
         "[shard 3: gms] raft - [sc-01be54c2-d122-11f1-932e-9f0ffe1c6b6f] Transferring snapshot to "
         "db9778e7-b231-44bb-ab2e-83a355dd523a failed with: std::runtime_error (transfer_snapshot() not implemented)"
     )
-    event = _classify(line)
+    event = classify_line(line)
     assert event.type == DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_NOT_IMPLEMENTED.type
     assert event.severity == Severity.SUPPRESS
 
 
 def test_error_level_runtime_error_line_still_classified():
+    """An ERR-level raft_topology line with std::runtime_error stays RUNTIME_ERROR."""
     line = (
         "2026-07-30T11:37:43.815 db-node-1 !ERR | scylla[12796]  [shard 0: gms] raft_topology - "
         "topology change coordinator fiber got error std::runtime_error (connection is closed)"
     )
-    assert _classify(line).type == DatabaseLogEvent.RUNTIME_ERROR.type
+    assert classify_line(line).type == DatabaseLogEvent.RUNTIME_ERROR.type
 
 
 @pytest.mark.parametrize(
@@ -306,16 +317,18 @@ def test_error_level_runtime_error_line_still_classified():
     ],
 )
 def test_info_level_lines_keep_lower_severity_classification(line, expected):
-    assert _classify(line).type == expected.type
+    """INFO-level lines keep the lower-severity event type of their pattern."""
+    assert classify_line(line).type == expected.type
 
 
 def test_mutation_write_exception_line_is_paxos_timeout():
+    """A mutation_write_failure_exception line is classified as SYSTEM_PAXOS_TIMEOUT."""
     line = (
         "2026-11-03T14:31:24.998 db-node-1 !ERR | scylla[1] [shard 0] storage_proxy - exception during mutation write "
         "to 10.0.0.1: exceptions::mutation_write_failure_exception (Operation failed for ks.t - received 0 responses "
         "and 1 failures from 1 CL=ONE.)"
     )
-    assert _classify(line).type == DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT.type
+    assert classify_line(line).type == DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT.type
 
 
 def test_backtrace_frame_with_mutation_write_type_name_is_not_paxos_timeout():
@@ -329,15 +342,11 @@ def test_backtrace_frame_with_mutation_write_type_name_is_not_paxos_timeout():
         "exceptions::read_failure_exception, exceptions::rate_limit_exception, exceptions::overloaded_exception, "
         "exceptions::read_failure_exception_with_timeout>, utils::exception_container_throw_policy> >::promise_type"
     )
-    assert _classify(line) is None
-
-
-NODE_NAME = "db-node-1"
-KS_CF = "ks_cf"
-MSG = "msg"
+    assert classify_line(line) is None
 
 
 def test_full_scan_event_no_message():
+    """FullScanEvent without a message has message None and omits it from str()."""
     event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF)
     assert event.message is None
     assert re.match(
@@ -348,6 +357,7 @@ def test_full_scan_event_no_message():
 
 
 def test_full_scan_event_with_message():
+    """FullScanEvent keeps its message and includes it in str()."""
     event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF, message=MSG)
     assert event.message == MSG
     assert re.match(
@@ -358,6 +368,7 @@ def test_full_scan_event_with_message():
 
 
 def test_index_special_column_error_event_msgfmt():
+    """IndexSpecialColumnErrorEvent str() shows its class, severity, period, event id and message."""
     event = IndexSpecialColumnErrorEvent(message="m1")
     event.event_id = "ac449879-485a-4b06-8596-3fbe58881093"
     assert str(event) == (

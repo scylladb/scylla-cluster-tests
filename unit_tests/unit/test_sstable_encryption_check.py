@@ -65,6 +65,7 @@ def make_sstable_utils(monkeypatch):
 
 
 def test_missing_sstable_is_skipped(make_sstable_utils):
+    """An sstable deleted while the check runs is skipped after an existence probe, and the check passes."""
     utils = make_sstable_utils(
         {ENCRYPTED_SSTABLE: ENCRYPTED_STDERR, FAILED_SSTABLE: DELETED_STDERR}, existing={ENCRYPTED_SSTABLE}
     )
@@ -80,6 +81,7 @@ def test_missing_sstable_is_skipped(make_sstable_utils):
 
 
 def test_read_error_on_existing_sstable_fails_check(make_sstable_utils):
+    """A read error on an sstable that still exists fails the check with the verdict counts."""
     utils = make_sstable_utils(
         {ENCRYPTED_SSTABLE: ENCRYPTED_STDERR, FAILED_SSTABLE: DELETED_STDERR},
         existing={ENCRYPTED_SSTABLE, FAILED_SSTABLE},
@@ -108,6 +110,7 @@ def test_stop_event_ends_check_between_sstables_without_verdict(make_sstable_uti
 
 
 def test_no_sstables_left_raises_not_found(make_sstable_utils):
+    """When every sstable is deleted or misordered, the check raises SstablesNotFound with the counts."""
     utils = make_sstable_utils(
         {ENCRYPTED_SSTABLE: DELETED_STDERR, FAILED_SSTABLE: MISORDERED_STDERR}, existing={FAILED_SSTABLE}
     )

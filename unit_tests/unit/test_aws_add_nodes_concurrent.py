@@ -23,7 +23,8 @@ from unittest.mock import MagicMock
 from sdcm.cluster_aws import AWSCluster
 
 
-def _cluster():
+def make_cluster():
+    """Return a fake AWSCluster whose instance and node creation are mocked."""
     cluster = MagicMock()
     cluster.params = {"simulated_regions": False, "simulated_racks": False, "ip_ssh_connections": "private"}
     cluster.racks_count = 1
@@ -34,32 +35,35 @@ def _cluster():
     return cluster
 
 
-def _add_nodes(cluster, count):
+def call_add_nodes(cluster, count):
+    """Run the undecorated AWSCluster.add_nodes on the fake cluster for count nodes in dc 0, rack 0."""
     return AWSCluster.add_nodes.__wrapped__(cluster, count=count, dc_idx=0, rack=0)
 
 
 def test_add_nodes_returns_the_nodes_it_created():
-    cluster = _cluster()
-    _add_nodes(cluster, count=2)
+    """add_nodes returns only the nodes of its own call, not the nodes registered before it."""
+    cluster = make_cluster()
+    call_add_nodes(cluster, count=2)
 
-    new_nodes = _add_nodes(cluster, count=3)
+    new_nodes = call_add_nodes(cluster, count=3)
 
     assert new_nodes == cluster.nodes[2:]
-    assert _add_nodes(cluster, count=0) == []
+    assert call_add_nodes(cluster, count=0) == []
 
 
 def test_add_nodes_does_not_return_the_nodes_of_a_concurrent_call():
-    cluster = _cluster()
+    """A node added by another caller mid-call is not returned to this call."""
+    cluster = make_cluster()
     nodes_of_the_other_call = []
 
     def another_call_adds_a_node():
         """Another caller adds a node after this call registered its nodes and before it returns them."""
         cluster.write_node_public_ip_file.side_effect = None
-        nodes_of_the_other_call.extend(_add_nodes(cluster, count=1))
+        nodes_of_the_other_call.extend(call_add_nodes(cluster, count=1))
 
     cluster.write_node_public_ip_file.side_effect = another_call_adds_a_node
 
-    new_nodes = _add_nodes(cluster, count=2)
+    new_nodes = call_add_nodes(cluster, count=2)
 
     assert len(cluster.nodes) == 3
     assert new_nodes == cluster.nodes[:2]

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import base64
 import json
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import ANY, MagicMock, PropertyMock
 
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.sct_events import Severity
@@ -32,6 +32,7 @@ from sdcm.utils.nvme_diagnostics import (
     IDENTIFY_CONTROLLER_LEN,
     LOG_PAGE_ERROR_INFORMATION,
     LOG_PAGE_SMART_HEALTH,
+    NVME_CMD_TIMEOUT,
     OACS_DEVICE_SELF_TEST,
     SELF_TEST_LOG_PAGE_LEN,
     SELF_TEST_RESULT_LEN,
@@ -228,6 +229,177 @@ Device Self Test Log for NVME device:nvme1n1
 Current operation  : 2
 Current Completion : 67
 """
+
+
+def make_mock_node():
+    """Create a mock node with remoter and log."""
+    node = MagicMock()
+    node.log = MagicMock()
+    node.remoter = MagicMock()
+    return node
+
+
+# A controller that advertises Device Self-test (OACS bit 4) and a 64-entry
+# Error Information Log. Callers read Identify once and pass this down, so the
+# tests hand it over the same way production code does.
+SELF_TEST_CAPABLE = NvmeControllerInfo(oacs=OACS_DEVICE_SELF_TEST, error_log_entries=64)
+
+
+def stub_controller_info(monkeypatch, info=SELF_TEST_CAPABLE):
+    """Stub the single Identify read the error-log collector performs."""
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_controller_info", lambda n, d: info)
+
+
+def make_result(stdout="", stderr="", exited=0):
+    """Create a mock command result."""
+    result = MagicMock()
+    result.stdout = stdout
+    result.stderr = stderr
+    result.exited = exited
+    type(result).ok = PropertyMock(return_value=(exited == 0))
+    type(result).failed = PropertyMock(return_value=(exited != 0))
+    return result
+
+
+def make_mock_cluster(collect_nvme_diagnostics=True):
+    """Create a mock cluster object with params and the _setup_nvme_diagnostics method."""
+    cluster = MagicMock(spec=BaseScyllaCluster)
+    cluster.params = MagicMock()
+    cluster.params.get = MagicMock(
+        side_effect=lambda key, *a, **kw: {
+            "collect_nvme_diagnostics": collect_nvme_diagnostics,
+        }.get(key)
+    )
+    # Bind the real method to the mock so we test actual logic
+    cluster._setup_nvme_diagnostics = BaseScyllaCluster._setup_nvme_diagnostics.__get__(cluster)
+    return cluster
+
+
+DEFAULT_THRESHOLDS = {
+    "percentage_used_warning": 90,
+    "temperature_warning_celsius": 70,
+}
+
+
+def make_smart_log(**overrides) -> NvmeSmartLog:
+    """Create an NvmeSmartLog with healthy defaults, overridable per field."""
+    defaults = {
+        "device_path": "/dev/nvme1n1",
+        "critical_warning": 0,
+        "temperature_kelvin": 310,  # 37°C
+        "available_spare": 100,
+        "available_spare_threshold": 10,
+        "percentage_used": 2,
+        "media_errors": 0,
+        "num_err_log_entries": 0,
+        "power_on_hours": 1000,
+    }
+    defaults.update(overrides)
+    return NvmeSmartLog(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# Raw log page builders
+#
+# Pages are assembled at the offsets the NVMe Base Specification defines, so a
+# test failure means a parser offset drifted from the spec, not that a fixture
+# was captured from a differently-behaved nvme-cli.
+# ---------------------------------------------------------------------------
+
+
+def write_field(buf: bytearray, offset: int, value: int, size: int) -> None:
+    """Store value little-endian in size bytes at offset."""
+    buf[offset : offset + size] = value.to_bytes(size, "little")
+
+
+def make_smart_page(**fields) -> bytes:
+    """Build a 512-byte SMART / Health Information log page (02h)."""
+    layout = {
+        "critical_warning": (0, 1),
+        "temperature_kelvin": (1, 2),
+        "available_spare": (3, 1),
+        "available_spare_threshold": (4, 1),
+        "percentage_used": (5, 1),
+        "data_units_read": (32, 16),
+        "data_units_written": (48, 16),
+        "host_read_commands": (64, 16),
+        "host_write_commands": (80, 16),
+        "controller_busy_time": (96, 16),
+        "power_cycles": (112, 16),
+        "power_on_hours": (128, 16),
+        "unsafe_shutdowns": (144, 16),
+        "media_errors": (160, 16),
+        "num_err_log_entries": (176, 16),
+    }
+    buf = bytearray(SMART_LOG_PAGE_LEN)
+    for name, value in fields.items():
+        offset, size = layout[name]
+        write_field(buf, offset, value, size)
+    return bytes(buf)
+
+
+def make_error_entry(**fields) -> bytes:
+    """Build one 64-byte Error Information Log entry (01h).
+
+    ``status_field`` and ``phase_tag`` are given separately and packed into the
+    single on-wire field, where bits 15:1 are the status and bit 0 the phase tag.
+    """
+    layout = {
+        "error_count": (0, 8),
+        "sqid": (8, 2),
+        "cmdid": (10, 2),
+        "parm_error_location": (14, 2),
+        "lba": (16, 8),
+        "nsid": (24, 4),
+        "vs": (28, 1),
+        "trtype": (29, 1),
+        "csi": (30, 1),
+        "opcode": (31, 1),
+        "cs": (32, 8),
+        "log_page_version": (63, 1),
+    }
+    buf = bytearray(ERROR_LOG_ENTRY_LEN)
+    write_field(buf, 0, fields.pop("error_count", 1), 8)
+    status_field = fields.pop("status_field", 0)
+    phase_tag = fields.pop("phase_tag", 0)
+    write_field(buf, 12, (status_field << 1) | phase_tag, 2)
+    for name, value in fields.items():
+        offset, size = layout[name]
+        write_field(buf, offset, value, size)
+    return bytes(buf)
+
+
+def make_self_test_page(current_operation=0, current_completion=0, results=()) -> bytes:
+    """Build a 564-byte Device Self-test log page (06h)."""
+    buf = bytearray(SELF_TEST_LOG_PAGE_LEN)
+    buf[0] = current_operation
+    buf[1] = current_completion
+    # Unused result slots are marked 0xf ("entry not used").
+    for index in range(20):
+        buf[4 + index * SELF_TEST_RESULT_LEN] = 0x0F
+    for index, res in enumerate(results):
+        offset = 4 + index * SELF_TEST_RESULT_LEN
+        buf[offset] = (res.get("self_test_code", 1) << 4) | res.get("result_code", 0)
+        buf[offset + 1] = res.get("segment_number", 0)
+        write_field(buf, offset + 4, res.get("power_on_hours", 0), 8)
+        write_field(buf, offset + 12, res.get("nsid", 0), 4)
+        write_field(buf, offset + 16, res.get("failing_lba", 0), 8)
+        buf[offset + 24] = res.get("status_code_type", 0)
+        buf[offset + 25] = res.get("status_code", 0)
+    return bytes(buf)
+
+
+def make_id_ctrl(oacs=0, elpe_zero_based=63) -> bytes:
+    """Build a 4096-byte Identify Controller structure with OACS and ELPE set."""
+    buf = bytearray(IDENTIFY_CONTROLLER_LEN)
+    write_field(buf, IDCTRL_OACS_OFFSET, oacs, 2)
+    buf[IDCTRL_ELPE_OFFSET] = elpe_zero_based
+    return bytes(buf)
+
+
+def b64_result(payload: bytes):
+    """Wrap payload as a successful remoter result with base64 stdout."""
+    return make_result(stdout=base64.b64encode(payload).decode())
 
 
 # ---------------------------------------------------------------------------
@@ -479,40 +651,10 @@ def test_self_test_type_values():
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_node():
-    """Create a mock node with remoter and log."""
-    node = MagicMock()
-    node.log = MagicMock()
-    node.remoter = MagicMock()
-    return node
-
-
-# A controller that advertises Device Self-test (OACS bit 4) and a 64-entry
-# Error Information Log. Callers read Identify once and pass this down, so the
-# tests hand it over the same way production code does.
-_SELF_TEST_CAPABLE = NvmeControllerInfo(oacs=OACS_DEVICE_SELF_TEST, error_log_entries=64)
-
-
-def _stub_controller_info(monkeypatch, info=_SELF_TEST_CAPABLE):
-    """Stub the single Identify read the error-log collector performs."""
-    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_controller_info", lambda n, d: info)
-
-
-def _make_result(stdout="", stderr="", exited=0):
-    """Create a mock command result."""
-    result = MagicMock()
-    result.stdout = stdout
-    result.stderr = stderr
-    result.exited = exited
-    type(result).ok = PropertyMock(return_value=(exited == 0))
-    type(result).failed = PropertyMock(return_value=(exited != 0))
-    return result
-
-
 def test_install_nvme_cli_already_installed():
     """Skip installation if nvme is already available."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(stdout="/usr/sbin/nvme")
 
     result = install_nvme_cli(node)
     assert result is True
@@ -521,11 +663,11 @@ def test_install_nvme_cli_already_installed():
 
 def test_install_nvme_cli_installs_successfully():
     """Install nvme-cli when not present, verify success."""
-    node = _make_mock_node()
+    node = make_mock_node()
     # First call: not installed. Second call: installed after install_package.
     node.remoter.run.side_effect = [
-        _make_result(exited=1),  # which nvme -> not found
-        _make_result(stdout="/usr/sbin/nvme"),  # which nvme -> found after install
+        make_result(exited=1),  # which nvme -> not found
+        make_result(stdout="/usr/sbin/nvme"),  # which nvme -> found after install
     ]
 
     result = install_nvme_cli(node)
@@ -535,10 +677,10 @@ def test_install_nvme_cli_installs_successfully():
 
 def test_install_nvme_cli_install_fails():
     """Return False when installation fails."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.remoter.run.side_effect = [
-        _make_result(exited=1),  # which nvme -> not found
-        _make_result(exited=1),  # which nvme -> still not found after install
+        make_result(exited=1),  # which nvme -> not found
+        make_result(exited=1),  # which nvme -> still not found after install
     ]
 
     result = install_nvme_cli(node)
@@ -547,36 +689,37 @@ def test_install_nvme_cli_install_fails():
 
 def test_install_nvme_cli_exception_during_install():
     """Return False when install_package raises an exception."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.remoter.run.side_effect = [
-        _make_result(exited=1),  # which nvme -> not found
+        make_result(exited=1),  # which nvme -> not found
     ]
-    node.install_package.side_effect = RuntimeError("apt lock timeout")
+    error = RuntimeError("apt lock timeout")
+    node.install_package.side_effect = error
 
     result = install_nvme_cli(node)
     assert result is False
-    node.log.warning.assert_called()
+    node.log.warning.assert_called_once_with("Failed to install nvme-cli: %s", error)
 
 
 def test_is_nvme_cli_available_true():
     """Return True when nvme binary exists."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(stdout="/usr/sbin/nvme")
     assert is_nvme_cli_available(node) is True
 
 
 def test_is_nvme_cli_available_false():
     """Return False when nvme binary does not exist."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(exited=1)
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(exited=1)
     assert is_nvme_cli_available(node) is False
 
 
 def test_list_nvme_devices_returns_devices():
     """list_nvme_devices returns parsed device list."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
-    node.remoter.sudo.return_value = _make_result(stdout=NVME_LIST_JSON_FLAT)
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(stdout="/usr/sbin/nvme")
+    node.remoter.sudo.return_value = make_result(stdout=NVME_LIST_JSON_FLAT)
 
     devices = list_nvme_devices(node)
     assert len(devices) == 2
@@ -585,8 +728,8 @@ def test_list_nvme_devices_returns_devices():
 
 def test_list_nvme_devices_no_nvme_cli():
     """Return empty list when nvme-cli is not installed."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(exited=1)
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(exited=1)
 
     devices = list_nvme_devices(node)
     assert devices == []
@@ -594,9 +737,9 @@ def test_list_nvme_devices_no_nvme_cli():
 
 def test_list_nvme_devices_command_fails():
     """Return empty list when nvme list command fails."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="permission denied")
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(stdout="/usr/sbin/nvme")
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="permission denied")
 
     devices = list_nvme_devices(node)
     assert devices == []
@@ -604,8 +747,8 @@ def test_list_nvme_devices_command_fails():
 
 def test_get_smart_log_failure():
     """get_smart_log returns None when command fails."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="device not found")
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="device not found")
 
     smart = get_smart_log(node, "/dev/nvme99n1")
     assert smart is None
@@ -613,18 +756,18 @@ def test_get_smart_log_failure():
 
 def test_get_error_log_failure():
     """A failed read returns None, which is not the same as an empty log."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="error")
 
     assert get_error_log(node, "/dev/nvme99n1", 64) is None
 
 
 def test_run_self_test_success():
     """run_self_test returns True on success."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result()
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result()
 
-    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE, SelfTestType.SHORT)
+    result = run_self_test(node, "/dev/nvme1n1", SELF_TEST_CAPABLE, SelfTestType.SHORT)
     assert result is True
     node.remoter.sudo.assert_called_once_with(
         "nvme device-self-test -s 1 /dev/nvme1n1",
@@ -635,10 +778,10 @@ def test_run_self_test_success():
 
 def test_run_self_test_extended():
     """run_self_test passes correct type for extended test."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result()
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result()
 
-    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE, SelfTestType.EXTENDED)
+    result = run_self_test(node, "/dev/nvme1n1", SELF_TEST_CAPABLE, SelfTestType.EXTENDED)
     assert result is True
     node.remoter.sudo.assert_called_once_with(
         "nvme device-self-test -s 2 /dev/nvme1n1",
@@ -649,10 +792,10 @@ def test_run_self_test_extended():
 
 def test_run_self_test_command_rejected():
     """run_self_test returns False when a supported controller rejects the command."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="not supported")
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="not supported")
 
-    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE)
+    result = run_self_test(node, "/dev/nvme1n1", SELF_TEST_CAPABLE)
     assert result is False
 
 
@@ -663,7 +806,7 @@ def test_run_self_test_skipped_when_controller_lacks_support():
     increments num_err_log_entries, so the diagnostic would report an anomaly
     it created itself.
     """
-    node = _make_mock_node()
+    node = make_mock_node()
     unsupported = NvmeControllerInfo(oacs=0x8, error_log_entries=64)
 
     assert run_self_test(node, "/dev/nvme1n1", unsupported) is False
@@ -672,8 +815,8 @@ def test_run_self_test_skipped_when_controller_lacks_support():
 
 def test_abort_self_test_success():
     """abort_self_test sends abort command (code 0xf) successfully."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result()
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result()
 
     result = abort_self_test(node, "/dev/nvme1n1")
     assert result is True
@@ -686,18 +829,18 @@ def test_abort_self_test_success():
 
 def test_abort_self_test_failure():
     """abort_self_test returns False when abort command fails."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="no test running")
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="no test running")
 
     result = abort_self_test(node, "/dev/nvme1n1")
     assert result is False
-    node.log.warning.assert_called()
+    node.log.warning.assert_called_once_with("Failed to abort self-test on %s: %s", "/dev/nvme1n1", "no test running")
 
 
 def test_get_self_test_log_failure():
     """get_self_test_log returns None when command fails."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="error")
 
     log = get_self_test_log(node, "/dev/nvme1n1")
     assert log is None
@@ -705,9 +848,9 @@ def test_get_self_test_log_failure():
 
 def test_collect_all_smart_logs_no_devices():
     """collect_all_smart_logs returns empty list when no devices found."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
-    node.remoter.sudo.return_value = _make_result(stdout=NVME_LIST_EMPTY_JSON)
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(stdout="/usr/sbin/nvme")
+    node.remoter.sudo.return_value = make_result(stdout=NVME_LIST_EMPTY_JSON)
 
     smart_logs = collect_all_smart_logs(node)
     assert smart_logs == []
@@ -715,8 +858,8 @@ def test_collect_all_smart_logs_no_devices():
 
 def test_collect_all_smart_logs_no_nvme_cli():
     """collect_all_smart_logs returns empty list when nvme-cli not installed."""
-    node = _make_mock_node()
-    node.remoter.run.return_value = _make_result(exited=1)
+    node = make_mock_node()
+    node.remoter.run.return_value = make_result(exited=1)
 
     smart_logs = collect_all_smart_logs(node)
     assert smart_logs == []
@@ -727,24 +870,10 @@ def test_collect_all_smart_logs_no_nvme_cli():
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_cluster(collect_nvme_diagnostics=True):
-    """Create a mock cluster object with params and the _setup_nvme_diagnostics method."""
-    cluster = MagicMock(spec=BaseScyllaCluster)
-    cluster.params = MagicMock()
-    cluster.params.get = MagicMock(
-        side_effect=lambda key, *a, **kw: {
-            "collect_nvme_diagnostics": collect_nvme_diagnostics,
-        }.get(key)
-    )
-    # Bind the real method to the mock so we test actual logic
-    cluster._setup_nvme_diagnostics = BaseScyllaCluster._setup_nvme_diagnostics.__get__(cluster)
-    return cluster
-
-
 def test_setup_nvme_diagnostics_installs_and_logs_baseline(monkeypatch):
     """_setup_nvme_diagnostics installs nvme-cli and logs baseline SMART data."""
-    node = _make_mock_node()
-    cluster = _make_mock_cluster()
+    node = make_mock_node()
+    cluster = make_mock_cluster()
 
     smart = NvmeSmartLog(
         device_path="/dev/nvme1n1",
@@ -761,7 +890,17 @@ def test_setup_nvme_diagnostics_installs_and_logs_baseline(monkeypatch):
     cluster._setup_nvme_diagnostics(node)
 
     # Verify baseline was logged
-    node.log.info.assert_called()
+    node.log.info.assert_called_with(
+        "NVMe baseline SMART for %s: temperature=%d°C, available_spare=%d%%, "
+        "percentage_used=%d%%, media_errors=%d, error_log_entries=%d, power_on_hours=%d",
+        "/dev/nvme1n1",
+        42,
+        100,
+        2,
+        0,
+        0,
+        8760,
+    )
     logged_args = node.log.info.call_args_list[-1]
     assert "/dev/nvme1n1" in str(logged_args)
     assert "8760" in str(logged_args)
@@ -769,8 +908,8 @@ def test_setup_nvme_diagnostics_installs_and_logs_baseline(monkeypatch):
 
 def test_setup_nvme_diagnostics_skips_when_install_fails(monkeypatch):
     """_setup_nvme_diagnostics skips gracefully when nvme-cli install fails."""
-    node = _make_mock_node()
-    cluster = _make_mock_cluster()
+    node = make_mock_node()
+    cluster = make_mock_cluster()
 
     monkeypatch.setattr("sdcm.cluster.install_nvme_cli", lambda n: False)
     collect_mock = MagicMock()
@@ -781,14 +920,14 @@ def test_setup_nvme_diagnostics_skips_when_install_fails(monkeypatch):
     # collect_all_smart_logs should not be called
     collect_mock.assert_not_called()
     # Should log that it's skipping
-    node.log.info.assert_called()
+    node.log.info.assert_called_once_with("NVMe diagnostics: nvme-cli not available, skipping")
     assert "skipping" in str(node.log.info.call_args_list[0]).lower()
 
 
 def test_setup_nvme_diagnostics_skips_when_no_data_disks(monkeypatch):
     """_setup_nvme_diagnostics skips gracefully when no NVMe data disks found."""
-    node = _make_mock_node()
-    cluster = _make_mock_cluster()
+    node = make_mock_node()
+    cluster = make_mock_cluster()
 
     monkeypatch.setattr("sdcm.cluster.install_nvme_cli", lambda n: True)
     monkeypatch.setattr("sdcm.cluster.collect_all_smart_logs", lambda n: [])
@@ -796,7 +935,7 @@ def test_setup_nvme_diagnostics_skips_when_no_data_disks(monkeypatch):
     cluster._setup_nvme_diagnostics(node)
 
     # Should log that no data disks were found
-    node.log.info.assert_called()
+    node.log.info.assert_called_once_with("NVMe diagnostics: no NVMe data disks found, skipping")
     assert "skipping" in str(node.log.info.call_args_list[0]).lower()
 
 
@@ -804,41 +943,19 @@ def test_setup_nvme_diagnostics_skips_when_no_data_disks(monkeypatch):
 # Tests: _check_single_device_health (threshold logic)
 # ---------------------------------------------------------------------------
 
-DEFAULT_THRESHOLDS = {
-    "percentage_used_warning": 90,
-    "temperature_warning_celsius": 70,
-}
-
-
-def _make_smart_log(**overrides) -> NvmeSmartLog:
-    """Create an NvmeSmartLog with healthy defaults, overridable per field."""
-    defaults = {
-        "device_path": "/dev/nvme1n1",
-        "critical_warning": 0,
-        "temperature_kelvin": 310,  # 37°C
-        "available_spare": 100,
-        "available_spare_threshold": 10,
-        "percentage_used": 2,
-        "media_errors": 0,
-        "num_err_log_entries": 0,
-        "power_on_hours": 1000,
-    }
-    defaults.update(overrides)
-    return NvmeSmartLog(**defaults)
-
 
 def test_threshold_healthy_device_yields_nothing():
     """A healthy device yields no events."""
-    node = _make_mock_node()
-    smart = _make_smart_log()
+    node = make_mock_node()
+    smart = make_smart_log()
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
     assert events == []
 
 
 def test_threshold_critical_warning_yields_critical():
     """critical_warning != 0 yields a CRITICAL event."""
-    node = _make_mock_node()
-    smart = _make_smart_log(critical_warning=4)
+    node = make_mock_node()
+    smart = make_smart_log(critical_warning=4)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     critical_events = [e for e in events if e.severity == Severity.CRITICAL]
@@ -848,10 +965,10 @@ def test_threshold_critical_warning_yields_critical():
 
 def test_threshold_media_errors_yields_error():
     """media_errors above the baseline yields an ERROR event."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
-    store_baseline_smart_logs(node, [_make_smart_log()])
-    smart = _make_smart_log(media_errors=42)
+    store_baseline_smart_logs(node, [make_smart_log()])
+    smart = make_smart_log(media_errors=42)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     error_events = [e for e in events if e.severity == Severity.ERROR]
@@ -861,10 +978,10 @@ def test_threshold_media_errors_yields_error():
 
 def test_threshold_error_log_entries_yields_warning():
     """num_err_log_entries above the baseline yields a WARNING event."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
-    store_baseline_smart_logs(node, [_make_smart_log()])
-    smart = _make_smart_log(num_err_log_entries=5)
+    store_baseline_smart_logs(node, [make_smart_log()])
+    smart = make_smart_log(num_err_log_entries=5)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     warning_events = [e for e in events if e.severity == Severity.WARNING]
@@ -874,8 +991,8 @@ def test_threshold_error_log_entries_yields_warning():
 
 def test_threshold_percentage_used_above_threshold_yields_warning():
     """percentage_used above threshold yields a WARNING event."""
-    node = _make_mock_node()
-    smart = _make_smart_log(percentage_used=95)
+    node = make_mock_node()
+    smart = make_smart_log(percentage_used=95)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     warning_events = [e for e in events if e.severity == Severity.WARNING]
@@ -885,16 +1002,16 @@ def test_threshold_percentage_used_above_threshold_yields_warning():
 
 def test_threshold_percentage_used_at_threshold_no_event():
     """percentage_used exactly at threshold does not yield an event."""
-    node = _make_mock_node()
-    smart = _make_smart_log(percentage_used=90)
+    node = make_mock_node()
+    smart = make_smart_log(percentage_used=90)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
     assert events == []
 
 
 def test_threshold_available_spare_below_device_threshold_yields_warning():
     """available_spare below the device's own spare_threshold yields a WARNING."""
-    node = _make_mock_node()
-    smart = _make_smart_log(available_spare=5, available_spare_threshold=10)
+    node = make_mock_node()
+    smart = make_smart_log(available_spare=5, available_spare_threshold=10)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     warning_events = [e for e in events if e.severity == Severity.WARNING]
@@ -904,8 +1021,8 @@ def test_threshold_available_spare_below_device_threshold_yields_warning():
 
 def test_threshold_temperature_above_threshold_yields_warning():
     """Temperature above threshold yields a WARNING event."""
-    node = _make_mock_node()
-    smart = _make_smart_log(temperature_kelvin=348)  # 75°C
+    node = make_mock_node()
+    smart = make_smart_log(temperature_kelvin=348)  # 75°C
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     warning_events = [e for e in events if e.severity == Severity.WARNING]
@@ -915,18 +1032,18 @@ def test_threshold_temperature_above_threshold_yields_warning():
 
 def test_threshold_temperature_at_threshold_no_event():
     """Temperature exactly at threshold does not yield an event."""
-    node = _make_mock_node()
-    smart = _make_smart_log(temperature_kelvin=343)  # 70°C
+    node = make_mock_node()
+    smart = make_smart_log(temperature_kelvin=343)  # 70°C
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
     assert events == []
 
 
 def test_threshold_multiple_issues_yields_multiple_events():
     """A device with multiple issues yields one event per issue."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
-    store_baseline_smart_logs(node, [_make_smart_log()])
-    smart = _make_smart_log(
+    store_baseline_smart_logs(node, [make_smart_log()])
+    smart = make_smart_log(
         critical_warning=1,
         media_errors=10,
         num_err_log_entries=20,
@@ -945,8 +1062,8 @@ def test_threshold_multiple_issues_yields_multiple_events():
 
 def test_threshold_custom_thresholds_override_defaults():
     """Custom thresholds override the default values."""
-    node = _make_mock_node()
-    smart = _make_smart_log(percentage_used=50, temperature_kelvin=333)  # 60°C
+    node = make_mock_node()
+    smart = make_smart_log(percentage_used=50, temperature_kelvin=333)  # 60°C
     custom = {"percentage_used_warning": 40, "temperature_warning_celsius": 55}
     events = list(_check_single_device_health(node, smart, custom))
 
@@ -961,7 +1078,7 @@ def test_threshold_custom_thresholds_override_defaults():
 
 def test_check_nvme_health_disabled_by_config(monkeypatch):
     """check_nvme_health yields nothing when collect_nvme_diagnostics is False."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.parent_cluster = MagicMock()
     node.parent_cluster.params.get.return_value = False
 
@@ -971,10 +1088,10 @@ def test_check_nvme_health_disabled_by_config(monkeypatch):
 
 def test_check_nvme_health_no_nvme_cli(monkeypatch):
     """check_nvme_health yields nothing when nvme-cli not available."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.parent_cluster = MagicMock()
     node.parent_cluster.params.get.return_value = True
-    node.remoter.run.return_value = _make_result(exited=1)  # which nvme -> not found
+    node.remoter.run.return_value = make_result(exited=1)  # which nvme -> not found
 
     events = list(check_nvme_health(current_node=node))
     assert events == []
@@ -982,11 +1099,11 @@ def test_check_nvme_health_no_nvme_cli(monkeypatch):
 
 def test_check_nvme_health_healthy_device(monkeypatch):
     """check_nvme_health yields nothing for a healthy device."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.parent_cluster = MagicMock()
     node.parent_cluster.params.get.return_value = True
 
-    smart = _make_smart_log()
+    smart = make_smart_log()
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.collect_all_smart_logs", lambda n: [smart])
 
@@ -996,13 +1113,13 @@ def test_check_nvme_health_healthy_device(monkeypatch):
 
 def test_check_nvme_health_yields_events_for_errors(monkeypatch):
     """check_nvme_health yields events when SMART data shows errors."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.parent_cluster = MagicMock()
     node.parent_cluster.params.get.return_value = True
     node.logdir = "/tmp/opencode/test_logdir"
 
-    store_baseline_smart_logs(node, [_make_smart_log()])
-    smart = _make_smart_log(media_errors=5)
+    store_baseline_smart_logs(node, [make_smart_log()])
+    smart = make_smart_log(media_errors=5)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.collect_all_smart_logs", lambda n: [smart])
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
@@ -1019,7 +1136,7 @@ def test_check_nvme_health_yields_events_for_errors(monkeypatch):
 
 def test_poll_self_test_completion_immediate(monkeypatch):
     """poll_self_test_completion returns immediately when test is not in progress."""
-    node = _make_mock_node()
+    node = make_mock_node()
     completed_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=0)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_self_test_log", lambda n, d: completed_log)
 
@@ -1030,7 +1147,7 @@ def test_poll_self_test_completion_immediate(monkeypatch):
 
 def test_poll_self_test_completion_waits_then_completes(monkeypatch):
     """poll_self_test_completion polls until test completes."""
-    node = _make_mock_node()
+    node = make_mock_node()
     in_progress_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=1, current_completion=50)
     completed_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=0)
 
@@ -1051,7 +1168,7 @@ def test_poll_self_test_completion_waits_then_completes(monkeypatch):
 
 def test_poll_self_test_completion_timeout_aborts(monkeypatch):
     """poll_self_test_completion aborts the test on timeout."""
-    node = _make_mock_node()
+    node = make_mock_node()
     in_progress_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=1, current_completion=10)
 
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_self_test_log", lambda n, d: in_progress_log)
@@ -1071,7 +1188,7 @@ def test_poll_self_test_completion_timeout_aborts(monkeypatch):
 
 def test_check_self_test_results_passed():
     """No events for a passing self-test."""
-    node = _make_mock_node()
+    node = make_mock_node()
     log = NvmeSelfTestLog(
         device_path="/dev/nvme0n1",
         results=[NvmeSelfTestResult(result_code=0, self_test_code=1)],
@@ -1082,7 +1199,7 @@ def test_check_self_test_results_passed():
 
 def test_check_self_test_results_failure():
     """ERROR event for a self-test failure with result_code >= 4."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.name = "test-node"
     log = NvmeSelfTestLog(
         device_path="/dev/nvme0n1",
@@ -1096,7 +1213,7 @@ def test_check_self_test_results_failure():
 
 def test_check_self_test_results_aborted():
     """No event for user-aborted self-test (result_code=1)."""
-    node = _make_mock_node()
+    node = make_mock_node()
     log = NvmeSelfTestLog(
         device_path="/dev/nvme0n1",
         results=[NvmeSelfTestResult(result_code=1, self_test_code=1)],
@@ -1107,7 +1224,7 @@ def test_check_self_test_results_aborted():
 
 def test_check_self_test_results_empty():
     """No events when no results in self-test log."""
-    node = _make_mock_node()
+    node = make_mock_node()
     log = NvmeSelfTestLog(device_path="/dev/nvme0n1", results=[])
     events = list(check_self_test_results(node, log))
     assert events == []
@@ -1115,7 +1232,7 @@ def test_check_self_test_results_empty():
 
 def test_check_self_test_results_entry_not_used():
     """No events for result_code=0xf (entry not used)."""
-    node = _make_mock_node()
+    node = make_mock_node()
     log = NvmeSelfTestLog(
         device_path="/dev/nvme0n1",
         results=[NvmeSelfTestResult(result_code=0xF)],
@@ -1131,7 +1248,7 @@ def test_check_self_test_results_entry_not_used():
 
 def test_run_self_test_on_all_devices_no_nvme_cli(monkeypatch):
     """Returns empty list when nvme-cli is not available."""
-    node = _make_mock_node()
+    node = make_mock_node()
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: False)
 
     result = run_self_test_on_all_devices(node)
@@ -1140,7 +1257,7 @@ def test_run_self_test_on_all_devices_no_nvme_cli(monkeypatch):
 
 def test_run_self_test_on_all_devices_triggers_all_before_polling(monkeypatch):
     """Self-tests are triggered on all disks first, so they run in parallel."""
-    node = _make_mock_node()
+    node = make_mock_node()
     disks = [
         NvmeDevice(
             device_path=f"/dev/nvme{i}n1",
@@ -1161,7 +1278,7 @@ def test_run_self_test_on_all_devices_triggers_all_before_polling(monkeypatch):
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.filter_data_disks", lambda devices, **kwargs: disks)
     monkeypatch.setattr(
         "sdcm.utils.nvme_diagnostics.get_controller_info",
-        lambda n, device_path: calls.append(("id-ctrl", device_path)) or _SELF_TEST_CAPABLE,
+        lambda n, device_path: calls.append(("id-ctrl", device_path)) or SELF_TEST_CAPABLE,
     )
     monkeypatch.setattr(
         "sdcm.utils.nvme_diagnostics.run_self_test",
@@ -1188,7 +1305,7 @@ def test_run_self_test_on_all_devices_skips_device_with_unreadable_identify(monk
     implemented, and issuing it to a controller that does not implement it
     adds an entry to the device Error Information Log.
     """
-    node = _make_mock_node()
+    node = make_mock_node()
     disk = NvmeDevice(
         device_path="/dev/nvme1n1",
         model="Amazon EC2 NVMe Instance Storage",
@@ -1216,7 +1333,7 @@ def test_run_self_test_on_all_devices_skips_device_with_unreadable_identify(monk
 
 def test_run_self_test_on_all_devices_no_devices(monkeypatch):
     """Returns empty list when no NVMe devices are found."""
-    node = _make_mock_node()
+    node = make_mock_node()
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.list_nvme_devices", lambda n: [])
 
@@ -1235,21 +1352,21 @@ def test_error_entries_present_at_baseline_yield_no_event():
     A fresh cloud instance can arrive with a non-empty error log, so an absolute
     "num_err_log_entries > 0" check fires on healthy nodes on every run.
     """
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = None
-    store_baseline_smart_logs(node, [_make_smart_log(num_err_log_entries=2, media_errors=1)])
-    smart = _make_smart_log(num_err_log_entries=2, media_errors=1)
+    store_baseline_smart_logs(node, [make_smart_log(num_err_log_entries=2, media_errors=1)])
+    smart = make_smart_log(num_err_log_entries=2, media_errors=1)
 
     assert list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS)) == []
 
 
 def test_error_entries_above_baseline_yield_warning(monkeypatch):
     """Only growth over the baseline is reported, and it reports the delta."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = None
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
-    store_baseline_smart_logs(node, [_make_smart_log(num_err_log_entries=2)])
-    smart = _make_smart_log(num_err_log_entries=5)
+    store_baseline_smart_logs(node, [make_smart_log(num_err_log_entries=2)])
+    smart = make_smart_log(num_err_log_entries=5)
 
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
@@ -1266,113 +1383,12 @@ def test_missing_baseline_skips_the_delta_checks(monkeypatch):
     reused clusters). Comparing the lifetime counters against zero would report
     the device's whole history as errors from this run.
     """
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = None
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
-    smart = _make_smart_log(num_err_log_entries=3, media_errors=2)
+    smart = make_smart_log(num_err_log_entries=3, media_errors=2)
 
     assert list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS)) == []
-
-
-# ---------------------------------------------------------------------------
-# Raw log page builders
-#
-# Pages are assembled at the offsets the NVMe Base Specification defines, so a
-# test failure means a parser offset drifted from the spec, not that a fixture
-# was captured from a differently-behaved nvme-cli.
-# ---------------------------------------------------------------------------
-
-
-def _put(buf: bytearray, offset: int, value: int, size: int) -> None:
-    buf[offset : offset + size] = value.to_bytes(size, "little")
-
-
-def _make_smart_page(**fields) -> bytes:
-    """Build a 512-byte SMART / Health Information log page (02h)."""
-    layout = {
-        "critical_warning": (0, 1),
-        "temperature_kelvin": (1, 2),
-        "available_spare": (3, 1),
-        "available_spare_threshold": (4, 1),
-        "percentage_used": (5, 1),
-        "data_units_read": (32, 16),
-        "data_units_written": (48, 16),
-        "host_read_commands": (64, 16),
-        "host_write_commands": (80, 16),
-        "controller_busy_time": (96, 16),
-        "power_cycles": (112, 16),
-        "power_on_hours": (128, 16),
-        "unsafe_shutdowns": (144, 16),
-        "media_errors": (160, 16),
-        "num_err_log_entries": (176, 16),
-    }
-    buf = bytearray(SMART_LOG_PAGE_LEN)
-    for name, value in fields.items():
-        offset, size = layout[name]
-        _put(buf, offset, value, size)
-    return bytes(buf)
-
-
-def _make_error_entry(**fields) -> bytes:
-    """Build one 64-byte Error Information Log entry (01h).
-
-    ``status_field`` and ``phase_tag`` are given separately and packed into the
-    single on-wire field, where bits 15:1 are the status and bit 0 the phase tag.
-    """
-    layout = {
-        "error_count": (0, 8),
-        "sqid": (8, 2),
-        "cmdid": (10, 2),
-        "parm_error_location": (14, 2),
-        "lba": (16, 8),
-        "nsid": (24, 4),
-        "vs": (28, 1),
-        "trtype": (29, 1),
-        "csi": (30, 1),
-        "opcode": (31, 1),
-        "cs": (32, 8),
-        "log_page_version": (63, 1),
-    }
-    buf = bytearray(ERROR_LOG_ENTRY_LEN)
-    _put(buf, 0, fields.pop("error_count", 1), 8)
-    status_field = fields.pop("status_field", 0)
-    phase_tag = fields.pop("phase_tag", 0)
-    _put(buf, 12, (status_field << 1) | phase_tag, 2)
-    for name, value in fields.items():
-        offset, size = layout[name]
-        _put(buf, offset, value, size)
-    return bytes(buf)
-
-
-def _make_self_test_page(current_operation=0, current_completion=0, results=()) -> bytes:
-    """Build a 564-byte Device Self-test log page (06h)."""
-    buf = bytearray(SELF_TEST_LOG_PAGE_LEN)
-    buf[0] = current_operation
-    buf[1] = current_completion
-    # Unused result slots are marked 0xf ("entry not used").
-    for index in range(20):
-        buf[4 + index * SELF_TEST_RESULT_LEN] = 0x0F
-    for index, res in enumerate(results):
-        offset = 4 + index * SELF_TEST_RESULT_LEN
-        buf[offset] = (res.get("self_test_code", 1) << 4) | res.get("result_code", 0)
-        buf[offset + 1] = res.get("segment_number", 0)
-        _put(buf, offset + 4, res.get("power_on_hours", 0), 8)
-        _put(buf, offset + 12, res.get("nsid", 0), 4)
-        _put(buf, offset + 16, res.get("failing_lba", 0), 8)
-        buf[offset + 24] = res.get("status_code_type", 0)
-        buf[offset + 25] = res.get("status_code", 0)
-    return bytes(buf)
-
-
-def _make_id_ctrl(oacs=0, elpe_zero_based=63) -> bytes:
-    buf = bytearray(IDENTIFY_CONTROLLER_LEN)
-    _put(buf, IDCTRL_OACS_OFFSET, oacs, 2)
-    buf[IDCTRL_ELPE_OFFSET] = elpe_zero_based
-    return bytes(buf)
-
-
-def _b64_result(payload: bytes):
-    return _make_result(stdout=base64.b64encode(payload).decode())
 
 
 # ---------------------------------------------------------------------------
@@ -1382,7 +1398,7 @@ def _b64_result(payload: bytes):
 
 def test_parse_smart_page_reads_spec_offsets():
     """Every field is decoded from its spec-defined offset."""
-    page = _make_smart_page(
+    page = make_smart_page(
         critical_warning=0x1,
         temperature_kelvin=315,
         available_spare=100,
@@ -1427,13 +1443,13 @@ def test_parse_smart_page_temperature_is_kelvin_by_definition():
     order ("315 K (42 Celsius)" vs "42 C (315 K, 107 F)"), which silently made
     the over-temperature check unreachable.
     """
-    assert parse_smart_log_page("/dev/nvme1n1", _make_smart_page(temperature_kelvin=315)).temperature_celsius == 42
+    assert parse_smart_log_page("/dev/nvme1n1", make_smart_page(temperature_kelvin=315)).temperature_celsius == 42
 
 
 def test_parse_smart_page_handles_128_bit_counters():
     """The 16-byte counters are decoded whole, not truncated to 64 bits."""
     huge = 2**100 + 12345
-    smart = parse_smart_log_page("/dev/nvme1n1", _make_smart_page(data_units_read=huge))
+    smart = parse_smart_log_page("/dev/nvme1n1", make_smart_page(data_units_read=huge))
     assert smart.data_units_read == huge
 
 
@@ -1448,15 +1464,16 @@ def test_parse_error_entry_splits_status_field_and_phase_tag():
     0x2001 is the status the AWS Nitro controller reported for the rejected
     'nvme device-self-test' - the value the previous text parser zeroed out.
     """
-    entry = parse_error_log_entry(_make_error_entry(error_count=2, status_field=0x2001, phase_tag=1))
+    entry = parse_error_log_entry(make_error_entry(error_count=2, status_field=0x2001, phase_tag=1))
 
     assert entry.status_field == 0x2001
     assert entry.phase_tag == 1
 
 
 def test_parse_error_entry_reads_spec_offsets():
+    """parse_error_log_entry reads every field from its spec-defined offset."""
     entry = parse_error_log_entry(
-        _make_error_entry(
+        make_error_entry(
             error_count=2,
             sqid=0,
             cmdid=0x4,
@@ -1486,18 +1503,18 @@ def test_parse_error_entry_opcode_requires_log_page_version_1():
     All 64 entries captured from an i4i node report log_page_version 0, so the
     'opcode=0x00' nvme-cli prints there is a reserved byte, not an opcode.
     """
-    without = parse_error_log_entry(_make_error_entry(csi=0x2, opcode=0x14, log_page_version=0))
+    without = parse_error_log_entry(make_error_entry(csi=0x2, opcode=0x14, log_page_version=0))
     assert without.opcode is None
     assert without.command_set_indicator is None
 
-    with_version = parse_error_log_entry(_make_error_entry(csi=0x2, opcode=0x14, log_page_version=1))
+    with_version = parse_error_log_entry(make_error_entry(csi=0x2, opcode=0x14, log_page_version=1))
     assert with_version.opcode == 0x14
     assert with_version.command_set_indicator == 0x2
 
 
 def test_parse_error_entry_zero_error_count_is_an_invalid_entry():
     """Spec: an Error Count of 0h marks an unused slot or a lost entry."""
-    assert parse_error_log_entry(_make_error_entry(error_count=0, status_field=0x2001)) is None
+    assert parse_error_log_entry(make_error_entry(error_count=0, status_field=0x2001)) is None
 
 
 def test_parse_error_log_page_drops_unused_slots():
@@ -1508,9 +1525,9 @@ def test_parse_error_log_page_drops_unused_slots():
     artifact, 62 of them identical zeros.
     """
     page = (
-        _make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001)
-        + _make_error_entry(error_count=1, cmdid=0x14, status_field=0x2002)
-        + _make_error_entry(error_count=0) * 62
+        make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001)
+        + make_error_entry(error_count=1, cmdid=0x14, status_field=0x2002)
+        + make_error_entry(error_count=0) * 62
     )
     entries = parse_error_log_page(page)
 
@@ -1524,7 +1541,8 @@ def test_parse_error_log_page_drops_unused_slots():
 
 
 def test_parse_self_test_page_reads_results():
-    page = _make_self_test_page(
+    """parse_self_test_log_page decodes each result slot, including the failing LBA."""
+    page = make_self_test_page(
         results=[
             {"result_code": 0, "self_test_code": 1, "power_on_hours": 8760, "nsid": 1},
             {
@@ -1554,11 +1572,12 @@ def test_parse_self_test_page_reads_results():
 
 def test_parse_self_test_page_skips_unused_entries():
     """Result code 0xf means the slot holds no test result."""
-    assert parse_self_test_log_page("/dev/nvme1n1", _make_self_test_page()).results == []
+    assert parse_self_test_log_page("/dev/nvme1n1", make_self_test_page()).results == []
 
 
 def test_parse_self_test_page_reports_test_in_progress():
-    page = _make_self_test_page(current_operation=2, current_completion=45)
+    """A running self-test is reported with its operation and completion percentage."""
+    page = make_self_test_page(current_operation=2, current_completion=45)
     log = parse_self_test_log_page("/dev/nvme1n1", page)
 
     assert log.test_in_progress
@@ -1572,8 +1591,9 @@ def test_parse_self_test_page_reports_test_in_progress():
 
 
 def test_get_smart_log_reads_raw_log_page():
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _b64_result(_make_smart_page(temperature_kelvin=315, media_errors=2))
+    """get_smart_log reads the SMART page via get-log and decodes it."""
+    node = make_mock_node()
+    node.remoter.sudo.return_value = b64_result(make_smart_page(temperature_kelvin=315, media_errors=2))
 
     smart = get_smart_log(node, "/dev/nvme1n1")
 
@@ -1588,19 +1608,30 @@ def test_get_smart_log_reads_raw_log_page():
 
 def test_get_smart_log_rejects_short_read():
     """A truncated page is a failed read, never a partially-trusted one."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _b64_result(b"\x00" * 128)
+    node = make_mock_node()
+    node.remoter.sudo.return_value = b64_result(b"\x00" * 128)
 
     assert get_smart_log(node, "/dev/nvme1n1") is None
-    node.log.warning.assert_called()
+    node.log.warning.assert_called_once_with(
+        "Reading %s returned %d bytes, expected %d: %s",
+        f"log page {LOG_PAGE_SMART_HEALTH:#04x} on /dev/nvme1n1",
+        128,
+        SMART_LOG_PAGE_LEN,
+        "",
+    )
 
 
 def test_get_smart_log_rejects_undecodable_output():
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(stdout="not base64 !!!")
+    """Output that is not base64 is a failed read, not a crash."""
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(stdout="not base64 !!!")
 
     assert get_smart_log(node, "/dev/nvme1n1") is None
-    node.log.warning.assert_called()
+    node.log.warning.assert_called_once_with(
+        "Reading %s returned undecodable output: %s",
+        f"log page {LOG_PAGE_SMART_HEALTH:#04x} on /dev/nvme1n1",
+        ANY,
+    )
 
 
 def test_get_error_log_sizes_the_page_from_elpe():
@@ -1610,10 +1641,10 @@ def test_get_error_log_sizes_the_page_from_elpe():
     rejected outright, so ELPE (0's based) decides the length. The caller reads
     Identify once and hands the count down.
     """
-    node = _make_mock_node()
+    node = make_mock_node()
     node.remoter.sudo.side_effect = [
-        _b64_result(_make_id_ctrl(elpe_zero_based=3)),  # id-ctrl -> 4 entries
-        _b64_result(_make_error_entry(error_count=2, status_field=0x2001) + _make_error_entry(error_count=0) * 3),
+        b64_result(make_id_ctrl(elpe_zero_based=3)),  # id-ctrl -> 4 entries
+        b64_result(make_error_entry(error_count=2, status_field=0x2001) + make_error_entry(error_count=0) * 3),
     ]
 
     controller_info = get_controller_info(node, "/dev/nvme1n1")
@@ -1627,45 +1658,49 @@ def test_get_error_log_sizes_the_page_from_elpe():
 
 
 def test_error_log_entry_count_is_zero_based():
-    assert parse_identify_controller(_make_id_ctrl(elpe_zero_based=63)).error_log_entries == 64
+    """ELPE is zero-based, so 63 means 64 entries."""
+    assert parse_identify_controller(make_id_ctrl(elpe_zero_based=63)).error_log_entries == 64
 
 
 def test_supports_self_test_reads_oacs_bit_4():
-    info = parse_identify_controller(_make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST | 0x8))
+    """OACS bit 4 advertises Device Self-test."""
+    info = parse_identify_controller(make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST | 0x8))
 
     assert info.supports_self_test is True
 
 
 def test_supports_self_test_false_for_aws_oacs():
     """oacs=0x8 (Namespace Management only) is what AWS Nitro controllers report."""
-    assert parse_identify_controller(_make_id_ctrl(oacs=0x8)).supports_self_test is False
+    assert parse_identify_controller(make_id_ctrl(oacs=0x8)).supports_self_test is False
 
 
 def test_get_controller_info_reads_both_fields_in_one_identify():
     """OACS and ELPE come from the same structure, so one read serves both."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _b64_result(_make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST, elpe_zero_based=3))
+    node = make_mock_node()
+    node.remoter.sudo.return_value = b64_result(make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST, elpe_zero_based=3))
 
     info = get_controller_info(node, "/dev/nvme1n1")
 
     assert info is not None
     assert info.supports_self_test is True
     assert info.error_log_entries == 4
-    node.remoter.sudo.assert_called_once()
+    node.remoter.sudo.assert_called_once_with(
+        "nvme id-ctrl /dev/nvme1n1 -b | base64 -w0", ignore_status=True, timeout=NVME_CMD_TIMEOUT
+    )
 
 
 def test_get_controller_info_none_when_identify_unreadable():
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
+    """get_controller_info returns None when Identify cannot be read."""
+    node = make_mock_node()
+    node.remoter.sudo.return_value = make_result(exited=1, stderr="error")
 
     assert get_controller_info(node, "/dev/nvme1n1") is None
 
 
 def test_get_self_test_log_reads_raw_log_page():
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _b64_result(
-        _make_self_test_page(results=[{"result_code": 0, "self_test_code": 1}])
-    )
+    """get_self_test_log reads the self-test page at its spec length."""
+    node = make_mock_node()
+    node.remoter.sudo.return_value = b64_result(make_self_test_page(results=[{"result_code": 0, "self_test_code": 1}]))
 
     log = get_self_test_log(node, "/dev/nvme1n1")
 
@@ -1676,10 +1711,10 @@ def test_get_self_test_log_reads_raw_log_page():
 
 def test_collected_artifact_marks_opcode_unavailable(monkeypatch, tmp_path):
     """Opcode is written as n/a when the controller did not report one."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = str(tmp_path)
-    entry = parse_error_log_entry(_make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001, opcode=0x14))
-    _stub_controller_info(monkeypatch)
+    entry = parse_error_log_entry(make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001, opcode=0x14))
+    stub_controller_info(monkeypatch)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [entry])
 
     _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
@@ -1693,9 +1728,9 @@ def test_collected_artifact_marks_opcode_unavailable(monkeypatch, tmp_path):
 
 def test_collect_error_log_writes_nothing_when_no_populated_entries(monkeypatch, tmp_path):
     """No artifact is produced when the page holds only unused slots."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = str(tmp_path)
-    _stub_controller_info(monkeypatch)
+    stub_controller_info(monkeypatch)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
 
     _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
@@ -1707,23 +1742,25 @@ def test_collect_error_log_writes_nothing_when_no_populated_entries(monkeypatch,
 
 def test_collect_error_log_warns_when_the_page_could_not_be_read(monkeypatch, tmp_path):
     """A failed read is reported as such, not as a device with a clean log."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = str(tmp_path)
-    _stub_controller_info(monkeypatch)
+    stub_controller_info(monkeypatch)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: None)
 
     _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
 
     assert list(tmp_path.glob("nvme_error_log_*.log")) == []
-    node.log.warning.assert_called_once()
+    node.log.warning.assert_called_once_with(
+        "Could not read the NVMe error log for %s, nothing collected", "/dev/nvme1n1"
+    )
 
 
 def test_collect_error_log_reads_nothing_when_identify_fails(monkeypatch, tmp_path):
     """Without ELPE there is no defensible page length, so nothing is read."""
-    node = _make_mock_node()
+    node = make_mock_node()
     node.logdir = str(tmp_path)
     reads = []
-    _stub_controller_info(monkeypatch, info=None)
+    stub_controller_info(monkeypatch, info=None)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: reads.append(d))
 
     _collect_error_log_with_timestamp(node, "/dev/nvme1n1")

@@ -14,6 +14,7 @@
 """collect-logs on a local run: no sct-runner, and usually no Argus registration."""
 
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import pytest
 from click.testing import CliRunner
@@ -31,23 +32,26 @@ MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_UR
 
 @pytest.fixture(autouse=True)
 def no_minicloud_env(monkeypatch):
+    """Unset the minicloud endpoint variables for every test."""
     for env_var in MINICLOUD_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)
 
 
 @pytest.fixture
 def runner() -> CliRunner:
+    """A click CliRunner for invoking collect_logs."""
     return CliRunner()
 
 
-def _config(enable_argus: bool) -> MagicMock:
+def make_config(enable_argus: bool) -> MagicMock:
     """A stand-in SCTConfiguration that answers only what collect_logs asks of it."""
     config = MagicMock()
     config.get.side_effect = lambda key, *_: {"test_id": None, "enable_argus": enable_argus}.get(key)
     return config
 
 
-def _collector(test_id: str | None) -> MagicMock:
+def make_collector(test_id: str | None) -> MagicMock:
+    """A stand-in Collector whose run() reports no logs and no error."""
     collector = MagicMock()
     collector.test_id = test_id
     collector.storage_dir = None
@@ -71,8 +75,8 @@ def test_test_id_is_read_from_the_logdir_when_not_given(
     raising about a runner a local run never had, after collection had already done its work.
     """
     (tmp_path / "test_id").write_text(TEST_ID, encoding="utf-8")
-    mock_config.return_value = _config(enable_argus=False)
-    mock_collector_cls.return_value = _collector(TEST_ID)
+    mock_config.return_value = make_config(enable_argus=False)
+    mock_collector_cls.return_value = make_collector(TEST_ID)
 
     result = runner.invoke(sct.collect_logs, ["--logdir", str(tmp_path), "--backend", "aws"])
 
@@ -94,8 +98,8 @@ def test_argus_submission_is_skipped_when_argus_is_disabled(
     ("No SCTTestRun found matching ..."), which reads like a failure and is not one.
     """
     (tmp_path / "test_id").write_text(TEST_ID, encoding="utf-8")
-    mock_config.return_value = _config(enable_argus=False)
-    mock_collector_cls.return_value = _collector(TEST_ID)
+    mock_config.return_value = make_config(enable_argus=False)
+    mock_collector_cls.return_value = make_collector(TEST_ID)
 
     result = runner.invoke(sct.collect_logs, ["--logdir", str(tmp_path), "--backend", "aws"])
 
@@ -113,10 +117,10 @@ def test_argus_submission_still_happens_when_argus_is_enabled(
 ):
     """The CI path must keep working: every pipeline run registers with Argus."""
     (tmp_path / "test_id").write_text(TEST_ID, encoding="utf-8")
-    mock_config.return_value = _config(enable_argus=True)
-    mock_collector_cls.return_value = _collector(TEST_ID)
+    mock_config.return_value = make_config(enable_argus=True)
+    mock_collector_cls.return_value = make_collector(TEST_ID)
 
     result = runner.invoke(sct.collect_logs, ["--logdir", str(tmp_path), "--backend", "aws"])
 
     assert result.exit_code == 0, result.output
-    mock_store.assert_called_once()
+    mock_store.assert_called_once_with(test_id=UUID(TEST_ID), logs={}, use_tunnel=False, log_dir=None)

@@ -117,11 +117,13 @@ def test_grafana_panel_screenshot_name_property_sanitizes_colons():
 @pytest.mark.parametrize(
     "dashboard_title,panel_title,expected_name",
     [
-        ("Detailed", "LSA total memory", "detailed-lsa_total_memory"),
-        ("Overview/Summary", "Disk Usage", "overview_summary-disk_usage"),
-        ("Prod (Main)", "CPU %", "prod__main_-cpu__"),
-        ("Node: Status", "Health Check", "node__status-health_check"),
-        ("Complex/Test(Env): Data", "Value %/Rate", "complex_test_env___data-value___rate"),
+        pytest.param("Detailed", "LSA total memory", "detailed-lsa_total_memory", id="plain"),
+        pytest.param("Overview/Summary", "Disk Usage", "overview_summary-disk_usage", id="slash"),
+        pytest.param("Prod (Main)", "CPU %", "prod__main_-cpu__", id="parens-and-percent"),
+        pytest.param("Node: Status", "Health Check", "node__status-health_check", id="colon"),
+        pytest.param(
+            "Complex/Test(Env): Data", "Value %/Rate", "complex_test_env___data-value___rate", id="mixed-special-chars"
+        ),
     ],
 )
 def test_grafana_panel_screenshot_name_property_various_inputs(dashboard_title, panel_title, expected_name):
@@ -251,18 +253,16 @@ def test_monitoring_stack_find_panel_id_none_in_nested():
     "panels,search_title,expected_id",
     [
         # Simple cases
-        ([{"id": 1, "title": "Panel A"}, {"id": 2, "title": "Panel B"}], "Panel A", 1),
-        ([{"id": 1, "title": "Panel A"}, {"id": 2, "title": "Panel B"}], "Panel B", 2),
-        ([{"id": 1, "title": "Panel A"}], "Not Found", None),
-        # Substring matching
-        ([{"id": 1, "title": "LSA total memory usage"}], "total memory", 1),
-        # Nested panels
-        ([{"id": 1, "title": "Row", "panels": [{"id": 10, "title": "Target"}]}], "Target", 10),
-        # Multiple nesting levels
-        (
+        pytest.param([{"id": 1, "title": "Panel A"}, {"id": 2, "title": "Panel B"}], "Panel A", 1, id="simple-first"),
+        pytest.param([{"id": 1, "title": "Panel A"}, {"id": 2, "title": "Panel B"}], "Panel B", 2, id="simple-second"),
+        pytest.param([{"id": 1, "title": "Panel A"}], "Not Found", None, id="not-found"),
+        pytest.param([{"id": 1, "title": "LSA total memory usage"}], "total memory", 1, id="substring"),
+        pytest.param([{"id": 1, "title": "Row", "panels": [{"id": 10, "title": "Target"}]}], "Target", 10, id="nested"),
+        pytest.param(
             [{"id": 1, "title": "R1", "panels": [{"id": 10, "title": "S1", "panels": [{"id": 100, "title": "Deep"}]}]}],
             "Deep",
             100,
+            id="multi-level-nesting",
         ),
     ],
 )
@@ -308,10 +308,10 @@ def test_grafana_panel_screenshot_resolution_default_height():
 @pytest.mark.parametrize(
     "resolution,expected_width,expected_height",
     [
-        ((1920, 4000), 1920, 4000),
-        ((1280, 720), 1280, 720),
-        ((2560, 1440), 2560, 1440),
-        ((800, 600), 800, 600),
+        pytest.param((1920, 4000), 1920, 4000, id="default"),
+        pytest.param((1280, 720), 1280, 720, id="720p"),
+        pytest.param((2560, 1440), 2560, 1440, id="1440p"),
+        pytest.param((800, 600), 800, 600, id="small"),
     ],
 )
 def test_grafana_panel_screenshot_resolution_extraction(resolution, expected_width, expected_height):
@@ -325,8 +325,12 @@ def test_grafana_panel_screenshot_resolution_extraction(resolution, expected_wid
 @pytest.mark.parametrize(
     "panels,expected_names",
     [
-        ([], ["overview", "per-server-metrics-nemesis"]),
-        ([GrafanaPanelScreenshot(dashboard_title="Gemini")], ["overview", "per-server-metrics-nemesis", "gemini"]),
+        pytest.param([], ["overview", "per-server-metrics-nemesis"], id="no-extra-dashboards"),
+        pytest.param(
+            [GrafanaPanelScreenshot(dashboard_title="Gemini")],
+            ["overview", "per-server-metrics-nemesis", "gemini"],
+            id="gemini-configured",
+        ),
     ],
 )
 def test_monitor_screenshots_extra_dashboards_only_when_configured(monkeypatch, panels, expected_names):

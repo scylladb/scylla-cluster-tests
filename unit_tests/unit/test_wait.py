@@ -35,75 +35,21 @@ class FakeClock:
         self.now = 0.0
 
     def monotonic(self):
+        """Return the simulated time in seconds."""
         return self.now
 
     def sleep(self, seconds):
+        """Advance simulated time by seconds instead of blocking."""
         self.now += seconds
 
 
 @pytest.fixture
 def fake_clock(monkeypatch):
+    """Patch tenacity's clock so retry waits advance a FakeClock instead of sleeping."""
     clock = FakeClock()
     monkeypatch.setattr("tenacity.time", clock)
     monkeypatch.setattr("tenacity.nap.time", clock)
     return clock
-
-
-def test_wait_simple(fake_clock):
-    calls = []
-
-    def callback(arg1, arg2):
-        calls.append((arg1, arg2))
-        raise Exception("error")
-
-    wait_for(callback, timeout=2, step=1, arg1=1, arg2=3, throw_exc=False)
-    assert len(calls) == 3
-
-
-def test_wait_throw_exc(fake_clock):
-    calls = []
-
-    def callback(arg1, arg2):
-        calls.append((arg1, arg2))
-        raise Exception("error")
-
-    with pytest.raises(Exception, match=r"error"):
-        wait_for(callback, throw_exc=True, timeout=4, step=1, arg1=1, arg2=3)
-    assert len(calls) == 5
-
-
-def test_wait_false_return(fake_clock):
-    calls = []
-
-    def callback(arg1, arg2):
-        calls.append((arg1, arg2))
-        return False
-
-    wait_for(callback, timeout=2, step=1, arg1=1, arg2=3, throw_exc=False)
-    assert len(calls) == 3
-
-
-def test_wait_false_return_reraise(fake_clock):
-    calls = []
-
-    def callback(arg1, arg2):
-        calls.append((arg1, arg2))
-        return False
-
-    with pytest.raises(Exception, match="callback: timeout - 4 seconds - expired"):
-        wait_for(callback, timeout=4, throw_exc=True, step=1, arg1=1, arg2=3)
-    assert len(calls) == 5
-
-
-def test_wait_return_value():
-    calls = []
-
-    def callback(arg1, arg2):
-        calls.append((arg1, arg2))
-        return "what ever"
-
-    assert wait_for(callback, timeout=0.2, step=0.1, arg1=1, arg2=3, throw_exc=False) == "what ever"
-    assert len(calls) == 1
 
 
 @pytest.fixture
@@ -123,8 +69,93 @@ def event_stop_state(fake_clock):
     return state
 
 
+class DummyNode(BaseNode):
+    """Minimal BaseNode subclass for log-following tests.
+
+    Inherits from BaseNode because wait_for_log_lines calls
+    node.follow_system_log which is implemented on BaseNode.
+    """
+
+    name = "node_1"
+    system_log = ""
+
+    def __init__(self, log_path):
+        self.system_log = log_path
+
+
+def write_to_file(filename, lines):
+    """Append each line to filename, pausing briefly between writes so a follower sees them one by one."""
+    for line in lines:
+        with open(filename, "a") as f:
+            f.write(f"{line}\n")
+        time.sleep(0.01)
+
+
+def test_wait_simple(fake_clock):
+    """wait_for with throw_exc=False retries a raising callback until the timeout and returns quietly."""
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        raise Exception("error")
+
+    wait_for(callback, timeout=2, step=1, arg1=1, arg2=3, throw_exc=False)
+    assert len(calls) == 3
+
+
+def test_wait_throw_exc(fake_clock):
+    """wait_for re-raises the callback's own exception once the timeout expires with throw_exc set."""
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        raise ValueError("error")
+
+    with pytest.raises(ValueError, match=r"error"):
+        wait_for(callback, throw_exc=True, timeout=4, step=1, arg1=1, arg2=3)
+    assert len(calls) == 5
+
+
+def test_wait_false_return(fake_clock):
+    """wait_for keeps retrying a falsy callback result until the timeout and returns quietly."""
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return False
+
+    wait_for(callback, timeout=2, step=1, arg1=1, arg2=3, throw_exc=False)
+    assert len(calls) == 3
+
+
+def test_wait_false_return_reraise(fake_clock):
+    """wait_for raises WaitForTimeoutError when a falsy result outlasts the timeout with throw_exc set."""
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return False
+
+    with pytest.raises(WaitForTimeoutError, match="callback: timeout - 4 seconds - expired"):
+        wait_for(callback, timeout=4, throw_exc=True, step=1, arg1=1, arg2=3)
+    assert len(calls) == 5
+
+
+def test_wait_return_value():
+    """wait_for returns the first truthy callback result without retrying."""
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return "what ever"
+
+    assert wait_for(callback, timeout=0.2, step=0.1, arg1=1, arg2=3, throw_exc=False) == "what ever"
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
 def test_stop_by_event(event_stop_state, throw_exc):
+    """Setting the stop event ends wait_for after the current attempt, raising or returning per throw_exc."""
     state = event_stop_state
     state.set_event_after = 1
     state.return_true_after = 3
@@ -147,6 +178,7 @@ def test_stop_by_event(event_stop_state, throw_exc):
 
 
 def test_stop_by_event_in_main_thread():
+    """Setting stop_event from another thread stops a wait_for running in a worker thread."""
     stop_event = threading.Event()
     first_call_done = threading.Event()
 
@@ -162,6 +194,7 @@ def test_stop_by_event_in_main_thread():
 
 
 def test_return_result_before_stop_event_and_wait_timeout(event_stop_state):
+    """A truthy result returned before the stop event is set is returned, not an error."""
     state = event_stop_state
     state.return_true_after = 2
     state.set_event_after = 4
@@ -171,6 +204,7 @@ def test_return_result_before_stop_event_and_wait_timeout(event_stop_state):
 
 
 def test_raise_by_timeout_before_set_event(event_stop_state):
+    """The timeout wins when it expires before the stop event is set."""
     state = event_stop_state
     state.set_event_after = 8
     state.return_true_after = 9
@@ -189,6 +223,7 @@ def test_raise_by_timeout_before_set_event(event_stop_state):
 
 @pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
 def test_raise_exception_in_func_before_set_event(event_stop_state, throw_exc):
+    """An exception raised by the callback before the stop event is retried until the event stops wait_for."""
     state = event_stop_state
     state.set_event_after = 5
 
@@ -236,28 +271,8 @@ def test_set_event_timeout_at_same_time(event_stop_state):
     assert len(state.calls) == 7
 
 
-class DummyNode(BaseNode):
-    """Minimal BaseNode subclass for log-following tests.
-
-    Inherits from BaseNode because wait_for_log_lines calls
-    node.follow_system_log which is implemented on BaseNode.
-    """
-
-    name = "node_1"
-    system_log = ""
-
-    def __init__(self, log_path):
-        self.system_log = log_path
-
-
-def write_to_file(filename, lines):
-    for line in lines:
-        with open(filename, "a") as f:
-            f.write(f"{line}\n")
-        time.sleep(0.01)
-
-
 def test_wait_for_log_start_line_and_end_line(tmp_path):
+    """wait_for_log_lines returns once the start and end patterns both appear in the log."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = [
@@ -279,6 +294,7 @@ def test_wait_for_log_start_line_and_end_line(tmp_path):
 
 
 def test_wait_for_log_timeout_when_no_start_line(tmp_path):
+    """wait_for_log_lines raises TimeoutError when the start pattern never appears in the log."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["end", "cde", "end"]  # no start line provided
@@ -295,6 +311,7 @@ def test_wait_for_log_timeout_when_no_start_line(tmp_path):
 
 
 def test_wait_for_log_timeout_when_no_end_line(tmp_path):
+    """wait_for_log_lines raises TimeoutError when the end pattern never appears after the start line."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["start", "cde", "start"]  # no start line provided
@@ -311,6 +328,7 @@ def test_wait_for_log_timeout_when_no_end_line(tmp_path):
 
 
 def test_wait_for_log_reraises_exception(tmp_path):
+    """An exception raised in the wait_for_log_lines body propagates unchanged."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["start", "cde", "end"]  # no start line provided
@@ -328,6 +346,7 @@ def test_wait_for_log_reraises_exception(tmp_path):
 
 
 def test_wait_for_log_reraises_exception_and_timeout_error(tmp_path):
+    """A TimeoutError from the missing start line is raised, with the body's ValueError kept in its traceback."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     file_path.touch()
@@ -342,6 +361,7 @@ def test_wait_for_log_reraises_exception_and_timeout_error(tmp_path):
 
 
 def test_wait_for_log_reraises_timeout_error_with_error_context(tmp_path):
+    """The end-line TimeoutError message includes the patterns and the error_msg_ctx given to wait_for_log_lines."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     # Provide lines that will not satisfy the end pattern so that a timeout occurs.

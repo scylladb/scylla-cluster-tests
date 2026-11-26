@@ -29,7 +29,7 @@ from sdcm.cluster_k8s.eks import EksScyllaPodCluster, EksScyllaPodContainer, Mon
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster, GkeScyllaPodContainer, MonitorSetGKE
 
 
-def _get_parent_method(child_cls, method_name):
+def get_parent_method(child_cls, method_name):
     """Walk the MRO to find the first parent class (after the child) that defines the method."""
     mro = inspect.getmro(child_cls)
     for parent_cls in mro[1:]:
@@ -38,7 +38,7 @@ def _get_parent_method(child_cls, method_name):
     return None
 
 
-def _check_signature_compatibility(parent_cls, child_cls, method_name):
+def check_signature_compatibility(parent_cls, child_cls, method_name):
     """Check that *child_cls.method_name* can be called with any argument combination valid for parent.
 
     Rules enforced:
@@ -87,7 +87,7 @@ def _check_signature_compatibility(parent_cls, child_cls, method_name):
 # Test data: (child_class, parent_class, method_name)
 # ---------------------------------------------------------------------------
 
-_OVERRIDE_PAIRS = [
+OVERRIDE_PAIRS = [
     # EKS overrides of AWS
     (MonitorSetEKS, AWSCluster, "_create_instances"),
     (MonitorSetEKS, AWSCluster, "_get_instances"),
@@ -102,15 +102,15 @@ _OVERRIDE_PAIRS = [
 
 @pytest.mark.parametrize(
     "child_cls, parent_cls, method_name",
-    _OVERRIDE_PAIRS,
-    ids=[f"{c.__name__}.{m}-vs-{p.__name__}" for c, p, m in _OVERRIDE_PAIRS],
+    OVERRIDE_PAIRS,
+    ids=[f"{c.__name__}.{m}-vs-{p.__name__}" for c, p, m in OVERRIDE_PAIRS],
 )
 def test_k8s_override_signature_compatible_with_parent(child_cls, parent_cls, method_name):
     """Child K8s class override must accept every parameter its cloud-provider parent accepts."""
     assert hasattr(child_cls, method_name), f"{child_cls.__name__} does not have method '{method_name}'"
     assert hasattr(parent_cls, method_name), f"{parent_cls.__name__} does not have method '{method_name}'"
 
-    errors = _check_signature_compatibility(parent_cls, child_cls, method_name)
+    errors = check_signature_compatibility(parent_cls, child_cls, method_name)
     assert not errors, (
         f"Signature incompatibility between {child_cls.__name__}.{method_name}() "
         f"and {parent_cls.__name__}.{method_name}():\n" + "\n".join(f"  - {e}" for e in errors)
@@ -144,13 +144,13 @@ def test_k8s_overrides_discovered_dynamically():
         }
 
         for method_name in child_methods:
-            parent_cls = _get_parent_method(child_cls, method_name)
+            parent_cls = get_parent_method(child_cls, method_name)
             if parent_cls is None:
                 continue  # New method, not an override
             if parent_cls.__name__ not in ancestor_names:
                 continue  # Not a cloud-provider ancestor
 
-            errors = _check_signature_compatibility(parent_cls, child_cls, method_name)
+            errors = check_signature_compatibility(parent_cls, child_cls, method_name)
             for err in errors:
                 all_errors.append(f"{child_cls.__name__} vs {parent_cls.__name__}: {err}")
 

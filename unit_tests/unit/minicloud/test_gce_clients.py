@@ -7,7 +7,7 @@ from google.api_core.client_options import ClientOptions
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import _gce_client_options
 
-_FAKE_GCP_INFO = {
+FAKE_GCP_INFO = {
     "project_id": "test-project",
     "type": "service_account",
     "client_email": "test@test-project.iam.gserviceaccount.com",
@@ -19,7 +19,7 @@ _FAKE_GCP_INFO = {
 }
 
 
-def _make_gce_region():
+def make_gce_region():
     """Build a GceRegion with the keystore and every GCP client patched out."""
     with (
         patch("sdcm.utils.gce_region.KeyStore") as mock_keystore_cls,
@@ -31,11 +31,12 @@ def _make_gce_region():
         patch("sdcm.utils.gce_region.compute_v1.RoutesClient"),
         patch("sdcm.utils.gce_region.storage.Client"),
     ):
-        mock_keystore_cls.return_value.get_gcp_credentials.return_value = _FAKE_GCP_INFO
+        mock_keystore_cls.return_value.get_gcp_credentials.return_value = FAKE_GCP_INFO
         return GceRegion("us-central1")
 
 
 def test_gce_client_options_returns_client_options_when_endpoint_set(monkeypatch):
+    """_gce_client_options wraps GCE_ENDPOINT_URL in ClientOptions."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:9099")
     result = _gce_client_options()
 
@@ -45,18 +46,21 @@ def test_gce_client_options_returns_client_options_when_endpoint_set(monkeypatch
 
 
 def test_gce_client_options_returns_empty_dict_when_no_endpoint():
+    """_gce_client_options returns {} when GCE_ENDPOINT_URL is unset."""
     result = _gce_client_options()
 
     assert result == {}
 
 
 def test_gce_region_is_minicloud_true_when_endpoint_set(monkeypatch):
+    """GceRegion is minicloud when GCE_ENDPOINT_URL is set."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:9099")
 
-    region = _make_gce_region()
+    region = make_gce_region()
     assert region._is_minicloud is True
 
 
 def test_gce_region_is_minicloud_false_when_no_endpoint():
-    region = _make_gce_region()
+    """GceRegion is not minicloud when GCE_ENDPOINT_URL is unset."""
+    region = make_gce_region()
     assert region._is_minicloud is False

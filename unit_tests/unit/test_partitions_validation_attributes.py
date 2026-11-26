@@ -13,6 +13,7 @@ from sdcm.utils.database_query_utils import PartitionsValidationAttributes
 
 
 def build_attrs(max_partitions=None, partition_range=None):
+    """Build PartitionsValidationAttributes with a mocked tester and the given partition settings."""
     return PartitionsValidationAttributes(
         tester=MagicMock(),
         table_name="scylla_bench.test",
@@ -23,6 +24,7 @@ def build_attrs(max_partitions=None, partition_range=None):
 
 
 def test_partition_range_attributes_default_without_validated_range():
+    """Without a validated range, start and end are 0 and the whole table counts as non-validated."""
     attrs = build_attrs(max_partitions="1000")
 
     assert attrs.partition_start_range == 0
@@ -32,6 +34,7 @@ def test_partition_range_attributes_default_without_validated_range():
 
 
 def test_partition_range_attributes_default_without_any_data_validation():
+    """Without data_validation, every partition attribute is defined and zero."""
     attrs = build_attrs()
 
     assert attrs.max_partitions_in_test_table is None
@@ -41,6 +44,7 @@ def test_partition_range_attributes_default_without_any_data_validation():
 
 
 def test_partition_range_attributes_with_validated_range():
+    """A validated range sets start and end and leaves the rest of the table non-validated."""
     attrs = build_attrs(max_partitions="1000", partition_range="0-800")
 
     assert attrs.partition_start_range == 0
@@ -49,13 +53,20 @@ def test_partition_range_attributes_with_validated_range():
 
 
 def test_non_validated_partitions_stays_zero_when_max_partitions_unset():
+    """Without max partitions, a validated range leaves non_validated_partitions at zero."""
     attrs = build_attrs(partition_range="0-800")
 
     assert attrs.partition_end_range == 800
     assert attrs.non_validated_partitions == 0
 
 
-@pytest.mark.parametrize("max_partitions,partition_range", [("400", "0-100"), ("10", "0-5")])
+@pytest.mark.parametrize(
+    "max_partitions,partition_range",
+    [
+        pytest.param("400", "0-100", id="large-table"),
+        pytest.param("10", "0-5", id="small-table"),
+    ],
+)
 def test_partition_range_attributes_are_always_defined(max_partitions, partition_range):
     """Every combination used by the shipped test-cases must expose all three attributes."""
     attrs = build_attrs(max_partitions=max_partitions, partition_range=partition_range)

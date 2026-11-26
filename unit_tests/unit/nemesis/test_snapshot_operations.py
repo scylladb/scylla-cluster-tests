@@ -9,6 +9,7 @@ from unit_tests.unit.nemesis import TestRunner
 
 
 def test_few_tables_snapshot_caps_table_count():
+    """few-tables snapshot passes at most MAX_NAMES_IN_CMD distinct tables to nodetool."""
     runner = TestRunner(ks_cfs=[f"ks.t{i}" for i in range(5000)])
     runner.target_node.run_nodetool.return_value.stdout = ""
     runner.random = random.Random()
@@ -27,6 +28,7 @@ def test_few_tables_snapshot_caps_table_count():
 
 
 def test_few_keyspaces_snapshot_caps_keyspace_count():
+    """few-keyspaces snapshot passes at most MAX_NAMES_IN_CMD distinct keyspaces to nodetool."""
     runner = TestRunner(ks_cfs=[f"ks{i}.t" for i in range(5000)])
     runner.target_node.run_nodetool.return_value.stdout = ""
     runner.random = random.Random()

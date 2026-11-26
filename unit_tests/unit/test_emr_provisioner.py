@@ -63,21 +63,24 @@ class MockParams:
         self._data.update(kwargs)
 
     def get(self, key, default=None):
+        """Get returns the value for key, or default when unset."""
         return self._data.get(key, default)
 
 
 @pytest.fixture()
 def emr_params():
+    """MockParams with the default EMR settings."""
     return MockParams()
 
 
 @pytest.fixture()
 def provisioner(iam_roles, emr_params):
+    """EmrClusterProvisioner in AWS_REGION with default params and IAM roles."""
     return EmrClusterProvisioner(region_name=AWS_REGION, params=emr_params)
 
 
 def test_create_emr_cluster(provisioner):
-    """Test creating an EMR cluster."""
+    """create_emr_cluster returns a j- cluster id and stores it on the provisioner."""
     cluster_id = provisioner.create_emr_cluster(
         test_id="test-1234-5678",
         user="test_user",
@@ -88,7 +91,7 @@ def test_create_emr_cluster(provisioner):
 
 
 def test_create_emr_cluster_has_required_tags(provisioner):
-    """Test that EMR cluster creation includes all SCP-required tags."""
+    """create_emr_cluster tags the cluster with all SCP-required tags."""
     provisioner.create_emr_cluster(
         test_id="test-tags-check",
         user="test_user",
@@ -110,14 +113,14 @@ def test_create_emr_cluster_has_required_tags(provisioner):
 
 
 def test_create_emr_cluster_has_ssh_key(provisioner):
-    """Test that EMR cluster creation includes the SSH key pair."""
+    """create_emr_cluster attaches the SCT SSH key pair."""
     provisioner.create_emr_cluster(test_id="test-ssh-key", user="test_user")
     ec2_attrs = provisioner.get_emr_cluster_description().get("Ec2InstanceAttributes", {})
     assert ec2_attrs.get("Ec2KeyName") == "scylla_test_id_ed25519"
 
 
 def test_create_emr_cluster_no_sct_security_groups(provisioner):
-    """Test that EMR cluster creation does not pass SCT security groups."""
+    """create_emr_cluster does not pass SCT security groups to EMR."""
     provisioner.create_emr_cluster(test_id="test-no-sct-sg", user="test_user")
     ec2_attrs = provisioner.get_emr_cluster_description().get("Ec2InstanceAttributes", {})
     # EMR should use its own managed SGs, not SCT's
@@ -125,7 +128,7 @@ def test_create_emr_cluster_no_sct_security_groups(provisioner):
 
 
 def test_get_emr_cluster_status(provisioner):
-    """Test getting EMR cluster status after creation."""
+    """get_emr_cluster_status returns a provisioning or running State after creation."""
     provisioner.create_emr_cluster(
         test_id="test-status-check",
         user="test_user",
@@ -136,7 +139,7 @@ def test_get_emr_cluster_status(provisioner):
 
 
 def test_get_emr_cluster_description(provisioner):
-    """Test getting full EMR cluster description."""
+    """get_emr_cluster_description returns the Id and Status of the created cluster."""
     provisioner.create_emr_cluster(
         test_id="test-describe",
         user="test_user",
@@ -163,7 +166,7 @@ def test_create_emr_cluster_explicit_log_uri_overrides_default():
 
 
 def test_terminate_emr_cluster(provisioner):
-    """Test terminating an EMR cluster."""
+    """terminate_emr_cluster moves the cluster to TERMINATING or TERMINATED."""
     provisioner.create_emr_cluster(
         test_id="test-terminate",
         user="test_user",
@@ -176,7 +179,7 @@ def test_terminate_emr_cluster(provisioner):
 
 
 def test_list_emr_clusters_by_tags(iam_roles):
-    """Test listing EMR clusters filtered by tags."""
+    """list_emr_clusters returns only clusters matching the given tags."""
     params = MockParams()
     prov = EmrClusterProvisioner(region_name=AWS_REGION, params=params)
 
@@ -205,7 +208,7 @@ def test_list_emr_clusters_uses_fail_fast_client_config():
 
 
 def test_build_instance_groups_default(provisioner):
-    """Test default instance groups configuration."""
+    """Default instance groups are an on-demand Master and a Core group of the configured size."""
     groups = provisioner._build_instance_groups()
     assert len(groups) == 2  # Master + Core
 
@@ -222,7 +225,7 @@ def test_build_instance_groups_default(provisioner):
 
 
 def test_build_instance_groups_with_task():
-    """Test instance groups with task nodes (Spot)."""
+    """Task nodes form a Spot group with the configured count and bid price."""
     params = MockParams(
         emr_instance_type_task="m5.xlarge",
         emr_instance_count_task=3,
@@ -241,7 +244,7 @@ def test_build_instance_groups_with_task():
 
 
 def test_add_step(provisioner):
-    """Test that add_step adds a generic step to the EMR cluster."""
+    """add_step adds a generic step to the EMR cluster and returns its id."""
     provisioner.create_emr_cluster(test_id="test-step", user="test_user")
     step_id = provisioner.add_step(
         cluster_id=provisioner.cluster_id,
@@ -253,7 +256,7 @@ def test_add_step(provisioner):
 
 
 def test_get_step_status(provisioner):
-    """Test getting step status."""
+    """get_step_status returns a State for an added step."""
     provisioner.create_emr_cluster(
         test_id="test-step-status",
         user="test_user",

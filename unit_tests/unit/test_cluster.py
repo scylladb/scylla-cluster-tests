@@ -14,7 +14,6 @@
 import importlib
 import inspect
 import logging
-import tempfile
 import threading
 import time
 import unittest.mock
@@ -51,904 +50,12 @@ from sdcm.utils.common import (
     keyspace_min_max_tokens,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.rpm import rpm_cmd
 from unit_tests.lib.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
 
-
-class TestBaseNode:
-    @pytest.fixture(autouse=True)
-    def setup_events(self, events_function_scope, tmp_path):
-        """Use per-test events fixture for proper isolation between tests."""
-        self._events = events_function_scope
-        self._tmp_path = tmp_path
-        self._init_node()
-
-    def _init_node(self):
-        if not hasattr(self, "_node"):
-            self._node = DummyNode(
-                name="test_node",
-                parent_cluster=None,
-                base_logdir=str(self._tmp_path),
-                ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-            )
-            self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
-            self._node.init()
-            self._node.remoter = DummyRemote()
-
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, setup_events, test_data_dir):  # noqa: ARG002
-        self.test_data_dir = test_data_dir
-        self.node.system_log = str(test_data_dir / "system.log")
-
-    @property
-    def node(self):
-        return self._node
-
-    @property
-    def _db_log_reader(self):
-        return DbLogReader(
-            system_log=self.node.system_log,
-            remoter=self.node.remoter,
-            node_name=str(self),
-            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
-            decoding_queue=None,
-            log_lines=False,
-            backtrace_stall_decoding=True,
-            backtrace_decoding_disable_regex=None,
-        )
-
-    def _read_and_publish_events(self, log_text=None):
-        if log_text:
-            with tempfile.NamedTemporaryFile(mode="wt") as temp_log:
-                self.node.system_log = temp_log.name
-                db_log_reader = self._db_log_reader
-
-                for line in log_text.splitlines(keepends=True):
-                    temp_log.write(line)
-                    temp_log.flush()
-                    db_log_reader._read_and_publish_events()
-        else:
-            self._db_log_reader._read_and_publish_events()
-
-    def test_search_system_log(self):
-        critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
-        assert 33 == len(critical_errors)
-
-    def test_search_system_log_specific_log(self):
-        errors = list(
-            self.node.follow_system_log(patterns=["Failed to load schema version"], start_from_beginning=True)
-        )
-        assert len(errors) == 2
-
-    def test_search_system_interlace_reactor_stall(self):
-        self.node.system_log = str(self.test_data_dir / "system_interlace_stall.log")
-
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        event_a, event_b = events[-2], events[-1]
-        print(event_a)
-        print(event_b)
-
-        assert event_a["type"] == "REACTOR_STALLED"
-        assert event_a["line_number"] == 0
-        assert event_b["type"] == "REACTOR_STALLED"
-        assert event_b["line_number"] == 3
-
-    def test_search_kernel_callstack(self):
-        self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
-        self.node.system_log = str(self.test_data_dir / "kernel_callstack.log")
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        event_a, event_b = events[-2], events[-1]
-        print(event_a)
-        print(event_b)
-
-        assert event_a["type"] == "KERNEL_CALLSTACK"
-        assert event_a["line_number"] == 2
-        assert event_b["type"] == "KERNEL_CALLSTACK"
-        assert event_b["line_number"] == 5
-
-    def test_search_cdc_invalid_request(self):
-        self.node.system_log = str(self.test_data_dir / "system_cdc_invalid_request.log")
-        with unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"):
-            with unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues") as skip_per_issues:
-                skip_per_issues.return_value = False
-                with ignore_upgrade_schema_errors():
-                    self._read_and_publish_events()
-
-        cdc_err_events = [
-            line
-            for line in self._events.get_events_by_category()["ERROR"]
-            if "cdc - Could not retrieve CDC streams" in line
-        ]
-        assert cdc_err_events != []
-
-    def test_search_power_off(self):
-        self.node.system_log = str(self.test_data_dir / "power_off.log")
-        with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
-            self._read_and_publish_events()
-
-        InstanceStatusEvent.POWER_OFF().add_info(
-            node="A",
-            line_number=22,
-            line=f"{datetime.fromtimestamp(time.time() + 1, tz=timezone.utc):%Y-%m-%dT%H:%M:%S+00:00} "
-            "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
-        ).publish()
-
-        events = [line for line in self._events.get_events_by_category()["WARNING"] if "Powering Off" in line]
-        assert events
-
-    def test_search_system_suppressed_messages(self):
-        self.node.system_log = str(self.test_data_dir / "system_suppressed_messages.log")
-
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        event_a = events[-1]
-        print(event_a)
-
-        assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
-        assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
-
-    def test_search_one_line_backtraces(self):
-        self.node.system_log = str(self.test_data_dir / "system_one_line_backtrace.log")
-
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        backtraces = [event for event in events if event["type"] == "BACKTRACE"]
-        assert len(backtraces) == 2
-        for event_backtrace in backtraces:
-            assert event_backtrace["raw_backtrace"]
-
-        oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
-        assert len(oversized_events) == 2
-        for event_oversized in oversized_events:
-            print(event_oversized)
-            assert event_oversized["raw_backtrace"]
-
-        print(events[-1])
-
-    def test_gate_closed_ignored_exception_is_catched(self):
-        self.node.system_log = str(self.test_data_dir / "gate_closed_ignored_exception.log")
-
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        event_backtrace1, event_backtrace2 = events[-2], events[-1]
-        print(event_backtrace1)
-        print(event_backtrace2)
-
-        assert event_backtrace1["type"] == "GATE_CLOSED"
-        assert event_backtrace1["line_number"] == 1
-        assert event_backtrace2["type"] == "GATE_CLOSED"
-        assert event_backtrace2["line_number"] == 3
-
-    def test_compaction_stopped_exception_is_catched(self):
-        self.node.system_log = str(self.test_data_dir / "compaction_stopped_exception.log")
-
-        self._read_and_publish_events()
-
-        events = self._events.published_events
-
-        event_backtrace1, event_backtrace2 = events[-3], events[-2]
-        print(event_backtrace1)
-        print(event_backtrace2)
-
-        assert event_backtrace1["type"] == "COMPACTION_STOPPED"
-        assert event_backtrace1["line_number"] == 0
-        assert event_backtrace2["type"] == "COMPACTION_STOPPED"
-        assert event_backtrace2["line_number"] == 1
-
-    def test_appending_to_log(self):
-        logs = """
-INFO  2022-07-14 09:28:34,095 [shard 1] database - Flushing non-system tables
-Reactor stalled for 32 ms on shard 1. Backtrace: 0x4e0d6e2 0x4e0c340 0x4e0d5f0 0x7f230af20a1f 0x14de339 0x14dc3b0 0x14d680c 0x14d5ff6 0x14e4d52 0x14d0238 0x1aec3c6 0x508c7e1
-kernel callstack:
-INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
-        """
-
-        self._read_and_publish_events(logs)
-
-        events = self._events.published_events
-        reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
-        assert len(reactor_stalls) == 1
-        event = reactor_stalls[0]
-        assert event["type"] == "REACTOR_STALLED"
-        assert event["line_number"] == 2
-        assert "Reactor stalled for 32 ms on shard 1" in event["line"]
-
-    def test_restart_suspends_kernel_panic_checker_around_restart_inner(self):
-        """BaseNode.restart() must suspend/resume the kernel panic checker around
-        `_restart_inner()`, mirroring `reboot()`'s existing suspend/resume window
-        (SCT-459). Backends whose `restart()` stops/starts or reboots the underlying
-        cloud instance (e.g. `OciNode._restart_inner()`) can otherwise trip a false
-        KernelPanicEvent while the instance is intentionally down (SCT-658).
-        """
-        call_order = []
-        checker = unittest.mock.MagicMock()
-        checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
-        checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
-        self.node.kernel_panic_checker = checker
-
-        with unittest.mock.patch.object(
-            self.node, "_restart_inner", side_effect=lambda: call_order.append("restart")
-        ) as mock_inner:
-            self.node.restart()
-
-        assert call_order == ["suspend", "restart", "resume"]
-        checker.suspended.assert_called_once()
-        mock_inner.assert_called_once()
-
-    def test_restart_without_kernel_panic_checker_calls_inner_directly(self):
-        self.node.kernel_panic_checker = None
-
-        with unittest.mock.patch.object(self.node, "_restart_inner") as mock_inner:
-            self.node.restart()
-
-        mock_inner.assert_called_once()
-
-    def test_restart_resumes_kernel_panic_checker_even_if_inner_raises(self):
-        call_order = []
-        checker = unittest.mock.MagicMock()
-        checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
-        checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
-        self.node.kernel_panic_checker = checker
-
-        def _boom():
-            call_order.append("restart")
-            raise RuntimeError("boom")
-
-        with unittest.mock.patch.object(self.node, "_restart_inner", side_effect=_boom):
-            with pytest.raises(RuntimeError):
-                self.node.restart()
-
-        assert call_order == ["suspend", "restart", "resume"]
-
-    def test_restart_inner_not_implemented_by_default(self):
-        """Derived classes that don't implement `_restart_inner()` must raise
-        NotImplementedError, same as before this refactor (previously `restart()`
-        itself raised NotImplementedError directly).
-        """
-        self.node.kernel_panic_checker = None
-
-        with pytest.raises(NotImplementedError):
-            self.node.restart()
-
-    @pytest.mark.parametrize(("node_type", "fail_on_ssh_lost"), [("loader", True), ("monitor", True), ("db", False)])
-    def test_kernel_panic_checker_fails_test_on_ssh_lost_except_for_db(self, node_type, fail_on_ssh_lost):
-        """Only db nodes are disrupted on purpose, so for loaders and monitors losing SSH must fail the test."""
-        checker = unittest.mock.MagicMock()
-        self.node.parent_cluster.params["enable_kernel_panic_checker"] = True
-
-        with (
-            unittest.mock.patch.object(self.node, "_create_kernel_panic_checker", return_value=checker),
-            unittest.mock.patch.object(
-                type(self.node), "node_type", new_callable=unittest.mock.PropertyMock, return_value=node_type
-            ),
-        ):
-            self.node._start_kernel_panic_checker()
-
-        assert checker.fail_on_ssh_lost is fail_on_ssh_lost
-        checker.start.assert_called_once()
-
-    def test_stop_task_threads_disarms_ssh_lost_failure(self):
-        """Teardown terminates the instance before stopping the checker, which must not fail the test."""
-        checker = unittest.mock.MagicMock()
-        checker.fail_on_ssh_lost = True
-        self.node.kernel_panic_checker = checker
-        self.node.termination_event.set()
-
-        self.node.stop_task_threads()
-
-        assert checker.fail_on_ssh_lost is False
-
-
-class VersionDummyRemote:
-    def __init__(self, test, results):
-        self.results = iter(results)
-
-    def run(self, cmd, *_, **__):
-        expected_cmd, result = next(self.results)
-        assert cmd == expected_cmd
-        return Result(exited=result[0], stdout=result[1], stderr=result[2])
-
-
-class TestBaseNodeGetScyllaVersion:
-    @pytest.fixture(autouse=True, scope="class")
-    def _class_tmp_dir(self, tmp_path_factory):
-        TestBaseNodeGetScyllaVersion.temp_dir = str(tmp_path_factory.mktemp("scylla_version"))
-
-    def setup_method(self):
-        self.node = DummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-        )
-        self.node.parent_cluster = DummyDbCluster([self.node])
-
-    def test_no_scylla_binary_rhel_like(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-                ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
-            ),
-        )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1" == self.node.scylla_version_detailed
-
-    def test_no_scylla_binary_other(self):
-        self.node.distro = Distro.DEBIAN11
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-                ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
-            ),
-        )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188-1" == self.node.scylla_version_detailed
-
-    def test_scylla(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_scylla_master(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "666.development" == self.node.scylla_version
-        assert "666.development-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_scylla_master_new_format(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_scylla_enterprise(self):
-        self.node.is_enterprise = True
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "2019.1.4" == self.node.scylla_version
-        assert "2019.1.4-0.20191217.b59e92dbd with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_scylla_enterprise_no_scylla_binary(self):
-        self.node.is_enterprise = True
-        self.node.is_product_enterprise = True
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-                ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
-            ),
-        )
-        assert "2019.1.4" == self.node.scylla_version
-        assert "2019.1.4" == self.node.scylla_version_detailed
-
-    def test_scylla_binary_version_unparseable(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "x.y.z\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert self.node.scylla_version is None
-        assert "x.y.z with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_get_scylla_version_from_second_attempt(self):
-        self.node.distro = Distro.DEBIAN11
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-                (
-                    "dpkg-query --show --showformat '${Version}' scylla",
-                    (1, "", "dpkg-query: no packages found matching scylla\n"),
-                ),
-                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-                (
-                    "dpkg-query --show --showformat '${Version}' scylla",
-                    (1, "", "dpkg-query: no packages found matching scylla\n"),
-                ),
-            ),
-        )
-        assert self.node.scylla_version is None
-        assert self.node.scylla_version_detailed is None
-
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
-
-    def test_forget_scylla_version(self):
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
-
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
-
-        self.node.forget_scylla_version()
-
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
-
-
-@pytest.mark.parametrize(
-    "distro, expected_cmd",
-    [
-        pytest.param(Distro.ROCKY9, "epel-release", id="rocky9"),
-        pytest.param(Distro.RHEL8, "epel-release-latest-8.noarch.rpm", id="rhel8"),
-        pytest.param(Distro.FEDORA44, None, id="fedora44"),
-    ],
-)
-def test_install_epel(distro, expected_cmd, tmp_path):
-    node = DummyNode(
-        name="test_node",
-        parent_cluster=None,
-        base_logdir=str(tmp_path),
-        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-    )
-    node.distro = distro
-    node.remoter = unittest.mock.MagicMock()
-
-    node.install_epel()
-
-    if expected_cmd is None:
-        node.remoter.run.assert_not_called()
-    else:
-        node.remoter.run.assert_called_once()
-        assert expected_cmd in node.remoter.run.call_args.args[0]
-
-
-def test_install_docker_on_fedora_installs_missing_docker():
-    node = unittest.mock.MagicMock()
-    node.remoter.run.return_value.ok = False
-
-    BaseLoaderSet._install_docker_on_fedora(node)
-
-    node.install_package.assert_called_once_with("moby-engine")
-    node.remoter.sudo.assert_called_once_with("systemctl enable --now docker", timeout=60)
-
-
-def test_install_docker_on_fedora_skips_present_docker():
-    node = unittest.mock.MagicMock()
-    node.remoter.run.return_value.ok = True
-
-    BaseLoaderSet._install_docker_on_fedora(node)
-
-    node.install_package.assert_not_called()
-    node.remoter.sudo.assert_not_called()
-
-
-class TestBaseMonitorSet:
-    @pytest.fixture(autouse=True, scope="class")
-    def _class_tmp_dir(self, tmp_path_factory):
-        TestBaseMonitorSet.temp_dir = str(tmp_path_factory.mktemp("monitor_set"))
-
-    def setup_method(self):
-        self.node = DummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-        )
-        self.db_cluster = DummyDbCluster([self.node])
-        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, params=SCTConfiguration())
-        self.monitor_cluster.log = logging
-
-    def test_monitoring_version(self):
-        """Verify that dev version are mapped to monitor master version"""
-        self.node.remoter = VersionDummyRemote(
-            self,
-            (
-                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-            ),
-        )
-        assert self.monitor_cluster.monitoring_version == "master"
-
-
-class TestNodetoolStatus:
-    def test_can_get_nodetool_status_typical(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
-        node = NodetoolDummyNode(resp=resp)
-        db_cluster = DummyScyllaCluster([node])
-
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {
-            "eastus": {
-                "10.0.59.34": {
-                    "state": "UN",
-                    "load": "21.71GB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "e5bcb094-e4de-43aa-8dc9-b1bf74b3b346",
-                    "rack": "1a",
-                },
-                "10.0.198.153": {
-                    "state": "UN",
-                    "load": "?",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "fba174cd-917a-40f6-ab62-cc58efaaf301",
-                    "rack": "1a",
-                },
-            }
-        }
-
-    def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
-        """Case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
-        resp = "Datacenter: datacenter1\n=======================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n-- Address    Load      Tokens Owns Host ID                              Rack \nUN 172.17.0.2 202.92 KB 256    ?    7b8f86bf-c70c-4246-a273-146057e12431 rack1"
-        node = NodetoolDummyNode(resp=resp)
-        db_cluster = DummyScyllaCluster([node])
-
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {
-            "datacenter1": {
-                "172.17.0.2": {
-                    "state": "UN",
-                    "load": "202.92KB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "7b8f86bf-c70c-4246-a273-146057e12431",
-                    "rack": "rack1",
-                },
-            }
-        }
-
-    def test_datacenter_name_per_region(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
-        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
-        db_cluster = DummyScyllaCluster([node1, node2, node3])
-        setattr(db_cluster, "params", {"use_zero_nodes": False})
-        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
-        assert datacenter_name_per_region == {"east-us": "eastus", "west-us": "westus"}
-
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1])
-        assert datacenter_name_per_region == {"east-us": "eastus"}
-
-    def test_datacenter_name_per_region_when_region_doesnt_have_live_nodes(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
-        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", db_up=False)
-        db_cluster = DummyScyllaCluster([node1, node2, node3])
-        setattr(db_cluster, "params", {"use_zero_nodes": False})
-        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
-        assert datacenter_name_per_region == {"east-us": "eastus"}
-
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node3])
-        assert datacenter_name_per_region == {}
-
-    def test_datacenter_name_per_region_when_first_node_is_dn(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", db_up=False)
-        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
-        db_cluster = DummyScyllaCluster([node1, node2, node3])
-        setattr(db_cluster, "params", {"use_zero_nodes": False})
-        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
-        assert datacenter_name_per_region == {"east-us": "eastus", "west-us": "westus"}
-
-        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1, node2])
-        assert datacenter_name_per_region == {"east-us": "eastus"}
-
-    def test_get_rack_names_per_datacenter_and_rack_idx(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", myrack=1)
-        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153", myrack=1)
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", myrack=2)
-        db_cluster = DummyScyllaCluster([node1, node2, node3])
-        setattr(db_cluster, "params", {"use_zero_nodes": False})
-        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
-        datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx()
-        assert datacenter_name_per_region == {("east-us", "1"): "1a", ("west-us", "2"): "2a"}
-
-        datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[node1])
-        assert datacenter_name_per_region == {("east-us", "1"): "1a"}
-
-        nodes_per_region = db_cluster.get_nodes_per_datacenter_and_rack_idx()
-        assert nodes_per_region == {
-            ("east-us", "1"): [node1, node2],
-            ("west-us", "2"): [
-                node3,
-            ],
-        }
-
-    def test_can_get_nodetool_status_ipv6(self):
-        resp = "Datacenter: eu-north\n====================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address                                 Load       Tokens       Owns    Host ID                Rack\nUN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a\nUN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a"
-        node = NodetoolDummyNode(resp=resp)
-        db_cluster = DummyScyllaCluster([node])
-
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {
-            "eu-north": {
-                "2a05:d016:cf8:de00:e07d:5832:c5c0:36a0": {
-                    "state": "UN",
-                    "load": "774KB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "e2ed6943",
-                    "rack": "1a",
-                },
-                "2a05:d016:cf8:de00:339e:d0d:9446:1980": {
-                    "state": "UN",
-                    "load": "1.04MB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "d67e8502",
-                    "rack": "1a",
-                },
-            }
-        }
-
-    def test_can_get_nodetool_status_azure(self):
-        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  \nUN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1\nUN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  \n"
-        node = NodetoolDummyNode(resp=resp)
-        db_cluster = DummyScyllaCluster([node])
-
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {
-            "eastus": {
-                "10.0.0.4": {
-                    "host_id": "ed6af9a0-8c22-4813-ac9b-6fbeb462b687",
-                    "load": "431KB",
-                    "owns": "?",
-                    "rack": "",
-                    "state": "UN",
-                    "tokens": "256",
-                },
-                "10.0.0.5": {
-                    "host_id": "caa15869-cfb4-4229-85d7-0f4832986237",
-                    "load": "612KB",
-                    "owns": "?",
-                    "rack": "1",
-                    "state": "UN",
-                    "tokens": "256",
-                },
-                "10.0.0.6": {
-                    "host_id": "3046ded9-ce17-4a3a-ac44-a3ada6916972",
-                    "load": "806KB",
-                    "owns": "?",
-                    "rack": "",
-                    "state": "UN",
-                    "tokens": "256",
-                },
-            }
-        }
-
-    def test_can_get_nodetool_status_oci_hyphenated_rack(self):
-        """OCI rack names contain hyphens (e.g., iad-ad-1). Verify they are parsed fully."""
-        resp = "Datacenter: iad\n===============\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address      Load       Tokens  Owns    Host ID                               Rack\nUN  10.0.3.109   77.79 GB   256     ?       6367305e-5b28-464c-8f0f-c18094822bbf  iad-ad-1\nUN  10.0.3.112   65.23 GB   256     ?       a1b2c3d4-e5f6-7890-abcd-ef1234567890  iad-ad-2\nUN  10.0.3.130   70.11 GB   256     ?       deadbeef-cafe-babe-dead-beefcafebabe  iad-ad-3"
-        node = NodetoolDummyNode(resp=resp)
-        db_cluster = DummyScyllaCluster([node])
-
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {
-            "iad": {
-                "10.0.3.109": {
-                    "state": "UN",
-                    "load": "77.79GB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "6367305e-5b28-464c-8f0f-c18094822bbf",
-                    "rack": "iad-ad-1",
-                },
-                "10.0.3.112": {
-                    "state": "UN",
-                    "load": "65.23GB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                    "rack": "iad-ad-2",
-                },
-                "10.0.3.130": {
-                    "state": "UN",
-                    "load": "70.11GB",
-                    "tokens": "256",
-                    "owns": "?",
-                    "host_id": "deadbeef-cafe-babe-dead-beefcafebabe",
-                    "rack": "iad-ad-3",
-                },
-            }
-        }
-
-
-@pytest.mark.parametrize(
-    "cat_results,expected_core_number",
-    (
-        ("1", 1),
-        ("2", 1),
-        ("9", 1),
-        ("10", 1),
-        ("11", 1),
-        ("1-7", 7),
-        ("2-7", 6),
-        ("1-6", 6),
-        ("2-6", 5),
-        ("1-7,9", 8),
-        ("1,9-15", 8),
-        ("1-7,9-15", 14),
-        ("2-7,10-15", 12),
-        ("1-7,9-15,17-23", 21),
-        ("1-7,9-15,17", 15),
-        ("1-7,9,17-23", 15),
-        ("1,9-15,17-23", 15),
-        ("1,9,17", 3),
-        ("1,9-15,17", 9),
-        ("1-7,9,17", 9),
-        ("1,9,17-23", 9),
-        ("1-7,9-15,17-23,25-31", 28),
-        ("1,9-15,17-23,25-31", 22),
-        ("1-7,9,17-23,25-31", 22),
-        ("1-7,9-15,23,25-31", 22),
-        ("1-7,9-15,17-23,31", 22),
-        ("1-7,15,17,25-31", 16),
-        ("1,9-15,17-23,31", 16),
-        ("1,15,17-23,31", 10),
-        ("1,15,17,31", 4),
-        ("1,9-15,17,25-31", 16),
-        ("1-7,9,17-23,25", 16),
-    ),
-)
-def test_base_node_cpuset(cat_results, expected_core_number, tmp_path):
-    dummy_node = DummyNode(
-        name="dummy_node",
-        parent_cluster=None,
-        base_logdir=str(tmp_path),
-        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-    )
-    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
-    dummy_node.init()
-    cat_results_obj = type("FakeGrepResults", (), {"stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'})
-    dummy_node.remoter = type(
-        "FakeRemoter",
-        (),
-        {
-            "run": (lambda *args, **kwargs: cat_results_obj),
-        },
-    )
-
-    cpuset_value = dummy_node.cpuset
-
-    assert isinstance(cpuset_value, int)
-    assert cpuset_value == expected_core_number
-
-
-@pytest.mark.parametrize(
-    "cat_results",
-    (
-        "",
-        "# one comment-line file",
-        "# first comment line\n# second comment line",
-        "# first comment line\n# second comment linei\n # third comment line",
-        '# CPUSET="--cpuset 1-7,9-15,17-23,31\' "',
-    ),
-)
-def test_base_node_cpuset_not_configured(cat_results, tmp_path):
-    dummy_node = DummyNode(
-        name="dummy_node",
-        parent_cluster=None,
-        base_logdir=str(tmp_path),
-        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
-    )
-    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
-    dummy_node.init()
-    cat_results_obj = type("FakeCatResults", (), {"stdout": cat_results})
-    dummy_node.remoter = type(
-        "FakeRemoter",
-        (),
-        {
-            "run": (lambda *args, **kwargs: cat_results_obj),
-        },
-    )
-    assert dummy_node.cpuset == ""
-
-
-class TestNodetool:
-    def test_describering_parsing(self):
-        """Test "nodetool describering" output parsing"""
-        resp = "Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:\nTokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])\nTokenRange(start_token:9154793403047166459, end_token:9156354786201613199, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])"
-        node = NodetoolDummyNode(resp=resp)
-        ranges = get_keyspace_partition_ranges(node=node, keyspace="")
-        assert ranges == [
-            {
-                "start_token": -9193109213506951143,
-                "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
-                "end_token": 9202125676696964746,
-                "endpoints": "127.0.49.3",
-                "rpc_endpoints": "127.0.49.3",
-            },
-            {
-                "start_token": 9154793403047166459,
-                "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
-                "end_token": 9156354786201613199,
-                "endpoints": "127.0.49.3",
-                "rpc_endpoints": "127.0.49.3",
-            },
-        ]
-
-        min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
-        assert min_token == -9193109213506951143
-        assert max_token == 9202125676696964746
-
-
-def test_base_node_init_with_none_ssh_login_info():
-    """Verify that node initialization does not crash when ssh_login_info is not defined."""
-    node = LocalNode(
-        name="test_local_node",
-        parent_cluster=DummyDbCluster(nodes=[]),
-    )
-
-    node.init()
-
-    assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"
-
-
 # backend modules whose `BaseNode` subclasses must be loaded into the class hierarchy
-_BACKEND_MODULES = (
+BACKEND_MODULES = (
     "sdcm.cluster_aws",
     "sdcm.cluster_azure",
     "sdcm.cluster_baremetal",
@@ -963,10 +70,79 @@ _BACKEND_MODULES = (
     "sdcm.utils.docker_remote",
 )
 
+# classes that use cloud-SDK clients in __init__ and need those patched out during construction
+INIT_CONSTRUCT_PATCHES: dict[str, tuple[str, ...]] = {
+    "GCENode": ("sdcm.cluster_gce.GceLoggingClient",),
+}
 
-def _all_base_node_subclasses() -> list[type]:
+# `BaseNode.__init__` kwargs a subclass intentionally does NOT accept.
+NO_SSH = frozenset({"ssh_login_info"})
+NO_DC_RACK = frozenset({"dc_idx", "rack"})
+NARROWED_KWARGS: dict[str, frozenset[str]] = {
+    "AWSNode": NO_SSH,
+    "AzureNode": NO_SSH,
+    "BasePodContainer": NO_SSH,
+    "CloudManagerNode": NO_SSH,
+    "CloudNode": NO_SSH,
+    "CloudVSNode": NO_SSH,
+    "GCENode": NO_SSH,
+    "LoaderPodContainer": NO_SSH,
+    "OciNode": NO_SSH,
+    "VectorStoreAWSNode": NO_SSH,
+    "DockerLoaderNode": NO_DC_RACK,
+    "DockerMonitoringNode": NO_DC_RACK,
+    "DockerNode": NO_DC_RACK,
+    "VectorStoreDockerNode": NO_DC_RACK,
+    "PhysicalMachineNode": NO_DC_RACK | NO_SSH,
+    "RemoteDocker": NO_DC_RACK | NO_SSH | frozenset({"base_logdir", "node_prefix"}),
+}
+
+MINICLOUD_BASE_SCYLLA_ARGS = "--blocked-reactor-notify-ms 25 --abort-on-seastar-bad-alloc"
+
+# the ruleset the OCI images ship: SSH is accepted, everything else gets an ICMP host-prohibited
+OCI_IMAGE_RULESET = """\
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+-A FORWARD -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+"""
+
+CVE_2026_98432_TABLE_DUMP = """\
+table inet cve_2026_98432 {
+	chain input {
+		type filter hook input priority -310; policy accept;
+		ip protocol tcp ip hdrlength > 5 counter packets 0 bytes 0 drop
+	}
+}
+"""
+
+VECTOR_JOURNAL = "vector[4710]: ERROR vector::config::loading: Config file not found in path"
+VECTOR_RESET = "systemctl reset-failed vector.service"
+VECTOR_RESTART = "systemctl restart vector.service"
+
+
+class VersionDummyRemote:
+    """Remoter that replays (expected command, result) pairs in order."""
+
+    def __init__(self, results):
+        """Queue the expected commands and their canned results."""
+        self.results = iter(results)
+
+    def run(self, cmd, *_, **__):
+        """Check the next expected command and return its canned result."""
+        expected_cmd, result = next(self.results)
+        assert cmd == expected_cmd
+        return Result(exited=result[0], stdout=result[1], stderr=result[2])
+
+
+def all_base_node_subclasses() -> list[type]:
     """Return all `BaseNode` subclasses from the `sdcm` package, excluding test fixtures."""
-    for module_name in _BACKEND_MODULES:
+    for module_name in BACKEND_MODULES:
         importlib.import_module(module_name)
 
     all_subclasses = set()
@@ -981,35 +157,7 @@ def _all_base_node_subclasses() -> list[type]:
     return sorted(production, key=lambda c: c.__name__)
 
 
-# classes that use cloud-SDK clients in __init__ and need those patched out during construction
-_INIT_CONSTRUCT_PATCHES: dict[str, tuple[str, ...]] = {
-    "GCENode": ("sdcm.cluster_gce.GceLoggingClient",),
-}
-
-# `BaseNode.__init__` kwargs a subclass intentionally does NOT accept.
-_NO_SSH = frozenset({"ssh_login_info"})
-_NO_DC_RACK = frozenset({"dc_idx", "rack"})
-_NARROWED_KWARGS: dict[str, frozenset[str]] = {
-    "AWSNode": _NO_SSH,
-    "AzureNode": _NO_SSH,
-    "BasePodContainer": _NO_SSH,
-    "CloudManagerNode": _NO_SSH,
-    "CloudNode": _NO_SSH,
-    "CloudVSNode": _NO_SSH,
-    "GCENode": _NO_SSH,
-    "LoaderPodContainer": _NO_SSH,
-    "OciNode": _NO_SSH,
-    "VectorStoreAWSNode": _NO_SSH,
-    "DockerLoaderNode": _NO_DC_RACK,
-    "DockerMonitoringNode": _NO_DC_RACK,
-    "DockerNode": _NO_DC_RACK,
-    "VectorStoreDockerNode": _NO_DC_RACK,
-    "PhysicalMachineNode": _NO_DC_RACK | _NO_SSH,
-    "RemoteDocker": _NO_DC_RACK | _NO_SSH | frozenset({"base_logdir", "node_prefix"}),
-}
-
-
-def _build_init_kwargs(cls: type) -> dict:
+def build_init_kwargs(cls: type) -> dict:
     """Build the minimal kwargs needed to construct `cls` for this test."""
     kwargs: dict[str, object] = {}
     constructor_params = inspect.signature(cls.__init__).parameters
@@ -1027,7 +175,7 @@ def _build_init_kwargs(cls: type) -> dict:
             continue
         kwargs[name] = unittest.mock.MagicMock(name=name)
 
-    narrowed_kwargs = _NARROWED_KWARGS.get(cls.__name__, frozenset())
+    narrowed_kwargs = NARROWED_KWARGS.get(cls.__name__, frozenset())
     for name, param in inspect.signature(BaseNode.__init__).parameters.items():
         if param.default is inspect.Parameter.empty or name in kwargs or name in narrowed_kwargs:
             continue
@@ -1036,21 +184,9 @@ def _build_init_kwargs(cls: type) -> dict:
     return kwargs
 
 
-@pytest.mark.parametrize("cls", _all_base_node_subclasses(), ids=lambda cls: cls.__name__)
-def test_base_node_subclass_constructs_with_forwarded_kwargs(cls, monkeypatch):
-    """Verify each `BaseNode` subclass can be constructed polymorphically."""
-    if "__init__" not in cls.__dict__:
-        pytest.skip(f"{cls.__name__} inherits __init__ from a parent")
-
-    for target in _INIT_CONSTRUCT_PATCHES.get(cls.__name__, ()):
-        monkeypatch.setattr(target, unittest.mock.MagicMock())
-
-    cls(**_build_init_kwargs(cls))
-
-
-def _cluster_classes_overriding_create_node() -> list[type]:
+def cluster_classes_overriding_create_node() -> list[type]:
     """Return all `BaseCluster` subclasses from the `sdcm` package that override `_create_node`."""
-    for module_name in _BACKEND_MODULES:
+    for module_name in BACKEND_MODULES:
         importlib.import_module(module_name)
 
     all_subclasses = set()
@@ -1067,7 +203,7 @@ def _cluster_classes_overriding_create_node() -> list[type]:
     return sorted(production, key=lambda c: c.__name__)
 
 
-def _parent_create_node_kwargs(cls: type) -> dict | None:
+def parent_create_node_kwargs(cls: type) -> dict | None:
     """Build kwargs from the closest ancestor's `_create_node` signature, or None if no ancestor defines it."""
     for ancestor in cls.__mro__[1:]:
         if "_create_node" not in ancestor.__dict__:
@@ -1084,37 +220,7 @@ def _parent_create_node_kwargs(cls: type) -> dict | None:
     return None
 
 
-@pytest.mark.parametrize("cls", _cluster_classes_overriding_create_node(), ids=lambda cls: cls.__name__)
-def test_cluster_create_node_accepts_parent_kwargs(cls):
-    """Verify every `_create_node` override accepts the kwargs its parent's `add_nodes` forwards.
-
-    Bypasses cluster `__init__` via `__new__` — Python validates kwargs at the call
-    boundary before the body runs, so any TypeError about unexpected/missing/duplicate
-    kwargs surfaces a signature mismatch. Other exceptions come from the body running
-    against the bare cluster, which is unrelated to what we're checking.
-    """
-    kwargs = _parent_create_node_kwargs(cls)
-    if kwargs is None:
-        pytest.skip(f"{cls.__name__} has no ancestor with `_create_node`")
-
-    try:
-        cls._create_node(cls.__new__(cls), **kwargs)
-    except TypeError as exc:
-        if any(phrase in str(exc) for phrase in ("unexpected keyword argument", "got multiple values", "missing ")):
-            raise
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def test_ip_address_ignores_empty_scylla_network_configuration():
-    """Empty Scylla network config should fall back to the legacy private IP path."""
-    node = unittest.mock.MagicMock()
-    node.scylla_network_configuration = ScyllaNetworkConfiguration([], [])
-    node.test_config = unittest.mock.MagicMock(IP_SSH_CONNECTIONS="private", INTRA_NODE_COMM_PUBLIC=False)
-    assert BaseNode.ip_address.fget(node) == node.private_ip_address
-
-
-def _network_config_with_broadcast_on_primary():
+def network_config_with_broadcast_on_primary():
     """`scylla_addresses_on_different_interfaces.yaml`: broadcast_address stays on nic 0."""
     interfaces = [
         NetworkInterface(
@@ -1143,49 +249,7 @@ def _network_config_with_broadcast_on_primary():
     )
 
 
-def test_secondary_network_interface_is_never_the_one_used_for_ssh():
-    """The network nemesis must never take down the interface carrying `test_communication`.
-
-    Downing it would cut the SSH connection the nemesis needs to bring the interface back up.
-    Following `broadcast_address` instead is not enough: it can sit on the very same interface.
-    """
-    node = unittest.mock.MagicMock()
-    network_config = _network_config_with_broadcast_on_primary()
-    node.scylla_network_configuration = network_config
-
-    assert network_config.device == "ens4", "broadcast_address is on the interface used for SSH"
-    assert BaseNode._secondary_network_interface_name(node) == "ens5"
-
-    # SSH over the secondary interface: the primary one becomes the safe target
-    for address_config in network_config.scylla_network_config:
-        if address_config["address"] == "test_communication":
-            address_config["nic"] = 1
-    assert BaseNode._secondary_network_interface_name(node) == "ens4"
-
-    node.scylla_network_configuration = None
-    assert BaseNode._secondary_network_interface_name(node) == "eth1", "backends without network config use eth1"
-
-
-def test_traffic_control_targets_the_secondary_interface():
-    """Tc commands must shape nic 1, resolved the same way the interface nemesis resolves it."""
-    node = unittest.mock.MagicMock()
-    node.scylla_network_configuration = _network_config_with_broadcast_on_primary()
-    node._secondary_network_interface_name = BaseNode._secondary_network_interface_name.__get__(node)
-
-    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
-        local_runner.run.return_value.stdout = "tc qdisc del dev ens5 root"
-        BaseNode.traffic_control(node)
-    local_runner.run.assert_called_once_with("tcdel ens5 --tc-command", ignore_status=True)
-    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc del dev ens5 root"', ignore_status=True)
-
-    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
-        local_runner.run.return_value.stdout = "tc qdisc add dev ens5 root netem loss 5%"
-        BaseNode.traffic_control(node, "--loss 5%")
-    local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
-    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
-
-
-def _node_for_str(instance_type="i4i.4xlarge", ip_ssh_connections="private"):
+def node_for_str(instance_type="i4i.4xlarge", ip_ssh_connections="private"):
     """A node stub whose only working attributes are the ones `__str__` is allowed to touch."""
     node = unittest.mock.MagicMock()
     node.name = "longevity-db-node-1"
@@ -1206,6 +270,1172 @@ def _node_for_str(instance_type="i4i.4xlarge", ip_ssh_connections="private"):
     return node
 
 
+def append_minicloud_reserve(args, **params):
+    """Run the append hook against a stand-in cluster: it only reads params and logs."""
+    defaults = {
+        "minicloud_endpoint_url": "http://localhost:5000",
+        "minicloud_scylla_reserve_memory": "3G",
+        "minicloud_lightweight_memory": "8GiB",
+        "minicloud_lightweight_vcpus": 2,
+    }
+    cluster = SimpleNamespace(params={**defaults, **params}, log=unittest.mock.MagicMock())
+    return BaseScyllaCluster._append_minicloud_reserve_memory(cluster, args)
+
+
+def drop_minicloud_memory_lock(**params) -> unittest.mock.MagicMock:
+    """Run the memory.conf hook against a stand-in cluster and return the node it touched."""
+    cluster = SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000", **params})
+    node = unittest.mock.MagicMock()
+    BaseScyllaCluster._drop_minicloud_scylla_memory_lock(cluster, node)
+    return node
+
+
+def append_cpu_overcommit(args):
+    """Run the polling hook against a stand-in minicloud cluster: it only reads params and logs."""
+    params = {"minicloud_endpoint_url": "http://localhost:5000", "minicloud_scylla_overcommitted_cpu": True}
+    cluster = SimpleNamespace(params=params, log=unittest.mock.MagicMock())
+    return BaseScyllaCluster._append_minicloud_cpu_overcommit(cluster, args)
+
+
+def minicloud_ca_commands(monkeypatch, **params):
+    """Run the real method against a stand-in node and return the commands it ran."""
+    for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
+        monkeypatch.delenv(var, raising=False)
+    commands = []
+    node = SimpleNamespace(
+        parent_cluster=SimpleNamespace(params=params),
+        distro=SimpleNamespace(is_rhel_like=False),
+        remoter=SimpleNamespace(sudo=commands.append),
+    )
+    BaseNode.install_minicloud_ca(node)
+    return commands
+
+
+@pytest.fixture
+def firewall_node():
+    """Build a bare `BaseNode` whose remoter reports the given rules - real methods, no stubs.
+
+    The rules are returned for whichever dump command is asked for; a command listed in
+    `failing` fails instead, which is how a node with a broken or half-installed netfilter
+    tooling behaves.
+    """
+
+    def _build(rules: str = "", debian: bool = True, failing: tuple = ()):
+        node = BaseNode.__new__(BaseNode)
+        node.name = "test-node"
+        node.log = logging.getLogger("test-node")
+        node.distro = unittest.mock.Mock(is_rhel_like=not debian, is_debian_like=debian)
+        node.remoter = unittest.mock.Mock()
+
+        def _sudo(command, **_):
+            if any(failed in command for failed in failing):
+                return unittest.mock.Mock(ok=False, return_code=1, stdout="", stderr="not permitted")
+            dump = rules if any(tool in command for tool in ("iptables-save", "nft list")) else ""
+            return unittest.mock.Mock(ok=True, return_code=0, stdout=dump, stderr="")
+
+        node.remoter.sudo.side_effect = _sudo
+        return node
+
+    return _build
+
+
+def nft_node(nft_ruleset: str) -> BaseNode:
+    """A bare `BaseNode` whose `nft list` returns nft_ruleset and every other sudo command succeeds silently."""
+    node = BaseNode.__new__(BaseNode)
+    node.name, node.log = "test-node", logging.getLogger("test-node")
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
+        ok=True, return_code=0, stdout=nft_ruleset if "nft list" in command else "", stderr=""
+    )
+    return node
+
+
+def node_waiting_for_db_up(firewall_node, db_up):
+    """A node whose `db_up()` follows the `db_up` side effects, with the diagnostics mocked out."""
+    node = firewall_node()
+    node.stop_wait_db_up_event = threading.Event()
+    node.verify_cql_address_resolvable = unittest.mock.Mock()
+    node.db_up = unittest.mock.Mock(side_effect=db_up)
+    node.log_cql_unreachable_diagnostics = unittest.mock.Mock()
+    return node
+
+
+def node_to_terminate(tmp_path, node_type, **kwargs):
+    """A stand-in node of `node_type` whose destroy() is a mock."""
+    # No scylla_shards attribute: reading it would mean SSH to a node that may be dead
+    return SimpleNamespace(
+        name=f"{node_type}-node-1",
+        node_type=node_type,
+        logdir=str(tmp_path / f"{node_type}-node-1"),
+        ip_address="10.4.0.201",
+        public_ip_address="63.34.198.130",
+        private_ip_address="10.4.0.201",
+        running_nemesis=None,
+        destroy=unittest.mock.Mock(),
+        **kwargs,
+    )
+
+
+def cluster_terminating(node, tmp_path):
+    """A stand-in cluster holding only `node`, for BaseCluster.terminate_node."""
+    return SimpleNamespace(
+        dead_nodes_ip_address_list=[],
+        dead_nodes_list=[],
+        nodes=[node],
+        test_config=unittest.mock.Mock(),
+        logdir=str(tmp_path),
+        params={},
+        log=logging.getLogger(__name__),
+    )
+
+
+@pytest.fixture
+def vector_node(monkeypatch):
+    """A bare `BaseNode` whose journal shows the Vector config error, with short Vector waits."""
+    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_TIMEOUT", 0.2)
+    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_CHECK_STEP", 0.05)
+    monkeypatch.setattr("sdcm.cluster.VECTOR_SETTLE_TIME", 0)
+    node = BaseNode.__new__(BaseNode)
+    node.name = "node-1"
+    node.log = unittest.mock.Mock()
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.return_value = SimpleNamespace(stdout=VECTOR_JOURNAL)
+    return node
+
+
+def vector_sudo_commands(node):
+    """The command strings sent to `node` through sudo, in order."""
+    return [call.args[0] for call in node.remoter.sudo.call_args_list]
+
+
+@pytest.fixture
+def base_node(test_data_dir, tmp_path):
+    """A DummyNode with an init()ed DummyRemote, whose system log is the default test data log."""
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster(nodes=[node])
+    node.init()
+    node.remoter = DummyRemote()
+    node.system_log = str(test_data_dir / "system.log")
+    return node
+
+
+def build_db_log_reader(node):
+    """A DbLogReader over the node's current system log."""
+    return DbLogReader(
+        system_log=node.system_log,
+        remoter=node.remoter,
+        node_name=node.name,
+        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+        decoding_queue=None,
+        log_lines=False,
+        backtrace_stall_decoding=True,
+        backtrace_decoding_disable_regex=None,
+    )
+
+
+def read_and_publish_events(node):
+    """Read the node's system log once and publish the events found in it."""
+    build_db_log_reader(node)._read_and_publish_events()
+
+
+def read_log_text_and_publish_events(node, tmp_path, log_text):
+    """Append log_text to a fresh system log line by line, reading the events after each line."""
+    log_file = tmp_path / "live-system.log"
+    log_file.touch()
+    node.system_log = str(log_file)
+    db_log_reader = build_db_log_reader(node)
+
+    with log_file.open("w") as live_log:
+        for line in log_text.splitlines(keepends=True):
+            live_log.write(line)
+            live_log.flush()
+            db_log_reader._read_and_publish_events()
+
+
+@pytest.fixture
+def version_node(tmp_path):
+    """A DummyNode whose remoter each test replaces with a VersionDummyRemote."""
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster([node])
+    return node
+
+
+@pytest.fixture
+def db_node(tmp_path):
+    """A DummyNode that a monitor set watches."""
+    return DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+
+
+@pytest.fixture
+def monitor_set(db_node):
+    """A BaseMonitorSet watching db_node."""
+    db_cluster = DummyDbCluster([db_node])
+    monitor_cluster = BaseMonitorSet({"db_cluster": db_cluster}, params=SCTConfiguration())
+    monitor_cluster.log = logging
+    return monitor_cluster
+
+
+def test_search_system_log(base_node):
+    """follow_system_log finds the 33 critical errors in the default system log."""
+    critical_errors = list(base_node.follow_system_log(start_from_beginning=True))
+    assert 33 == len(critical_errors)
+
+
+def test_search_system_log_specific_log(base_node):
+    """follow_system_log with patterns returns only the lines matching them."""
+    errors = list(base_node.follow_system_log(patterns=["Failed to load schema version"], start_from_beginning=True))
+    assert len(errors) == 2
+
+
+def test_search_system_interlace_reactor_stall(events_function_scope, base_node, test_data_dir):
+    """Reactor stalls interlaced with other log lines are published with their line numbers."""
+    base_node.system_log = str(test_data_dir / "system_interlace_stall.log")
+
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    event_a, event_b = events[-2], events[-1]
+    print(event_a)
+    print(event_b)
+
+    assert event_a["type"] == "REACTOR_STALLED"
+    assert event_a["line_number"] == 0
+    assert event_b["type"] == "REACTOR_STALLED"
+    assert event_b["line_number"] == 3
+
+
+def test_search_kernel_callstack(events_function_scope, base_node, test_data_dir):
+    """Kernel callstacks are published as KERNEL_CALLSTACK events when print_kernel_callstack is set."""
+    base_node.parent_cluster = {"params": {"print_kernel_callstack": True}}
+    base_node.system_log = str(test_data_dir / "kernel_callstack.log")
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    event_a, event_b = events[-2], events[-1]
+    print(event_a)
+    print(event_b)
+
+    assert event_a["type"] == "KERNEL_CALLSTACK"
+    assert event_a["line_number"] == 2
+    assert event_b["type"] == "KERNEL_CALLSTACK"
+    assert event_b["line_number"] == 5
+
+
+def test_search_cdc_invalid_request(events_function_scope, base_node, test_data_dir):
+    """A CDC invalid request error is published as an ERROR event under an upgrade schema-error ignore."""
+    base_node.system_log = str(test_data_dir / "system_cdc_invalid_request.log")
+    with (
+        unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"),
+        unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues") as skip_per_issues,
+    ):
+        skip_per_issues.return_value = False
+        with ignore_upgrade_schema_errors():
+            read_and_publish_events(base_node)
+
+    cdc_err_events = [
+        line
+        for line in events_function_scope.get_events_by_category()["ERROR"]
+        if "cdc - Could not retrieve CDC streams" in line
+    ]
+    assert cdc_err_events != []
+
+
+def test_search_power_off(events_function_scope, base_node, test_data_dir):
+    """A power-off log line is reported as a WARNING event, and the DbEventsFilter lets it through."""
+    base_node.system_log = str(test_data_dir / "power_off.log")
+    with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=base_node):
+        read_and_publish_events(base_node)
+
+    InstanceStatusEvent.POWER_OFF().add_info(
+        node="A",
+        line_number=22,
+        line=f"{datetime.fromtimestamp(time.time() + 1, tz=timezone.utc):%Y-%m-%dT%H:%M:%S+00:00} "
+        "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
+    ).publish()
+
+    events = [line for line in events_function_scope.get_events_by_category()["WARNING"] if "Powering Off" in line]
+    assert events
+
+
+def test_search_system_suppressed_messages(events_function_scope, base_node, test_data_dir):
+    """A suppressed-messages summary is published as the last SUPPRESSED_MESSAGES event."""
+    base_node.system_log = str(test_data_dir / "system_suppressed_messages.log")
+
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    event_a = events[-1]
+    print(event_a)
+
+    assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
+    assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
+
+
+def test_search_one_line_backtraces(events_function_scope, base_node, test_data_dir):
+    """One-line backtraces are published as BACKTRACE and OVERSIZED_ALLOCATION events with raw backtraces."""
+    base_node.system_log = str(test_data_dir / "system_one_line_backtrace.log")
+
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    backtraces = [event for event in events if event["type"] == "BACKTRACE"]
+    assert len(backtraces) == 2
+    for event_backtrace in backtraces:
+        assert event_backtrace["raw_backtrace"]
+
+    oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+    assert len(oversized_events) == 2
+    for event_oversized in oversized_events:
+        print(event_oversized)
+        assert event_oversized["raw_backtrace"]
+
+    print(events[-1])
+
+
+def test_gate_closed_ignored_exception_is_catched(events_function_scope, base_node, test_data_dir):
+    """Ignored gate-closed exceptions are published as GATE_CLOSED events."""
+    base_node.system_log = str(test_data_dir / "gate_closed_ignored_exception.log")
+
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    event_backtrace1, event_backtrace2 = events[-2], events[-1]
+    print(event_backtrace1)
+    print(event_backtrace2)
+
+    assert event_backtrace1["type"] == "GATE_CLOSED"
+    assert event_backtrace1["line_number"] == 1
+    assert event_backtrace2["type"] == "GATE_CLOSED"
+    assert event_backtrace2["line_number"] == 3
+
+
+def test_compaction_stopped_exception_is_catched(events_function_scope, base_node, test_data_dir):
+    """Compaction-stopped exceptions are published as COMPACTION_STOPPED events."""
+    base_node.system_log = str(test_data_dir / "compaction_stopped_exception.log")
+
+    read_and_publish_events(base_node)
+
+    events = events_function_scope.published_events
+
+    event_backtrace1, event_backtrace2 = events[-3], events[-2]
+    print(event_backtrace1)
+    print(event_backtrace2)
+
+    assert event_backtrace1["type"] == "COMPACTION_STOPPED"
+    assert event_backtrace1["line_number"] == 0
+    assert event_backtrace2["type"] == "COMPACTION_STOPPED"
+    assert event_backtrace2["line_number"] == 1
+
+
+def test_appending_to_log(events_function_scope, base_node, tmp_path):
+    """Lines appended to a live log are read as they arrive, and a reactor stall is published once."""
+    logs = """
+INFO  2022-07-14 09:28:34,095 [shard 1] database - Flushing non-system tables
+Reactor stalled for 32 ms on shard 1. Backtrace: 0x4e0d6e2 0x4e0c340 0x4e0d5f0 0x7f230af20a1f 0x14de339 0x14dc3b0 0x14d680c 0x14d5ff6 0x14e4d52 0x14d0238 0x1aec3c6 0x508c7e1
+kernel callstack:
+INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
+        """
+
+    read_log_text_and_publish_events(base_node, tmp_path, logs)
+
+    events = events_function_scope.published_events
+    reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
+    assert len(reactor_stalls) == 1
+    event = reactor_stalls[0]
+    assert event["type"] == "REACTOR_STALLED"
+    assert event["line_number"] == 2
+    assert "Reactor stalled for 32 ms on shard 1" in event["line"]
+
+
+def test_restart_suspends_kernel_panic_checker_around_restart_inner(base_node):
+    """BaseNode.restart() must suspend/resume the kernel panic checker around
+    `_restart_inner()`, mirroring `reboot()`'s existing suspend/resume window
+    (SCT-459). Backends whose `restart()` stops/starts or reboots the underlying
+    cloud instance (e.g. `OciNode._restart_inner()`) can otherwise trip a false
+    KernelPanicEvent while the instance is intentionally down (SCT-658).
+    """
+    call_order = []
+    checker = unittest.mock.MagicMock()
+    checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
+    checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
+    base_node.kernel_panic_checker = checker
+
+    with unittest.mock.patch.object(
+        base_node, "_restart_inner", side_effect=lambda: call_order.append("restart")
+    ) as mock_inner:
+        base_node.restart()
+
+    assert call_order == ["suspend", "restart", "resume"]
+    checker.suspended.assert_called_once_with()
+    mock_inner.assert_called_once_with()
+
+
+def test_restart_without_kernel_panic_checker_calls_inner_directly(base_node):
+    """restart() calls _restart_inner() directly when no kernel panic checker is set."""
+    base_node.kernel_panic_checker = None
+
+    with unittest.mock.patch.object(base_node, "_restart_inner") as mock_inner:
+        base_node.restart()
+
+    mock_inner.assert_called_once_with()
+
+
+def test_restart_resumes_kernel_panic_checker_even_if_inner_raises(base_node):
+    """The kernel panic checker is resumed even when _restart_inner() raises."""
+    call_order = []
+    checker = unittest.mock.MagicMock()
+    checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
+    checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
+    base_node.kernel_panic_checker = checker
+
+    def _boom():
+        call_order.append("restart")
+        raise RuntimeError("boom")
+
+    with (
+        unittest.mock.patch.object(base_node, "_restart_inner", side_effect=_boom),
+        pytest.raises(RuntimeError),
+    ):
+        base_node.restart()
+
+    assert call_order == ["suspend", "restart", "resume"]
+
+
+def test_restart_inner_not_implemented_by_default(base_node):
+    """Derived classes that don't implement `_restart_inner()` must raise
+    NotImplementedError, same as before this refactor (previously `restart()`
+    itself raised NotImplementedError directly).
+    """
+    base_node.kernel_panic_checker = None
+
+    with pytest.raises(NotImplementedError):
+        base_node.restart()
+
+
+@pytest.mark.parametrize(
+    ("node_type", "fail_on_ssh_lost"),
+    [
+        pytest.param("loader", True, id="loader"),
+        pytest.param("monitor", True, id="monitor"),
+        pytest.param("db", False, id="db"),
+    ],
+)
+def test_kernel_panic_checker_fails_test_on_ssh_lost_except_for_db(base_node, node_type, fail_on_ssh_lost):
+    """Only db nodes are disrupted on purpose, so for loaders and monitors losing SSH must fail the test."""
+    checker = unittest.mock.MagicMock()
+    base_node.parent_cluster.params["enable_kernel_panic_checker"] = True
+
+    with (
+        unittest.mock.patch.object(base_node, "_create_kernel_panic_checker", return_value=checker),
+        unittest.mock.patch.object(
+            type(base_node), "node_type", new_callable=unittest.mock.PropertyMock, return_value=node_type
+        ),
+    ):
+        base_node._start_kernel_panic_checker()
+
+    assert checker.fail_on_ssh_lost is fail_on_ssh_lost
+    checker.start.assert_called_once_with()
+
+
+def test_stop_task_threads_disarms_ssh_lost_failure(base_node):
+    """Teardown terminates the instance before stopping the checker, which must not fail the test."""
+    checker = unittest.mock.MagicMock()
+    checker.fail_on_ssh_lost = True
+    base_node.kernel_panic_checker = checker
+    base_node.termination_event.set()
+
+    base_node.stop_task_threads()
+
+    assert checker.fail_on_ssh_lost is False
+
+
+def test_scylla_version_rhel_like_without_scylla_binary(version_node):
+    """Without the scylla binary, the version comes from the rpm package on RHEL-like distros."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
+        ),
+    )
+    assert "3.3.rc1" == version_node.scylla_version
+    assert "3.3.rc1" == version_node.scylla_version_detailed
+
+
+def test_no_scylla_binary_other(version_node):
+    """Without the scylla binary, the version comes from dpkg on Debian-like distros."""
+    version_node.distro = Distro.DEBIAN11
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
+        ),
+    )
+    assert "3.3.rc1" == version_node.scylla_version
+    assert "3.3.rc1-0.20200209.0d0c1d43188-1" == version_node.scylla_version_detailed
+
+
+def test_scylla(version_node):
+    """A release binary reports its version and build-id in the detailed version."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "3.3.rc1" == version_node.scylla_version
+    assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_scylla_master(version_node):
+    """A development build is reported as its development version, not the master tag."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "666.development" == version_node.scylla_version
+    assert "666.development-0.20200205.2816404f575 with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_scylla_master_new_format(version_node):
+    """The newer development version format keeps the `.dev` suffix in the version."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "4.4.dev" == version_node.scylla_version
+    assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_scylla_enterprise(version_node):
+    """An enterprise binary reports its version without the enterprise product name."""
+    version_node.is_enterprise = True
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "2019.1.4" == version_node.scylla_version
+    assert "2019.1.4-0.20191217.b59e92dbd with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_scylla_enterprise_no_scylla_binary(version_node):
+    """Without the binary, an enterprise install is found through the scylla-enterprise rpm."""
+    version_node.is_enterprise = True
+    version_node.is_product_enterprise = True
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
+        ),
+    )
+    assert "2019.1.4" == version_node.scylla_version
+    assert "2019.1.4" == version_node.scylla_version_detailed
+
+
+def test_scylla_binary_version_unparseable(version_node):
+    """An unparseable version gives no scylla_version, but the detailed version keeps the raw string."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "x.y.z\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert version_node.scylla_version is None
+    assert "x.y.z with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_get_scylla_version_from_second_attempt(version_node):
+    """A failed version lookup is not cached, so a later lookup picks up the installed version."""
+    version_node.distro = Distro.DEBIAN11
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+            (
+                "dpkg-query --show --showformat '${Version}' scylla",
+                (1, "", "dpkg-query: no packages found matching scylla\n"),
+            ),
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+            (
+                "dpkg-query --show --showformat '${Version}' scylla",
+                (1, "", "dpkg-query: no packages found matching scylla\n"),
+            ),
+        ),
+    )
+    assert version_node.scylla_version is None
+    assert version_node.scylla_version_detailed is None
+
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "4.4.dev" == version_node.scylla_version
+    assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == version_node.scylla_version_detailed
+
+
+def test_forget_scylla_version(version_node):
+    """forget_scylla_version() drops the cached version so the next access re-reads the binary."""
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert "4.4.dev" == version_node.scylla_version
+    assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == version_node.scylla_version_detailed
+
+    version_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+
+    assert "4.4.dev" == version_node.scylla_version
+    assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == version_node.scylla_version_detailed
+
+    version_node.forget_scylla_version()
+
+    assert "3.3.rc1" == version_node.scylla_version
+    assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == version_node.scylla_version_detailed
+
+
+@pytest.mark.parametrize(
+    "distro, expected_cmd",
+    [
+        pytest.param(Distro.ROCKY9, "install -y epel-release", id="rocky9"),
+        pytest.param(
+            Distro.RHEL8,
+            "install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+            id="rhel8",
+        ),
+        pytest.param(Distro.FEDORA44, None, id="fedora44"),
+    ],
+)
+def test_install_epel(distro, expected_cmd, tmp_path):
+    """install_epel runs the epel-release install on RHEL-like distros only."""
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.distro = distro
+    node.remoter = unittest.mock.MagicMock()
+
+    node.install_epel()
+
+    if expected_cmd is None:
+        node.remoter.run.assert_not_called()
+    else:
+        node.remoter.run.assert_called_once_with(f"sudo {rpm_cmd('yum', expected_cmd)}", retry=3)
+
+
+def test_install_docker_on_fedora_installs_missing_docker():
+    """Docker is installed and enabled on Fedora when it is not present."""
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = False
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_called_once_with("moby-engine")
+    node.remoter.sudo.assert_called_once_with("systemctl enable --now docker", timeout=60)
+
+
+def test_install_docker_on_fedora_skips_present_docker():
+    """Docker is left alone on Fedora when it is already present."""
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = True
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_not_called()
+    node.remoter.sudo.assert_not_called()
+
+
+def test_monitoring_version(db_node, monitor_set):
+    """Verify that dev version are mapped to monitor master version"""
+    db_node.remoter = VersionDummyRemote(
+        (
+            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+        ),
+    )
+    assert monitor_set.monitoring_version == "master"
+
+
+def test_can_get_nodetool_status_typical():
+    """get_nodetool_status parses the datacenter, state, load, tokens and rack of each node."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
+    node = NodetoolDummyNode(resp=resp)
+    db_cluster = DummyScyllaCluster([node])
+
+    status = db_cluster.get_nodetool_status()
+
+    assert status == {
+        "eastus": {
+            "10.0.59.34": {
+                "state": "UN",
+                "load": "21.71GB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "e5bcb094-e4de-43aa-8dc9-b1bf74b3b346",
+                "rack": "1a",
+            },
+            "10.0.198.153": {
+                "state": "UN",
+                "load": "?",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "fba174cd-917a-40f6-ab62-cc58efaaf301",
+                "rack": "1a",
+            },
+        }
+    }
+
+
+def test_can_get_nodetool_status_typical_with_one_space_after_host_id():
+    """Case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
+    resp = "Datacenter: datacenter1\n=======================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n-- Address    Load      Tokens Owns Host ID                              Rack \nUN 172.17.0.2 202.92 KB 256    ?    7b8f86bf-c70c-4246-a273-146057e12431 rack1"
+    node = NodetoolDummyNode(resp=resp)
+    db_cluster = DummyScyllaCluster([node])
+
+    status = db_cluster.get_nodetool_status()
+
+    assert status == {
+        "datacenter1": {
+            "172.17.0.2": {
+                "state": "UN",
+                "load": "202.92KB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "7b8f86bf-c70c-4246-a273-146057e12431",
+                "rack": "rack1",
+            },
+        }
+    }
+
+
+def test_datacenter_name_per_region():
+    """get_datacenter_name_per_region maps each region to its datacenter, optionally limited to db_nodes."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+    node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
+    node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+    node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
+    db_cluster = DummyScyllaCluster([node1, node2, node3])
+    setattr(db_cluster, "params", {"use_zero_nodes": False})
+    node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+    assert datacenter_name_per_region == {"east-us": "eastus", "west-us": "westus"}
+
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1])
+    assert datacenter_name_per_region == {"east-us": "eastus"}
+
+
+def test_datacenter_name_per_region_when_region_doesnt_have_live_nodes():
+    """A region whose only node is down is left out of the datacenter mapping."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+    node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
+    node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+    node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", db_up=False)
+    db_cluster = DummyScyllaCluster([node1, node2, node3])
+    setattr(db_cluster, "params", {"use_zero_nodes": False})
+    node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+    assert datacenter_name_per_region == {"east-us": "eastus"}
+
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node3])
+    assert datacenter_name_per_region == {}
+
+
+def test_datacenter_name_per_region_when_first_node_is_dn():
+    """A down first node in a datacenter does not hide that datacenter from the mapping."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+    node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", db_up=False)
+    node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+    node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
+    db_cluster = DummyScyllaCluster([node1, node2, node3])
+    setattr(db_cluster, "params", {"use_zero_nodes": False})
+    node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+    assert datacenter_name_per_region == {"east-us": "eastus", "west-us": "westus"}
+
+    datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1, node2])
+    assert datacenter_name_per_region == {"east-us": "eastus"}
+
+
+def test_get_rack_names_per_datacenter_and_rack_idx():
+    """Rack names are keyed by datacenter and rack index, and nodes are grouped the same way."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+    node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", myrack=1)
+    node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153", myrack=1)
+    node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", myrack=2)
+    db_cluster = DummyScyllaCluster([node1, node2, node3])
+    setattr(db_cluster, "params", {"use_zero_nodes": False})
+    node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+    datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx()
+    assert datacenter_name_per_region == {("east-us", "1"): "1a", ("west-us", "2"): "2a"}
+
+    datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[node1])
+    assert datacenter_name_per_region == {("east-us", "1"): "1a"}
+
+    nodes_per_region = db_cluster.get_nodes_per_datacenter_and_rack_idx()
+    assert nodes_per_region == {
+        ("east-us", "1"): [node1, node2],
+        ("west-us", "2"): [
+            node3,
+        ],
+    }
+
+
+def test_can_get_nodetool_status_ipv6():
+    """get_nodetool_status keeps full IPv6 addresses as the node keys."""
+    resp = "Datacenter: eu-north\n====================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address                                 Load       Tokens       Owns    Host ID                Rack\nUN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a\nUN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a"
+    node = NodetoolDummyNode(resp=resp)
+    db_cluster = DummyScyllaCluster([node])
+
+    status = db_cluster.get_nodetool_status()
+
+    assert status == {
+        "eu-north": {
+            "2a05:d016:cf8:de00:e07d:5832:c5c0:36a0": {
+                "state": "UN",
+                "load": "774KB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "e2ed6943",
+                "rack": "1a",
+            },
+            "2a05:d016:cf8:de00:339e:d0d:9446:1980": {
+                "state": "UN",
+                "load": "1.04MB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "d67e8502",
+                "rack": "1a",
+            },
+        }
+    }
+
+
+def test_can_get_nodetool_status_azure():
+    """Nodes without a rack column get an empty rack name in the status."""
+    resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  \nUN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1\nUN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  \n"
+    node = NodetoolDummyNode(resp=resp)
+    db_cluster = DummyScyllaCluster([node])
+
+    status = db_cluster.get_nodetool_status()
+
+    assert status == {
+        "eastus": {
+            "10.0.0.4": {
+                "host_id": "ed6af9a0-8c22-4813-ac9b-6fbeb462b687",
+                "load": "431KB",
+                "owns": "?",
+                "rack": "",
+                "state": "UN",
+                "tokens": "256",
+            },
+            "10.0.0.5": {
+                "host_id": "caa15869-cfb4-4229-85d7-0f4832986237",
+                "load": "612KB",
+                "owns": "?",
+                "rack": "1",
+                "state": "UN",
+                "tokens": "256",
+            },
+            "10.0.0.6": {
+                "host_id": "3046ded9-ce17-4a3a-ac44-a3ada6916972",
+                "load": "806KB",
+                "owns": "?",
+                "rack": "",
+                "state": "UN",
+                "tokens": "256",
+            },
+        }
+    }
+
+
+def test_can_get_nodetool_status_oci_hyphenated_rack():
+    """OCI rack names contain hyphens (e.g., iad-ad-1). Verify they are parsed fully."""
+    resp = "Datacenter: iad\n===============\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address      Load       Tokens  Owns    Host ID                               Rack\nUN  10.0.3.109   77.79 GB   256     ?       6367305e-5b28-464c-8f0f-c18094822bbf  iad-ad-1\nUN  10.0.3.112   65.23 GB   256     ?       a1b2c3d4-e5f6-7890-abcd-ef1234567890  iad-ad-2\nUN  10.0.3.130   70.11 GB   256     ?       deadbeef-cafe-babe-dead-beefcafebabe  iad-ad-3"
+    node = NodetoolDummyNode(resp=resp)
+    db_cluster = DummyScyllaCluster([node])
+
+    status = db_cluster.get_nodetool_status()
+
+    assert status == {
+        "iad": {
+            "10.0.3.109": {
+                "state": "UN",
+                "load": "77.79GB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "6367305e-5b28-464c-8f0f-c18094822bbf",
+                "rack": "iad-ad-1",
+            },
+            "10.0.3.112": {
+                "state": "UN",
+                "load": "65.23GB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "rack": "iad-ad-2",
+            },
+            "10.0.3.130": {
+                "state": "UN",
+                "load": "70.11GB",
+                "tokens": "256",
+                "owns": "?",
+                "host_id": "deadbeef-cafe-babe-dead-beefcafebabe",
+                "rack": "iad-ad-3",
+            },
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "cat_results,expected_core_number",
+    [
+        pytest.param("1", 1, id="cpus-1"),
+        pytest.param("2", 1, id="cpus-2"),
+        pytest.param("9", 1, id="cpus-9"),
+        pytest.param("10", 1, id="cpus-10"),
+        pytest.param("11", 1, id="cpus-11"),
+        pytest.param("1-7", 7, id="cpus-1-7"),
+        pytest.param("2-7", 6, id="cpus-2-7"),
+        pytest.param("1-6", 6, id="cpus-1-6"),
+        pytest.param("2-6", 5, id="cpus-2-6"),
+        pytest.param("1-7,9", 8, id="cpus-1-7-9"),
+        pytest.param("1,9-15", 8, id="cpus-1-9-15"),
+        pytest.param("1-7,9-15", 14, id="cpus-1-7-9-15"),
+        pytest.param("2-7,10-15", 12, id="cpus-2-7-10-15"),
+        pytest.param("1-7,9-15,17-23", 21, id="cpus-1-7-9-15-17-23"),
+        pytest.param("1-7,9-15,17", 15, id="cpus-1-7-9-15-17"),
+        pytest.param("1-7,9,17-23", 15, id="cpus-1-7-9-17-23"),
+        pytest.param("1,9-15,17-23", 15, id="cpus-1-9-15-17-23"),
+        pytest.param("1,9,17", 3, id="cpus-1-9-17"),
+        pytest.param("1,9-15,17", 9, id="cpus-1-9-15-17"),
+        pytest.param("1-7,9,17", 9, id="cpus-1-7-9-17"),
+        pytest.param("1,9,17-23", 9, id="cpus-1-9-17-23"),
+        pytest.param("1-7,9-15,17-23,25-31", 28, id="cpus-1-7-9-15-17-23-25-31"),
+        pytest.param("1,9-15,17-23,25-31", 22, id="cpus-1-9-15-17-23-25-31"),
+        pytest.param("1-7,9,17-23,25-31", 22, id="cpus-1-7-9-17-23-25-31"),
+        pytest.param("1-7,9-15,23,25-31", 22, id="cpus-1-7-9-15-23-25-31"),
+        pytest.param("1-7,9-15,17-23,31", 22, id="cpus-1-7-9-15-17-23-31"),
+        pytest.param("1-7,15,17,25-31", 16, id="cpus-1-7-15-17-25-31"),
+        pytest.param("1,9-15,17-23,31", 16, id="cpus-1-9-15-17-23-31"),
+        pytest.param("1,15,17-23,31", 10, id="cpus-1-15-17-23-31"),
+        pytest.param("1,15,17,31", 4, id="cpus-1-15-17-31"),
+        pytest.param("1,9-15,17,25-31", 16, id="cpus-1-9-15-17-25-31"),
+        pytest.param("1-7,9,17-23,25", 16, id="cpus-1-7-9-17-23-25"),
+    ],
+)
+def test_base_node_cpuset(cat_results, expected_core_number, tmp_path):
+    """The cpuset of the node is the number of cores in the CPUSET line of its scylla config."""
+    dummy_node = DummyNode(
+        name="dummy_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
+    dummy_node.init()
+    cat_results_obj = type("FakeGrepResults", (), {"stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'})
+    dummy_node.remoter = type(
+        "FakeRemoter",
+        (),
+        {
+            "run": (lambda *args, **kwargs: cat_results_obj),
+        },
+    )
+
+    cpuset_value = dummy_node.cpuset
+
+    assert isinstance(cpuset_value, int)
+    assert cpuset_value == expected_core_number
+
+
+@pytest.mark.parametrize(
+    "cat_results",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("# one comment-line file", id="comment-only"),
+        pytest.param("# first comment line\n# second comment line", id="two-comments"),
+        pytest.param("# first comment line\n# second comment linei\n # third comment line", id="stray-comment-line"),
+        pytest.param('# CPUSET="--cpuset 1-7,9-15,17-23,31\' "', id="commented-out-cpuset"),
+    ],
+)
+def test_base_node_cpuset_not_configured(cat_results, tmp_path):
+    """Without a CPUSET line in the scylla config, the cpuset is the empty string."""
+    dummy_node = DummyNode(
+        name="dummy_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
+    dummy_node.init()
+    cat_results_obj = type("FakeCatResults", (), {"stdout": cat_results})
+    dummy_node.remoter = type(
+        "FakeRemoter",
+        (),
+        {
+            "run": (lambda *args, **kwargs: cat_results_obj),
+        },
+    )
+    assert dummy_node.cpuset == ""
+
+
+def test_describering_parsing():
+    """ "nodetool describering" output is parsed into token ranges, and min/max tokens are taken from them."""
+    resp = "Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:\nTokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])\nTokenRange(start_token:9154793403047166459, end_token:9156354786201613199, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])"
+    node = NodetoolDummyNode(resp=resp)
+    ranges = get_keyspace_partition_ranges(node=node, keyspace="")
+    assert ranges == [
+        {
+            "start_token": -9193109213506951143,
+            "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
+            "end_token": 9202125676696964746,
+            "endpoints": "127.0.49.3",
+            "rpc_endpoints": "127.0.49.3",
+        },
+        {
+            "start_token": 9154793403047166459,
+            "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
+            "end_token": 9156354786201613199,
+            "endpoints": "127.0.49.3",
+            "rpc_endpoints": "127.0.49.3",
+        },
+    ]
+
+    min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
+    assert min_token == -9193109213506951143
+    assert max_token == 9202125676696964746
+
+
+def test_base_node_init_with_none_ssh_login_info():
+    """Verify that node initialization does not crash when ssh_login_info is not defined."""
+    node = LocalNode(
+        name="test_local_node",
+        parent_cluster=DummyDbCluster(nodes=[]),
+    )
+
+    node.init()
+
+    assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"
+
+
+@pytest.mark.parametrize("cls", all_base_node_subclasses(), ids=lambda cls: cls.__name__)
+def test_base_node_subclass_constructs_with_forwarded_kwargs(cls, monkeypatch):
+    """Verify each `BaseNode` subclass can be constructed polymorphically."""
+    if "__init__" not in cls.__dict__:
+        pytest.skip(f"{cls.__name__} inherits __init__ from a parent")
+
+    for target in INIT_CONSTRUCT_PATCHES.get(cls.__name__, ()):
+        monkeypatch.setattr(target, unittest.mock.MagicMock())
+
+    cls(**build_init_kwargs(cls))
+
+
+@pytest.mark.parametrize("cls", cluster_classes_overriding_create_node(), ids=lambda cls: cls.__name__)
+def test_cluster_create_node_accepts_parent_kwargs(cls):
+    """Verify every `_create_node` override accepts the kwargs its parent's `add_nodes` forwards.
+
+    Bypasses cluster `__init__` via `__new__` — Python validates kwargs at the call
+    boundary before the body runs, so any TypeError about unexpected/missing/duplicate
+    kwargs surfaces a signature mismatch. Other exceptions come from the body running
+    against the bare cluster, which is unrelated to what we're checking.
+    """
+    kwargs = parent_create_node_kwargs(cls)
+    if kwargs is None:
+        pytest.skip(f"{cls.__name__} has no ancestor with `_create_node`")
+
+    try:
+        cls._create_node(cls.__new__(cls), **kwargs)
+    except TypeError as exc:
+        if any(phrase in str(exc) for phrase in ("unexpected keyword argument", "got multiple values", "missing ")):
+            raise
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def test_ip_address_ignores_empty_scylla_network_configuration():
+    """Empty Scylla network config should fall back to the legacy private IP path."""
+    node = unittest.mock.MagicMock()
+    node.scylla_network_configuration = ScyllaNetworkConfiguration([], [])
+    node.test_config = unittest.mock.MagicMock(IP_SSH_CONNECTIONS="private", INTRA_NODE_COMM_PUBLIC=False)
+    assert BaseNode.ip_address.fget(node) == node.private_ip_address
+
+
+def test_secondary_network_interface_is_never_the_one_used_for_ssh():
+    """The network nemesis must never take down the interface carrying `test_communication`.
+
+    Downing it would cut the SSH connection the nemesis needs to bring the interface back up.
+    Following `broadcast_address` instead is not enough: it can sit on the very same interface.
+    """
+    node = unittest.mock.MagicMock()
+    network_config = network_config_with_broadcast_on_primary()
+    node.scylla_network_configuration = network_config
+
+    assert network_config.device == "ens4", "broadcast_address is on the interface used for SSH"
+    assert BaseNode._secondary_network_interface_name(node) == "ens5"
+
+    # SSH over the secondary interface: the primary one becomes the safe target
+    for address_config in network_config.scylla_network_config:
+        if address_config["address"] == "test_communication":
+            address_config["nic"] = 1
+    assert BaseNode._secondary_network_interface_name(node) == "ens4"
+
+    node.scylla_network_configuration = None
+    assert BaseNode._secondary_network_interface_name(node) == "eth1", "backends without network config use eth1"
+
+
+def test_traffic_control_targets_the_secondary_interface():
+    """Tc commands must shape nic 1, resolved the same way the interface nemesis resolves it."""
+    node = unittest.mock.MagicMock()
+    node.scylla_network_configuration = network_config_with_broadcast_on_primary()
+    node._secondary_network_interface_name = BaseNode._secondary_network_interface_name.__get__(node)
+
+    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
+        local_runner.run.return_value.stdout = "tc qdisc del dev ens5 root"
+        BaseNode.traffic_control(node)
+    local_runner.run.assert_called_once_with("tcdel ens5 --tc-command", ignore_status=True)
+    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc del dev ens5 root"', ignore_status=True)
+
+    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
+        local_runner.run.return_value.stdout = "tc qdisc add dev ens5 root netem loss 5%"
+        BaseNode.traffic_control(node, "--loss 5%")
+    local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
+    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
+
+
 def test_str_does_not_resolve_ip_addresses():
     """`__str__` runs from log records, so it must never trigger cloud API calls or SSH commands.
 
@@ -1213,13 +1443,14 @@ def test_str_does_not_resolve_ip_addresses():
     `nemesis.target_node`; resolving its addresses there blocks on the SSH connect timeout for
     minutes per log line and raises spurious errors (scylladb/scylla-cluster-tests#10217).
     """
-    node = _node_for_str()
+    node = node_for_str()
 
     assert BaseNode.__str__(node) == "Node longevity-db-node-1 [None | 10.164.8.11] (Type: i4i.4xlarge)"
 
 
 def test_str_uses_cached_ipv6_address():
-    node = _node_for_str(ip_ssh_connections="ipv6")
+    """`__str__` shows the cached IPv6 address when the node connects over IPv6."""
+    node = node_for_str(ip_ssh_connections="ipv6")
     node._ipv6_ip_address_cached = "2a05:d018::1"
 
     assert "| 2a05:d018::1]" in BaseNode.__str__(node)
@@ -1258,7 +1489,7 @@ def test_public_ip_address_caches_a_missing_address():
     for _ in range(3):
         assert BaseNode.public_ip_address.fget(node) is None
 
-    node._get_public_ip_address.assert_called_once()
+    node._get_public_ip_address.assert_called_once_with()
 
 
 def test_destroy_drops_the_remoter():
@@ -1270,12 +1501,13 @@ def test_destroy_drops_the_remoter():
     with unittest.mock.patch("sdcm.cluster.ContainerManager"):
         BaseNode.destroy(node)
 
-    remoter.stop.assert_called_once()
+    remoter.stop.assert_called_once_with()
     assert node.remoter is None
     assert node.destroyed is True
 
 
 def test_get_tables_with_sstable_folder():
+    """Table names are read from the sstable folders, with the keyspace prefix for alternator tables."""
     node = unittest.mock.MagicMock()
     node.remoter.sudo.return_value.stdout = """
 /var/lib/scylla/data/ks/t1-0123456789abcdef0123456789abcdef
@@ -1283,7 +1515,9 @@ def test_get_tables_with_sstable_folder():
 """
 
     assert BaseNode.get_tables_with_sstable_folder(node) == {"ks.t1", "alternator_my-tbl.my-tbl"}
-    node.remoter.sudo.assert_called_once()
+    node.remoter.sudo.assert_called_once_with(
+        "find /var/lib/scylla/data -mindepth 2 -maxdepth 2 -type d", ignore_status=True, verbose=False
+    )
 
 
 def test_network_configuration_skips_a_destroyed_node():
@@ -1355,50 +1589,38 @@ def test_vector_store_address_follows_the_re_created_container():
         assert node.get_vector_store_api_client().base_url == "http://172.17.0.2:6080"
 
 
-MINICLOUD_BASE_SCYLLA_ARGS = "--blocked-reactor-notify-ms 25 --abort-on-seastar-bad-alloc"
-
-
-def _append_minicloud_reserve(args, **params):
-    """Run the append hook against a stand-in cluster: it only reads params and logs."""
-    defaults = {
-        "minicloud_endpoint_url": "http://localhost:5000",
-        "minicloud_scylla_reserve_memory": "3G",
-        "minicloud_lightweight_memory": "8GiB",
-        "minicloud_lightweight_vcpus": 2,
-    }
-    cluster = SimpleNamespace(params={**defaults, **params}, log=unittest.mock.MagicMock())
-    return BaseScyllaCluster._append_minicloud_reserve_memory(cluster, args)
-
-
 def test_minicloud_reserve_memory_is_appended_to_the_test_s_own_args():
-    assert _append_minicloud_reserve(MINICLOUD_BASE_SCYLLA_ARGS) == (
+    """The minicloud reserve-memory flag is appended after the test's own Scylla args."""
+    assert append_minicloud_reserve(MINICLOUD_BASE_SCYLLA_ARGS) == (
         f"{MINICLOUD_BASE_SCYLLA_ARGS} --reserve-memory 3072M"
     )
 
 
 def test_minicloud_reserve_memory_not_appended_outside_minicloud():
+    """Without a minicloud endpoint the Scylla args are returned unchanged."""
     args = MINICLOUD_BASE_SCYLLA_ARGS
-    assert _append_minicloud_reserve(args, minicloud_endpoint_url="") == args
+    assert append_minicloud_reserve(args, minicloud_endpoint_url="") == args
 
 
 @pytest.mark.parametrize(
-    "existing", ["-m 4G", "--memory 4G", "--memory=4G", "--reserve-memory 1G", "--reserve-memory=1G"]
+    "existing",
+    [
+        pytest.param("-m 4G", id="short-memory"),
+        pytest.param("--memory 4G", id="long-memory"),
+        pytest.param("--memory=4G", id="long-memory-equals"),
+        pytest.param("--reserve-memory 1G", id="reserve-memory"),
+        pytest.param("--reserve-memory=1G", id="reserve-memory-equals"),
+    ],
 )
 def test_minicloud_reserve_memory_defers_to_a_test_that_sized_scylla_itself(existing):
+    """A test that already sizes Scylla's memory keeps its own setting."""
     args = f"{MINICLOUD_BASE_SCYLLA_ARGS} {existing}"
-    assert _append_minicloud_reserve(args) == args
-
-
-def _drop_minicloud_memory_lock(**params) -> unittest.mock.MagicMock:
-    """Run the memory.conf hook against a stand-in cluster and return the node it touched."""
-    cluster = SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000", **params})
-    node = unittest.mock.MagicMock()
-    BaseScyllaCluster._drop_minicloud_scylla_memory_lock(cluster, node)
-    return node
+    assert append_minicloud_reserve(args) == args
 
 
 def test_minicloud_without_guest_locking_drops_scylla_memory_lock():
-    node = _drop_minicloud_memory_lock(minicloud_lock_guest_memory=False)
+    """Without guest memory locking, the --lock-memory flag is removed from memory.conf."""
+    node = drop_minicloud_memory_lock(minicloud_lock_guest_memory=False)
     node.remoter.sudo.assert_called_once_with(
         "sed -i 's/--lock-memory=1//' /etc/scylla.d/memory.conf", ignore_status=True
     )
@@ -1410,33 +1632,31 @@ def test_minicloud_without_guest_locking_drops_scylla_memory_lock():
     ids=["guest-locking-on", "not-minicloud"],
 )
 def test_scylla_memory_lock_kept(params):
-    assert not _drop_minicloud_memory_lock(**params).remoter.sudo.called
+    """memory.conf is left alone when guest locking is on or the endpoint is not minicloud."""
+    assert not drop_minicloud_memory_lock(**params).remoter.sudo.called
 
 
 def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
+    """A flag that only starts with 'memory' does not count as a Scylla memory setting."""
     args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --max-memory-for-unlimited-query-soft-limit 1M"
-    assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
-
-
-def _append_cpu_overcommit(args):
-    """Run the polling hook against a stand-in minicloud cluster: it only reads params and logs."""
-    params = {"minicloud_endpoint_url": "http://localhost:5000", "minicloud_scylla_overcommitted_cpu": True}
-    cluster = SimpleNamespace(params=params, log=unittest.mock.MagicMock())
-    return BaseScyllaCluster._append_minicloud_cpu_overcommit(cluster, args)
+    assert append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
 
 
 def test_minicloud_cpu_overcommit_args_are_appended():
-    assert _append_cpu_overcommit(MINICLOUD_BASE_SCYLLA_ARGS) == (
+    """Overcommitted minicloud CPUs get the no-idle-poll Scylla args appended."""
+    assert append_cpu_overcommit(MINICLOUD_BASE_SCYLLA_ARGS) == (
         f"{MINICLOUD_BASE_SCYLLA_ARGS} --idle-poll-time-us 0 --poll-aio 0"
     )
 
 
 def test_minicloud_cpu_overcommit_keeps_a_test_s_own_polling_flag():
+    """A test's own --poll-aio flag is kept and the overcommit args are not added."""
     args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --poll-aio=1"
-    assert _append_cpu_overcommit(args) == args
+    assert append_cpu_overcommit(args) == args
 
 
 def test_minicloud_scylla_setup_skips_iotune_and_keeps_a_test_s_own_args():
+    """Minicloud Scylla setup adds --no-io-setup after the test's own setup args."""
     node = SimpleNamespace(
         parent_cluster=SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000"}),
         log=unittest.mock.MagicMock(),
@@ -1444,71 +1664,17 @@ def test_minicloud_scylla_setup_skips_iotune_and_keeps_a_test_s_own_args():
     assert BaseNode._append_minicloud_no_io_setup(node, "--no-ec2-check") == "--no-ec2-check --no-io-setup"
 
 
-def _install_minicloud_ca(monkeypatch, **params):
-    """Run the real method against a stand-in node and return the commands it ran."""
-    for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
-        monkeypatch.delenv(var, raising=False)
-    commands = []
-    node = SimpleNamespace(
-        parent_cluster=SimpleNamespace(params=params),
-        distro=SimpleNamespace(is_rhel_like=False),
-        remoter=SimpleNamespace(sudo=commands.append),
-    )
-    BaseNode.install_minicloud_ca(node)
-    return commands
-
-
 def test_minicloud_ca_goes_into_the_system_trust_store(monkeypatch):
-    assert _install_minicloud_ca(monkeypatch, minicloud_endpoint_url="http://localhost:5000") == [
+    """The minicloud CA is downloaded and added to the system trust store."""
+    assert minicloud_ca_commands(monkeypatch, minicloud_endpoint_url="http://localhost:5000") == [
         "curl -fsS -o /usr/local/share/ca-certificates/minicloud.crt http://169.254.169.254/minicloud/ca.pem",
         "update-ca-certificates",
     ]
 
 
 def test_minicloud_ca_is_not_installed_off_minicloud(monkeypatch):
-    assert _install_minicloud_ca(monkeypatch, minicloud_endpoint_url="") == []
-
-
-# the ruleset the OCI images ship: SSH is accepted, everything else gets an ICMP host-prohibited
-OCI_IMAGE_RULESET = """\
-*filter
-:INPUT ACCEPT [0:0]
-:FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [0:0]
--A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
--A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
--A INPUT -j REJECT --reject-with icmp-host-prohibited
--A FORWARD -j REJECT --reject-with icmp-host-prohibited
-COMMIT
-"""
-
-
-@pytest.fixture
-def firewall_node():
-    """Build a bare `BaseNode` whose remoter reports the given rules - real methods, no stubs.
-
-    The rules are returned for whichever dump command is asked for; a command listed in
-    `failing` fails instead, which is how a node with a broken or half-installed netfilter
-    tooling behaves.
-    """
-
-    def _build(rules: str = "", debian: bool = True, failing: tuple = ()):
-        node = BaseNode.__new__(BaseNode)
-        node.name = "test-node"
-        node.log = logging.getLogger("test-node")
-        node.distro = unittest.mock.Mock(is_rhel_like=not debian, is_debian_like=debian)
-        node.remoter = unittest.mock.Mock()
-
-        def _sudo(command, **_):
-            if any(failed in command for failed in failing):
-                return unittest.mock.Mock(ok=False, return_code=1, stdout="", stderr="not permitted")
-            dump = rules if any(tool in command for tool in ("iptables-save", "nft list")) else ""
-            return unittest.mock.Mock(ok=True, return_code=0, stdout=dump, stderr="")
-
-        node.remoter.sudo.side_effect = _sudo
-        return node
-
-    return _build
+    """No CA is installed when the endpoint is not minicloud."""
+    assert minicloud_ca_commands(monkeypatch, minicloud_endpoint_url="") == []
 
 
 def test_disable_firewall_runs_the_script_cloud_init_runs(firewall_node):
@@ -1541,6 +1707,7 @@ def test_disable_firewall_verifies_the_firewall_is_actually_down(firewall_node):
 
 
 def test_verify_firewall_disabled_accepts_an_empty_ruleset(firewall_node):
+    """A ruleset that only accepts traffic is reported as no firewall."""
     node = firewall_node(rules="*filter\n:INPUT ACCEPT [0:0]\n:FORWARD ACCEPT [0:0]\nCOMMIT\n")
 
     BaseNode.verify_firewall_disabled(node)
@@ -1566,30 +1733,11 @@ COMMIT
 
 
 def test_verify_firewall_disabled_reports_a_dropping_policy(firewall_node):
+    """An INPUT chain with a DROP policy is reported as a firewall that is not disabled."""
     node = firewall_node(rules="*filter\n:INPUT DROP [0:0]\nCOMMIT\n")
 
     with pytest.raises(FirewallNotDisabled, match="INPUT DROP"):
         BaseNode.verify_firewall_disabled(node)
-
-
-CVE_2026_98432_TABLE_DUMP = """\
-table inet cve_2026_98432 {
-	chain input {
-		type filter hook input priority -310; policy accept;
-		ip protocol tcp ip hdrlength > 5 counter packets 0 bytes 0 drop
-	}
-}
-"""
-
-
-def nft_node(nft_ruleset: str) -> BaseNode:
-    node = BaseNode.__new__(BaseNode)
-    node.name, node.log = "test-node", logging.getLogger("test-node")
-    node.remoter = unittest.mock.Mock()
-    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
-        ok=True, return_code=0, stdout=nft_ruleset if "nft list" in command else "", stderr=""
-    )
-    return node
 
 
 def test_verify_firewall_disabled_ignores_the_cve_2026_98432_mitigation():
@@ -1598,6 +1746,7 @@ def test_verify_firewall_disabled_ignores_the_cve_2026_98432_mitigation():
 
 
 def test_verify_firewall_disabled_still_reports_a_table_after_the_mitigation():
+    """A dropping table next to the CVE mitigation is still reported as a firewall."""
     blocking_table = "table inet filter {\n  chain input { type filter hook input priority 0; policy drop; }\n}\n"
 
     with pytest.raises(FirewallNotDisabled, match="policy drop"):
@@ -1605,6 +1754,7 @@ def test_verify_firewall_disabled_still_reports_a_table_after_the_mitigation():
 
 
 def test_verify_firewall_disabled_still_reports_the_same_rule_in_another_table():
+    """The CVE mitigation is only exempt in its own table, so the same rule elsewhere is still reported."""
     with pytest.raises(FirewallNotDisabled, match="hdrlength"):
         BaseNode.verify_firewall_disabled(
             nft_node(CVE_2026_98432_TABLE_DUMP.replace("cve_2026_98432", "someone_elses"))
@@ -1629,7 +1779,14 @@ table inet filter {
         BaseNode.verify_firewall_disabled(node)
 
 
-@pytest.mark.parametrize("failing_tool", ["iptables-save", "ip6tables-save", "nft list ruleset"])
+@pytest.mark.parametrize(
+    "failing_tool",
+    [
+        pytest.param("iptables-save", id="iptables-save"),
+        pytest.param("ip6tables-save", id="ip6tables-save"),
+        pytest.param("nft list ruleset", id="nft-list-ruleset"),
+    ],
+)
 def test_verify_firewall_disabled_refuses_to_pass_on_an_unreadable_ruleset(firewall_node, failing_tool):
     """An installed tool which fails says nothing about the firewall - and must not read as 'none'.
 
@@ -1706,7 +1863,14 @@ def test_cql_diagnostics_tell_a_misbound_listener_from_an_unreachable_node(firew
     assert "127.0.0.1" in published[0]["message"]
 
 
-@pytest.mark.parametrize("wildcard", ["0.0.0.0", "*", "[::]"])
+@pytest.mark.parametrize(
+    "wildcard",
+    [
+        pytest.param("0.0.0.0", id="ipv4-wildcard"),
+        pytest.param("*", id="star-wildcard"),
+        pytest.param("[::]", id="ipv6-wildcard"),
+    ],
+)
 def test_a_wildcard_listener_serves_the_cql_address(firewall_node, wildcard, events_function_scope):
     """A listener on every address of the node is serving `cql_address` as well."""
     node = firewall_node(rules=OCI_IMAGE_RULESET)
@@ -1768,28 +1932,19 @@ table inet filter {
     BaseNode.verify_firewall_disabled(node)
 
 
-def _node_waiting_for_db_up(firewall_node, db_up):
-    node = firewall_node()
-    node.stop_wait_db_up_event = threading.Event()
-    node.verify_cql_address_resolvable = unittest.mock.Mock()
-    node.db_up = unittest.mock.Mock(side_effect=db_up)
-    node.log_cql_unreachable_diagnostics = unittest.mock.Mock()
-    return node
-
-
 def test_wait_db_up_diagnoses_the_node_it_gave_up_on(firewall_node):
     """The report is the point of the wait failing: it must come before the exception does."""
-    node = _node_waiting_for_db_up(firewall_node, db_up=lambda: False)
+    node = node_waiting_for_db_up(firewall_node, db_up=lambda: False)
 
     with unittest.mock.patch("sdcm.wait.time.sleep"), pytest.raises(WaitForTimeoutError):
         BaseNode.wait_db_up(node, timeout=0.1)
 
-    node.log_cql_unreachable_diagnostics.assert_called_once()
+    node.log_cql_unreachable_diagnostics.assert_called_once_with()
 
 
 def test_wait_db_up_says_nothing_about_a_node_which_came_up(firewall_node):
     """A node SCT waited for and got is not worth a word."""
-    node = _node_waiting_for_db_up(firewall_node, db_up=[False, True])
+    node = node_waiting_for_db_up(firewall_node, db_up=[False, True])
 
     with unittest.mock.patch("sdcm.wait.time.sleep"):
         BaseNode.wait_db_up(node, timeout=60)
@@ -1799,7 +1954,7 @@ def test_wait_db_up_says_nothing_about_a_node_which_came_up(firewall_node):
 
 def test_wait_db_up_says_nothing_about_a_wait_stopped_on_purpose(firewall_node):
     """`stop_wait_db_up_event` ends the wait by decision, the node is not the subject."""
-    node = _node_waiting_for_db_up(firewall_node, db_up=lambda: False)
+    node = node_waiting_for_db_up(firewall_node, db_up=lambda: False)
     node.stop_wait_db_up_event.set()
 
     with unittest.mock.patch("sdcm.wait.time.sleep"), pytest.raises(ExitByEventError):
@@ -1811,19 +1966,22 @@ def test_wait_db_up_says_nothing_about_a_wait_stopped_on_purpose(firewall_node):
 @pytest.mark.parametrize(
     "cluster_backend,endpoint,expected",
     [
-        (
+        pytest.param(
             "aws",
             {"name": "s3.{region}.amazonaws.com", "port": 443, "https": True, "aws_region": "{region}"},
             {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
+            id="aws",
         ),
-        (
+        pytest.param(
             "oci",
             {"name": "https://ns.compat.objectstorage.{region}.oci.customer-oci.com", "aws_region": "{region}"},
             {"name": "https://ns.compat.objectstorage.us-ashburn-1.oci.customer-oci.com", "aws_region": "us-ashburn-1"},
+            id="oci",
         ),
     ],
 )
 def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path, cluster_backend, endpoint, expected):
+    """The {region} placeholder of an object storage endpoint is filled with the region of the backend."""
     node = DummyNode(
         name="test_node",
         parent_cluster=None,
@@ -1844,6 +2002,7 @@ def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path, cluster_b
 
 
 def test_get_ks_cf_with_most_sstables_counts_with_one_ssh_call():
+    """The table with the most sstables is found from one sudo listing, not nodetool."""
     db_cluster = DummyScyllaCluster([])
     db_cluster.get_non_system_ks_cf_list = unittest.mock.MagicMock(
         return_value=["ks.t1", "ks.t2", 'ks."MixedCase"', "ks.empty"]
@@ -1859,11 +2018,14 @@ def test_get_ks_cf_with_most_sstables_counts_with_one_ssh_call():
 """
 
     assert db_cluster.get_ks_cf_with_most_sstables(db_node=node) == 'ks."MixedCase"'
-    node.remoter.sudo.assert_called_once()
+    node.remoter.sudo.assert_called_once_with(
+        "find /var/lib/scylla/data -mindepth 3 -maxdepth 3 -name '*-Data.db'", ignore_status=True, verbose=False
+    )
     node.run_nodetool.assert_not_called()
 
 
 def test_get_ks_cf_with_most_sstables_falls_back_to_default():
+    """Without any sstables the default keyspace1.standard1 table is returned."""
     db_cluster = DummyScyllaCluster([])
     db_cluster.get_non_system_ks_cf_list = unittest.mock.MagicMock(return_value=["ks.empty"])
     node = unittest.mock.MagicMock()
@@ -1872,37 +2034,10 @@ def test_get_ks_cf_with_most_sstables_falls_back_to_default():
     assert db_cluster.get_ks_cf_with_most_sstables(db_node=node) == "keyspace1.standard1"
 
 
-def _node_to_terminate(tmp_path, node_type, **kwargs):
-    # No scylla_shards attribute: reading it would mean SSH to a node that may be dead
-    return SimpleNamespace(
-        name=f"{node_type}-node-1",
-        node_type=node_type,
-        logdir=str(tmp_path / f"{node_type}-node-1"),
-        ip_address="10.4.0.201",
-        public_ip_address="63.34.198.130",
-        private_ip_address="10.4.0.201",
-        running_nemesis=None,
-        destroy=unittest.mock.Mock(),
-        **kwargs,
-    )
-
-
-def _cluster_terminating(node, tmp_path):
-    return SimpleNamespace(
-        dead_nodes_ip_address_list=[],
-        dead_nodes_list=[],
-        nodes=[node],
-        test_config=unittest.mock.Mock(),
-        logdir=str(tmp_path),
-        params={},
-        log=logging.getLogger(__name__),
-    )
-
-
 def test_terminate_node_of_a_node_that_failed_init_collects_loader_logs_without_ssh(tmp_path, caplog):
     """SCT-1439: a loader that never got SSH lost its logs to `log_links[0]` and to SSH shard queries."""
-    node = _node_to_terminate(tmp_path, "loader")
-    cluster = _cluster_terminating(node, tmp_path)
+    node = node_to_terminate(tmp_path, "loader")
+    cluster = cluster_terminating(node, tmp_path)
 
     with unittest.mock.patch("sdcm.cluster.LoaderLogCollector") as collector:
         collector.return_value.collect_node_logs.return_value = []
@@ -1914,12 +2049,13 @@ def test_terminate_node_of_a_node_that_failed_init_collects_loader_logs_without_
     assert "No logs were collected for node loader-node-1" in caplog.text
     assert cluster.dead_nodes_list[0].shards == 0
     assert cluster.nodes == []
-    node.destroy.assert_called_once()
+    node.destroy.assert_called_once_with()
 
 
 def test_terminate_node_of_a_db_node_reads_its_shards_and_submits_the_logs(tmp_path):
-    node = _node_to_terminate(tmp_path, "db", scylla_shards=8)
-    cluster = _cluster_terminating(node, tmp_path)
+    """A db node's shard count is read from the node and its collected logs are submitted to Argus."""
+    node = node_to_terminate(tmp_path, "db", scylla_shards=8)
+    cluster = cluster_terminating(node, tmp_path)
 
     with unittest.mock.patch("sdcm.cluster.ScyllaLogCollector") as collector:
         collector.return_value.collect_node_logs.return_value = ["https://s3/db-node-1.tar.zst"]
@@ -1945,6 +2081,7 @@ def test_save_console_output_writes_the_console_of_a_node_without_ssh(tmp_path):
 
 
 def test_save_console_output_leaves_a_running_checker_alone():
+    """A checker which is already running is kept and no new one is created."""
     running = unittest.mock.Mock()
     node = SimpleNamespace(kernel_panic_checker=running, _create_kernel_panic_checker=unittest.mock.Mock())
 
@@ -1955,6 +2092,7 @@ def test_save_console_output_leaves_a_running_checker_alone():
 
 
 def test_terminate_on_failure_saves_the_console_before_terminating():
+    """terminate_on_failure saves the console output and then terminates the node when init fails."""
     calls = unittest.mock.Mock()
     node = SimpleNamespace(
         name="loader-node-1",
@@ -1977,6 +2115,7 @@ def test_terminate_on_failure_saves_the_console_before_terminating():
 
 
 def test_wait_ssh_up_timeout_says_why_ssh_is_down():
+    """The SSH wait timeout reports the last SSH error and the user and host it tried."""
     remoter = SimpleNamespace(
         user="ubuntu", hostname="10.4.0.201", is_up=lambda: False, last_is_up_error=PermissionError("publickey")
     )
@@ -2006,29 +2145,8 @@ def test_wait_ssh_up_timeout_through_the_sct_agent_stays_a_timeout():
         BaseNode.wait_ssh_up(node)
 
 
-VECTOR_JOURNAL = "vector[4710]: ERROR vector::config::loading: Config file not found in path"
-VECTOR_RESET = "systemctl reset-failed vector.service"
-VECTOR_RESTART = "systemctl restart vector.service"
-
-
-@pytest.fixture(name="vector_node")
-def fixture_vector_node(monkeypatch):
-    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_TIMEOUT", 0.2)
-    monkeypatch.setattr("sdcm.cluster.VECTOR_ACTIVE_CHECK_STEP", 0.05)
-    monkeypatch.setattr("sdcm.cluster.VECTOR_SETTLE_TIME", 0)
-    node = BaseNode.__new__(BaseNode)
-    node.name = "node-1"
-    node.log = unittest.mock.Mock()
-    node.remoter = unittest.mock.Mock()
-    node.remoter.sudo.return_value = SimpleNamespace(stdout=VECTOR_JOURNAL)
-    return node
-
-
-def vector_sudo_commands(node):
-    return [call.args[0] for call in node.remoter.sudo.call_args_list]
-
-
 def test_steady_vector_needs_two_readings_and_no_restart(vector_node):
+    """A vector.service that reads active twice in a row is left running."""
     vector_node.remoter.run.return_value = SimpleNamespace(stdout="active\n")
 
     vector_node._ensure_vector_is_active()
@@ -2038,6 +2156,7 @@ def test_steady_vector_needs_two_readings_and_no_restart(vector_node):
 
 
 def test_vector_that_dies_after_its_start_is_restarted(vector_node):
+    """A vector.service that fails after its start is reset and restarted, in that order."""
     readings = iter(["active\n", "failed\n"] * 100)
 
     def run(*_, **__):
@@ -2055,6 +2174,7 @@ def test_vector_that_dies_after_its_start_is_restarted(vector_node):
 
 
 def test_node_setup_fails_when_vector_stays_down(vector_node):
+    """A vector.service that stays failed after one restart fails the node setup with the journal."""
     vector_node.remoter.run.return_value = SimpleNamespace(stdout="failed\n")
 
     with pytest.raises(NodeSetupFailed) as error:
@@ -2067,6 +2187,7 @@ def test_node_setup_fails_when_vector_stays_down(vector_node):
 
 
 def test_ssh_drop_ends_in_node_setup_failed(vector_node):
+    """A dropped SSH connection while checking vector fails the node setup, not the test with a raw error."""
     vector_node.remoter.run.side_effect = ConnectionError("ssh is down")
     vector_node.remoter.sudo.side_effect = ConnectionError("ssh is down")
 
@@ -2087,8 +2208,15 @@ def test_every_vector_command_has_a_timeout(vector_node):
     assert calls and all(call.kwargs.get("timeout") for call in calls)
 
 
-@pytest.mark.parametrize("logs_transport,checked", [("vector", True), ("syslog-ng", False)])
+@pytest.mark.parametrize(
+    "logs_transport,checked",
+    [
+        pytest.param("vector", True, id="vector"),
+        pytest.param("syslog-ng", False, id="syslog-ng"),
+    ],
+)
 def test_base_node_checks_vector_only_for_the_vector_transport(logs_transport, checked):
+    """Remote logging checks the vector service only when the logs transport is vector."""
     node = BaseNode.__new__(BaseNode)
     node.name = "node-1"
     node.journal_since = None

@@ -98,7 +98,13 @@ def test_port_mapping_allows_the_ports_of_the_tunnels_it_creates(node_type, ldap
     assert container_manager.run_container.call_args_list == expected_containers
 
 
-@pytest.mark.parametrize("logs_transport", ["vector", "ssh"])
+@pytest.mark.parametrize(
+    "logs_transport",
+    [
+        pytest.param("vector", id="vector"),
+        pytest.param("ssh", id="ssh"),
+    ],
+)
 def test_logging_port_keeps_its_tunnel_label_without_syslog_ng(logs_transport):
     """Only syslog-ng, which runs confined, needs the log port relabelled to `syslogd_port_t`."""
     cluster = BaseScyllaCluster.__new__(BaseScyllaCluster)

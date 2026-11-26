@@ -24,7 +24,24 @@ from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient, _get_jenkins
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix
 
 
+@pytest.fixture()
+def required_param_matrix(tmp_path):
+    """Matrix file where sd_tarball is required; job-2 sets it, job-3 is disabled."""
+    data = {
+        "required_params": ["sd_tarball"],
+        "jobs": [
+            {"job_name": "/gating/job-1", "backend": "docker"},
+            {"job_name": "/gating/job-2", "backend": "docker", "params": {"sd_tarball": "s3://own"}},
+            {"job_name": "/gating/job-3", "backend": "docker", "disabled": True},
+        ],
+    }
+    path = tmp_path / "required.yaml"
+    path.write_text(yaml.dump(data))
+    return path
+
+
 def test_dry_run_produces_output(sample_matrix_yaml, caplog):
+    """A dry run triggers every matching job and logs each one as [DRY-RUN]."""
     with caplog.at_level(logging.INFO):
         results = trigger_matrix(
             matrix_file=str(sample_matrix_yaml),
@@ -38,6 +55,7 @@ def test_dry_run_produces_output(sample_matrix_yaml, caplog):
 
 
 def test_dry_run_with_label_filter(sample_matrix_yaml):
+    """labels_selector keeps only the jobs carrying that label."""
     results = trigger_matrix(
         matrix_file=str(sample_matrix_yaml),
         scylla_version="2025.4",
@@ -48,6 +66,7 @@ def test_dry_run_with_label_filter(sample_matrix_yaml):
 
 
 def test_dry_run_with_backend_filter(sample_matrix_yaml):
+    """Backend filter keeps only the jobs for that backend."""
     results = trigger_matrix(
         matrix_file=str(sample_matrix_yaml),
         scylla_version="2025.4",
@@ -58,6 +77,7 @@ def test_dry_run_with_backend_filter(sample_matrix_yaml):
 
 
 def test_dry_run_version_exclusion(sample_matrix_yaml):
+    """Jobs excluding the requested version are not triggered."""
     results = trigger_matrix(
         matrix_file=str(sample_matrix_yaml),
         scylla_version="master:latest",
@@ -68,6 +88,7 @@ def test_dry_run_version_exclusion(sample_matrix_yaml):
 
 @patch.object(JenkinsClient, "trigger")
 def test_full_flow_with_mocked_api(mock_trigger, sample_matrix_yaml):
+    """Every matching job is sent to JenkinsClient.trigger and reported as triggered."""
     mock_trigger.return_value = True
     results = trigger_matrix(
         matrix_file=str(sample_matrix_yaml),
@@ -79,6 +100,7 @@ def test_full_flow_with_mocked_api(mock_trigger, sample_matrix_yaml):
 
 @patch.object(JenkinsClient, "trigger")
 def test_failed_jobs_reported(mock_trigger, sample_matrix_yaml):
+    """Jobs whose trigger returns False are reported under failed, not triggered."""
     mock_trigger.return_value = False
     results = trigger_matrix(
         matrix_file=str(sample_matrix_yaml),
@@ -90,23 +112,30 @@ def test_failed_jobs_reported(mock_trigger, sample_matrix_yaml):
 
 
 def test_missing_jenkins_url_raises(monkeypatch):
+    """Without JENKINS_URL or KeyStore credentials, trigger raises JenkinsTriggerError about the URL."""
     monkeypatch.delenv("JENKINS_URL", raising=False)
     monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
-    with patch("sdcm.keystore.KeyStore.get_json", side_effect=NoCredentialsError()):
-        with pytest.raises(JenkinsTriggerError, match="Jenkins URL not set"):
-            JenkinsClient().trigger("test-job", {}, dry_run=False)
+    with (
+        patch("sdcm.keystore.KeyStore.get_json", side_effect=NoCredentialsError()),
+        pytest.raises(JenkinsTriggerError, match="Jenkins URL not set"),
+    ):
+        JenkinsClient().trigger("test-job", {}, dry_run=False)
 
 
 def test_missing_jenkins_token_raises(monkeypatch):
+    """With a URL but no API token, trigger raises JenkinsTriggerError about the token."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
-    with patch("sdcm.keystore.KeyStore.get_json", side_effect=NoCredentialsError()):
-        with pytest.raises(JenkinsTriggerError, match="Jenkins API token not set"):
-            JenkinsClient().trigger("test-job", {}, dry_run=False)
+    with (
+        patch("sdcm.keystore.KeyStore.get_json", side_effect=NoCredentialsError()),
+        pytest.raises(JenkinsTriggerError, match="Jenkins API token not set"),
+    ):
+        JenkinsClient().trigger("test-job", {}, dry_run=False)
 
 
 @patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_returns_false(mock_sleep, monkeypatch):
+    """A JenkinsException from run_script makes trigger return False."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
@@ -122,6 +151,7 @@ def test_jenkins_exception_returns_false(mock_sleep, monkeypatch):
 
 @patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_retries_then_fails(mock_sleep, monkeypatch):
+    """Persistent JenkinsException is retried up to 3 attempts, then trigger returns False."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
@@ -138,6 +168,7 @@ def test_jenkins_exception_retries_then_fails(mock_sleep, monkeypatch):
 
 @patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_then_success(mock_sleep, monkeypatch):
+    """A transient JenkinsException is retried, and a later TRIGGERED reply makes trigger return True."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
@@ -157,6 +188,7 @@ def test_jenkins_exception_then_success(mock_sleep, monkeypatch):
 
 @patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_trigger_script_error_returns_false_without_retry(mock_sleep, monkeypatch):
+    """An ERROR: reply from the Jenkins script makes trigger return False after one call, with no retry."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
@@ -172,6 +204,7 @@ def test_trigger_script_error_returns_false_without_retry(mock_sleep, monkeypatc
 
 
 def test_zero_match_logs_warning(sample_matrix_yaml, caplog):
+    """A labels_selector that matches no job logs a 'No jobs matched' warning."""
     with caplog.at_level(logging.WARNING):
         trigger_matrix(
             matrix_file=str(sample_matrix_yaml),
@@ -183,6 +216,7 @@ def test_zero_match_logs_warning(sample_matrix_yaml, caplog):
 
 
 def test_unknown_skip_jobs_logs_warning(sample_matrix_yaml, caplog):
+    """skip_jobs names missing from the matrix log a 'not found in matrix' warning."""
     with caplog.at_level(logging.WARNING):
         trigger_matrix(
             matrix_file=str(sample_matrix_yaml),
@@ -257,6 +291,7 @@ def test_duplicate_job_names_deduplicated(tmp_path):
 
 
 def test_credentials_are_read_from_env(monkeypatch):
+    """_get_jenkins_client builds the Jenkins client from JENKINS_* env vars, stripping the URL's trailing slash."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com/")
     monkeypatch.setenv("JENKINS_USERNAME", "bob")
     monkeypatch.setenv("JENKINS_API_TOKEN", "tok")
@@ -306,6 +341,7 @@ def test_env_url_wins_over_keystore(monkeypatch):
 
 @patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_trigger_with_queue_returns_the_queue_url(_mock_sleep):
+    """trigger_with_queue returns the queue item URL from the TRIGGERED reply."""
     mock_client = MagicMock()
     mock_client.run_script.return_value = "TRIGGERED:https://jenkins.example.com/queue/item/77/"
     with patch(
@@ -345,29 +381,19 @@ def test_error_reply_fails_fast_without_retrying(_mock_sleep):
     assert mock_client.run_script.call_count == 1
 
 
-@pytest.fixture()
-def required_param_matrix(tmp_path):
-    data = {
-        "required_params": ["sd_tarball"],
-        "jobs": [
-            {"job_name": "/gating/job-1", "backend": "docker"},
-            {"job_name": "/gating/job-2", "backend": "docker", "params": {"sd_tarball": "s3://own"}},
-            {"job_name": "/gating/job-3", "backend": "docker", "disabled": True},
-        ],
-    }
-    path = tmp_path / "required.yaml"
-    path.write_text(yaml.dump(data))
-    return path
-
-
 def test_missing_required_param_fails_before_triggering(required_param_matrix, monkeypatch):
+    """A missing required param fails the run before any job is triggered."""
     monkeypatch.setattr(JenkinsClient, "trigger", lambda *a, **kw: pytest.fail("a job was triggered"))
     with pytest.raises(TriggerMatrixError, match=r"sd_tarball \(jobs: /gating/job-1\)"):
         trigger_matrix(matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True)
 
 
-@pytest.mark.parametrize("value", ["", "  "])
+@pytest.mark.parametrize(
+    "value",
+    [pytest.param("", id="empty"), pytest.param("  ", id="whitespace")],
+)
 def test_empty_required_param_override_fails(required_param_matrix, value):
+    """A required param overridden with an empty or blank value fails the run."""
     with pytest.raises(TriggerMatrixError, match="sd_tarball"):
         trigger_matrix(
             matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True, sd_tarball=value
@@ -375,6 +401,7 @@ def test_empty_required_param_override_fails(required_param_matrix, value):
 
 
 def test_required_param_given_as_override(required_param_matrix):
+    """A required param given as an override lets the jobs without their own value trigger."""
     results = trigger_matrix(
         matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True, sd_tarball="s3://x"
     )

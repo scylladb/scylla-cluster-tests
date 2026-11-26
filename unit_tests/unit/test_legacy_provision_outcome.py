@@ -28,7 +28,7 @@ from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND, INSTANCE_PROVISION_SPOT
 
 
-def _cluster(instance_provision=INSTANCE_PROVISION_SPOT, fallback_on_demand=True):
+def make_cluster(instance_provision=INSTANCE_PROVISION_SPOT, fallback_on_demand=True):
     """A bare AWSCluster with only what fallback_provision_type touches."""
     cluster = AWSCluster.__new__(AWSCluster)
     cluster.instance_provision = instance_provision
@@ -39,7 +39,7 @@ def _cluster(instance_provision=INSTANCE_PROVISION_SPOT, fallback_on_demand=True
     return cluster
 
 
-def _run(cluster, on_demand=None, spot=None):
+def drive_fallback(cluster, on_demand=None, spot=None):
     """Drive fallback_provision_type with stubbed creators; return the published event kwargs."""
     with (
         patch.object(AWSCluster, "_create_on_demand_instances", **(on_demand or {})),
@@ -54,8 +54,9 @@ def _run(cluster, on_demand=None, spot=None):
 
 
 def test_spot_success_records_no_downgrade():
-    cluster = _cluster()
-    instances, event = _run(cluster, spot={"return_value": ["i-1"]})
+    """A spot success publishes requested and realized as spot, with the requested count."""
+    cluster = make_cluster()
+    instances, event = drive_fallback(cluster, spot={"return_value": ["i-1"]})
 
     assert instances == ["i-1"]
     kwargs = event.call_args.kwargs
@@ -66,8 +67,8 @@ def test_spot_success_records_no_downgrade():
 
 def test_silent_downgrade_to_on_demand_is_recorded():
     """The whole point: mid-test spot exhaustion quietly falls back, and used to leave no trace."""
-    cluster = _cluster()
-    instances, event = _run(
+    cluster = make_cluster()
+    instances, event = drive_fallback(
         cluster,
         spot={"side_effect": CreateSpotInstancesError("capacity-not-available")},
         on_demand={"return_value": ["i-2"]},
@@ -81,9 +82,9 @@ def test_silent_downgrade_to_on_demand_is_recorded():
 
 def test_total_failure_records_before_reraising():
     """This path raises rather than returning [] (unlike ProvisionPlan), so the event must precede the raise."""
-    cluster = _cluster()
+    cluster = make_cluster()
     err = CreateSpotInstancesError("capacity-not-available")
-    instances, event = _run(
+    instances, event = drive_fallback(
         cluster,
         spot={"side_effect": err},
         on_demand={"side_effect": botocore.exceptions.ClientError({"Error": {"Code": "X"}}, "RunInstances")},
@@ -101,8 +102,8 @@ def test_any_client_error_downgrades_and_is_recorded():
     "only retry spot-specific errors" guard never actually rejects a ClientError. Pre-existing, not changed
     here - but it means the downgrade is recorded for these too, which is the behaviour we want to pin.
     """
-    cluster = _cluster()
-    instances, event = _run(
+    cluster = make_cluster()
+    instances, event = drive_fallback(
         cluster,
         spot={"side_effect": botocore.exceptions.ClientError({"Error": {"Code": "Boom"}}, "RunInstances")},
         on_demand={"return_value": ["i-3"]},
@@ -113,8 +114,9 @@ def test_any_client_error_downgrades_and_is_recorded():
 
 
 def test_no_fallback_configured_records_failure():
-    cluster = _cluster(fallback_on_demand=False)
-    instances, event = _run(cluster, spot={"side_effect": CreateSpotInstancesError("capacity-not-available")})
+    """With fallback disabled, a spot failure is recorded with no realized type and re-raised."""
+    cluster = make_cluster(fallback_on_demand=False)
+    instances, event = drive_fallback(cluster, spot={"side_effect": CreateSpotInstancesError("capacity-not-available")})
 
     assert isinstance(instances, CreateSpotInstancesError)
     assert event.call_args.kwargs["realized"] is None
@@ -122,8 +124,8 @@ def test_no_fallback_configured_records_failure():
 
 def test_event_carries_region_and_az():
     """az_idx is threaded through so the event can name the AZ, matching the upfront path's fields."""
-    cluster = _cluster()
-    _, event = _run(cluster, spot={"return_value": ["i-1"]})
+    cluster = make_cluster()
+    _, event = drive_fallback(cluster, spot={"return_value": ["i-1"]})
 
     kwargs = event.call_args.kwargs
     assert kwargs["region"] == "eu-west-1"
@@ -133,7 +135,7 @@ def test_event_carries_region_and_az():
 
 def test_publishing_failure_never_breaks_provisioning():
     """This sits on the hot path for every add_nodes; a reporting bug must not fail node creation."""
-    cluster = _cluster()
+    cluster = make_cluster()
     with (
         patch.object(AWSCluster, "_create_spot_instances", return_value=["i-1"]),
         patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent", side_effect=RuntimeError("boom")),
@@ -141,10 +143,17 @@ def test_publishing_failure_never_breaks_provisioning():
         assert cluster.fallback_provision_type(count=1, interfaces=[], ec2_user_data="", dc_idx=0, az_idx=0) == ["i-1"]
 
 
-@pytest.mark.parametrize("az_idx", [0, 1, 99])
+@pytest.mark.parametrize(
+    "az_idx",
+    [
+        pytest.param(0, id="first-az"),
+        pytest.param(1, id="second-az"),
+        pytest.param(99, id="out-of-range"),
+    ],
+)
 def test_out_of_range_az_index_is_tolerated(az_idx):
     """A bad index must degrade to an empty AZ, not raise out of the provisioning path."""
-    cluster = _cluster()
+    cluster = make_cluster()
     with (
         patch.object(AWSCluster, "_create_spot_instances", return_value=["i-1"]),
         patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,

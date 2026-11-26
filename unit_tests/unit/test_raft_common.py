@@ -23,14 +23,16 @@ OTHER_HOST_ID = "22222222-2222-2222-2222-222222222222"
 NULL_HOST_ID = "00000000-0000-0000-0000-000000000000"
 
 
-def _make_node(name: str, host_id: str) -> MagicMock:
+def make_node(name: str, host_id: str) -> MagicMock:
+    """Build a mock node with the given name and host id."""
     node = MagicMock()
     node.name = name
     node.host_id = host_id
     return node
 
 
-def _make_verification_node(active_nodes: list[MagicMock]) -> MagicMock:
+def make_verification_node(active_nodes: list[MagicMock]) -> MagicMock:
+    """Build a mock node whose parent cluster reports active_nodes as up and normal."""
     node = MagicMock()
     node.name = "verification-node"
     node.parent_cluster.get_nodes_up_and_normal.return_value = active_nodes
@@ -38,8 +40,8 @@ def _make_verification_node(active_nodes: list[MagicMock]) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def _no_retry_sleep(monkeypatch):
-    # Speed up retrying(n=3) failures.
+def no_retry_sleep(monkeypatch):
+    """Replace retry sleep with a no-op so the retrying(n=3) wrapper runs instantly."""
     monkeypatch.setattr("sdcm.utils.decorators.time.sleep", lambda *_, **__: None)
 
 
@@ -66,9 +68,10 @@ def raft_leader_host_mock(monkeypatch):
 
 
 def test_returns_node_matching_group0_leader(raft_leader_host_mock, storage_service_client_mock):
-    leader_node = _make_node("node-1", LEADER_HOST_ID)
-    other_node = _make_node("node-2", OTHER_HOST_ID)
-    verification_node = _make_verification_node([other_node, leader_node])
+    """get_topology_coordinator_node returns the active node whose host id matches the group0 leader."""
+    leader_node = make_node("node-1", LEADER_HOST_ID)
+    other_node = make_node("node-2", OTHER_HOST_ID)
+    verification_node = make_verification_node([other_node, leader_node])
     raft_leader_host_mock.return_value = f'"{LEADER_HOST_ID}"'
 
     result = common.get_topology_coordinator_node(verification_node)
@@ -98,7 +101,8 @@ def test_raises_when_leader_unusable_or_missing_in_active_nodes(
     leader_host_id,
     error_match,
 ):
-    verification_node = _make_verification_node([_make_node("node-1", OTHER_HOST_ID)])
+    """get_topology_coordinator_node raises when the leader is unusable or not among active nodes, retrying 3 times."""
+    verification_node = make_verification_node([make_node("node-1", OTHER_HOST_ID)])
     raft_leader_host_mock.return_value = leader_host_id
 
     with pytest.raises(RaftTopologyCoordinatorNotFound, match=error_match):

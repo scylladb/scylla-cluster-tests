@@ -33,6 +33,7 @@ TRIGGERS_DIR = PROJECT_ROOT / "configurations" / "triggers"
     ],
 )
 def test_yaml_loads_and_has_expected_job_count(filename, min_jobs):
+    """load_matrix_config yields at least min_jobs jobs for each trigger YAML."""
     path = TRIGGERS_DIR / filename
     if not path.exists():
         pytest.skip(f"{filename} not found")
@@ -40,8 +41,16 @@ def test_yaml_loads_and_has_expected_job_count(filename, min_jobs):
     assert len(config.jobs) >= min_jobs, f"{filename} has {len(config.jobs)} jobs, expected at least {min_jobs}"
 
 
-@pytest.mark.parametrize("filename", ["tier1.yaml", "sanity.yaml", "perf-regression.yaml"])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        pytest.param("tier1.yaml", id="tier1"),
+        pytest.param("sanity.yaml", id="sanity"),
+        pytest.param("perf-regression.yaml", id="perf-regression"),
+    ],
+)
 def test_yaml_jobs_have_required_fields(filename):
+    """Every job in the main trigger YAMLs has a job_name and a known backend."""
     path = TRIGGERS_DIR / filename
     if not path.exists():
         pytest.skip(f"{filename} not found")
@@ -56,12 +65,13 @@ def test_yaml_jobs_have_required_fields(filename):
 @pytest.mark.parametrize(
     "filename",
     [
-        "configurations/triggers/pgo-offline-installer.yaml",
-        "configurations/triggers/scylla-doctor-gating.yaml",
-        "configurations/triggers/xcloud.yaml",
+        pytest.param("configurations/triggers/pgo-offline-installer.yaml", id="pgo-offline-installer"),
+        pytest.param("configurations/triggers/scylla-doctor-gating.yaml", id="scylla-doctor-gating"),
+        pytest.param("configurations/triggers/xcloud.yaml", id="xcloud"),
     ],
 )
 def test_new_yaml_loads_successfully(filename):
+    """Each new trigger YAML loads and defines at least one job."""
     path = PROJECT_ROOT / filename
     if not path.exists():
         pytest.skip(f"{filename} not found")
@@ -70,6 +80,7 @@ def test_new_yaml_loads_successfully(filename):
 
 
 def test_scylla_doctor_gating_defaults():
+    """scylla-doctor-gating.yaml sets wait, fail_on_error, collect_results and defaults as the gating run expects."""
     path = PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml"
     if not path.exists():
         pytest.skip("scylla-doctor-gating.yaml not found")
@@ -84,6 +95,7 @@ def test_scylla_doctor_gating_defaults():
 
 
 def test_scylla_doctor_gating_runs_every_sd_release_gating_os_but_docker():
+    """Every release-gating OS artifact job is enabled and only the docker one is disabled."""
     config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
     enabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if not job.disabled}
     disabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if job.disabled}
@@ -109,6 +121,7 @@ def test_scylla_doctor_gating_runs_every_sd_release_gating_os_but_docker():
 
 
 def test_scylla_doctor_gating_jobs_are_defined_in_the_scylla_doctor_folder():
+    """Every gating job points at an artifacts job symlinked in the scylla-doctor folder."""
     symlinks = yaml.safe_load(
         (PROJECT_ROOT / "jenkins-pipelines/scylla-doctor/oss/artifacts/_symlinks.yaml").read_text()
     )
@@ -118,6 +131,7 @@ def test_scylla_doctor_gating_jobs_are_defined_in_the_scylla_doctor_folder():
 
 
 def test_scylla_doctor_gating_arm_jobs_run_on_aarch64():
+    """ARM gating jobs resolve to aarch64 and the others to x86_64."""
     config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
     for job in config.jobs:
         expected = "aarch64" if job.job_name.endswith("-arm-test") else "x86_64"
@@ -125,6 +139,7 @@ def test_scylla_doctor_gating_arm_jobs_run_on_aarch64():
 
 
 def test_scylla_doctor_gating_jobs_have_their_os_label():
+    """Each gating job carries exactly one os- label matching its job name."""
     config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
     for job in config.jobs:
         os_name = job.job_name.removeprefix("/scylla-doctor/oss/artifacts/artifacts-").removesuffix("-test")
@@ -132,6 +147,7 @@ def test_scylla_doctor_gating_jobs_have_their_os_label():
 
 
 def test_pgo_has_wait_false():
+    """Every PGO offline-installer job runs with wait disabled."""
     path = PROJECT_ROOT / "configurations/triggers/pgo-offline-installer.yaml"
     if not path.exists():
         pytest.skip("pgo-offline-installer.yaml not found")

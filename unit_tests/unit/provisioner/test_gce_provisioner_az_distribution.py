@@ -35,7 +35,8 @@ FAKE_SSH_KEY = SSHKey(
 )
 
 
-def _make_definition(node_index: int, rack_index: int | None = None) -> InstanceDefinition:
+def make_definition(node_index: int, rack_index: int | None = None) -> InstanceDefinition:
+    """Build an InstanceDefinition named node-<node_index>, tagged with its NodeIndex and optional rack."""
     return InstanceDefinition(
         name=f"node-{node_index}",
         image_id="projects/scylla-images/global/images/test-image",
@@ -49,7 +50,8 @@ def _make_definition(node_index: int, rack_index: int | None = None) -> Instance
     )
 
 
-def _make_fake_instance(name: str, zone: str) -> compute_v1.Instance:
+def make_fake_instance(name: str, zone: str) -> compute_v1.Instance:
+    """Build a RUNNING compute_v1.Instance mock with a NAT address, SSH metadata and labels, in the given zone."""
     instance = MagicMock(spec=compute_v1.Instance)
     instance.name = name
     instance.zone = f"projects/test-project/zones/{zone}"
@@ -87,7 +89,7 @@ def gce_providers():
         def track_create(definitions, pricing_model, user_data_list, startup_script_list):
             created_per_zone.setdefault(zone, []).extend(definition.name for definition in definitions)
             # GCE creates the instance under the normalized name, not the definition name
-            return [_make_fake_instance(normalize_instance_name(definition.name), zone) for definition in definitions]
+            return [make_fake_instance(normalize_instance_name(definition.name), zone) for definition in definitions]
 
         provider.get_or_create.side_effect = track_create
         providers[zone] = provider
@@ -107,7 +109,8 @@ def gce_providers():
         yield {"providers": providers, "created_per_zone": created_per_zone}
 
 
-def _provisioner(availability_zone: str) -> GceProvisioner:
+def make_provisioner(availability_zone: str) -> GceProvisioner:
+    """Build a GceProvisioner for test-123 in us-east1 with the given availability_zone string."""
     return GceProvisioner(
         test_id="test-123",
         region="us-east1",
@@ -118,9 +121,9 @@ def _provisioner(availability_zone: str) -> GceProvisioner:
 
 def test_nodes_are_placed_by_node_index(gce_providers):
     """With AZ='a,b,c' and 6 nodes, each zone gets the nodes whose index maps to it."""
-    provisioner = _provisioner("a,b,c")
+    provisioner = make_provisioner("a,b,c")
 
-    provisioner.get_or_create_instances([_make_definition(idx) for idx in range(1, 7)], PricingModel.ON_DEMAND)
+    provisioner.get_or_create_instances([make_definition(idx) for idx in range(1, 7)], PricingModel.ON_DEMAND)
 
     assert gce_providers["created_per_zone"] == {
         "us-east1-a": ["node-1", "node-4"],
@@ -135,10 +138,10 @@ def test_placement_is_stable_when_nodes_are_provisioned_one_at_a_time(gce_provid
     This is what a nemesis grow does: a batch position based rule would send every added node to
     the first zone.
     """
-    provisioner = _provisioner("a,b,c")
+    provisioner = make_provisioner("a,b,c")
 
     for node_index in range(1, 7):
-        provisioner.get_or_create_instances([_make_definition(node_index)], PricingModel.ON_DEMAND)
+        provisioner.get_or_create_instances([make_definition(node_index)], PricingModel.ON_DEMAND)
 
     assert gce_providers["created_per_zone"] == {
         "us-east1-a": ["node-1", "node-4"],
@@ -149,8 +152,8 @@ def test_placement_is_stable_when_nodes_are_provisioned_one_at_a_time(gce_provid
 
 def test_placement_is_unchanged_when_some_nodes_already_exist(gce_providers):
     """A retry after a partial failure must not move the remaining nodes to other zones."""
-    provisioner = _provisioner("a,b,c")
-    definitions = [_make_definition(idx) for idx in range(1, 7)]
+    provisioner = make_provisioner("a,b,c")
+    definitions = [make_definition(idx) for idx in range(1, 7)]
 
     # first attempt created nodes 1 and 2 only
     provisioner.get_or_create_instances(definitions[:2], PricingModel.ON_DEMAND)
@@ -165,10 +168,10 @@ def test_placement_is_unchanged_when_some_nodes_already_exist(gce_providers):
 
 def test_rack_index_selects_the_zone(gce_providers):
     """An explicit rack index wins over the node index - it is how the cluster picks the AZ."""
-    provisioner = _provisioner("a,b,c")
+    provisioner = make_provisioner("a,b,c")
 
     provisioner.get_or_create_instances(
-        [_make_definition(idx, rack_index=2) for idx in range(1, 4)], PricingModel.ON_DEMAND
+        [make_definition(idx, rack_index=2) for idx in range(1, 4)], PricingModel.ON_DEMAND
     )
 
     assert gce_providers["created_per_zone"] == {"us-east1-c": ["node-1", "node-2", "node-3"]}
@@ -176,8 +179,8 @@ def test_rack_index_selects_the_zone(gce_providers):
 
 def test_instances_are_returned_in_the_requested_order(gce_providers):
     """Callers zip the result with the definitions they passed in, so the order must be kept."""
-    provisioner = _provisioner("a,b,c")
-    definitions = [_make_definition(idx) for idx in range(1, 7)]
+    provisioner = make_provisioner("a,b,c")
+    definitions = [make_definition(idx) for idx in range(1, 7)]
 
     instances = provisioner.get_or_create_instances(definitions, PricingModel.ON_DEMAND)
 
@@ -186,8 +189,8 @@ def test_instances_are_returned_in_the_requested_order(gce_providers):
 
 def test_partial_creation_raises_instead_of_returning_a_short_list(gce_providers):
     """A missing instance must not be swallowed: callers pair the result with their definitions."""
-    provisioner = _provisioner("a,b,c")
-    definitions = [_make_definition(idx) for idx in range(1, 4)]
+    provisioner = make_provisioner("a,b,c")
+    definitions = [make_definition(idx) for idx in range(1, 4)]
     zone_b = gce_providers["providers"]["us-east1-b"]
     zone_b.get_or_create.side_effect = lambda definitions, **kwargs: []
 
@@ -197,7 +200,7 @@ def test_partial_creation_raises_instead_of_returning_a_short_list(gce_providers
 
 def test_operations_on_an_out_of_zone_instance_go_to_its_own_zone(gce_providers):
     """AZ fallback can leave an instance outside the configured zones; it must still be reachable."""
-    provisioner = _provisioner("a,b")
+    provisioner = make_provisioner("a,b")
     provisioner._cache["moved-node"] = MagicMock()
     provisioner._instance_zones["moved-node"] = "us-east1-f"
 
@@ -211,8 +214,8 @@ def test_operations_on_an_out_of_zone_instance_go_to_its_own_zone(gce_providers)
 
 def test_definition_name_that_gce_renames_is_still_matched_to_its_instance(gce_providers):
     """GCE replaces anything outside [a-z0-9-] on creation - a user_prefix may well carry a dot."""
-    provisioner = _provisioner("a,b")
-    definition = _make_definition(1)
+    provisioner = make_provisioner("a,b")
+    definition = make_definition(1)
     definition.name = "user.name-db-node-1"
 
     instances = provisioner.get_or_create_instances([definition], PricingModel.ON_DEMAND)
@@ -225,8 +228,8 @@ def test_definition_name_that_gce_renames_is_still_matched_to_its_instance(gce_p
 
 def test_terminate_uses_the_zone_of_the_instance(gce_providers):
     """A node living in the second zone must not be deleted through the first zone's provider."""
-    provisioner = _provisioner("a,b,c")
-    provisioner.get_or_create_instances([_make_definition(2)], PricingModel.ON_DEMAND)
+    provisioner = make_provisioner("a,b,c")
+    provisioner.get_or_create_instances([make_definition(2)], PricingModel.ON_DEMAND)
 
     provisioner.terminate_instance("node-2", wait=True)
 
@@ -235,8 +238,9 @@ def test_terminate_uses_the_zone_of_the_instance(gce_providers):
 
 
 def test_reboot_and_tagging_use_the_zone_of_the_instance(gce_providers):
-    provisioner = _provisioner("a,b,c")
-    provisioner.get_or_create_instances([_make_definition(3)], PricingModel.ON_DEMAND)
+    """reboot_instance and add_instance_tags reach the provider of the zone the instance lives in."""
+    provisioner = make_provisioner("a,b,c")
+    provisioner.get_or_create_instances([make_definition(3)], PricingModel.ON_DEMAND)
 
     provisioner.reboot_instance("node-3", wait=False)
     provisioner.add_instance_tags("node-3", {"keep": "alive"})
@@ -247,8 +251,8 @@ def test_reboot_and_tagging_use_the_zone_of_the_instance(gce_providers):
 
 def test_cleanup_deletes_instances_in_every_zone(gce_providers):
     """Cleanup must reach the nodes of all zones, or they leak."""
-    provisioner = _provisioner("a,b,c")
-    provisioner.get_or_create_instances([_make_definition(idx) for idx in range(1, 7)], PricingModel.ON_DEMAND)
+    provisioner = make_provisioner("a,b,c")
+    provisioner.get_or_create_instances([make_definition(idx) for idx in range(1, 7)], PricingModel.ON_DEMAND)
 
     provisioner.cleanup(wait=True)
 
@@ -262,14 +266,14 @@ def test_cleanup_deletes_instances_in_every_zone(gce_providers):
         "us-east1-c": ["node-3", "node-6"],
     }
     for provider in gce_providers["providers"].values():
-        provider.clear_cache.assert_called_once()
+        provider.clear_cache.assert_called_once_with()
 
 
 def test_existing_instances_are_cached_with_their_own_zone(gce_providers):
     """Instances discovered at startup must keep the zone they were found in."""
 
     def list_for_zone(zone):
-        return lambda: [_make_fake_instance(f"node-in-{zone}", zone)]
+        return lambda: [make_fake_instance(f"node-in-{zone}", zone)]
 
     with patch("sdcm.provision.gce.provisioner.VirtualMachineProvider") as mock_vm_provider_cls:
         providers = {}
@@ -281,7 +285,7 @@ def test_existing_instances_are_cached_with_their_own_zone(gce_providers):
             return provider
 
         mock_vm_provider_cls.side_effect = make_provider
-        provisioner = _provisioner("a,b")
+        provisioner = make_provisioner("a,b")
 
         provisioner.terminate_instance("node-in-us-east1-b")
 
@@ -290,9 +294,10 @@ def test_existing_instances_are_cached_with_their_own_zone(gce_providers):
 
 
 def test_single_az_places_every_node_in_that_zone(gce_providers):
-    provisioner = _provisioner("b")
+    """A single configured zone receives every node and is the only availability zone."""
+    provisioner = make_provisioner("b")
 
-    provisioner.get_or_create_instances([_make_definition(idx) for idx in range(1, 4)], PricingModel.ON_DEMAND)
+    provisioner.get_or_create_instances([make_definition(idx) for idx in range(1, 4)], PricingModel.ON_DEMAND)
 
     assert gce_providers["created_per_zone"] == {"us-east1-b": ["node-1", "node-2", "node-3"]}
     assert provisioner.availability_zones == ["us-east1-b"]
@@ -300,13 +305,14 @@ def test_single_az_places_every_node_in_that_zone(gce_providers):
 
 @pytest.mark.parametrize("availability_zone", ["a, b , c", "a,,b,c,"], ids=["spaces", "empty-parts"])
 def test_zone_letters_are_normalized(gce_providers, availability_zone):
-    assert _provisioner(availability_zone).availability_zones == ["us-east1-a", "us-east1-b", "us-east1-c"]
+    """Spaces and empty parts in the availability_zone string are dropped; letters map to us-east1 zones."""
+    assert make_provisioner(availability_zone).availability_zones == ["us-east1-a", "us-east1-b", "us-east1-c"]
 
 
 @patch("sdcm.provision.gce.provisioner.random_zone", return_value="c")
 def test_empty_az_uses_random_zone(mock_random_zone, gce_providers):
     """When availability_zone is empty, a random zone is selected."""
-    provisioner = _provisioner("")
+    provisioner = make_provisioner("")
 
     assert provisioner.availability_zones == ["us-east1-c"]
     assert provisioner.availability_zone == "us-east1-c"

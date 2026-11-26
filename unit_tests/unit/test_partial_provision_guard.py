@@ -33,7 +33,7 @@ from sdcm.tester import teardown_on_exception
 # ---------------------------------------------------------------------------
 
 
-def _make_gce_cluster(instance_count, requested_count, is_reuse=False):
+def make_gce_cluster(instance_count, requested_count, is_reuse=False):
     """Create a minimally-mocked GCECluster and invoke add_nodes.
 
     Args:
@@ -43,7 +43,7 @@ def _make_gce_cluster(instance_count, requested_count, is_reuse=False):
     """
     fake_instances = [MagicMock(name=f"instance-{i}") for i in range(instance_count)]
 
-    cluster = _gce_cluster_mock(is_reuse=is_reuse)
+    cluster = gce_cluster_mock(is_reuse=is_reuse)
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: fake_instances)
 
     # Call the real add_nodes with self=cluster
@@ -55,7 +55,7 @@ def _make_gce_cluster(instance_count, requested_count, is_reuse=False):
     )
 
 
-def _gce_cluster_mock(is_reuse=False, racks_count=1):
+def gce_cluster_mock(is_reuse=False, racks_count=1):
     """Mocked GCECluster keeping the real rack placement and find-or-create logic."""
     cluster = MagicMock(spec=GCECluster)
     cluster.log = MagicMock()
@@ -84,27 +84,37 @@ def _gce_cluster_mock(is_reuse=False, racks_count=1):
     return cluster
 
 
+def make_tester_mock():
+    """Create a minimal mock of ClusterTester for teardown_on_exception tests."""
+    tester = MagicMock()
+    tester.__class__.__name__ = "ClusterTester"
+    tester.params = MagicMock()
+    tester.argus_heartbeat_stop_signal = MagicMock()
+    tester.tearDown = MagicMock()
+    return tester
+
+
 def test_gce_add_nodes_partial_provision_raises_error():
     """add_nodes should raise ProvisionError when fewer instances are found than requested."""
     with pytest.raises(ProvisionError, match=r"Found only 2.*but 9 were requested"):
-        _make_gce_cluster(instance_count=2, requested_count=9)
+        make_gce_cluster(instance_count=2, requested_count=9)
 
 
 def test_gce_add_nodes_exact_count_succeeds():
     """add_nodes should succeed when exactly the requested number of instances are found."""
-    result = _make_gce_cluster(instance_count=3, requested_count=3)
+    result = make_gce_cluster(instance_count=3, requested_count=3)
     assert len(result) == 3
 
 
 def test_gce_add_nodes_more_instances_than_requested_succeeds():
     """add_nodes should succeed when more instances are found than requested."""
-    result = _make_gce_cluster(instance_count=5, requested_count=3)
+    result = make_gce_cluster(instance_count=5, requested_count=3)
     assert len(result) >= 3
 
 
 def test_gce_reuse_cluster_with_fewer_instances_raises():
     """Reusing a cluster that lost nodes must fail loudly, not add fewer nodes than requested."""
-    cluster = _gce_cluster_mock(is_reuse=True)
+    cluster = gce_cluster_mock(is_reuse=True)
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [MagicMock(name="instance-0")])
 
     with pytest.raises(ProvisionError, match="Found only 1 instance.*but 3 were requested"):
@@ -113,7 +123,7 @@ def test_gce_reuse_cluster_with_fewer_instances_raises():
 
 def test_gce_add_nodes_no_instances_provisions_inline():
     """add_nodes should fall through to inline provisioning when no instances are found."""
-    cluster = _gce_cluster_mock()
+    cluster = gce_cluster_mock()
 
     # _get_instances returns empty list -> falls through to _create_instances
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
@@ -129,7 +139,7 @@ def test_gce_add_nodes_no_instances_provisions_inline():
 
 def test_gce_add_nodes_spreads_racks_by_node_index():
     """rack=None must place each node in the rack its node index maps to."""
-    cluster = _gce_cluster_mock(racks_count=3)
+    cluster = gce_cluster_mock(racks_count=3)
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
     cluster._create_instances = MagicMock(
         side_effect=lambda node_indexes, **kwargs: [MagicMock(name=f"vm-{idx}") for idx in node_indexes]
@@ -147,7 +157,7 @@ def test_gce_add_nodes_spreads_racks_by_node_index():
 
 def test_gce_add_nodes_explicit_rack_places_all_nodes_in_it():
     """An explicit rack must be used for every node of the call, as the AZ to provision in."""
-    cluster = _gce_cluster_mock(racks_count=3)
+    cluster = gce_cluster_mock(racks_count=3)
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
     cluster._create_instances = MagicMock(
         side_effect=lambda node_indexes, **kwargs: [MagicMock(name=f"vm-{idx}") for idx in node_indexes]
@@ -162,7 +172,7 @@ def test_gce_add_nodes_explicit_rack_places_all_nodes_in_it():
 
 def test_gce_add_nodes_finds_pre_provisioned_instances_per_rack():
     """Pre-provisioned instances must be looked up in the zone bucket of each rack."""
-    cluster = _gce_cluster_mock(racks_count=3)
+    cluster = gce_cluster_mock(racks_count=3)
     per_az = {az_idx: [MagicMock(name=f"instance-az{az_idx}")] for az_idx in range(3)}
     cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: per_az[az_idx])
 
@@ -225,19 +235,9 @@ def test_aws_create_or_find_exact_count_succeeds():
 # ---------------------------------------------------------------------------
 
 
-def _make_tester_mock():
-    """Create a minimal mock of ClusterTester for teardown_on_exception tests."""
-    tester = MagicMock()
-    tester.__class__.__name__ = "ClusterTester"
-    tester.params = MagicMock()
-    tester.argus_heartbeat_stop_signal = MagicMock()
-    tester.tearDown = MagicMock()
-    return tester
-
-
 def test_teardown_on_exception_provision_error_publishes_critical():
     """ProvisionError in setUp should publish TestFrameworkEvent with CRITICAL severity."""
-    tester = _make_tester_mock()
+    tester = make_tester_mock()
 
     @teardown_on_exception
     def fake_setup(self):
@@ -245,16 +245,18 @@ def test_teardown_on_exception_provision_error_publishes_critical():
 
     with patch("sdcm.tester.TestFrameworkEvent") as mock_event_cls:
         mock_event_cls.return_value.publish_or_dump = MagicMock()
-        with pytest.raises(ProvisionError):
+        with pytest.raises(ProvisionError) as exc_info:
             fake_setup(tester)
-        mock_event_cls.assert_called_once()
+        mock_event_cls.assert_called_once_with(
+            source="ClusterTester", source_method="SetUp", exception=exc_info.value, severity=Severity.CRITICAL
+        )
         _, kwargs = mock_event_cls.call_args
         assert kwargs["severity"] == Severity.CRITICAL
 
 
 def test_teardown_on_exception_zone_exhausted_publishes_critical():
     """ZoneResourcesExhaustedError in setUp should publish TestFrameworkEvent with CRITICAL severity."""
-    tester = _make_tester_mock()
+    tester = make_tester_mock()
 
     @teardown_on_exception
     def fake_setup(self):
@@ -262,16 +264,18 @@ def test_teardown_on_exception_zone_exhausted_publishes_critical():
 
     with patch("sdcm.tester.TestFrameworkEvent") as mock_event_cls:
         mock_event_cls.return_value.publish_or_dump = MagicMock()
-        with pytest.raises(ZoneResourcesExhaustedError):
+        with pytest.raises(ZoneResourcesExhaustedError) as exc_info:
             fake_setup(tester)
-        mock_event_cls.assert_called_once()
+        mock_event_cls.assert_called_once_with(
+            source="ClusterTester", source_method="SetUp", exception=exc_info.value, severity=Severity.CRITICAL
+        )
         _, kwargs = mock_event_cls.call_args
         assert kwargs["severity"] == Severity.CRITICAL
 
 
 def test_teardown_on_exception_generic_error_publishes_default_severity():
     """Non-provisioning errors in setUp should publish TestFrameworkEvent with default (None) severity."""
-    tester = _make_tester_mock()
+    tester = make_tester_mock()
 
     @teardown_on_exception
     def fake_setup(self):
@@ -279,16 +283,18 @@ def test_teardown_on_exception_generic_error_publishes_default_severity():
 
     with patch("sdcm.tester.TestFrameworkEvent") as mock_event_cls:
         mock_event_cls.return_value.publish_or_dump = MagicMock()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError) as exc_info:
             fake_setup(tester)
-        mock_event_cls.assert_called_once()
+        mock_event_cls.assert_called_once_with(
+            source="ClusterTester", source_method="SetUp", exception=exc_info.value, severity=None
+        )
         _, kwargs = mock_event_cls.call_args
         assert kwargs["severity"] is None
 
 
 def test_teardown_on_exception_preserves_severity_from_exception():
     """If the exception carries a severity attribute, it should be forwarded to the event."""
-    tester = _make_tester_mock()
+    tester = make_tester_mock()
 
     class ErrorWithSeverity(Exception):
         severity = Severity.WARNING
@@ -299,8 +305,10 @@ def test_teardown_on_exception_preserves_severity_from_exception():
 
     with patch("sdcm.tester.TestFrameworkEvent") as mock_event_cls:
         mock_event_cls.return_value.publish_or_dump = MagicMock()
-        with pytest.raises(ErrorWithSeverity):
+        with pytest.raises(ErrorWithSeverity) as exc_info:
             fake_setup(tester)
-        mock_event_cls.assert_called_once()
+        mock_event_cls.assert_called_once_with(
+            source="ClusterTester", source_method="SetUp", exception=exc_info.value, severity=Severity.WARNING
+        )
         _, kwargs = mock_event_cls.call_args
         assert kwargs["severity"] == Severity.WARNING

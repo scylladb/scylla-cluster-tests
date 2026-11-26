@@ -16,14 +16,16 @@ from sdcm.provision.scylla_yaml import ClientEncryptionOptions, ScyllaYaml, Seed
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions
 
 
-def _run_test(object_type, init_params: dict, expected_without_defaults: dict, expected_with_defaults: dict):
+def check_model_dump(object_type, init_params: dict, expected_without_defaults: dict, expected_with_defaults: dict):
+    """Model dumps match the expected dicts with and without default values."""
     instance = object_type(**init_params)
     assert instance.model_dump(exclude_unset=True) == expected_without_defaults
     assert instance.model_dump(exclude_unset=False) == expected_with_defaults
 
 
 def test_server_encryption_options():
-    _run_test(
+    """ServerEncryptionOptions dumps only set fields, and fills in defaults when asked."""
+    check_model_dump(
         object_type=ServerEncryptionOptions,
         init_params={
             "certificate": "/tmp/123.crt",
@@ -45,7 +47,8 @@ def test_server_encryption_options():
 
 
 def test_client_encryption_options():
-    _run_test(
+    """ClientEncryptionOptions dumps only set fields, and fills in defaults when asked."""
+    check_model_dump(
         object_type=ClientEncryptionOptions,
         init_params={
             "certificate": "/tmp/123.crt",
@@ -71,7 +74,8 @@ def test_client_encryption_options():
 
 
 def test_request_scheduler_options():
-    _run_test(
+    """RequestSchedulerOptions dumps the set fields and fills in the default weights."""
+    check_model_dump(
         object_type=RequestSchedulerOptions,
         init_params={
             "throttle_limit": 100,
@@ -83,7 +87,8 @@ def test_request_scheduler_options():
 
 
 def test_seed_provider():
-    _run_test(
+    """SeedProvider dumps class_name and parameters unchanged, with or without defaults."""
+    check_model_dump(
         object_type=SeedProvider,
         init_params={
             "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
@@ -101,7 +106,8 @@ def test_seed_provider():
 
 
 def test_scylla_yaml():
-    _run_test(
+    """ScyllaYaml dumps nested options and the full set of top-level fields with defaults."""
+    check_model_dump(
         object_type=ScyllaYaml,
         init_params={
             "log_to_stdout": True,
@@ -434,6 +440,7 @@ def test_scylla_yaml():
 
 
 def test_update_with_scylla_yaml_object():
+    """update() applies each ScyllaYaml in order, so a later default object overrides earlier values."""
     yaml1 = ScyllaYaml(cluster_name="cluster1", redis_keyspace_replication_strategy="NetworkTopologyStrategy")
     yaml2 = ScyllaYaml(
         redis_keyspace_replication_strategy="SimpleStrategy",
@@ -466,6 +473,7 @@ def test_update_with_scylla_yaml_object():
 
 
 def test_update_with_dict_object(test_data_dir):
+    """update() accepts a dict loaded from the append_scylla_yaml test data file."""
     yaml1 = ScyllaYaml(cluster_name="cluster1", redis_keyspace_replication_strategy="NetworkTopologyStrategy")
     test_config_file = test_data_dir / "scylla_yaml_update.yaml"
     with open(test_config_file, encoding="utf-8") as test_file:
@@ -479,6 +487,7 @@ def test_update_with_dict_object(test_data_dir):
 
 
 def test_update_with_extra_audit_rules():
+    """update() keeps audit_rules given as a list of dicts in the dumped config."""
     audit_rules = [
         {
             "sinks": ["syslog"],
@@ -496,6 +505,7 @@ def test_update_with_extra_audit_rules():
 
 
 def test_copy():
+    """copy() returns an equal instance whose nested option changes don't leak back to the original."""
     original = ScyllaYaml(
         redis_keyspace_replication_strategy="SimpleStrategy",
         client_encryption_options=ClientEncryptionOptions(

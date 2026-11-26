@@ -12,7 +12,7 @@
 # Copyright (c) 2026 ScyllaDB
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -35,11 +35,13 @@ EXPECTED_BENCHMARK_COLUMNS = {
 
 @pytest.fixture
 def argus_client():
+    """Mock Argus client whose submit_results calls are recorded."""
     return MagicMock()
 
 
 @pytest.fixture
 def sample_metrics():
+    """Spark-migrator metrics dict with one value per benchmark column."""
     return {
         "P99 write max": 12.5,
         "P99 write avg": 8.3,
@@ -53,6 +55,7 @@ def sample_metrics():
 
 
 def test_migrator_benchmark_result_schema():
+    """MigratorBenchmarkResult declares the expected columns and table name."""
     table = MigratorBenchmarkResult()
     assert {col.name for col in table.columns} == EXPECTED_BENCHMARK_COLUMNS
     assert table.name == "spark-migrator - benchmark"
@@ -60,9 +63,11 @@ def test_migrator_benchmark_result_schema():
 
 
 def test_send_migrator_results_submits_benchmark_table(argus_client, sample_metrics):
+    """send_migrator_results_to_argus submits one benchmark table carrying every metric value."""
     send_migrator_results_to_argus(argus_client, sample_metrics)
 
-    argus_client.submit_results.assert_called_once()
+    # the table is a fresh object without __eq__; its type and cells are checked below
+    argus_client.submit_results.assert_called_once_with(ANY)
     submitted_result = argus_client.submit_results.call_args.args[0]
     assert isinstance(submitted_result, MigratorBenchmarkResult)
 
@@ -79,12 +84,14 @@ def test_send_migrator_results_submits_benchmark_table(argus_client, sample_metr
 
 
 def test_send_migrator_results_skips_when_empty(argus_client):
+    """An empty metrics dict submits nothing to Argus."""
     send_migrator_results_to_argus(argus_client, {})
 
     argus_client.submit_results.assert_not_called()
 
 
 def test_send_migrator_results_without_client_returns_quietly(sample_metrics, caplog):
+    """A missing Argus client logs a warning and does not raise."""
     with caplog.at_level(logging.WARNING, logger="sdcm.argus_results"):
         send_migrator_results_to_argus(None, sample_metrics)
     assert any("no client initialized" in rec.message for rec in caplog.records)

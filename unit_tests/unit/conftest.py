@@ -22,7 +22,6 @@
 """
 
 import json
-import os
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -81,13 +80,9 @@ def mock_cloud_services(tmp_path_factory):
     - _file validator: SCTConfiguration uses ExistingFile (pydantic BeforeValidator)
       to check user_credentials_path exists on disk
     """
-    # Redirect HOME to a temp directory so dummy SSH key files are created there
-    # instead of polluting the real home directory.
     fake_home = tmp_path_factory.mktemp("home")
     ssh_dir = fake_home / ".ssh"
     ssh_dir.mkdir()
-    orig_home = os.environ.get("HOME")
-    os.environ["HOME"] = str(fake_home)
     for key_name in ("scylla_test_id_ed25519",):
         (ssh_dir / key_name).touch(mode=0o600)
 
@@ -124,6 +119,7 @@ def mock_cloud_services(tmp_path_factory):
     )
 
     with (
+        pytest.MonkeyPatch.context() as env,
         patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
         patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
         patch("sdcm.utils.version_utils.find_scylla_repo", side_effect=fake_find_scylla_repo),
@@ -141,9 +137,6 @@ def mock_cloud_services(tmp_path_factory):
         patch.object(KeyStore, "s3", new_callable=PropertyMock, return_value=MagicMock()),
         patch.object(KeyStore, "s3_client", new_callable=PropertyMock, return_value=MagicMock()),
     ):
+        # Redirect HOME so dummy SSH key files land in the temp dir, not the real home. Restored on exit.
+        env.setenv("HOME", str(fake_home))
         yield
-
-    if orig_home is not None:
-        os.environ["HOME"] = orig_home
-    else:
-        os.environ.pop("HOME", None)

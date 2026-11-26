@@ -10,11 +10,21 @@ import pytest
 from sdcm.cluster_aws import AWSNode, VectorStoreAWSNode, VectorStoreSetAWS
 from sdcm.sct_events import Severity
 
+VECTOR_STORE_PASSWORD_FILE = "/home/ubuntu/vector-store/.scylla_password"
+
 
 def make_client_error(code: str, message: str = "") -> botocore.exceptions.ClientError:
     """Build a botocore ClientError for the ReleaseAddress operation."""
     error_response = {"Error": {"Code": code, "Message": message}}
     return botocore.exceptions.ClientError(error_response, "ReleaseAddress")
+
+
+def with_marker(node, marker: str | None):
+    """Set the remoter reply to marker (failed when None) and the node's base AMI, then return the node."""
+    node.remoter.run.return_value = Mock(ok=marker is not None, stdout=marker or "")
+    node._instance = Mock()
+    node._instance.image = Mock(creation_date="2026-10-22T11:24:37.000Z", image_id="ami-0vs")
+    return node
 
 
 @pytest.fixture
@@ -49,68 +59,82 @@ def mock_aws_node():
     return aws_node
 
 
-class TestAWSNodeReleaseAddress:
-    """Test cases for AWS node release_address functionality."""
+@pytest.fixture
+def vector_store_aws_node():
+    """Vector Store AWS node with a remoter that records the commands it runs."""
+    node = VectorStoreAWSNode.__new__(VectorStoreAWSNode)
+    node.name = "vs-node-1"
+    node.parent_cluster = Mock(scylla_cluster=None)
+    node.parent_cluster.params = {
+        "vector_store_port": 6080,
+        "vector_store_threads": 0,
+        "vector_store_scylla_username": "vs_user",
+        "vector_store_scylla_password": "vs_password",
+        "ami_vector_store_user": "vs-service",
+    }
+    node.remoter = Mock()
+    return node
 
-    @patch("boto3.client")
-    def test_release_address_invalid_allocation_id_ignored(self, mock_boto3_client, mock_aws_node):
-        """Test that InvalidAllocationID.NotFound error is properly caught and ignored."""
-        # Setup
-        mock_client = Mock()
-        mock_boto3_client.return_value = mock_client
 
-        # Create the specific error that should be caught
-        error_response = {
-            "Error": {
-                "Code": "InvalidAllocationID.NotFound",
-                "Message": "The allocation ID 'eipalloc-05bed6a4528b5369f' does not exist",
-            }
+@patch("boto3.client")
+def test_release_address_invalid_allocation_id_ignored(mock_boto3_client, mock_aws_node):
+    """release_address swallows InvalidAllocationID.NotFound and logs a warning."""
+    # Setup
+    mock_client = Mock()
+    mock_boto3_client.return_value = mock_client
+
+    # Create the specific error that should be caught
+    error_response = {
+        "Error": {
+            "Code": "InvalidAllocationID.NotFound",
+            "Message": "The allocation ID 'eipalloc-05bed6a4528b5369f' does not exist",
         }
-        client_error = botocore.exceptions.ClientError(error_response, "ReleaseAddress")
-        mock_client.release_address.side_effect = client_error
+    }
+    client_error = botocore.exceptions.ClientError(error_response, "ReleaseAddress")
+    mock_client.release_address.side_effect = client_error
 
-        # Execute - should not raise an exception
+    # Execute - should not raise an exception
+    mock_aws_node.release_address()
+
+    # Verify
+    mock_boto3_client.assert_called_once_with("ec2", region_name="us-east-1")
+    mock_client.release_address.assert_called_once_with(AllocationId="eipalloc-05bed6a4528b5369f")
+    mock_aws_node._instance.wait_until_terminated.assert_called_once_with()
+
+    # Verify that warning was logged with the exception and allocation ID
+    mock_aws_node.log.warning.assert_called_once_with(
+        "Ignoring InvalidAllocationID.NotFound error when releasing address: %s. "
+        "The allocation ID '%s' does not exist, likely already released.",
+        client_error,
+        "eipalloc-05bed6a4528b5369f",
+    )
+
+
+@patch("boto3.client")
+def test_release_address_other_error_propagated(mock_boto3_client, mock_aws_node):
+    """release_address re-raises other ClientErrors without logging a warning."""
+    # Setup
+    mock_client = Mock()
+    mock_boto3_client.return_value = mock_client
+
+    # Create a different error that should not be caught
+    error_response = {
+        "Error": {"Code": "UnauthorizedOperation", "Message": "You are not authorized to perform this operation"}
+    }
+    client_error = botocore.exceptions.ClientError(error_response, "ReleaseAddress")
+    mock_client.release_address.side_effect = client_error
+
+    # Execute - should raise the exception
+    with pytest.raises(botocore.exceptions.ClientError) as exc_info:
         mock_aws_node.release_address()
 
-        # Verify
-        mock_boto3_client.assert_called_once_with("ec2", region_name="us-east-1")
-        mock_client.release_address.assert_called_once_with(AllocationId="eipalloc-05bed6a4528b5369f")
-        mock_aws_node._instance.wait_until_terminated.assert_called_once()
-
-        # Verify that warning was logged
-        mock_aws_node.log.warning.assert_called_once()
-        warning_call_args = mock_aws_node.log.warning.call_args[0]
-        # Check the message format
-        assert "Ignoring InvalidAllocationID.NotFound error" in warning_call_args[0]
-        # Check that the exception and allocation ID are passed as arguments
-        assert warning_call_args[1] is client_error
-        assert warning_call_args[2] == "eipalloc-05bed6a4528b5369f"
-
-    @patch("boto3.client")
-    def test_release_address_other_error_propagated(self, mock_boto3_client, mock_aws_node):
-        """Test that other ClientError exceptions are still propagated."""
-        # Setup
-        mock_client = Mock()
-        mock_boto3_client.return_value = mock_client
-
-        # Create a different error that should not be caught
-        error_response = {
-            "Error": {"Code": "UnauthorizedOperation", "Message": "You are not authorized to perform this operation"}
-        }
-        client_error = botocore.exceptions.ClientError(error_response, "ReleaseAddress")
-        mock_client.release_address.side_effect = client_error
-
-        # Execute - should raise the exception
-        with pytest.raises(botocore.exceptions.ClientError) as exc_info:
-            mock_aws_node.release_address()
-
-        # Verify
-        assert exc_info.value.response["Error"]["Code"] == "UnauthorizedOperation"
-        mock_boto3_client.assert_called_once_with("ec2", region_name="us-east-1")
-        mock_client.release_address.assert_called_once_with(AllocationId="eipalloc-05bed6a4528b5369f")
-        mock_aws_node._instance.wait_until_terminated.assert_called_once()
-        # Verify that warning was NOT logged for other errors
-        mock_aws_node.log.warning.assert_not_called()
+    # Verify
+    assert exc_info.value.response["Error"]["Code"] == "UnauthorizedOperation"
+    mock_boto3_client.assert_called_once_with("ec2", region_name="us-east-1")
+    mock_client.release_address.assert_called_once_with(AllocationId="eipalloc-05bed6a4528b5369f")
+    mock_aws_node._instance.wait_until_terminated.assert_called_once_with()
+    # Verify that warning was NOT logged for other errors
+    mock_aws_node.log.warning.assert_not_called()
 
 
 @patch("boto3.client")
@@ -149,10 +173,12 @@ def test_release_address_raises_original_error_when_retries_exhausted(
 @pytest.mark.parametrize(
     "release_error",
     [
-        make_client_error("InvalidNetworkInterfaceID.NotFound", "does not exist"),
-        botocore.exceptions.EndpointConnectionError(endpoint_url="https://ec2.us-east-1.amazonaws.com"),
+        pytest.param(make_client_error("InvalidNetworkInterfaceID.NotFound", "does not exist"), id="transient_error"),
+        pytest.param(
+            botocore.exceptions.EndpointConnectionError(endpoint_url="https://ec2.us-east-1.amazonaws.com"),
+            id="connection_error",
+        ),
     ],
-    ids=["transient_error", "connection_error"],
 )
 def test_destroy_continues_when_release_address_fails(mock_aws_node, release_error):
     """A failed EIP release must not abort destroy() after instance termination."""
@@ -165,31 +191,18 @@ def test_destroy_continues_when_release_address_fails(mock_aws_node, release_err
     ):
         mock_aws_node.destroy()
 
-    mock_base_destroy.assert_called_once()
-    mock_event.assert_called_once()
-    assert mock_event.call_args.kwargs["severity"] is Severity.WARNING
-    assert "eipalloc-05bed6a4528b5369f" in mock_event.call_args.kwargs["message"]
-    mock_event.return_value.publish_or_dump.assert_called_once()
-
-
-VECTOR_STORE_PASSWORD_FILE = "/home/ubuntu/vector-store/.scylla_password"
-
-
-@pytest.fixture
-def vector_store_aws_node():
-    """Vector Store AWS node with a remoter that records the commands it runs."""
-    node = VectorStoreAWSNode.__new__(VectorStoreAWSNode)
-    node.name = "vs-node-1"
-    node.parent_cluster = Mock(scylla_cluster=None)
-    node.parent_cluster.params = {
-        "vector_store_port": 6080,
-        "vector_store_threads": 0,
-        "vector_store_scylla_username": "vs_user",
-        "vector_store_scylla_password": "vs_password",
-        "ami_vector_store_user": "vs-service",
-    }
-    node.remoter = Mock()
-    return node
+    mock_base_destroy.assert_called_once_with()
+    mock_event.assert_called_once_with(
+        source="AWSNode",
+        source_method="release_address",
+        message=(
+            "Failed to release elastic IP 'eipalloc-05bed6a4528b5369f' of node longevity-test-db-node-1. "
+            "It is left for the cleanup at the end of the test."
+        ),
+        exception=release_error,
+        severity=Severity.WARNING,
+    )
+    mock_event.return_value.publish_or_dump.assert_called_once_with()
 
 
 def test_configure_vector_store_service_password_file_readable_by_service_user(vector_store_aws_node):
@@ -237,16 +250,10 @@ def test_the_service_is_stopped_before_a_source_build_replaces_its_binary():
     assert steps.mock_calls[0].args == ("sudo systemctl stop vector-store",)
 
 
-def _with_marker(node, marker: str | None):
-    node.remoter.run.return_value = Mock(ok=marker is not None, stdout=marker or "")
-    node._instance = Mock()
-    node._instance.image = Mock(creation_date="2026-10-22T11:24:37.000Z", image_id="ami-0vs")
-    return node
-
-
 def test_a_source_build_is_dated_by_the_commit_it_built(vector_store_aws_node):
+    """A source build is dated by its commit time, and its commit and ref are reported."""
     vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "my-branch"
-    node = _with_marker(vector_store_aws_node, "3f162c9 my-branch 1760000000\n")
+    node = with_marker(vector_store_aws_node, "3f162c9 my-branch 1760000000\n")
 
     assert node.get_vector_store_build() == (1760000000, "3f162c9")
     assert node.get_vector_store_source_build_info() == ("3f162c9", "my-branch")
@@ -254,12 +261,18 @@ def test_a_source_build_is_dated_by_the_commit_it_built(vector_store_aws_node):
 
 def test_a_prebuilt_vector_store_is_dated_by_its_ami(vector_store_aws_node):
     """2026-10-22T11:24:37Z, the AMI's creation date."""
-    assert _with_marker(vector_store_aws_node, None).get_vector_store_build() == (1792668277, "ami-0vs")
+    assert with_marker(vector_store_aws_node, None).get_vector_store_build() == (1792668277, "ami-0vs")
 
 
-@pytest.mark.parametrize("marker", [None, "3f162c9 my-branch\n"], ids=["unreadable", "no-commit-time"])
+@pytest.mark.parametrize(
+    "marker",
+    [
+        pytest.param(None, id="unreadable"),
+        pytest.param("3f162c9 my-branch\n", id="no-commit-time"),
+    ],
+)
 def test_a_source_build_without_its_commit_time_is_not_dated_by_the_base_ami(vector_store_aws_node, marker):
     """The base AMI is not the build under test; no date leaves the placement to the ScyllaDB build."""
     vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "my-branch"
 
-    assert _with_marker(vector_store_aws_node, marker).get_vector_store_build() == (None, "")
+    assert with_marker(vector_store_aws_node, marker).get_vector_store_build() == (None, "")

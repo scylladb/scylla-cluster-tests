@@ -26,7 +26,7 @@ from unit_tests.unit.nemesis.execute_nemesis import (
 from unit_tests.unit.nemesis.fake_cluster import PARAMS, FakeTester
 
 # Fields that vary with time or identity — excluded from full-dict event assertions.
-_TIMESTAMP_FIELDS = frozenset({"event_id", "event_timestamp", "begin_timestamp", "end_timestamp", "source_timestamp"})
+TIMESTAMP_FIELDS = frozenset({"event_id", "event_timestamp", "begin_timestamp", "end_timestamp", "source_timestamp"})
 
 # Expected DisruptionEvent END-phase snapshot for a clean skip reason.
 SKIPPED_EVENT = {
@@ -69,7 +69,7 @@ FAILED_EVENT = {
 
 def stable(event: dict) -> dict:
     """Return the event dict with time-varying fields removed."""
-    return {k: v for k, v in event.items() if k not in _TIMESTAMP_FIELDS}
+    return {k: v for k, v in event.items() if k not in TIMESTAMP_FIELDS}
 
 
 def disruption_end_events(events_fixture) -> list[dict]:
@@ -188,8 +188,21 @@ def test_duplicate_instances_all_pruned_reported_once(runner, argus_mock, events
 
     assert runner.disruptions_list == []
     assert excluded == [("PrecheckSkipNemesis", "static condition not met")]
-    argus_mock.submit_nemesis.assert_called_once()
-    argus_mock.finalize_nemesis.assert_called_once()
+    argus_mock.submit_nemesis.assert_called_once_with(
+        name="PrecheckSkipNemesis",
+        class_name="TestNemesisRunner",
+        start_time=ANY,
+        target_name="Node1",
+        target_ip="127.0.0.1",
+        target_shards=8,
+        description="A nemesis whose precheck() returns a skip reason.",
+    )
+    argus_mock.finalize_nemesis.assert_called_once_with(
+        name="PrecheckSkipNemesis",
+        start_time=ANY,
+        status=NemesisStatus.SKIPPED,
+        message="static condition not met",
+    )
     assert len(disruption_end_events(events_function_scope)) == 1
 
 
@@ -229,7 +242,7 @@ def test_duplicate_excluded_instances_precheck_called_once(runner):
 
     runner.precheck_nemesis()
 
-    nemesis.precheck.assert_called_once()
+    nemesis.precheck.assert_called_once_with(node=runner.cluster.nodes[0])
 
 
 def test_duplicate_runnable_instances_precheck_called_once(runner):
@@ -242,7 +255,7 @@ def test_duplicate_runnable_instances_precheck_called_once(runner):
 
     assert excluded == []
     assert len(runner.disruptions_list) == 3
-    nemesis.precheck.assert_called_once()
+    nemesis.precheck.assert_called_once_with(node=runner.cluster.nodes[0])
 
 
 # ---------------------------------------------------------------------------

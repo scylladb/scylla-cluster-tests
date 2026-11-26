@@ -17,6 +17,7 @@ from sdcm.remote.remote_cmd_runner import RemoteCmdRunner
 
 
 def connection_in_new_thread(remoter):
+    """Return the remoter's connection as seen from a freshly started thread."""
     connections = []
     thread = threading.Thread(target=lambda: connections.append(remoter.connection))
     thread.start()

@@ -18,4 +18,5 @@ from sdcm.utils.vm_arch import AWS_ARCH_TYPES
 
 
 def test_aws_arch_types_match_boto():
+    """AWS_ARCH_TYPES lists the same architectures as the boto AwsArchType literal."""
     assert sorted(AWS_ARCH_TYPES) == sorted(get_args(AwsArchType))

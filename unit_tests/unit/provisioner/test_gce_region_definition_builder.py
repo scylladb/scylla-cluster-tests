@@ -21,6 +21,7 @@ from sdcm.test_config import TestConfig
 
 @pytest.fixture
 def make_config(monkeypatch, defaults_dir):
+    """Factory that sets the GCE SCT env vars and returns (SCTConfiguration, TestConfig)."""
     gce_config = str(defaults_dir / "gce_config.yaml")
     base_env = {
         "SCT_CLUSTER_BACKEND": "gce",
@@ -33,6 +34,7 @@ def make_config(monkeypatch, defaults_dir):
     }
 
     def _factory(extra_env: dict | None = None):
+        """Apply base env plus extra_env, then return the SCTConfiguration and TestConfig."""
         test_config = TestConfig()
         test_config.set_test_id_only("3923f974-bf0e-4c3c-9f52-3f6473b8a0b7")
         env = {**base_env, "SCT_TEST_ID": test_config.test_id(), **(extra_env or {})}
@@ -45,7 +47,10 @@ def make_config(monkeypatch, defaults_dir):
 
 @pytest.fixture
 def build_region_defs():
+    """Factory that builds all region definitions with KeyStore stubbed to a fake SSH key."""
+
     def _factory(config, test_config):
+        """Return build_all_region_definitions() for config, using the stubbed KeyStore."""
         fake_ssh_key = MagicMock()
         fake_ssh_key.name = "fake-key"
         fake_ssh_key.public_key = b"ssh-ed25519 AAAA fake"
@@ -60,9 +65,9 @@ def build_region_defs():
 @pytest.mark.parametrize(
     "extra_env,node_type,expected_disk_type",
     [
-        ({"SCT_GCE_ROOT_DISK_TYPE_LOADER": "pd-ssd"}, "loader", "pd-ssd"),
-        ({"SCT_GCE_ROOT_DISK_TYPE_DB": "pd-ssd"}, "scylla-db", "pd-ssd"),
-        ({"SCT_GCE_ROOT_DISK_TYPE_MONITOR": "pd-standard"}, "monitor", "pd-standard"),
+        pytest.param({"SCT_GCE_ROOT_DISK_TYPE_LOADER": "pd-ssd"}, "loader", "pd-ssd", id="loader"),
+        pytest.param({"SCT_GCE_ROOT_DISK_TYPE_DB": "pd-ssd"}, "scylla-db", "pd-ssd", id="scylla-db"),
+        pytest.param({"SCT_GCE_ROOT_DISK_TYPE_MONITOR": "pd-standard"}, "monitor", "pd-standard", id="monitor"),
     ],
 )
 def test_root_disk_type_flows_into_instance_definition(
@@ -82,7 +87,11 @@ def test_root_disk_type_flows_into_instance_definition(
 
 @pytest.mark.parametrize(
     "ip_type,expected_public_ip",
-    [("private", False), ("public", True), ("ipv6", True)],
+    [
+        pytest.param("private", False, id="private"),
+        pytest.param("public", True, id="public"),
+        pytest.param("ipv6", True, id="ipv6"),
+    ],
 )
 def test_monitor_public_ip_follows_ssh_connection_ip_type(make_config, build_region_defs, ip_type, expected_public_ip):
     """A monitor gets a public IP only when the run asks for public connections."""

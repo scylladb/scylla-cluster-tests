@@ -59,8 +59,8 @@ def test_argus_aggregation_id_defaults_to_event_id():
 @pytest.mark.parametrize(
     "event_type",
     [
-        DatabaseLogEvent.OVERSIZED_ALLOCATION,
-        DatabaseLogEvent.TOPOLOGY_BARRIER_STALL,
+        pytest.param(DatabaseLogEvent.OVERSIZED_ALLOCATION, id="oversized-allocation"),
+        pytest.param(DatabaseLogEvent.TOPOLOGY_BARRIER_STALL, id="topology-barrier-stall"),
     ],
 )
 def test_argus_aggregation_id_equal_backtraces_share_id_distinct_differ(event_type, make_log_event):
@@ -92,8 +92,8 @@ def test_argus_aggregation_id_without_backtrace_falls_back_to_event_id(make_log_
 @pytest.mark.parametrize(
     "event_type",
     [
-        DatabaseLogEvent.OVERSIZED_ALLOCATION,
-        DatabaseLogEvent.TOPOLOGY_BARRIER_STALL,
+        pytest.param(DatabaseLogEvent.OVERSIZED_ALLOCATION, id="oversized-allocation"),
+        pytest.param(DatabaseLogEvent.TOPOLOGY_BARRIER_STALL, id="topology-barrier-stall"),
     ],
 )
 def test_argus_pipeline_posts_distinct_backtraces_and_collapses_identical_ones(

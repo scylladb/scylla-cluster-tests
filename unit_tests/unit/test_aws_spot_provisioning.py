@@ -38,321 +38,318 @@ def mock_ec2_client():
         yield mock_clients
 
 
-class TestGetProvisionedSpotInstanceIds:
-    """Tests for get_provisioned_spot_instance_ids function."""
-
-    @pytest.mark.parametrize(
-        "test_case",
-        [
-            {
-                "id": "successful_provisioning",
-                "description": "Test successful spot instance provisioning",
-                "region": "us-east-1",
-                "request_id": "sir-12345",
-                "response": {
-                    "SpotInstanceRequests": [
-                        {
-                            "SpotInstanceRequestId": "sir-12345",
-                            "Status": {"Code": STATUS_FULFILLED, "Message": "Request fulfilled"},
-                            "State": "active",
-                            "InstanceId": "i-12345",
-                        }
-                    ]
-                },
-                "expected_result": ["i-12345"],
-                "expected_log_count": 0,
-                "log_level": logging.INFO,
-                "expected_log_messages": [],
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        {
+            "id": "successful_provisioning",
+            "description": "Test successful spot instance provisioning",
+            "region": "us-east-1",
+            "request_id": "sir-12345",
+            "response": {
+                "SpotInstanceRequests": [
+                    {
+                        "SpotInstanceRequestId": "sir-12345",
+                        "Status": {"Code": STATUS_FULFILLED, "Message": "Request fulfilled"},
+                        "State": "active",
+                        "InstanceId": "i-12345",
+                    }
+                ]
             },
-            {
-                "id": "capacity_not_available_error",
-                "description": "Test capacity not available error logging",
-                "region": "us-east-1",
-                "request_id": "sir-12345",
-                "response": {
-                    "SpotInstanceRequests": [
-                        {
-                            "SpotInstanceRequestId": "sir-12345",
-                            "Status": {
-                                "Code": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
-                                "Message": "No capacity available in this AZ",
-                            },
-                            "State": "open",
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot provisioning failure",
-                    "capacity-not-available",
-                    "No capacity available in this AZ",
-                    "sir-12345",
-                ],
+            "expected_result": ["i-12345"],
+            "expected_log_count": 0,
+            "log_level": logging.INFO,
+            "expected_log_messages": [],
+        },
+        {
+            "id": "capacity_not_available_error",
+            "description": "Test capacity not available error logging",
+            "region": "us-east-1",
+            "request_id": "sir-12345",
+            "response": {
+                "SpotInstanceRequests": [
+                    {
+                        "SpotInstanceRequestId": "sir-12345",
+                        "Status": {
+                            "Code": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+                            "Message": "No capacity available in this AZ",
+                        },
+                        "State": "open",
+                    }
+                ]
             },
-            {
-                "id": "price_too_low_error",
-                "description": "Test price too low error logging",
-                "region": "us-west-2",
-                "request_id": "sir-67890",
-                "response": {
-                    "SpotInstanceRequests": [
-                        {
-                            "SpotInstanceRequestId": "sir-67890",
-                            "Status": {
-                                "Code": SPOT_PRICE_TOO_LOW,
-                                "Message": "Your Spot request price is lower than the minimum",
-                            },
-                            "State": "open",
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot provisioning failure",
-                    "price-too-low",
-                    "Your Spot request price is lower",
-                ],
+            "expected_result": None,
+            "expected_log_count": 1,
+            "log_level": logging.ERROR,
+            "expected_log_messages": [
+                "Critical spot provisioning failure",
+                "capacity-not-available",
+                "No capacity available in this AZ",
+                "sir-12345",
+            ],
+        },
+        {
+            "id": "price_too_low_error",
+            "description": "Test price too low error logging",
+            "region": "us-west-2",
+            "request_id": "sir-67890",
+            "response": {
+                "SpotInstanceRequests": [
+                    {
+                        "SpotInstanceRequestId": "sir-67890",
+                        "Status": {
+                            "Code": SPOT_PRICE_TOO_LOW,
+                            "Message": "Your Spot request price is lower than the minimum",
+                        },
+                        "State": "open",
+                    }
+                ]
             },
-            {
-                "id": "pending_request_warning",
-                "description": "Test warning for pending spot request",
-                "region": "eu-west-1",
-                "request_id": "sir-pending",
-                "response": {
-                    "SpotInstanceRequests": [
-                        {
-                            "SpotInstanceRequestId": "sir-pending",
-                            "Status": {
-                                "Code": "pending-evaluation",
-                                "Message": "Your Spot request is being evaluated",
-                            },
-                            "State": "open",
-                        }
-                    ]
-                },
-                "expected_result": [],
-                "expected_log_count": 1,
-                "log_level": logging.WARNING,
-                "expected_log_messages": [
-                    "Spot instance request not yet fulfilled",
-                    "pending-evaluation",
-                ],
+            "expected_result": None,
+            "expected_log_count": 1,
+            "log_level": logging.ERROR,
+            "expected_log_messages": [
+                "Critical spot provisioning failure",
+                "price-too-low",
+                "Your Spot request price is lower",
+            ],
+        },
+        {
+            "id": "pending_request_warning",
+            "description": "Test warning for pending spot request",
+            "region": "eu-west-1",
+            "request_id": "sir-pending",
+            "response": {
+                "SpotInstanceRequests": [
+                    {
+                        "SpotInstanceRequestId": "sir-pending",
+                        "Status": {
+                            "Code": "pending-evaluation",
+                            "Message": "Your Spot request is being evaluated",
+                        },
+                        "State": "open",
+                    }
+                ]
             },
-        ],
-        ids=lambda tc: tc["id"],
-    )
-    def test_spot_instance_scenarios(self, mock_ec2_client, caplog, test_case):
-        """Test various spot instance provisioning scenarios."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_instance_requests.return_value = test_case["response"]
+            "expected_result": [],
+            "expected_log_count": 1,
+            "log_level": logging.WARNING,
+            "expected_log_messages": [
+                "Spot instance request not yet fulfilled",
+                "pending-evaluation",
+            ],
+        },
+    ],
+    ids=lambda tc: tc["id"],
+)
+def test_spot_instance_scenarios(mock_ec2_client, caplog, test_case):
+    """get_provisioned_spot_instance_ids returns the expected ids and logs per request status."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.describe_spot_instance_requests.return_value = test_case["response"]
 
-        with caplog.at_level(test_case["log_level"]):
-            result = get_provisioned_spot_instance_ids(test_case["region"], [test_case["request_id"]])
+    with caplog.at_level(test_case["log_level"]):
+        result = get_provisioned_spot_instance_ids(test_case["region"], [test_case["request_id"]])
 
-        assert result == test_case["expected_result"]
-        assert len(caplog.records) == test_case["expected_log_count"]
-        for expected_msg in test_case["expected_log_messages"]:
-            assert expected_msg in caplog.records[0].message if caplog.records else True
-
-    def test_api_exception_handling(self, mock_ec2_client, caplog):
-        """Test exception handling for API errors."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_instance_requests.side_effect = Exception("API Error")
-
-        with caplog.at_level(logging.ERROR):
-            result = get_provisioned_spot_instance_ids("us-east-1", ["sir-error"])
-
-        assert result == []
-        assert len(caplog.records) == 1
-        assert "Failed to describe spot instance requests" in caplog.records[0].message
-        assert "API Error" in caplog.records[0].message
+    assert result == test_case["expected_result"]
+    assert len(caplog.records) == test_case["expected_log_count"]
+    for expected_msg in test_case["expected_log_messages"]:
+        assert expected_msg in caplog.records[0].message if caplog.records else True
 
 
-class TestGetProvisionedFleetInstanceIds:
-    """Tests for get_provisioned_fleet_instance_ids function."""
+def test_api_exception_handling(mock_ec2_client, caplog):
+    """get_provisioned_spot_instance_ids returns [] and logs the error when describe raises."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.describe_spot_instance_requests.side_effect = Exception("API Error")
 
-    @pytest.mark.parametrize(
-        "test_case",
-        [
-            {
-                "id": "successful_fleet_provisioning",
-                "description": "Test successful spot fleet provisioning",
-                "region": "us-east-1",
-                "request_id": "sfr-12345",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-12345",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": STATUS_FULFILLED,
-                        }
-                    ]
-                },
-                "instances_response": {
-                    "ActiveInstances": [
-                        {"InstanceId": "i-fleet-1"},
-                        {"InstanceId": "i-fleet-2"},
-                    ]
-                },
-                "expected_result": ["i-fleet-1", "i-fleet-2"],
-                "expected_log_count": 0,
-                "log_level": logging.INFO,
-                "expected_log_messages": [],
+    with caplog.at_level(logging.ERROR):
+        result = get_provisioned_spot_instance_ids("us-east-1", ["sir-error"])
+
+    assert result == []
+    assert len(caplog.records) == 1
+    assert "Failed to describe spot instance requests" in caplog.records[0].message
+    assert "API Error" in caplog.records[0].message
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        {
+            "id": "successful_fleet_provisioning",
+            "description": "Test successful spot fleet provisioning",
+            "region": "us-east-1",
+            "request_id": "sfr-12345",
+            "fleet_response": {
+                "SpotFleetRequestConfigs": [
+                    {
+                        "SpotFleetRequestId": "sfr-12345",
+                        "SpotFleetRequestState": "active",
+                        "ActivityStatus": STATUS_FULFILLED,
+                    }
+                ]
             },
-            {
-                "id": "fleet_capacity_error",
-                "description": "Test fleet capacity not available error logging",
-                "region": "us-east-1",
-                "request_id": "sfr-error",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-error",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
-                        }
-                    ]
-                },
-                "history_response": {
-                    "HistoryRecords": [
-                        {
-                            "EventType": "error",
-                            "EventInformation": {
-                                "EventSubType": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
-                                "EventDescription": "Insufficient capacity in availability zone",
-                            },
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot fleet provisioning failure",
-                    "capacity-not-available",
-                    "Insufficient capacity",
-                ],
+            "instances_response": {
+                "ActiveInstances": [
+                    {"InstanceId": "i-fleet-1"},
+                    {"InstanceId": "i-fleet-2"},
+                ]
             },
-            {
-                "id": "fleet_limit_exceeded_error",
-                "description": "Test fleet limit exceeded error logging",
-                "region": "us-west-1",
-                "request_id": "sfr-limit",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-limit",
-                            "SpotFleetRequestState": "failed",
-                            "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
-                        }
-                    ]
-                },
-                "history_response": {
-                    "HistoryRecords": [
-                        {
-                            "EventType": "fleetRequestChange",
-                            "EventInformation": {
-                                "EventSubType": FLEET_LIMIT_EXCEEDED_ERROR,
-                                "EventDescription": "You have exceeded your spot instance limit",
-                            },
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot fleet provisioning failure",
-                    "spotInstanceCountLimitExceeded",
-                    "exceeded your spot instance limit",
-                ],
+            "expected_result": ["i-fleet-1", "i-fleet-2"],
+            "expected_log_count": 0,
+            "log_level": logging.INFO,
+            "expected_log_messages": [],
+        },
+        {
+            "id": "fleet_capacity_error",
+            "description": "Test fleet capacity not available error logging",
+            "region": "us-east-1",
+            "request_id": "sfr-error",
+            "fleet_response": {
+                "SpotFleetRequestConfigs": [
+                    {
+                        "SpotFleetRequestId": "sfr-error",
+                        "SpotFleetRequestState": "active",
+                        "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
+                    }
+                ]
             },
-            {
-                "id": "fleet_pending_warning",
-                "description": "Test warning for pending fleet request",
-                "region": "ap-south-1",
-                "request_id": "sfr-pending",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-pending",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": "pending_fulfillment",
-                        }
-                    ]
-                },
-                "expected_result": [],
-                "expected_log_count": 1,
-                "log_level": logging.WARNING,
-                "expected_log_messages": [
-                    "Spot fleet request not yet fulfilled",
-                ],
+            "history_response": {
+                "HistoryRecords": [
+                    {
+                        "EventType": "error",
+                        "EventInformation": {
+                            "EventSubType": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+                            "EventDescription": "Insufficient capacity in availability zone",
+                        },
+                    }
+                ]
             },
-        ],
-        ids=lambda tc: tc["id"],
-    )
-    def test_fleet_scenarios(self, mock_ec2_client, caplog, test_case):
-        """Test various spot fleet provisioning scenarios."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_fleet_requests.return_value = test_case["fleet_response"]
+            "expected_result": None,
+            "expected_log_count": 1,
+            "log_level": logging.ERROR,
+            "expected_log_messages": [
+                "Critical spot fleet provisioning failure",
+                "capacity-not-available",
+                "Insufficient capacity",
+            ],
+        },
+        {
+            "id": "fleet_limit_exceeded_error",
+            "description": "Test fleet limit exceeded error logging",
+            "region": "us-west-1",
+            "request_id": "sfr-limit",
+            "fleet_response": {
+                "SpotFleetRequestConfigs": [
+                    {
+                        "SpotFleetRequestId": "sfr-limit",
+                        "SpotFleetRequestState": "failed",
+                        "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
+                    }
+                ]
+            },
+            "history_response": {
+                "HistoryRecords": [
+                    {
+                        "EventType": "fleetRequestChange",
+                        "EventInformation": {
+                            "EventSubType": FLEET_LIMIT_EXCEEDED_ERROR,
+                            "EventDescription": "You have exceeded your spot instance limit",
+                        },
+                    }
+                ]
+            },
+            "expected_result": None,
+            "expected_log_count": 1,
+            "log_level": logging.ERROR,
+            "expected_log_messages": [
+                "Critical spot fleet provisioning failure",
+                "spotInstanceCountLimitExceeded",
+                "exceeded your spot instance limit",
+            ],
+        },
+        {
+            "id": "fleet_pending_warning",
+            "description": "Test warning for pending fleet request",
+            "region": "ap-south-1",
+            "request_id": "sfr-pending",
+            "fleet_response": {
+                "SpotFleetRequestConfigs": [
+                    {
+                        "SpotFleetRequestId": "sfr-pending",
+                        "SpotFleetRequestState": "active",
+                        "ActivityStatus": "pending_fulfillment",
+                    }
+                ]
+            },
+            "expected_result": [],
+            "expected_log_count": 1,
+            "log_level": logging.WARNING,
+            "expected_log_messages": [
+                "Spot fleet request not yet fulfilled",
+            ],
+        },
+    ],
+    ids=lambda tc: tc["id"],
+)
+def test_fleet_scenarios(mock_ec2_client, caplog, test_case):
+    """get_provisioned_fleet_instance_ids returns the expected ids and logs per request status."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.describe_spot_fleet_requests.return_value = test_case["fleet_response"]
 
-        # Set up history response if needed
-        if "history_response" in test_case:
-            mock_client.describe_spot_fleet_request_history.return_value = test_case["history_response"]
+    # Set up history response if needed
+    if "history_response" in test_case:
+        mock_client.describe_spot_fleet_request_history.return_value = test_case["history_response"]
 
-        # Set up instances response if needed
-        if "instances_response" in test_case:
-            mock_client.describe_spot_fleet_instances.return_value = test_case["instances_response"]
+    # Set up instances response if needed
+    if "instances_response" in test_case:
+        mock_client.describe_spot_fleet_instances.return_value = test_case["instances_response"]
 
-        with caplog.at_level(test_case["log_level"]):
-            result = get_provisioned_fleet_instance_ids(test_case["region"], [test_case["request_id"]])
+    with caplog.at_level(test_case["log_level"]):
+        result = get_provisioned_fleet_instance_ids(test_case["region"], [test_case["request_id"]])
 
-        assert result == test_case["expected_result"]
-        assert len(caplog.records) == test_case["expected_log_count"]
-        for expected_msg in test_case["expected_log_messages"]:
-            assert expected_msg in caplog.records[0].message if caplog.records else True
+    assert result == test_case["expected_result"]
+    assert len(caplog.records) == test_case["expected_log_count"]
+    for expected_msg in test_case["expected_log_messages"]:
+        assert expected_msg in caplog.records[0].message if caplog.records else True
 
-    def test_fleet_api_exception(self, mock_ec2_client, caplog):
-        """Test exception handling for fleet API errors."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_fleet_requests.side_effect = Exception("Fleet API Error")
 
-        with caplog.at_level(logging.ERROR):
-            result = get_provisioned_fleet_instance_ids("eu-central-1", ["sfr-error"])
+def test_fleet_api_exception(mock_ec2_client, caplog):
+    """get_provisioned_fleet_instance_ids returns [] and logs the error when describe raises."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.describe_spot_fleet_requests.side_effect = Exception("Fleet API Error")
 
-        assert result == []
-        assert len(caplog.records) == 1
-        assert "Failed to describe spot fleet requests" in caplog.records[0].message
-        assert "Fleet API Error" in caplog.records[0].message
+    with caplog.at_level(logging.ERROR):
+        result = get_provisioned_fleet_instance_ids("eu-central-1", ["sfr-error"])
 
-    def test_fleet_instances_describe_exception(self, mock_ec2_client, caplog):
-        """Test exception handling when describing fleet instances."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
+    assert result == []
+    assert len(caplog.records) == 1
+    assert "Failed to describe spot fleet requests" in caplog.records[0].message
+    assert "Fleet API Error" in caplog.records[0].message
 
-        mock_client.describe_spot_fleet_requests.return_value = {
-            "SpotFleetRequestConfigs": [
-                {
-                    "SpotFleetRequestId": "sfr-12345",
-                    "SpotFleetRequestState": "active",
-                    "ActivityStatus": STATUS_FULFILLED,
-                }
-            ]
-        }
-        mock_client.describe_spot_fleet_instances.side_effect = Exception("Instance describe error")
 
-        with caplog.at_level(logging.ERROR):
-            result = get_provisioned_fleet_instance_ids("us-east-1", ["sfr-12345"])
+def test_fleet_instances_describe_exception(mock_ec2_client, caplog):
+    """get_provisioned_fleet_instance_ids returns None and logs the error when describing instances raises."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
 
-        assert result is None
-        assert len(caplog.records) == 1
-        assert "Failed to describe spot fleet instances" in caplog.records[0].message
-        assert "Instance describe error" in caplog.records[0].message
+    mock_client.describe_spot_fleet_requests.return_value = {
+        "SpotFleetRequestConfigs": [
+            {
+                "SpotFleetRequestId": "sfr-12345",
+                "SpotFleetRequestState": "active",
+                "ActivityStatus": STATUS_FULFILLED,
+            }
+        ]
+    }
+    mock_client.describe_spot_fleet_instances.side_effect = Exception("Instance describe error")
+
+    with caplog.at_level(logging.ERROR):
+        result = get_provisioned_fleet_instance_ids("us-east-1", ["sfr-12345"])
+
+    assert result is None
+    assert len(caplog.records) == 1
+    assert "Failed to describe spot fleet instances" in caplog.records[0].message
+    assert "Instance describe error" in caplog.records[0].message

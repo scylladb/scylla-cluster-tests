@@ -29,8 +29,9 @@ import pytest
 from sdcm.cluster import BaseNode, CqlAddressUnresolvableError, _drain_queued_failures
 
 
-@pytest.fixture(name="node")
-def node_fixture():
+@pytest.fixture
+def node():
+    """BaseNode mock with the real is_port_used and verify_cql_address_resolvable bound to it."""
     node = MagicMock(spec=BaseNode)
     node.log = logging.getLogger("test_node")
     node.name = "test-node"
@@ -66,6 +67,7 @@ def test_is_port_used_stays_quiet_for_a_closed_port(node, caplog):
 
 
 def test_verify_cql_address_resolvable_passes_when_the_name_resolves(node):
+    """A cql_address that resolves lets verify_cql_address_resolvable return without raising."""
     with patch("sdcm.cluster.socket.getaddrinfo") as getaddrinfo:
         node.verify_cql_address_resolvable(timeout=0)
     assert getaddrinfo.called

@@ -36,7 +36,7 @@ from sdcm.utils.cloud_catalog.cost import (
 from sdcm.utils.cloud_catalog.pricing import AWSPricing, AzurePricing, GCEPricing, OCIPricing
 
 
-def _config(**values) -> SCTConfiguration:
+def build_config(**values) -> SCTConfiguration:
     """A real SCTConfiguration holding exactly these values, shaped as a resolved run's would be.
 
     `model_construct` skips loading the config files, which is slow and irrelevant here, but
@@ -57,11 +57,99 @@ def _config(**values) -> SCTConfiguration:
     )
 
 
+def aws_params(**overrides):
+    """Real SCTConfiguration of a 3-db, 2-loader, 1-monitor AWS run, with overrides applied."""
+    params = dict(
+        cluster_backend="aws",
+        region_name="eu-west-1",
+        test_duration=120,
+        instance_provision="on_demand",
+        instance_type_db="i4i.4xlarge",
+        n_db_nodes=3,
+        instance_type_loader="c6i.2xlarge",
+        n_loaders=2,
+        instance_type_monitor="t3.large",
+        n_monitor_nodes=1,
+    )
+    params.update(overrides)
+    return build_config(**params)
+
+
+# --- how many API calls a run costs --------------------------------------------------
+#
+# The whole design rests on DescribeSpotPriceHistory taking a *list* of instance types, so
+# the unit of work is a region rather than an instance type. These pin that: if a refactor
+# ever moves the call inside the per-role loop, the count changes and these fail.
+
+
+class FakeEC2:
+    """Counts describe_spot_price_history calls and answers with per-AZ prices."""
+
+    def __init__(self, price=0.2):
+        """Start with no recorded calls and a flat spot price."""
+        self.calls: list[list[str]] = []
+        self.regions: list[str] = []
+        self._price = price
+
+    def client(self, service, region_name=None):
+        """Record the region for ec2 clients and return this fake as the client."""
+        if service == "ec2":
+            self.regions.append(region_name)
+        return self
+
+    def describe_spot_price_history(self, **kwargs):
+        """Record the requested types and answer with one price per type in two AZs."""
+        requested = list(kwargs["InstanceTypes"])
+        self.calls.append(requested)
+        return {
+            "SpotPriceHistory": [
+                {"InstanceType": itype, "AvailabilityZone": f"{az}", "SpotPrice": str(self._price)}
+                for itype in requested
+                for az in ("eu-west-1a", "eu-west-1b")
+            ]
+        }
+
+
+@pytest.fixture
+def fake_ec2(monkeypatch):
+    """Patch the pricing boto3 client with a FakeEC2 and reset the per-region pricing cache."""
+    fake = FakeEC2()
+    monkeypatch.setattr("sdcm.utils.cloud_catalog.pricing.boto3.client", fake.client)
+    # AWSPricing memoises per region on the instance, so each test gets a fresh one.
+    monkeypatch.setattr("sdcm.utils.cloud_catalog.cost._pricing_for", fresh_pricing_for)
+    return fake
+
+
+def fresh_pricing_for(cloud):
+    """Build a new pricing object for the cloud, with no memoised prices."""
+    return {"aws": AWSPricing, "gce": GCEPricing, "azure": AzurePricing, "oci": OCIPricing}[cloud]()
+
+
+def spot_estimate(monkeypatch, *, fallback):
+    """Estimate an AWS spot run priced at 0.25/h, with on-demand fallback set as given."""
+    monkeypatch.setattr(
+        "sdcm.utils.cloud_catalog.cost.resolve_spot_rates",
+        lambda backend, region, types: {t: InstanceRate(price_per_hour=0.25, is_spot=True) for t in types},
+    )
+    return estimate_run_cost(aws_params(instance_provision="spot", instance_provision_fallback_on_demand=fallback))
+
+
 # --- the 0-means-unknown rule -------------------------------------------------------
 
 
-@pytest.mark.parametrize("raw", [0, 0.0, -1, None, "", "not-a-number"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param(0, id="zero"),
+        pytest.param(0.0, id="zero-float"),
+        pytest.param(-1, id="negative"),
+        pytest.param(None, id="none"),
+        pytest.param("", id="empty"),
+        pytest.param("not-a-number", id="not-a-number"),
+    ],
+)
 def test_non_positive_price_is_unknown_not_free(raw):
+    """A zero, negative, empty or unparseable raw price is unknown, never a zero cost."""
     rate = InstanceRate.from_raw(raw, is_spot=False)
     assert rate.price_per_hour is None
     assert not rate.known
@@ -70,6 +158,7 @@ def test_non_positive_price_is_unknown_not_free(raw):
 
 
 def test_positive_price_is_kept():
+    """A positive raw price is kept as a known rate."""
     rate = InstanceRate.from_raw(1.5, is_spot=True)
     assert rate.price_per_hour == 1.5
     assert rate.is_spot is True
@@ -82,14 +171,15 @@ def test_positive_price_is_kept():
 @pytest.mark.parametrize(
     "backend, region, instance_type, expected",
     [
-        ("aws", "eu-west-1", "i4i.4xlarge", 1.373),
-        ("gce", "us-east1", "n2-highmem-32", 2.096224),
-        ("gce", "us-central1", "z4d-highmem-16-highlssd", 2.528691507),
-        ("gce", "us-east4", "z4d-highmem-16-standardlssd", 2.145129863),
-        ("azure", "eastus", "Standard_L8s_v3", 0.696),
+        pytest.param("aws", "eu-west-1", "i4i.4xlarge", 1.373, id="aws-i4i-4xlarge"),
+        pytest.param("gce", "us-east1", "n2-highmem-32", 2.096224, id="gce-n2-highmem-32"),
+        pytest.param("gce", "us-central1", "z4d-highmem-16-highlssd", 2.528691507, id="gce-z4d-highlssd"),
+        pytest.param("gce", "us-east4", "z4d-highmem-16-standardlssd", 2.145129863, id="gce-z4d-standardlssd"),
+        pytest.param("azure", "eastus", "Standard_L8s_v3", 0.696, id="azure-l8s-v3"),
     ],
 )
 def test_on_demand_rate_from_catalog(backend, region, instance_type, expected):
+    """get_hourly_rate returns the checked-in catalog on-demand price."""
     rate = get_hourly_rate(backend, region, instance_type)
     assert rate.price_per_hour == pytest.approx(expected)
     assert rate.is_spot is False
@@ -103,8 +193,17 @@ def test_oci_shape_without_an_ocpu_count_is_unknown():
     assert get_hourly_rate("oci", "eu-frankfurt-1", "VM.Standard.E4.Flex").price_per_hour is None
 
 
-@pytest.mark.parametrize("instance_type", ["c3-standard-8", "c4-standard-8", "n4-standard-8", "t2a-standard-4"])
+@pytest.mark.parametrize(
+    "instance_type",
+    [
+        pytest.param("c3-standard-8", id="c3-standard-8"),
+        pytest.param("c4-standard-8", id="c4-standard-8"),
+        pytest.param("n4-standard-8", id="n4-standard-8"),
+        pytest.param("t2a-standard-4", id="t2a-standard-4"),
+    ],
+)
 def test_gce_spot_for_an_uncatalogued_type_is_unknown(instance_type):
+    """GCE spot for a type missing from the catalog is unknown, not free."""
     rate = get_hourly_rate("gce", "us-east1", instance_type, is_spot=True, catalog_only=True)
     assert rate.price_per_hour is None
     assert rate.is_spot is True
@@ -128,16 +227,28 @@ def test_gce_spot_discount_is_region_specific():
     assert len(set(round(r, 3) for r in rates.values())) > 1, rates
 
 
-@pytest.mark.parametrize("backend", ["docker", "k8s-local-kind", "unknown-backend", ""])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("docker", id="docker"),
+        pytest.param("k8s-local-kind", id="k8s-local-kind"),
+        pytest.param("unknown-backend", id="unknown-backend"),
+        pytest.param("", id="empty-backend"),
+    ],
+)
 def test_backends_without_pricing_report_unknown(backend):
+    """Backends without a pricing source report an unknown rate."""
     assert get_hourly_rate(backend, "somewhere", "some.type").price_per_hour is None
 
 
 def test_unknown_instance_type_is_unknown():
+    """An AWS instance type absent from the catalog has an unknown price."""
     assert get_hourly_rate("aws", "eu-west-1", "totally.made.up").price_per_hour is None
 
 
 def test_pricing_failure_never_propagates(monkeypatch):
+    """An exception from the pricing API becomes an unknown rate."""
+
     def explode(*_args, **_kwargs):
         raise RuntimeError("pricing API down")
 
@@ -149,18 +260,28 @@ def test_pricing_failure_never_propagates(monkeypatch):
 
 
 def test_cost_uses_fractional_hours_not_whole_ones():
+    """cost_for bills by fractional hours, not rounded-up whole hours."""
     rate = InstanceRate.from_raw(2.0, is_spot=False)
     # 90 minutes at $2/h is $3, not $4 as a ceil-to-whole-hours implementation would give.
     assert cost_for(rate, 90 * 60) == pytest.approx(3.0)
 
 
-@pytest.mark.parametrize("seconds", [0, 1, 12345.678])
+@pytest.mark.parametrize(
+    "seconds",
+    [
+        pytest.param(0, id="zero"),
+        pytest.param(1, id="one-second"),
+        pytest.param(12345.678, id="fractional"),
+    ],
+)
 def test_cost_scales_linearly(seconds):
+    """cost_for is linear in seconds at a fixed rate."""
     rate = InstanceRate.from_raw(3.0, is_spot=False)
     assert cost_for(rate, seconds) == pytest.approx(3.0 * seconds / 3600)
 
 
 def test_cost_of_none_or_negative_is_none():
+    """cost_for returns None for an unknown rate or negative seconds."""
     rate = InstanceRate.from_raw(1.0, is_spot=False)
     assert cost_for(None, 3600) is None
     assert cost_for(rate, -5) is None
@@ -169,25 +290,9 @@ def test_cost_of_none_or_negative_is_none():
 # --- run-level estimate -------------------------------------------------------------
 
 
-def _aws_params(**overrides):
-    params = dict(
-        cluster_backend="aws",
-        region_name="eu-west-1",
-        test_duration=120,
-        instance_provision="on_demand",
-        instance_type_db="i4i.4xlarge",
-        n_db_nodes=3,
-        instance_type_loader="c6i.2xlarge",
-        n_loaders=2,
-        instance_type_monitor="t3.large",
-        n_monitor_nodes=1,
-    )
-    params.update(overrides)
-    return _config(**params)
-
-
 def test_estimate_sums_nodes_times_rate_times_duration():
-    est = estimate_run_cost(_aws_params())
+    """The db role cost is node count times hourly rate times duration hours."""
+    est = estimate_run_cost(aws_params())
     assert isinstance(est, RunCostEstimate)
     assert est.duration_hours == pytest.approx(2.0)
     assert not est.partial
@@ -199,25 +304,28 @@ def test_estimate_sums_nodes_times_rate_times_duration():
 
 
 def test_multi_dc_node_counts_are_summed():
-    est = estimate_run_cost(_aws_params(n_db_nodes=[3, 3]))
+    """Node counts across datacenters are summed per role."""
+    est = estimate_run_cost(aws_params(n_db_nodes=[3, 3]))
     assert next(r for r in est.roles if r.role == "db").node_count == 6
 
 
 def test_a_scale_test_prices_the_db_cluster_at_its_target_size():
-    est = estimate_run_cost(_aws_params(n_db_nodes=3, cluster_target_size=9))
+    """A scale test prices the db role at cluster_target_size, not n_db_nodes."""
+    est = estimate_run_cost(aws_params(n_db_nodes=3, cluster_target_size=9))
     assert next(r for r in est.roles if r.role == "db").node_count == 9
 
 
 def test_stress_duration_drives_the_estimated_duration_when_set():
     """The test runs prepare + stress + warmup/teardown, however short test_duration reads."""
-    params = _aws_params(test_duration=60, stress_duration=600, prepare_stress_duration=0)
+    params = aws_params(test_duration=60, stress_duration=600, prepare_stress_duration=0)
     est = estimate_run_cost(params)
     assert est.duration_hours * 60 == params.effective_test_duration()
     assert est.duration_hours > 10
 
 
 def test_each_role_carries_its_on_demand_price_and_the_ceiling_is_their_sum(fake_ec2):
-    est = estimate_run_cost(_aws_params(instance_provision="spot"))
+    """Each role keeps its on-demand price, and the ceiling is their sum."""
+    est = estimate_run_cost(aws_params(instance_provision="spot"))
     db = next(r for r in est.roles if r.role == "db")
     assert (db.rate.is_spot, db.on_demand_rate.price_per_hour) == (True, 1.373)
     assert est.on_demand_total == pytest.approx(sum(r.on_demand_cost for r in est.roles))
@@ -225,12 +333,14 @@ def test_each_role_carries_its_on_demand_price_and_the_ceiling_is_their_sum(fake
 
 
 def test_duration_override_wins_over_config():
-    est = estimate_run_cost(_aws_params(), duration_minutes=30)
+    """duration_minutes overrides the configured test duration."""
+    est = estimate_run_cost(aws_params(), duration_minutes=30)
     assert est.duration_hours == pytest.approx(0.5)
 
 
 def test_unpriced_role_makes_the_estimate_partial_not_silently_low():
-    est = estimate_run_cost(_aws_params(instance_type_loader="totally.made.up"))
+    """An unpriced role marks the estimate partial; the total covers only priced roles."""
+    est = estimate_run_cost(aws_params(instance_type_loader="totally.made.up"))
     assert est.partial
     assert "loader" in est.unpriced_roles
     # The priced roles still contribute; the total is a floor, flagged as incomplete.
@@ -238,7 +348,8 @@ def test_unpriced_role_makes_the_estimate_partial_not_silently_low():
 
 
 def test_roles_with_zero_nodes_are_skipped():
-    est = estimate_run_cost(_aws_params(n_loaders=0))
+    """A role with zero nodes is left out of the estimate."""
+    est = estimate_run_cost(aws_params(n_loaders=0))
     assert "loader" not in {r.role for r in est.roles}
 
 
@@ -248,8 +359,8 @@ def test_spot_run_is_priced_at_spot_and_carries_an_on_demand_ceiling(monkeypatch
         "sdcm.utils.cloud_catalog.cost.resolve_spot_rates",
         lambda backend, region, types: {t: InstanceRate(price_per_hour=0.25, is_spot=True) for t in types},
     )
-    on_demand = estimate_run_cost(_aws_params())
-    spot = estimate_run_cost(_aws_params(instance_provision="spot"))
+    on_demand = estimate_run_cost(aws_params())
+    spot = estimate_run_cost(aws_params(instance_provision="spot"))
 
     assert spot.is_spot is True
     assert spot.total < on_demand.total
@@ -258,13 +369,15 @@ def test_spot_run_is_priced_at_spot_and_carries_an_on_demand_ceiling(monkeypatch
 
 
 def test_backend_without_pricing_yields_an_unknown_total():
-    est = estimate_run_cost(_config(cluster_backend="docker", test_duration=60))
+    """A backend without pricing gives an unknown, partial total."""
+    est = estimate_run_cost(build_config(cluster_backend="docker", test_duration=60))
     assert est.total is None
     assert est.partial
 
 
 def test_as_dict_is_json_serialisable_and_keeps_nulls():
-    payload = json.loads(json.dumps(estimate_run_cost(_aws_params(instance_type_db="made.up")).as_dict()))
+    """as_dict survives a JSON round trip and keeps unknown values as null."""
+    payload = json.loads(json.dumps(estimate_run_cost(aws_params(instance_type_db="made.up")).as_dict()))
     assert payload["partial"] is True
     assert "db" in payload["unpriced_roles"]
     db = next(r for r in payload["roles"] if r["role"] == "db")
@@ -275,6 +388,8 @@ def test_as_dict_is_json_serialisable_and_keeps_nulls():
 
 
 def test_catalog_only_does_not_fall_through_to_a_pricing_api(monkeypatch):
+    """catalog_only never calls the live AWS pricing API on a catalog miss."""
+
     def explode(*_args, **_kwargs):
         raise AssertionError("a live pricing API was called")
 
@@ -303,10 +418,10 @@ def test_on_demand_estimate_never_calls_a_cloud_api(monkeypatch):
     monkeypatch.setattr("botocore.client.BaseClient._make_api_call", record_boto)
     monkeypatch.setattr("requests.sessions.Session.request", record_http)
 
-    priced = estimate_run_cost(_aws_params())
+    priced = estimate_run_cost(aws_params())
     assert priced.total is not None
 
-    unpriced = estimate_run_cost(_aws_params(instance_type_db="m5.24xlarge"))
+    unpriced = estimate_run_cost(aws_params(instance_type_db="m5.24xlarge"))
     assert unpriced.partial
     assert "db" in unpriced.unpriced_roles
 
@@ -331,9 +446,10 @@ def test_unavailable_estimate_is_well_formed():
 @pytest.mark.parametrize(
     "instance_type, expected",
     [
-        ("VM.Standard.E4.Flex:2", 0.098),  # catalogued form
-        ("VM.Standard.E4.Flex:2:8", 0.098),  # configured form: <shape>:<ocpus>:<memory_gb>
-        ("VM.Standard.E4.Flex:1:8", 0.049),
+        pytest.param("VM.Standard.E4.Flex:2", 0.098, id="catalogued-form"),
+        # configured form: <shape>:<ocpus>:<memory_gb>
+        pytest.param("VM.Standard.E4.Flex:2:8", 0.098, id="configured-form"),
+        pytest.param("VM.Standard.E4.Flex:1:8", 0.049, id="one-ocpu"),
     ],
 )
 def test_oci_flex_shapes_resolve_to_the_base_shape(instance_type, expected):
@@ -347,6 +463,7 @@ def test_oci_flex_shapes_resolve_to_the_base_shape(instance_type, expected):
 
 
 def test_unknown_flex_shape_is_still_unknown():
+    """An OCI flex shape whose base shape is unknown is unknown."""
     assert get_hourly_rate("oci", "us-ashburn-1", "VM.Bogus.Flex:9:9", catalog_only=True).price_per_hour is None
 
 
@@ -356,7 +473,7 @@ def test_configured_nodes_with_no_instance_type_are_reported_not_dropped():
     Silently skipping it yields a confident-looking total that is missing an entire
     cluster - far worse than admitting the gap.
     """
-    est = estimate_run_cost(_aws_params(instance_type_db=""))
+    est = estimate_run_cost(aws_params(instance_type_db=""))
     db = next(r for r in est.roles if r.role == "db")
     assert db.node_count == 3
     assert db.cost is None
@@ -366,64 +483,20 @@ def test_configured_nodes_with_no_instance_type_are_reported_not_dropped():
 
 def test_oracle_nodes_are_ignored_unless_the_run_is_mixed():
     """`n_test_oracle_db_nodes` defaults to 1 even when no oracle cluster is used."""
-    plain = estimate_run_cost(_aws_params(n_test_oracle_db_nodes=1))
+    plain = estimate_run_cost(aws_params(n_test_oracle_db_nodes=1))
     assert "db_oracle" not in {r.role for r in plain.roles}
     assert not plain.partial
 
     mixed = estimate_run_cost(
-        _aws_params(db_type="mixed_scylla", n_test_oracle_db_nodes=1, instance_type_db_oracle="i4i.4xlarge")
+        aws_params(db_type="mixed_scylla", n_test_oracle_db_nodes=1, instance_type_db_oracle="i4i.4xlarge")
     )
     oracle = next(r for r in mixed.roles if r.role == "db_oracle")
     assert oracle.cost == pytest.approx(1.373 * 1 * 2.0)
 
 
-# --- how many API calls a run costs --------------------------------------------------
-#
-# The whole design rests on DescribeSpotPriceHistory taking a *list* of instance types, so
-# the unit of work is a region rather than an instance type. These pin that: if a refactor
-# ever moves the call inside the per-role loop, the count changes and these fail.
-
-
-class _FakeEC2:
-    """Counts describe_spot_price_history calls and answers with per-AZ prices."""
-
-    def __init__(self, price=0.2):
-        self.calls: list[list[str]] = []
-        self.regions: list[str] = []
-        self._price = price
-
-    def client(self, service, region_name=None):
-        if service == "ec2":
-            self.regions.append(region_name)
-        return self
-
-    def describe_spot_price_history(self, **kwargs):
-        requested = list(kwargs["InstanceTypes"])
-        self.calls.append(requested)
-        return {
-            "SpotPriceHistory": [
-                {"InstanceType": itype, "AvailabilityZone": f"{az}", "SpotPrice": str(self._price)}
-                for itype in requested
-                for az in ("eu-west-1a", "eu-west-1b")
-            ]
-        }
-
-
-@pytest.fixture(name="fake_ec2")
-def fixture_fake_ec2(monkeypatch):
-    fake = _FakeEC2()
-    monkeypatch.setattr("sdcm.utils.cloud_catalog.pricing.boto3.client", fake.client)
-    # AWSPricing memoises per region on the instance, so each test gets a fresh one.
-    monkeypatch.setattr("sdcm.utils.cloud_catalog.cost._pricing_for", _fresh_pricing_for)
-    return fake
-
-
-def _fresh_pricing_for(cloud):
-    return {"aws": AWSPricing, "gce": GCEPricing, "azure": AzurePricing, "oci": OCIPricing}[cloud]()
-
-
 def test_a_spot_run_costs_exactly_one_aws_call(fake_ec2):
-    estimate_run_cost(_aws_params(instance_provision="spot"))
+    """A spot run makes one describe_spot_price_history call covering all its types."""
+    estimate_run_cost(aws_params(instance_provision="spot"))
     assert len(fake_ec2.calls) == 1
     # One call carried every distinct instance type the run needs.
     assert set(fake_ec2.calls[0]) == {"i4i.4xlarge", "c6i.2xlarge", "t3.large"}
@@ -431,19 +504,20 @@ def test_a_spot_run_costs_exactly_one_aws_call(fake_ec2):
 
 def test_a_multi_region_run_is_priced_in_its_first_region(fake_ec2):
     """config.get() space-joins region_name, so the raw value is not a region on its own."""
-    estimate = estimate_run_cost(_aws_params(instance_provision="spot", region_name="eu-west-1 us-east-1"))
+    estimate = estimate_run_cost(aws_params(instance_provision="spot", region_name="eu-west-1 us-east-1"))
     assert fake_ec2.regions == ["eu-west-1"]
     assert not estimate.partial
 
 
 def test_call_count_does_not_grow_with_node_count(fake_ec2):
-    estimate_run_cost(_aws_params(instance_provision="spot", n_db_nodes=60, n_loaders=20, n_monitor_nodes=3))
+    """The spot lookup count stays at one regardless of node count."""
+    estimate_run_cost(aws_params(instance_provision="spot", n_db_nodes=60, n_loaders=20, n_monitor_nodes=3))
     assert len(fake_ec2.calls) == 1
 
 
 def test_an_on_demand_run_makes_no_spot_call_at_all(fake_ec2):
     """Cheap is not free — a lookup nothing asked for is pure waste."""
-    estimate = estimate_run_cost(_aws_params(instance_provision="on_demand"))
+    estimate = estimate_run_cost(aws_params(instance_provision="on_demand"))
     assert fake_ec2.calls == []
     assert estimate.total is not None
 
@@ -463,9 +537,9 @@ def test_unreachable_spot_api_yields_unknown_not_a_wrong_number(monkeypatch):
         raise RuntimeError("no credentials")
 
     monkeypatch.setattr("sdcm.utils.cloud_catalog.pricing.boto3.client", explode)
-    monkeypatch.setattr("sdcm.utils.cloud_catalog.cost._pricing_for", _fresh_pricing_for)
+    monkeypatch.setattr("sdcm.utils.cloud_catalog.cost._pricing_for", fresh_pricing_for)
 
-    estimate = estimate_run_cost(_aws_params(instance_provision="spot"))
+    estimate = estimate_run_cost(aws_params(instance_provision="spot"))
     assert estimate.partial
     assert estimate.total is None
     # The ceiling still comes from the catalog, so the run is not left with nothing.
@@ -478,7 +552,7 @@ def test_a_missing_spot_price_never_falls_back_to_on_demand(monkeypatch):
         "sdcm.utils.cloud_catalog.cost.resolve_spot_rates",
         lambda backend, region, types: {t: InstanceRate.unknown(is_spot=True) for t in types},
     )
-    estimate = estimate_run_cost(_aws_params(instance_provision="spot"))
+    estimate = estimate_run_cost(aws_params(instance_provision="spot"))
     assert estimate.total is None
     assert set(estimate.unpriced_roles) == {"db", "loader", "monitor"}
 
@@ -493,7 +567,7 @@ def test_gce_spot_estimate_makes_no_network_call(monkeypatch):
     monkeypatch.setattr("requests.sessions.Session.request", explode)
 
     estimate = estimate_run_cost(
-        _config(
+        build_config(
             cluster_backend="gce",
             gce_datacenter="us-east1",
             test_duration=60,
@@ -536,8 +610,10 @@ def test_oci_preemptible_is_exactly_half_of_on_demand():
     assert spot.price_per_hour == pytest.approx(on_demand.price_per_hour * 0.5, rel=1e-4)
 
 
-@pytest.mark.parametrize("backend", ["azure", "oci"])
+@pytest.mark.parametrize("backend", [pytest.param("azure", id="azure"), pytest.param("oci", id="oci")])
 def test_azure_and_oci_spot_estimates_make_no_network_call(monkeypatch, backend):
+    """Azure and OCI spot estimates make no boto or HTTP calls."""
+
     def explode(*_args, **_kwargs):
         raise AssertionError("a network call was made during an estimate")
 
@@ -566,7 +642,7 @@ def test_azure_and_oci_spot_estimates_make_no_network_call(monkeypatch, backend)
             n_monitor_nodes=1,
         ),
     }[backend]
-    estimate = estimate_run_cost(_config(**params, test_duration=60, instance_provision="spot"))
+    estimate = estimate_run_cost(build_config(**params, test_duration=60, instance_provision="spot"))
     assert estimate.is_spot is True
     assert estimate.total is not None
     assert estimate.total < estimate.on_demand_total
@@ -575,58 +651,71 @@ def test_azure_and_oci_spot_estimates_make_no_network_call(monkeypatch, backend)
 # --- the on-demand ceiling is only real when fallback is enabled ------------------------
 
 
-def _spot_estimate(monkeypatch, *, fallback):
-    monkeypatch.setattr(
-        "sdcm.utils.cloud_catalog.cost.resolve_spot_rates",
-        lambda backend, region, types: {t: InstanceRate(price_per_hour=0.25, is_spot=True) for t in types},
-    )
-    return estimate_run_cost(_aws_params(instance_provision="spot", instance_provision_fallback_on_demand=fallback))
-
-
 def test_ceiling_is_a_real_risk_only_when_fallback_is_enabled(monkeypatch):
-    assert _spot_estimate(monkeypatch, fallback=True).may_fall_back is True
+    """With on-demand fallback enabled, the on-demand ceiling is a real risk."""
+    assert spot_estimate(monkeypatch, fallback=True).may_fall_back is True
 
 
 def test_ceiling_is_hypothetical_when_fallback_is_disabled(monkeypatch):
     """With fallback off the run cannot reach the on-demand figure, so we must not imply it can."""
-    estimate = _spot_estimate(monkeypatch, fallback=False)
+    estimate = spot_estimate(monkeypatch, fallback=False)
     assert estimate.may_fall_back is False
     # Still computed and exposed — callers may want it; it just is not a risk to announce.
     assert estimate.on_demand_total is not None
 
 
 def test_an_on_demand_run_never_claims_it_may_fall_back():
-    assert estimate_run_cost(_aws_params(instance_provision="on_demand")).may_fall_back is False
+    """An on-demand run never reports that it may fall back."""
+    assert estimate_run_cost(aws_params(instance_provision="on_demand")).may_fall_back is False
 
 
 def test_fallback_flag_is_carried_into_the_json(monkeypatch):
-    assert _spot_estimate(monkeypatch, fallback=True).as_dict()["fallback_to_on_demand"] is True
+    """fallback_to_on_demand is carried into as_dict."""
+    assert spot_estimate(monkeypatch, fallback=True).as_dict()["fallback_to_on_demand"] is True
 
 
 def test_duration_is_carried_on_the_estimate_so_output_can_state_it():
     """A cost with no timespan attached reads as a rate, or as a shorter run than it is."""
-    estimate = estimate_run_cost(_aws_params(test_duration=255))
+    estimate = estimate_run_cost(aws_params(test_duration=255))
     assert estimate.duration_hours == pytest.approx(4.25)
     assert estimate.as_dict()["duration_hours"] == pytest.approx(4.25)
 
 
 def test_duration_override_is_reflected_in_both_the_hours_and_the_total():
-    short = estimate_run_cost(_aws_params(), duration_minutes=60)
-    long = estimate_run_cost(_aws_params(), duration_minutes=600)
+    """duration_minutes scales both duration_hours and the total."""
+    short = estimate_run_cost(aws_params(), duration_minutes=60)
+    long = estimate_run_cost(aws_params(), duration_minutes=600)
     assert (short.duration_hours, long.duration_hours) == (1.0, 10.0)
     assert long.total == pytest.approx(short.total * 10)
 
 
-@pytest.mark.parametrize("backend", ["xcloud", "k8s-local-kind", "k8s-local-kind-aws", "baremetal", "docker"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("xcloud", id="xcloud"),
+        pytest.param("k8s-local-kind", id="k8s-local-kind"),
+        pytest.param("k8s-local-kind-aws", id="k8s-local-kind-aws"),
+        pytest.param("baremetal", id="baremetal"),
+        pytest.param("docker", id="docker"),
+    ],
+)
 def test_unpriceable_backends_yield_an_honest_estimate_rather_than_an_error(backend):
     """A backend with no priceable instances must degrade, not break the pre-flight stage."""
-    estimate = estimate_run_cost(_config(cluster_backend=backend, test_duration=60))
+    estimate = estimate_run_cost(build_config(cluster_backend=backend, test_duration=60))
     assert estimate.total is None
     assert estimate.partial
     assert estimate.as_dict()["total"] is None
 
 
-@pytest.mark.parametrize("backend", ["k8s-eks", "k8s-gke", "aws-siren", "gce-siren"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("k8s-eks", id="k8s-eks"),
+        pytest.param("k8s-gke", id="k8s-gke"),
+        pytest.param("aws-siren", id="aws-siren"),
+        pytest.param("gce-siren", id="gce-siren"),
+    ],
+)
 def test_managed_backends_price_through_their_underlying_cloud(backend):
     """k8s-eks and aws-siren are AWS underneath; k8s-gke and gce-siren are GCE."""
     assert backend_to_cloud(backend) in ("aws", "gce")
@@ -637,7 +726,7 @@ def test_managed_backends_price_through_their_underlying_cloud(backend):
 
 def test_xcloud_prices_through_its_configured_provider():
     """Xcloud has no cloud of its own; config resolves it from xcloud_provider."""
-    params = _aws_params(cluster_backend="xcloud", xcloud_provider="aws")
+    params = aws_params(cluster_backend="xcloud", xcloud_provider="aws")
     estimate = estimate_run_cost(params)
     assert estimate.total is not None
     assert not estimate.partial
@@ -645,7 +734,7 @@ def test_xcloud_prices_through_its_configured_provider():
 
 def test_xcloud_db_nodes_are_never_priced_at_spot(fake_ec2):
     """Scylla Cloud never runs db nodes on spot; instance_provision only reaches the loaders."""
-    params = _aws_params(cluster_backend="xcloud", xcloud_provider="aws", instance_provision="spot")
+    params = aws_params(cluster_backend="xcloud", xcloud_provider="aws", instance_provision="spot")
     estimate = estimate_run_cost(params)
     roles = {r.role: r for r in estimate.roles}
     assert (roles["db"].rate.is_spot, roles["db"].rate.price_per_hour) == (False, 1.373)
@@ -653,10 +742,16 @@ def test_xcloud_db_nodes_are_never_priced_at_spot(fake_ec2):
     assert "i4i.4xlarge" not in fake_ec2.calls[0]
 
 
-@pytest.mark.parametrize("db_instance_type", ["z3-highmem-8-highlssd", "z4d-highmem-16-highlssd"])
+@pytest.mark.parametrize(
+    "db_instance_type",
+    [
+        pytest.param("z3-highmem-8-highlssd", id="z3-highmem-8-highlssd"),
+        pytest.param("z4d-highmem-16-highlssd", id="z4d-highmem-16-highlssd"),
+    ],
+)
 def test_gce_bundled_ssd_db_nodes_are_never_priced_at_spot(db_instance_type):
     """SCT's GCE provisioning requests z3 and z4d on-demand: their bundled local SSD needs MIGRATE."""
-    params = _config(
+    params = build_config(
         cluster_backend="gce",
         gce_datacenter="us-east1",
         test_duration=60,
@@ -673,7 +768,7 @@ def test_gce_bundled_ssd_db_nodes_are_never_priced_at_spot(db_instance_type):
 
 def test_gce_z4d_db_nodes_are_priced():
     """SCT-1384: z4d db nodes have a catalog price, so the estimate is not reported as partial."""
-    params = _config(
+    params = build_config(
         cluster_backend="gce",
         gce_datacenter="us-central1",
         test_duration=60,
@@ -696,7 +791,8 @@ def test_role_table_follows_config_so_a_new_role_is_not_silently_dropped():
 
 
 def test_zero_token_nodes_are_priced_when_configured():
-    params = _aws_params(zero_token_instance_type_db="i4i.4xlarge", n_db_zero_token_nodes=2)
+    """Zero-token nodes are priced under the zero_token role."""
+    params = aws_params(zero_token_instance_type_db="i4i.4xlarge", n_db_zero_token_nodes=2)
     estimate = estimate_run_cost(params)
     assert "zero_token" in {r.role for r in estimate.roles}
 
@@ -710,6 +806,7 @@ def test_spot_prices_are_cached_per_region_without_expiry(fake_ec2):
 
 
 def test_a_later_lookup_does_not_evict_earlier_types(fake_ec2):
+    """A later spot lookup keeps earlier instance types cached."""
     pricing = AWSPricing()
     pricing.get_spot_instance_prices("eu-west-1", ["i4i.4xlarge"])
     pricing.get_spot_instance_prices("eu-west-1", ["c6i.2xlarge"])

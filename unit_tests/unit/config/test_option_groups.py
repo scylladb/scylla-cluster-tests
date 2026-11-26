@@ -35,7 +35,8 @@ from sdcm.sct_config.config import is_ignored_field
 from sdcm.sct_config.mixins import CONFIG_GROUPS
 
 
-def _module(mixin):
+def module_name(mixin):
+    """module_name returns the last component of the mixin's module path."""
     return mixin.__module__.rsplit(".", 1)[-1]
 
 
@@ -45,7 +46,7 @@ DOCUMENTED_OPTIONS = {
     if not (field.exclude or is_ignored_field(field))
 }
 
-OPTION_GROUP = {name: _module(mixin) for mixin in CONFIG_GROUPS for name in mixin.model_fields}
+OPTION_GROUP = {name: module_name(mixin) for mixin in CONFIG_GROUPS for name in mixin.model_fields}
 
 # name prefix -> the group an option with that prefix belongs in
 PREFIX_CONVENTION = {
@@ -125,8 +126,8 @@ def test_every_option_belongs_to_exactly_one_mixin():
     for mixin in CONFIG_GROUPS:
         for name in mixin.model_fields:
             if name in seen:
-                duplicated.append((name, seen[name], _module(mixin)))
-            seen[name] = _module(mixin)
+                duplicated.append((name, seen[name], module_name(mixin)))
+            seen[name] = module_name(mixin)
     assert not duplicated, f"options declared in more than one mixin: {duplicated}"
 
 

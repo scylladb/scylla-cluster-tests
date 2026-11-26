@@ -25,7 +25,7 @@ def src_dir(tmp_path):
     return src
 
 
-def _get_tar_names(tar_stream: BytesIO) -> list[str]:
+def get_tar_names(tar_stream: BytesIO) -> list[str]:
     """Extract archive member names from a tar stream."""
     tar_stream.seek(0)
     with tarfile.open(fileobj=tar_stream, mode="r") as tar:
@@ -35,7 +35,7 @@ def _get_tar_names(tar_stream: BytesIO) -> list[str]:
 def test_create_tar_stream_dir_with_trailing_slash_copies_contents(src_dir):
     """Trailing slash on src copies only directory contents (no parent dir in archive)."""
     tar_stream = DockerCmdRunner._create_tar_stream(str(src_dir) + "/", "/dst/")
-    names = _get_tar_names(tar_stream)
+    names = get_tar_names(tar_stream)
 
     # Should contain files relative to src_dir, without the "mydir" prefix
     assert "file1.txt" in names
@@ -47,7 +47,7 @@ def test_create_tar_stream_dir_with_trailing_slash_copies_contents(src_dir):
 def test_create_tar_stream_dir_without_trailing_slash_copies_dir_itself(src_dir):
     """No trailing slash on src copies the directory itself (includes dir name in archive)."""
     tar_stream = DockerCmdRunner._create_tar_stream(str(src_dir), "/dst/")
-    names = _get_tar_names(tar_stream)
+    names = get_tar_names(tar_stream)
 
     # Should contain files with the "mydir" directory prefix
     assert "mydir/file1.txt" in names
@@ -60,7 +60,7 @@ def test_create_tar_stream_single_file(tmp_path):
     test_file.write_text("hello")
 
     tar_stream = DockerCmdRunner._create_tar_stream(str(test_file), "/dst/test.txt")
-    names = _get_tar_names(tar_stream)
+    names = get_tar_names(tar_stream)
 
     assert names == ["test.txt"]
 
@@ -71,6 +71,6 @@ def test_create_tar_stream_single_file_dst_with_trailing_slash(tmp_path):
     test_file.write_text("a,b,c")
 
     tar_stream = DockerCmdRunner._create_tar_stream(str(test_file), "/dst/")
-    names = _get_tar_names(tar_stream)
+    names = get_tar_names(tar_stream)
 
     assert names == ["data.csv"]

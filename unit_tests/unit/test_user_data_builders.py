@@ -11,15 +11,16 @@ from sdcm.utils.sct_cmd_helpers import get_test_config
 pytestmark = pytest.mark.parametrize(
     "logs_transport",
     [
-        "libssh2",
-        "syslog-ng",
-        "vector",
+        pytest.param("libssh2", id="libssh2"),
+        pytest.param("syslog-ng", id="syslog-ng"),
+        pytest.param("vector", id="vector"),
     ],
 )
 
 
 @pytest.fixture
 def test_config():
+    """SCT test config with a fixed test id and syslog-ng address for user data builders."""
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     config.SYSLOGNG_ADDRESS = ("localhost", 12345)
@@ -27,6 +28,7 @@ def test_config():
 
 
 def test_user_data_format_version_v2_building(logs_transport, test_config):
+    """Format version 2 user data is JSON with a post-configuration script and RAID level 0."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         syslog_host_port=("0.0.0.0", 1234),
@@ -42,6 +44,7 @@ def test_user_data_format_version_v2_building(logs_transport, test_config):
 
 
 def test_user_data_format_version_v1_building(logs_transport, test_config):
+    """Format version 1 user data runs the base64 post-configuration script with stop-services."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         syslog_host_port=("0.0.0.0", 1234),
@@ -54,6 +57,7 @@ def test_user_data_format_version_v1_building(logs_transport, test_config):
 
 
 def test_user_data_format_version_v3_building(logs_transport, test_config):
+    """Format version 3 is multipart MIME with JSON, cloud-config and a gzipped post-configuration script."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         user_data_format_version="3",

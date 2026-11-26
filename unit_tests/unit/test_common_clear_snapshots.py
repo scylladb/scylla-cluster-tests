@@ -22,6 +22,7 @@ Total TrueDiskSpaceUsed: 0 bytes
 
 
 def make_node(listsnapshots_output: str) -> MagicMock:
+    """Return a node mock whose listsnapshots prints the given output; other nodetool calls print nothing."""
     node = MagicMock()
     node.run_nodetool.side_effect = lambda sub_cmd, args="": MagicMock(
         stdout=listsnapshots_output if sub_cmd == "listsnapshots" else ""
@@ -30,6 +31,7 @@ def make_node(listsnapshots_output: str) -> MagicMock:
 
 
 def cleared(node: MagicMock) -> list[str]:
+    """Return the args of every clearsnapshot nodetool call made on node."""
     return [c.kwargs["args"] for c in node.run_nodetool.call_args_list if c.args[0] == "clearsnapshot"]
 
 
@@ -58,6 +60,7 @@ def cleared(node: MagicMock) -> list[str]:
     ],
 )
 def test_clear_snapshots(tag_prefix, keyspace, table, expected):
+    """clear_snapshots clears only the snapshots matching tag prefix, keyspace and table, then lists again."""
     node = make_node(LISTSNAPSHOTS_OUTPUT)
     clear_snapshots([node], tag_prefix, keyspace, table)
     assert cleared(node) == expected
@@ -66,12 +69,14 @@ def test_clear_snapshots(tag_prefix, keyspace, table, expected):
 
 
 def test_clear_snapshots_without_snapshots():
+    """clear_snapshots issues no clearsnapshot when the node has no snapshots."""
     node = make_node("There are no snapshots\n")
     clear_snapshots([node], "pre-drop-", "ks1")
     assert cleared(node) == []
 
 
 def test_clear_snapshots_on_all_nodes():
+    """clear_snapshots applies the same filter on every node."""
     nodes = [make_node(LISTSNAPSHOTS_OUTPUT), make_node(LISTSNAPSHOTS_OUTPUT)]
     clear_snapshots(nodes, "pre-drop-", "ks1", "tbl_view")
     for node in nodes:
@@ -79,12 +84,14 @@ def test_clear_snapshots_on_all_nodes():
 
 
 def test_clear_snapshots_truncate_keeps_other_snapshots_of_table():
+    """A tag_suffix clears only the truncate snapshot, keeping the table's other snapshots."""
     node = make_node(LISTSNAPSHOTS_OUTPUT)
     clear_snapshots([node], keyspace="ks_truncate", table="standard1", tag_suffix="-standard1")
     assert cleared(node) == ["-t 1793005180517-standard1 ks_truncate"]
 
 
 def test_clear_snapshots_logs_node_failure(caplog):
+    """A nodetool failure on one node is logged and does not stop clearing on the next node."""
     failing = make_node(LISTSNAPSHOTS_OUTPUT)
     failing.run_nodetool.side_effect = RuntimeError("nodetool failed")
     node = make_node(LISTSNAPSHOTS_OUTPUT)

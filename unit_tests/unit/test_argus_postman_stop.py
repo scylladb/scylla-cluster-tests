@@ -55,7 +55,7 @@ def argus_event(severity: Severity, message: str) -> SCTArgusEvent:
     )
 
 
-def _argus_params(enable_argus: bool) -> MagicMock:
+def argus_params(enable_argus: bool) -> MagicMock:
     """Minimal SCTConfiguration stand-in for init_argus_client(): only "enable_argus" is
     ever read via dict-style .get(), and argus_use_ssh_tunnel via attribute access.
     """
@@ -84,63 +84,6 @@ def argus_pipeline(tmp_path):
         yield postman, aggregator
     finally:
         stop_events_device(_registry=registry)
-
-
-def test_stop_drains_pending_events(argus_pipeline):
-    """stop() posts every event still queued in the aggregator before the thread exits."""
-    postman, aggregator = argus_pipeline
-    submitted = []
-    postman._argus_client.submit_event.side_effect = submitted.append
-
-    events = [
-        argus_event(Severity.WARNING, "warn"),
-        argus_event(Severity.ERROR, "err"),
-        argus_event(Severity.NORMAL, "info"),
-    ]
-    for event in events:
-        aggregator.outbound_queue.put(event)
-
-    postman.stop(timeout=5)
-
-    assert not postman.is_alive()
-    assert submitted == events
-
-
-def test_stop_is_bounded_when_submit_hangs(argus_pipeline):
-    """stop() returns within the caller-provided timeout even when a submit blocks forever."""
-    postman, aggregator = argus_pipeline
-
-    release = threading.Event()  # never set -> submit_event blocks until teardown
-    postman._argus_client.submit_event.side_effect = lambda event: release.wait()
-
-    aggregator.outbound_queue.put(argus_event(Severity.ERROR, "err"))
-
-    start = time.monotonic()
-    postman.stop(timeout=1)
-    elapsed = time.monotonic() - start
-
-    try:
-        # Generous margin over the timeout=1 above: real thread scheduling under a loaded,
-        # parallelized CI run can add noticeable jitter; this only needs to catch stop()
-        # ignoring the timeout altogether, not verify it precisely.
-        assert elapsed < 10
-        postman._argus_client.submit_event.assert_called_once()  # drain was attempted
-        assert postman.is_alive()  # the hung submit is still stuck past the timeout
-    finally:
-        release.set()  # release the leaked daemon worker
-
-
-def test_stop_without_queued_events_returns_quickly(argus_pipeline):
-    """stop() with an empty queue does not block and posts nothing."""
-    postman, _ = argus_pipeline
-
-    start = time.monotonic()
-    postman.stop(timeout=5)
-    elapsed = time.monotonic() - start
-
-    assert elapsed < 2
-    assert not postman.is_alive()
-    postman._argus_client.submit_event.assert_not_called()
 
 
 @pytest.fixture
@@ -179,6 +122,84 @@ def unwired_argus_postman(events_function_scope, monkeypatch, tmp_path):
         TestConfig._close_argus_client()
 
 
+def fake_argus_event(**overrides) -> SimpleNamespace:
+    """SimpleNamespace stand-in for an SCT event, with defaults overridable via kwargs."""
+    fields = {
+        "publish_to_argus": True,
+        "severity": Severity.WARNING,
+        "timestamp": time.time(),
+        "duration": None,
+        "event_id": "fake-event-id",
+        "argus_aggregation_id": lambda: "fake-event-id",
+        "known_issue": None,
+        "nemesis_name": None,
+        "nemesis_status": None,
+        "node": None,
+        "received_timestamp": None,
+        "target_node": None,
+    }
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
+
+
+def test_stop_drains_pending_events(argus_pipeline):
+    """stop() posts every event still queued in the aggregator before the thread exits."""
+    postman, aggregator = argus_pipeline
+    submitted = []
+    postman._argus_client.submit_event.side_effect = submitted.append
+
+    events = [
+        argus_event(Severity.WARNING, "warn"),
+        argus_event(Severity.ERROR, "err"),
+        argus_event(Severity.NORMAL, "info"),
+    ]
+    for event in events:
+        aggregator.outbound_queue.put(event)
+
+    postman.stop(timeout=5)
+
+    assert not postman.is_alive()
+    assert submitted == events
+
+
+def test_stop_is_bounded_when_submit_hangs(argus_pipeline):
+    """stop() returns within the caller-provided timeout even when a submit blocks forever."""
+    postman, aggregator = argus_pipeline
+
+    release = threading.Event()  # never set -> submit_event blocks until teardown
+    postman._argus_client.submit_event.side_effect = lambda event: release.wait()
+
+    event = argus_event(Severity.ERROR, "err")
+    aggregator.outbound_queue.put(event)
+
+    start = time.monotonic()
+    postman.stop(timeout=1)
+    elapsed = time.monotonic() - start
+
+    try:
+        # Generous margin over the timeout=1 above: real thread scheduling under a loaded,
+        # parallelized CI run can add noticeable jitter; this only needs to catch stop()
+        # ignoring the timeout altogether, not verify it precisely.
+        assert elapsed < 10
+        postman._argus_client.submit_event.assert_called_once_with(event)  # drain was attempted
+        assert postman.is_alive()  # the hung submit is still stuck past the timeout
+    finally:
+        release.set()  # release the leaked daemon worker
+
+
+def test_stop_without_queued_events_returns_quickly(argus_pipeline):
+    """stop() with an empty queue does not block and posts nothing."""
+    postman, _ = argus_pipeline
+
+    start = time.monotonic()
+    postman.stop(timeout=5)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2
+    assert not postman.is_alive()
+    postman._argus_client.submit_event.assert_not_called()
+
+
 def test_init_argus_client_alone_does_not_touch_event_pipeline(unwired_argus_postman):
     """init_argus_client() is also called from SCTConfiguration.update_argus_with_version()
     during config resolution, which only needs a client for a couple of synchronous
@@ -209,14 +230,16 @@ def test_init_argus_client_is_idempotent_after_first_resolution(monkeypatch, tmp
     real_client = MagicMock()
     get_argus_client_mock = MagicMock(return_value=real_client)
     monkeypatch.setattr("sdcm.test_config.get_argus_client", get_argus_client_mock)
-    params = _argus_params(enable_argus=True)
+    params = argus_params(enable_argus=True)
 
     TestConfig.init_argus_client(params=params, test_id="same-run")
     TestConfig.init_argus_client(params=params, test_id="different-run")
 
     assert TestConfig._argus_client is real_client  # reused, not closed and recreated
     real_client.close.assert_not_called()
-    get_argus_client_mock.assert_called_once()  # second call didn't even try to reconnect
+    get_argus_client_mock.assert_called_once_with(
+        run_id="same-run", use_tunnel=False, log_dir=str(tmp_path), init_global=False
+    )  # second call didn't even try to reconnect
 
 
 def test_init_argus_client_real_connection_does_not_wire_argus_singleton(monkeypatch, tmp_path):
@@ -245,7 +268,7 @@ def test_init_argus_client_real_connection_does_not_wire_argus_singleton(monkeyp
     }
     monkeypatch.setattr("sdcm.utils.argus.KeyStore", lambda: fake_key_store)
 
-    params = _argus_params(enable_argus=True)
+    params = argus_params(enable_argus=True)
     TestConfig.init_argus_client(params=params, test_id=str(uuid.uuid4()))
 
     try:
@@ -273,10 +296,11 @@ def test_start_argus_event_pipeline_wires_up_replay_only_postman(unwired_argus_p
 
     submit_event = MagicMock()
     monkeypatch.setattr(postman._argus_client, "submit_event", submit_event)
-    aggregator.outbound_queue.put(argus_event(Severity.ERROR, "err"))
+    event = argus_event(Severity.ERROR, "err")
+    aggregator.outbound_queue.put(event)
     postman.stop(timeout=5)
 
-    submit_event.assert_called_once()  # drained and posted, not a silent no-op
+    submit_event.assert_called_once_with(event)  # drained and posted, not a silent no-op
 
 
 def test_start_argus_event_pipeline_postman_really_writes_the_event_to_disk(unwired_argus_postman):
@@ -325,7 +349,7 @@ def test_init_argus_client_retries_transient_connection_failure_within_one_call(
         return real_client
 
     monkeypatch.setattr("sdcm.test_config.get_argus_client", fake_get_argus_client)
-    params = _argus_params(enable_argus=True)
+    params = argus_params(enable_argus=True)
 
     TestConfig.init_argus_client(params=params, test_id="same-run")
 
@@ -348,7 +372,7 @@ def test_init_argus_client_falls_back_to_replay_permanently_after_exhausting_ret
 
     get_argus_client_mock = MagicMock(side_effect=ArgusError("permanent failure"))
     monkeypatch.setattr("sdcm.test_config.get_argus_client", get_argus_client_mock)
-    params = _argus_params(enable_argus=True)
+    params = argus_params(enable_argus=True)
 
     TestConfig.init_argus_client(params=params, test_id="same-run")
     assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
@@ -408,7 +432,7 @@ def test_start_argus_event_pipeline_failure_does_not_discard_client(monkeypatch,
     real_client = MagicMock()
     monkeypatch.setattr("sdcm.test_config.get_argus_client", lambda **kwargs: real_client)
 
-    params = _argus_params(enable_argus=True)
+    params = argus_params(enable_argus=True)
     TestConfig.init_argus_client(params=params, test_id=str(uuid.uuid4()))
     with caplog.at_level(logging.WARNING):
         TestConfig.start_argus_event_pipeline()
@@ -416,25 +440,6 @@ def test_start_argus_event_pipeline_failure_does_not_discard_client(monkeypatch,
     assert TestConfig._argus_client is real_client  # kept, not discarded
     real_client.close.assert_not_called()
     assert "Skipping setting up argus events" in caplog.text  # failure is logged, not silent
-
-
-def _fake_argus_event(**overrides) -> SimpleNamespace:
-    fields = {
-        "publish_to_argus": True,
-        "severity": Severity.WARNING,
-        "timestamp": time.time(),
-        "duration": None,
-        "event_id": "fake-event-id",
-        "argus_aggregation_id": lambda: "fake-event-id",
-        "known_issue": None,
-        "nemesis_name": None,
-        "nemesis_status": None,
-        "node": None,
-        "received_timestamp": None,
-        "target_node": None,
-    }
-    fields.update(overrides)
-    return SimpleNamespace(**fields)
 
 
 def test_argus_event_collector_resolves_run_id_per_event_not_once_at_thread_start(
@@ -459,9 +464,9 @@ def test_argus_event_collector_resolves_run_id_per_event_not_once_at_thread_star
             # Argus.INSTANCE is still unset here, matching production: the collector thread
             # is already running by the time ClusterTester.setUp() gets around to wiring
             # Argus up, so its first event(s) can arrive before that happens.
-            yield ("FakeEvent", _fake_argus_event(event_id="before-init"))
+            yield ("FakeEvent", fake_argus_event(event_id="before-init"))
             Argus.init_global(replay_client)  # simulates setUp() completing mid-test
-            yield ("FakeEvent", _fake_argus_event(event_id="after-init"))
+            yield ("FakeEvent", fake_argus_event(event_id="after-init"))
 
         monkeypatch.setattr(collector, "inbound_events", fake_inbound_events)
 
@@ -482,7 +487,7 @@ def test_argus_event_collector_survives_argus_wrapping_a_none_client(events_func
     monkeypatch.setattr(Argus, "INSTANCE", Argus(None))
 
     collector = ArgusEventCollector(_registry=SctEvent._events_processes_registry)
-    monkeypatch.setattr(collector, "inbound_events", lambda: iter([("FakeEvent", _fake_argus_event())]))
+    monkeypatch.setattr(collector, "inbound_events", lambda: iter([("FakeEvent", fake_argus_event())]))
 
     collector.run()  # must not raise
 

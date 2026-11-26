@@ -21,14 +21,14 @@ from sdcm.cluster_docker import VectorStoreSetDocker
 GRANT_STATEMENT = "GRANT VECTOR_SEARCH_INDEXING ON ALL KEYSPACES TO 'vs_user'"
 
 
-@pytest.fixture(name="cql_session")
-def fixture_cql_session():
+@pytest.fixture
+def cql_session():
     """CQL session that records the statements sent to the ScyllaDB cluster."""
     return MagicMock()
 
 
-@pytest.fixture(name="vector_store_cluster")
-def fixture_vector_store_cluster(cql_session):
+@pytest.fixture
+def vector_store_cluster(cql_session):
     """Vector Store cluster without nodes whose ScyllaDB cluster hands out the recording CQL session."""
     cluster = VectorStoreSetDocker.__new__(VectorStoreSetDocker)
     cluster.nodes = []

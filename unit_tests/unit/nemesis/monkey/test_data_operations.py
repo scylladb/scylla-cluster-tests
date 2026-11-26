@@ -62,6 +62,7 @@ def mock_prepare_test_table():
 
 @pytest.fixture()
 def common_prepare_test_table_mocks():
+    """Tester mock with a reliable replication factor of 3, as prepare_test_table reads it."""
     tester = MagicMock()
     tester.reliable_replication_factor = 3
     return tester
@@ -69,6 +70,7 @@ def common_prepare_test_table_mocks():
 
 @pytest.fixture()
 def truncate_runner(runner):
+    """Runner on Scylla 5.4.0 whose cluster holds only the target node."""
     runner.cluster.params = {"scylla_version": "5.4.0", "stress_cmd": ["scylla-bench -mode=write"]}
     runner.cluster.nodes = [runner.target_node]
     runner.target_node.scylla_version = "5.4.0"
@@ -77,11 +79,13 @@ def truncate_runner(runner):
 
 @pytest.fixture()
 def truncate_monkey(truncate_runner):
+    """TruncateMonkey built on truncate_runner."""
     return TruncateMonkey(truncate_runner)
 
 
 @pytest.fixture()
 def truncate_large_monkey(truncate_runner):
+    """TruncateLargeParititionMonkey whose tester params report False and whose stress thread is a mock."""
     params = MagicMock()
     params.get.return_value = False
     params.__getitem__ = MagicMock(return_value=False)
@@ -92,16 +96,19 @@ def truncate_large_monkey(truncate_runner):
 
 @pytest.fixture()
 def delete_partitions_monkey(runner):
+    """DeleteByPartitionsMonkey built on runner."""
     return DeleteByPartitionsMonkey(runner)
 
 
 @pytest.fixture()
 def delete_overlapping_monkey(runner):
+    """DeleteOverlappingRowRangesMonkey built on runner."""
     return DeleteOverlappingRowRangesMonkey(runner)
 
 
 @pytest.fixture()
 def delete_rows_range_monkey(runner):
+    """DeleteByRowsRangeMonkey built on runner."""
     return DeleteByRowsRangeMonkey(runner)
 
 
@@ -116,18 +123,21 @@ def add_drop_column_monkey(runner):
 
 @pytest.fixture()
 def mock_verify_keyspace():
+    """Patch verify_scylla_bench_keyspace_exists in the monkey module."""
     with patch(f"{MODULE}.verify_scylla_bench_keyspace_exists") as mock:
         yield mock
 
 
 @pytest.fixture()
 def mock_run_deletions():
+    """Patch run_deletions in the monkey module."""
     with patch(f"{MODULE}.run_deletions") as mock:
         yield mock
 
 
 @pytest.fixture()
 def mock_get_tables():
+    """Patch get_all_tables_with_no_compact_storage in the monkey module."""
     with patch(f"{MODULE}.get_all_tables_with_no_compact_storage") as mock:
         yield mock
 
@@ -143,8 +153,16 @@ def patch_all_helpers(mock_verify_keyspace, mock_run_deletions, mock_get_tables)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("keyspace_name", ["keyspace1", "ks_truncate", "custom_ks"])
+@pytest.mark.parametrize(
+    "keyspace_name",
+    [
+        pytest.param("keyspace1", id="default-keyspace"),
+        pytest.param("ks_truncate", id="truncate-keyspace"),
+        pytest.param("custom_ks", id="custom-keyspace"),
+    ],
+)
 def test_prepare_test_table_runs_stress_on_requested_keyspace(common_prepare_test_table_mocks, keyspace_name):
+    """prepare_test_table runs cassandra-stress on the requested keyspace and verifies the thread."""
     tester = common_prepare_test_table_mocks
 
     prepare_test_table(tester, ks=keyspace_name)
@@ -154,7 +172,7 @@ def test_prepare_test_table_runs_stress_on_requested_keyspace(common_prepare_tes
         stop_test_on_failure=False,
         round_robin=True,
     )
-    tester.verify_stress_thread.assert_called_once()
+    tester.verify_stress_thread.assert_called_once_with(tester.run_stress_thread.return_value, error_handler=None)
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +181,7 @@ def test_prepare_test_table_runs_stress_on_requested_keyspace(common_prepare_tes
 
 
 def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
+    """TruncateMonkey flushes, then truncates with a 600s USING TIMEOUT clause."""
     monkey = TruncateMonkey(truncate_runner)
 
     with patch(f"{MODULE}.clear_snapshots") as mock_clear:
@@ -170,7 +189,7 @@ def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
 
     target = truncate_runner.target_node
     target.run_nodetool.assert_called_once_with("flush")
-    target.run_cqlsh.assert_called_once()
+    target.run_cqlsh.assert_called_once_with(cmd="TRUNCATE ks_truncate.standard1 USING TIMEOUT 600s", timeout=600)
     cmd = target.run_cqlsh.call_args.kwargs["cmd"]
     assert "TRUNCATE ks_truncate.standard1" in cmd
     assert "USING TIMEOUT 600s" in cmd
@@ -185,12 +204,21 @@ def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
 
 
 def test_truncate_large_partition_runs_bench_and_truncates(truncate_large_monkey):
+    """TruncateLargeParititionMonkey stresses with scylla-bench, flushes, then truncates the table."""
     truncate_large_monkey.runner.tester.reliable_replication_factor = 1
     with patch(f"{MODULE}.clear_snapshots") as mock_clear:
         truncate_large_monkey.disrupt()
 
     runner = truncate_large_monkey.runner
-    runner.tester.run_stress_thread.assert_called_once()
+    runner.tester.run_stress_thread.assert_called_once_with(
+        stress_cmd=(
+            "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=10 "
+            "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
+            "-connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=60s "
+            "-keyspace ks_truncate_large_partition -table test_table"
+        ),
+        stop_test_on_failure=False,
+    )
     stress_cmd = runner.tester.run_stress_thread.call_args.kwargs["stress_cmd"]
     assert "scylla-bench" in stress_cmd
     assert "-replication-factor=1 " in stress_cmd
@@ -208,6 +236,7 @@ def test_truncate_large_partition_runs_bench_and_truncates(truncate_large_monkey
 
 
 def test_delete_by_partitions_issues_correct_queries(delete_partitions_monkey, mock_run_deletions):
+    """DeleteByPartitionsMonkey issues one delete per chosen partition."""
     # Limit available partitions to 3 so the loop exhausts them (avoids needing 10 randint values)
     delete_partitions_monkey.runner.tester.partitions_attrs.max_partitions_in_test_table = 3
     # Configure monkey random to pick indices 0, 0, 0 (always first available partition)
@@ -234,6 +263,7 @@ def test_delete_by_partitions_issues_correct_queries(delete_partitions_monkey, m
 
 
 def test_delete_overlapping_generates_range_queries(delete_overlapping_monkey, mock_run_deletions):
+    """DeleteOverlappingRowRangesMonkey emits one range delete per generated clustering range."""
     # Only 1 partition available so choose_partitions_for_delete picks it with one randint call
     delete_overlapping_monkey.runner.tester.partitions_attrs.max_partitions_in_test_table = 1
     session = delete_overlapping_monkey.runner.cluster.cql_session
@@ -277,6 +307,7 @@ def test_delete_overlapping_generates_range_queries(delete_overlapping_monkey, m
 
 
 def test_delete_by_rows_range_uses_half_partition_path(delete_rows_range_monkey, mock_run_deletions):
+    """A random draw above 0.5 takes the half-partition delete path."""
     # random() > 0.5 → takes half_partition path
     delete_rows_range_monkey.random.random.return_value = 0.7
     delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 90]}])
@@ -292,6 +323,7 @@ def test_delete_by_rows_range_uses_half_partition_path(delete_rows_range_monkey,
 
 
 def test_delete_by_rows_range_uses_timestamp_path(delete_rows_range_monkey, mock_run_deletions):
+    """A random draw at or below 0.5 takes the timestamp delete path."""
     # random() <= 0.5 → takes timestamp path
     delete_rows_range_monkey.random.random.return_value = 0.3
     delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: []}, {2: [0, 90]}])
@@ -309,6 +341,7 @@ def test_delete_by_rows_range_uses_timestamp_path(delete_rows_range_monkey, mock
 
 
 def test_delete_by_rows_range_step2_excludes_step1_partitions(delete_rows_range_monkey, mock_run_deletions):
+    """The step 2 partition choice excludes the partitions chosen in step 1."""
     delete_rows_range_monkey.random.random.return_value = 0.7
     delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 90]}])
 
@@ -318,10 +351,17 @@ def test_delete_by_rows_range_step2_excludes_step1_partitions(delete_rows_range_
     assert step2_call.kwargs["exclude_partitions"] == [1]
 
 
-@pytest.mark.parametrize("empty_call", [0, 1])
+@pytest.mark.parametrize(
+    "empty_call",
+    [
+        pytest.param(0, id="first-step-empty"),
+        pytest.param(1, id="second-step-empty"),
+    ],
+)
 def test_delete_by_rows_range_skips_before_deleting_when_no_partitions(
     delete_rows_range_monkey, mock_run_deletions, empty_call
 ):
+    """Disrupt raises UnsupportedNemesis before any delete when either step selects no partitions."""
     delete_rows_range_monkey.random.random.return_value = 0.7
     selections = [{1: [0, 50]}, {2: [0, 90]}]
     selections[empty_call] = {}
@@ -334,6 +374,7 @@ def test_delete_by_rows_range_skips_before_deleting_when_no_partitions(
 
 
 def test_delete_by_rows_range_skips_before_deleting_when_no_shared_range(delete_rows_range_monkey, mock_run_deletions):
+    """Disrupt raises UnsupportedNemesis before any delete when the partitions share no clustering range."""
     delete_rows_range_monkey.random.random.return_value = 0.7
     delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 0]}])
 
@@ -352,11 +393,19 @@ def test_delete_by_rows_range_skips_before_deleting_when_no_shared_range(delete_
     ],
 )
 def test_shared_clustering_range(partitions, expected):
+    """shared_clustering_range returns the clustering window shared by the partitions."""
     assert DeleteByRowsRangeMonkey.shared_clustering_range(partitions) == expected
 
 
-@pytest.mark.parametrize("partitions", [{1: [0, 0]}, {1: [0, 1], 2: [5, 9]}])
+@pytest.mark.parametrize(
+    "partitions",
+    [
+        pytest.param({1: [0, 0]}, id="empty-range"),
+        pytest.param({1: [0, 1], 2: [5, 9]}, id="disjoint-ranges"),
+    ],
+)
 def test_shared_clustering_range_raises_when_nothing_deletable(partitions):
+    """shared_clustering_range raises UnsupportedNemesis when no row can be deleted."""
     with pytest.raises(UnsupportedNemesis):
         DeleteByRowsRangeMonkey.shared_clustering_range(partitions)
 
@@ -367,6 +416,7 @@ def test_shared_clustering_range_raises_when_nothing_deletable(partitions):
 
 
 def test_add_drop_column_issues_alter_table(mock_get_tables, add_drop_column_monkey):
+    """add_drop_column issues one ALTER TABLE ADD with the generated column name."""
     mock_get_tables.return_value = {"ks1": ["tbl1"]}
     # Configure monkey random for deterministic behavior:
     # randrange(1, 5) → 1 column to add
@@ -385,6 +435,7 @@ def test_add_drop_column_issues_alter_table(mock_get_tables, add_drop_column_mon
 
 
 def test_add_drop_column_reuses_target_table(mock_get_tables, add_drop_column_monkey):
+    """Repeated add_drop_column calls keep the target table chosen on the first call."""
     mock_get_tables.return_value = {"ks1": ["tbl1"]}
     add_drop_column_monkey.random.randrange.return_value = 1
     # Different names on each call to avoid infinite loop in random_column_name
@@ -397,6 +448,7 @@ def test_add_drop_column_reuses_target_table(mock_get_tables, add_drop_column_mo
 
 
 def test_add_drop_column_raises_when_no_tables(mock_get_tables, add_drop_column_monkey):
+    """add_drop_column raises UnsupportedNemesis when no table is available."""
     mock_get_tables.return_value = {}
 
     with pytest.raises(UnsupportedNemesis, match="can't find table"):
@@ -482,12 +534,13 @@ def test_add_drop_column_no_cleanup(mock_get_tables, runner):
 @pytest.mark.parametrize(
     "stress_cmd,expected",
     [
-        (["scylla-bench -mode=write -workload=sequential"], 3),
-        (["cassandra-stress write n=1000000"], 5),
-        (None, 5),
+        pytest.param(["scylla-bench -mode=write -workload=sequential"], 3, id="scylla-bench"),
+        pytest.param(["cassandra-stress write n=1000000"], 5, id="cassandra-stress"),
+        pytest.param(None, 5, id="no-stress-cmd"),
     ],
 )
 def test_partition_deletion_divisor(delete_partitions_monkey, stress_cmd, expected):
+    """partition_deletion_divisor is 3 for scylla-bench and 5 for other or missing stress commands."""
     delete_partitions_monkey.runner.cluster.params = {"stress_cmd": stress_cmd}
     assert delete_partitions_monkey.partition_deletion_divisor == expected
 
@@ -498,6 +551,7 @@ def test_partition_deletion_divisor(delete_partitions_monkey, stress_cmd, expect
 
 
 def test_verify_keyspace_raises_when_no_scylla_bench():
+    """verify_scylla_bench_keyspace_exists raises UnsupportedNemesis when scylla_bench is absent."""
     cluster = MagicMock()
     cluster.get_test_keyspaces.return_value = ["keyspace1"]
 
@@ -506,6 +560,7 @@ def test_verify_keyspace_raises_when_no_scylla_bench():
 
 
 def test_verify_keyspace_passes_when_scylla_bench_present():
+    """verify_scylla_bench_keyspace_exists returns None when scylla_bench is present."""
     cluster = MagicMock()
     cluster.get_test_keyspaces.return_value = ["scylla_bench"]
 
@@ -518,6 +573,7 @@ def test_verify_keyspace_passes_when_scylla_bench_present():
 
 
 def test_delete_monkey_precheck_skips_without_partition_attrs(runner):
+    """Precheck reports max_partitions_in_test_table when partitions_attrs is missing."""
     runner.tester.partitions_attrs = None
     monkey = DeleteByPartitionsMonkey(runner)
 
@@ -525,6 +581,7 @@ def test_delete_monkey_precheck_skips_without_partition_attrs(runner):
 
 
 def test_delete_monkey_precheck_skips_when_max_partitions_unset(runner):
+    """Precheck reports max_partitions_in_test_table when it is 0."""
     runner.tester.partitions_attrs.max_partitions_in_test_table = 0
     monkey = DeleteByPartitionsMonkey(runner)
 
@@ -532,20 +589,22 @@ def test_delete_monkey_precheck_skips_when_max_partitions_unset(runner):
 
 
 def test_delete_monkey_precheck_passes_with_partition_attrs(delete_partitions_monkey):
+    """Precheck returns None when the partition attributes are set."""
     assert delete_partitions_monkey.precheck(node=delete_partitions_monkey.runner.target_node) is None
 
 
 @pytest.mark.parametrize(
     "skip_per_issues,use_zero_nodes,expected_skip",
     [
-        (True, True, True),
-        (True, False, False),
-        (False, True, False),
+        pytest.param(True, True, True, id="skipped-zero-nodes"),
+        pytest.param(True, False, False, id="zero-nodes-off"),
+        pytest.param(False, True, False, id="issue-not-applicable"),
     ],
 )
 def test_truncate_large_partition_precheck_zero_nodes_issue(
     truncate_large_monkey, skip_per_issues, use_zero_nodes, expected_skip
 ):
+    """Precheck skips only when SCYLLADB-5041 applies and zero-token nodes are used."""
     truncate_large_monkey.runner.tester.params.get.return_value = use_zero_nodes
     with patch(f"{MODULE}.SkipPerIssues", return_value=skip_per_issues):
         result = truncate_large_monkey.precheck(node=truncate_large_monkey.runner.target_node)

@@ -12,7 +12,7 @@
 # Copyright (c) 2026 ScyllaDB
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -38,7 +38,7 @@ CONFIG_ERROR_MSG = (
 )
 
 
-class _GceParams(DotDict):
+class GceParams(DotDict):
     """Params stand-in whose ``gce_datacenters`` is re-derived on every access.
 
     ``SCTConfiguration.gce_datacenters`` is a plain (uncached) property over ``gce_datacenter``, which
@@ -48,13 +48,14 @@ class _GceParams(DotDict):
 
     @property
     def gce_datacenters(self) -> list[str]:
+        """Split the live gce_datacenter value into its datacenter list."""
         raw = self.get("gce_datacenter") or ""
         return raw.split() if isinstance(raw, str) else list(raw)
 
 
-def _make_params(**overrides):
+def make_params(**overrides):
     """Build a minimal single-DC GCE params object with region fallback enabled by default."""
-    return _GceParams(
+    return GceParams(
         {
             "cluster_backend": "gce",
             "gce_datacenter": "us-east1",
@@ -73,33 +74,40 @@ def _make_params(**overrides):
     )
 
 
+def fake_tester(params):
+    """Build a MagicMock tester bound to the given params for exercising ClusterTester methods."""
+    fake = MagicMock()
+    fake.params = params
+    return fake
+
+
 # --------------------------------------------------------------------------- gate
 
 
 def test_is_region_fallback_enabled_gce():
     """Region fallback is enabled for GCE when fallback_to_next_region is set."""
-    assert is_region_fallback_enabled(_make_params(fallback_to_next_region=True)) is True
+    assert is_region_fallback_enabled(make_params(fallback_to_next_region=True)) is True
 
 
 def test_is_region_fallback_enabled_disabled():
     """Region fallback is disabled when fallback_to_next_region is false."""
-    assert is_region_fallback_enabled(_make_params(fallback_to_next_region=False)) is False
+    assert is_region_fallback_enabled(make_params(fallback_to_next_region=False)) is False
 
 
 def test_is_region_fallback_enabled_other_backend():
     """Region fallback is rejected for unsupported backends even if the flag is set."""
-    params = _make_params(cluster_backend="docker", fallback_to_next_region=True)
+    params = make_params(cluster_backend="docker", fallback_to_next_region=True)
     assert is_region_fallback_enabled(params) is False
 
 
 def test_enforce_single_region_gate_ok():
     """A single configured GCE datacenter passes the region-fallback gate."""
-    rf.enforce_single_region_gate(_make_params())  # does not raise
+    rf.enforce_single_region_gate(make_params())  # does not raise
 
 
 def test_enforce_single_region_gate_rejects_multi_dc():
     """More than one configured GCE datacenter is rejected by the gate."""
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     with pytest.raises(ValueError, match="single GCE datacenter"):
         rf.enforce_single_region_gate(params)
 
@@ -110,7 +118,7 @@ def test_enforce_single_region_gate_rejects_multi_dc():
 def test_switch_region_updates_params_and_env(monkeypatch):
     """switch_region updates gce_datacenter, availability_zone, and the env override."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     rf.switch_region(params, "us-west1", ["a", "b"])
     assert params["gce_datacenter"] == "us-west1"
     assert params["availability_zone"] == "a,b"
@@ -120,7 +128,7 @@ def test_switch_region_updates_params_and_env(monkeypatch):
 def test_restore_region_pops_env_when_originally_unset(monkeypatch):
     """restore_region drops the env override when the region was not originally set in the env."""
     monkeypatch.setenv("SCT_GCE_DATACENTER", "us-west1")
-    params = _make_params()
+    params = make_params()
     rf.restore_region(params, "us-east1", "b", None)
     assert params["gce_datacenter"] == "us-east1"
     assert params["availability_zone"] == "b"
@@ -130,7 +138,7 @@ def test_restore_region_pops_env_when_originally_unset(monkeypatch):
 def test_restore_region_restores_prior_env(monkeypatch):
     """restore_region puts back the original env value when there was one."""
     monkeypatch.setenv("SCT_GCE_DATACENTER", "us-west1")
-    params = _make_params()
+    params = make_params()
     rf.restore_region(params, "us-east1", "b", "us-east1")
     assert os.environ["SCT_GCE_DATACENTER"] == "us-east1"
 
@@ -145,7 +153,7 @@ def test_cleanup_region_sweeps_only_matching_region():
     partial = MagicMock()
     with patch.object(rf.GceProvisioner, "discover_regions", return_value=[prov_east, prov_west]) as discover:
         rf.cleanup_region("test-id", "us-east1", network_name="qa-vpc", partial_cleanup=partial)
-    partial.assert_called_once()
+    partial.assert_called_once_with()
     discover.assert_called_once_with("test-id", network_name="qa-vpc")
     # wait=True so the old region is fully torn down before a relocation reuses the same names
     prov_east.cleanup.assert_called_once_with(wait=True)
@@ -157,7 +165,7 @@ def test_cleanup_region_swallows_discovery_failure():
     partial = MagicMock()
     with patch.object(rf.GceProvisioner, "discover_regions", side_effect=RuntimeError("boom")):
         rf.cleanup_region("test-id", "us-east1", network_name="qa-vpc", partial_cleanup=partial)
-    partial.assert_called_once()  # partial cleanup still ran; discovery error did not propagate
+    partial.assert_called_once_with()  # partial cleanup still ran; discovery error did not propagate
 
 
 # ------------------------------------------------------ get_region_fallback_candidates
@@ -165,7 +173,7 @@ def test_cleanup_region_swallows_discovery_failure():
 
 def test_get_region_fallback_candidates_excludes_current_and_filters_by_zone_support():
     """Candidates exclude the current region and any region without enough supported zones."""
-    params = _make_params()  # current region us-east1, configured letter "b"
+    params = make_params()  # current region us-east1, configured letter "b"
     zone_table = {
         "us-east4": ["us-east4-a", "us-east4-b"],
         "us-west1": ["us-west1-b"],
@@ -185,7 +193,7 @@ def test_get_region_fallback_candidates_excludes_current_and_filters_by_zone_sup
 
 def test_get_region_fallback_candidates_never_checks_peering():
     """GCE uses a global VPC; the candidate path must never perform an AWS-style peering lookup."""
-    params = _make_params()
+    params = make_params()
     with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
         mock_cls.return_value.get_common_zones.return_value = ["us-west1-b"]
         candidates = list(GceAZResolver(params).get_region_fallback_candidates())
@@ -198,7 +206,7 @@ def test_get_region_fallback_candidates_never_checks_peering():
 
 def test_loop_success_first_attempt_no_switch_no_cleanup():
     """When the configured region succeeds, no relocation or cleanup happens."""
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock()
     with patch.object(rf, "cleanup_region") as cleanup:
         rf.provision_with_region_fallback(
@@ -209,14 +217,14 @@ def test_loop_success_first_attempt_no_switch_no_cleanup():
             provision_once=provision_once,
             error_factory=ProvisionUnrecoverableError,
         )
-    provision_once.assert_called_once()
+    provision_once.assert_called_once_with()
     cleanup.assert_not_called()
     assert params["gce_datacenter"] == "us-east1"  # unchanged
 
 
 def test_loop_success_does_not_resolve_candidates():
     """A run that provisions in the configured region must never invoke the (costly) candidate resolver."""
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock()  # succeeds on the first attempt
     candidates = MagicMock(return_value=[("us-west1", ["a"])])
     with patch.object(rf, "cleanup_region"):
@@ -228,14 +236,14 @@ def test_loop_success_does_not_resolve_candidates():
             provision_once=provision_once,
             error_factory=ProvisionUnrecoverableError,
         )
-    provision_once.assert_called_once()
+    provision_once.assert_called_once_with()
     candidates.assert_not_called()  # lazy: fallback regions are not probed on the success path
 
 
 def test_loop_relocates_on_zone_exhausted_then_succeeds(monkeypatch):
     """A ZoneResourcesExhaustedError relocates to the next region, which then succeeds."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=[ZoneResourcesExhaustedError(CAPACITY_MSG), None])
     with patch.object(rf, "cleanup_region") as cleanup:
         rf.provision_with_region_fallback(
@@ -255,7 +263,7 @@ def test_loop_relocates_on_zone_exhausted_then_succeeds(monkeypatch):
 def test_loop_relocates_on_capacity_provision_error(monkeypatch):
     """A capacity-class ProvisionError is treated like exhaustion and triggers relocation."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=[ProvisionError(CAPACITY_MSG), None])
     with patch.object(rf, "cleanup_region"):
         rf.provision_with_region_fallback(
@@ -272,18 +280,17 @@ def test_loop_relocates_on_capacity_provision_error(monkeypatch):
 def test_loop_non_capacity_error_propagates_and_restores(monkeypatch):
     """A non-capacity error propagates unchanged and restores the original region/AZ."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=ProvisionError("permission denied creating instance"))
-    with patch.object(rf, "cleanup_region") as cleanup:
-        with pytest.raises(ProvisionError, match="permission denied"):
-            rf.provision_with_region_fallback(
-                params=params,
-                test_id="t",
-                network_name="qa-vpc",
-                region_candidates=lambda: [("us-west1", ["a"])],
-                provision_once=provision_once,
-                error_factory=ProvisionUnrecoverableError,
-            )
+    with patch.object(rf, "cleanup_region") as cleanup, pytest.raises(ProvisionError, match="permission denied"):
+        rf.provision_with_region_fallback(
+            params=params,
+            test_id="t",
+            network_name="qa-vpc",
+            region_candidates=lambda: [("us-west1", ["a"])],
+            provision_once=provision_once,
+            error_factory=ProvisionUnrecoverableError,
+        )
     cleanup.assert_not_called()
     assert params["gce_datacenter"] == "us-east1"  # restored
     assert params["availability_zone"] == "b"
@@ -292,18 +299,20 @@ def test_loop_non_capacity_error_propagates_and_restores(monkeypatch):
 def test_loop_does_not_relocate_on_config_error(monkeypatch):
     """A config error wearing the capacity code must not relocate: it fails identically everywhere."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=InstanceConfigurationError(CONFIG_ERROR_MSG))
-    with patch.object(rf, "cleanup_region") as cleanup:
-        with pytest.raises(InstanceConfigurationError, match="not compatible for creating instance"):
-            rf.provision_with_region_fallback(
-                params=params,
-                test_id="t",
-                network_name="qa-vpc",
-                region_candidates=lambda: [("us-west1", ["a"])],
-                provision_once=provision_once,
-                error_factory=ProvisionUnrecoverableError,
-            )
+    with (
+        patch.object(rf, "cleanup_region") as cleanup,
+        pytest.raises(InstanceConfigurationError, match="not compatible for creating instance"),
+    ):
+        rf.provision_with_region_fallback(
+            params=params,
+            test_id="t",
+            network_name="qa-vpc",
+            region_candidates=lambda: [("us-west1", ["a"])],
+            provision_once=provision_once,
+            error_factory=ProvisionUnrecoverableError,
+        )
     assert provision_once.call_count == 1
     cleanup.assert_not_called()
     assert params["gce_datacenter"] == "us-east1"  # restored
@@ -312,18 +321,20 @@ def test_loop_does_not_relocate_on_config_error(monkeypatch):
 def test_loop_does_not_relocate_on_config_error_wrapped_in_provision_error(monkeypatch):
     """Text-based classification agrees with the type-based one: no relocation on a config message."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=ProvisionError(CONFIG_ERROR_MSG))
-    with patch.object(rf, "cleanup_region") as cleanup:
-        with pytest.raises(ProvisionError, match="not compatible for creating instance"):
-            rf.provision_with_region_fallback(
-                params=params,
-                test_id="t",
-                network_name="qa-vpc",
-                region_candidates=lambda: [("us-west1", ["a"])],
-                provision_once=provision_once,
-                error_factory=ProvisionUnrecoverableError,
-            )
+    with (
+        patch.object(rf, "cleanup_region") as cleanup,
+        pytest.raises(ProvisionError, match="not compatible for creating instance"),
+    ):
+        rf.provision_with_region_fallback(
+            params=params,
+            test_id="t",
+            network_name="qa-vpc",
+            region_candidates=lambda: [("us-west1", ["a"])],
+            provision_once=provision_once,
+            error_factory=ProvisionUnrecoverableError,
+        )
     assert provision_once.call_count == 1
     cleanup.assert_not_called()
 
@@ -331,18 +342,20 @@ def test_loop_does_not_relocate_on_config_error_wrapped_in_provision_error(monke
 def test_loop_all_regions_exhausted_raises_via_error_factory(monkeypatch):
     """When the configured region and every candidate are exhausted, error_factory builds the error."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=ZoneResourcesExhaustedError(CAPACITY_MSG))
-    with patch.object(rf, "cleanup_region") as cleanup:
-        with pytest.raises(ProvisionUnrecoverableError, match="all fallback candidates"):
-            rf.provision_with_region_fallback(
-                params=params,
-                test_id="t",
-                network_name="qa-vpc",
-                region_candidates=lambda: [("us-west1", ["a"]), ("us-east4", ["b"])],
-                provision_once=provision_once,
-                error_factory=ProvisionUnrecoverableError,
-            )
+    with (
+        patch.object(rf, "cleanup_region") as cleanup,
+        pytest.raises(ProvisionUnrecoverableError, match="all fallback candidates"),
+    ):
+        rf.provision_with_region_fallback(
+            params=params,
+            test_id="t",
+            network_name="qa-vpc",
+            region_candidates=lambda: [("us-west1", ["a"]), ("us-east4", ["b"])],
+            provision_once=provision_once,
+            error_factory=ProvisionUnrecoverableError,
+        )
     assert provision_once.call_count == 3  # original + 2 candidates
     assert cleanup.call_count == 3  # each exhausted region cleaned up inside the loop
     assert params["gce_datacenter"] == "us-east1"  # restored
@@ -356,23 +369,22 @@ def test_loop_restores_placement_when_candidate_resolution_fails(monkeypatch):
     the original placement has to be restored before the error propagates.
     """
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params()
+    params = make_params()
     provision_once = MagicMock(side_effect=ZoneResourcesExhaustedError(CAPACITY_MSG))
 
     def candidates():
         yield "us-west1", ["a"]
         raise RuntimeError("zone list API blew up")
 
-    with patch.object(rf, "cleanup_region"):
-        with pytest.raises(RuntimeError, match="zone list API blew up"):
-            rf.provision_with_region_fallback(
-                params=params,
-                test_id="t",
-                network_name="qa-vpc",
-                region_candidates=candidates,
-                provision_once=provision_once,
-                error_factory=ProvisionUnrecoverableError,
-            )
+    with patch.object(rf, "cleanup_region"), pytest.raises(RuntimeError, match="zone list API blew up"):
+        rf.provision_with_region_fallback(
+            params=params,
+            test_id="t",
+            network_name="qa-vpc",
+            region_candidates=candidates,
+            provision_once=provision_once,
+            error_factory=ProvisionUnrecoverableError,
+        )
     assert params["gce_datacenter"] == "us-east1"  # relocation to us-west1 undone
     assert params["availability_zone"] == "b"
     assert "SCT_GCE_DATACENTER" not in os.environ
@@ -380,7 +392,7 @@ def test_loop_restores_placement_when_candidate_resolution_fails(monkeypatch):
 
 def test_loop_rejects_multi_dc():
     """The shared loop refuses to run for a multi-DC config."""
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     with pytest.raises(ValueError, match="single GCE datacenter"):
         rf.provision_with_region_fallback(
             params=params,
@@ -397,7 +409,7 @@ def test_loop_rejects_multi_dc():
 
 def test_get_dc_fallback_candidates_excludes_in_use_and_filters_by_zone_support():
     """DC candidates exclude every in-use region and regions without enough supported zones."""
-    params = _make_params(gce_datacenter="us-east1 us-west1")  # in use: us-east1, us-west1
+    params = make_params(gce_datacenter="us-east1 us-west1")  # in use: us-east1, us-west1
     zone_table = {
         "us-east4": ["us-east4-b"],
         "us-central1": [],  # no supported zone -> excluded
@@ -420,7 +432,7 @@ def test_get_dc_fallback_candidates_skips_regions_missing_the_configured_zone():
     switch_dc_region deliberately leaves the global availability_zone alone, so a candidate qualified
     by an alternative letter would aim the retry at a zone the target region does not have.
     """
-    params = _make_params(gce_datacenter="us-east1 us-west1", availability_zone="b")
+    params = make_params(gce_datacenter="us-east1 us-west1", availability_zone="b")
     zone_table = {
         "us-east4": ["us-east4-a", "us-east4-c"],  # supports 'a'/'c' but NOT the configured 'b'
         "us-central1": ["us-central1-b"],  # supports the configured 'b'
@@ -441,7 +453,7 @@ def test_get_dc_fallback_candidates_rechecks_live_regions_between_yields():
     relocating. A set snapshotted on first use would hand back an already-occupied region and land two
     DCs in the same one.
     """
-    params = _make_params(gce_datacenter="us-east1 us-west1", availability_zone="b")
+    params = make_params(gce_datacenter="us-east1 us-west1", availability_zone="b")
     with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
         # Every region supports the configured zone, so only occupancy can filter candidates.
         mock_cls.return_value.get_common_zones.side_effect = lambda region, machine_types, preferred_zones: (
@@ -464,7 +476,7 @@ def test_switch_dc_region_updates_only_target_dc(monkeypatch):
     test_get_dc_fallback_candidates_skips_regions_missing_the_configured_zone).
     """
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     rf.switch_dc_region(params, 1, "us-east4", ["b"])
     assert params["gce_datacenter"] == "us-east1 us-east4"
     assert os.environ["SCT_GCE_DATACENTER"] == "us-east1 us-east4"
@@ -473,7 +485,7 @@ def test_switch_dc_region_updates_only_target_dc(monkeypatch):
 
 def test_failed_dc_index_attributes_region_from_error():
     """A capacity error naming a zone is attributed to the DC whose region it belongs to."""
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     assert rf._failed_dc_index(params, ZoneResourcesExhaustedError("Zone us-west1-b exhausted")) == 1
     assert rf._failed_dc_index(params, ZoneResourcesExhaustedError("Zone us-east1-c exhausted")) == 0
     assert rf._failed_dc_index(params, ZoneResourcesExhaustedError("vague error, no region")) is None
@@ -481,7 +493,7 @@ def test_failed_dc_index_attributes_region_from_error():
 
 def test_required_machine_types_excludes_gated_off_types():
     """A machine type whose node count is 0 (e.g. vector store) is not required, so it never constrains candidates."""
-    params = _make_params(instance_type_vector_store="e2-medium", n_vector_store_nodes=0)
+    params = make_params(instance_type_vector_store="e2-medium", n_vector_store_nodes=0)
     types = GceAZResolver(params).required_machine_types()
     assert "e2-medium" not in types  # gated off (no vector-store nodes)
     assert "n2-highmem-8" in types  # db type is always required
@@ -493,7 +505,7 @@ def test_required_machine_types_excludes_gated_off_types():
 def test_dc_loop_relocates_exhausted_dc_then_succeeds(monkeypatch):
     """The exhausted DC is relocated to a candidate region and the whole cluster retried to success."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     provision_once = MagicMock(
         side_effect=[ZoneResourcesExhaustedError("Zone us-west1-b resource pool exhausted"), None]
     )
@@ -519,7 +531,7 @@ def test_dc_loop_relocates_exhausted_dc_then_succeeds(monkeypatch):
 def test_dc_loop_success_does_not_resolve_candidates(monkeypatch):
     """A successful multi-DC run must never resolve any DC's fallback candidates."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     provision_once = MagicMock()  # succeeds on the first attempt
     with patch.object(rf, "cleanup_region"), patch.object(rf, "GceAZResolver") as resolver:
         rf.provision_with_dc_fallback(
@@ -529,14 +541,14 @@ def test_dc_loop_success_does_not_resolve_candidates(monkeypatch):
             provision_once=provision_once,
             error_factory=ProvisionUnrecoverableError,
         )
-    provision_once.assert_called_once()
+    provision_once.assert_called_once_with()
     resolver.return_value.get_dc_fallback_candidates.assert_not_called()  # lazy per-DC resolution
 
 
 def test_dc_loop_all_candidates_exhausted_raises(monkeypatch):
     """When the failing DC runs out of candidates, error_factory builds the raised error."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
 
     def always_exhaust_dc1(*_args, **_kwargs):
         raise ZoneResourcesExhaustedError(f"Zone {params['gce_datacenter'].split()[1]}-b resource pool exhausted")
@@ -566,7 +578,7 @@ def test_dc_loop_all_candidates_exhausted_raises(monkeypatch):
 def test_dc_loop_restores_placement_when_candidate_resolution_fails(monkeypatch):
     """A per-DC candidate generator failing after a relocation must restore the original placement."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
 
     def always_exhaust_dc1(*_args, **_kwargs):
         raise ZoneResourcesExhaustedError(f"Zone {params['gce_datacenter'].split()[1]}-b resource pool exhausted")
@@ -594,7 +606,7 @@ def test_dc_loop_restores_placement_when_candidate_resolution_fails(monkeypatch)
 def test_dc_loop_non_capacity_error_propagates_and_restores(monkeypatch):
     """A non-capacity error propagates unchanged and restores the original multi-DC placement."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     provision_once = MagicMock(side_effect=ProvisionError("permission denied creating instance"))
     with (
         patch.object(rf, "cleanup_region") as cleanup,
@@ -616,7 +628,7 @@ def test_dc_loop_non_capacity_error_propagates_and_restores(monkeypatch):
 def test_dc_loop_unattributable_capacity_error_raises(monkeypatch):
     """A capacity error that names no configured region cannot be relocated and stops the loop."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     provision_once = MagicMock(side_effect=ZoneResourcesExhaustedError("capacity exhausted, region unknown"))
     with (
         patch.object(rf, "cleanup_region"),
@@ -637,7 +649,7 @@ def test_dc_loop_unattributable_capacity_error_raises(monkeypatch):
 def test_dc_loop_relocates_two_dcs_in_sequence(monkeypatch):
     """Independent per-DC candidate lists let two different DCs each relocate across retries."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     calls = {"n": 0}
 
     def side_effect(*_args, **_kwargs):
@@ -667,7 +679,7 @@ def test_dc_loop_relocates_two_dcs_in_sequence(monkeypatch):
 def test_dc_loop_is_bounded_when_relocation_keeps_failing(monkeypatch):
     """The attempt count is bounded by the per-DC candidate lists, so a persistently-failing DC stops."""
     monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
 
     def always_exhaust_dc0(*_args, **_kwargs):
         raise ZoneResourcesExhaustedError(f"Zone {params['gce_datacenter'].split()[0]}-b resource pool exhausted")
@@ -693,7 +705,7 @@ def test_dc_loop_is_bounded_when_relocation_keeps_failing(monkeypatch):
 
 def test_get_az_fallback_candidates_yields_the_regions_other_supported_zones():
     """Zone candidates are the region's other supported letters, with the configured one excluded."""
-    params = _make_params(availability_zone="b")
+    params = make_params(availability_zone="b")
     with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
         mock_cls.return_value.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
         assert list(GceAZResolver(params).get_az_fallback_candidates()) == [["c"], ["d"]]
@@ -701,7 +713,7 @@ def test_get_az_fallback_candidates_yields_the_regions_other_supported_zones():
 
 def test_get_az_fallback_candidates_skips_multi_az_configs():
     """Multi-AZ configs yield nothing: which letter to swap is ambiguous, so region fallback takes over."""
-    params = _make_params(availability_zone="b,c")
+    params = make_params(availability_zone="b,c")
     with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
         mock_cls.return_value.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
         assert list(GceAZResolver(params).get_az_fallback_candidates()) == []
@@ -709,7 +721,7 @@ def test_get_az_fallback_candidates_skips_multi_az_configs():
 
 def test_az_fallback_disabled_returns_the_original_callable():
     """With fallback_to_next_availability_zone off, provision_once is handed back untouched."""
-    params = _make_params(fallback_to_next_availability_zone=False)
+    params = make_params(fallback_to_next_availability_zone=False)
     provision_once = MagicMock()
     wrapped = rf.provision_with_az_fallback(
         params=params, test_id="t", network_name="qa-vpc", provision_once=provision_once
@@ -719,7 +731,7 @@ def test_az_fallback_disabled_returns_the_original_callable():
 
 def test_az_fallback_retries_next_zone_in_the_same_region():
     """An exhausted zone retries the region's next supported zone, without relocating the cluster."""
-    params = _make_params(fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_availability_zone=True)
     provision_once = MagicMock(side_effect=[ZoneResourcesExhaustedError(CAPACITY_MSG), None])
     with patch.object(rf, "cleanup_region") as cleanup, patch.object(rf, "GceAZResolver") as resolver:
         resolver.return_value.get_az_fallback_candidates.return_value = iter([["c"], ["d"]])
@@ -734,13 +746,13 @@ def test_az_fallback_retries_next_zone_in_the_same_region():
 
 def test_az_fallback_success_never_resolves_candidates():
     """A first-attempt success must not probe zone candidates at all."""
-    params = _make_params(fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_availability_zone=True)
     provision_once = MagicMock()
     with patch.object(rf, "GceAZResolver") as resolver:
         rf.provision_with_az_fallback(
             params=params, test_id="t", network_name="qa-vpc", provision_once=provision_once
         )()
-    provision_once.assert_called_once()
+    provision_once.assert_called_once_with()
     resolver.return_value.get_az_fallback_candidates.assert_not_called()
 
 
@@ -750,7 +762,7 @@ def test_az_fallback_restores_zone_and_escalates_when_all_zones_exhausted():
     This is what hands control to region / multi-DC fallback - and it must start from the configured
     placement, not from the last zone we tried.
     """
-    params = _make_params(fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_availability_zone=True)
     provision_once = MagicMock(side_effect=ZoneResourcesExhaustedError(CAPACITY_MSG))
     with patch.object(rf, "cleanup_region"), patch.object(rf, "GceAZResolver") as resolver:
         resolver.return_value.get_az_fallback_candidates.return_value = iter([["c"]])
@@ -764,14 +776,13 @@ def test_az_fallback_restores_zone_and_escalates_when_all_zones_exhausted():
 
 def test_az_fallback_propagates_non_capacity_error_and_restores_zone():
     """A non-capacity failure is not a zone problem: restore the AZ and propagate straight away."""
-    params = _make_params(fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_availability_zone=True)
     provision_once = MagicMock(side_effect=ProvisionError("permission denied creating instance"))
-    with patch.object(rf, "GceAZResolver") as resolver:
-        with pytest.raises(ProvisionError, match="permission denied"):
-            rf.provision_with_az_fallback(
-                params=params, test_id="t", network_name="qa-vpc", provision_once=provision_once
-            )()
-    provision_once.assert_called_once()
+    with patch.object(rf, "GceAZResolver") as resolver, pytest.raises(ProvisionError, match="permission denied"):
+        rf.provision_with_az_fallback(
+            params=params, test_id="t", network_name="qa-vpc", provision_once=provision_once
+        )()
+    provision_once.assert_called_once_with()
     resolver.return_value.get_az_fallback_candidates.assert_not_called()
     assert params["availability_zone"] == "b"
 
@@ -781,7 +792,7 @@ def test_az_fallback_propagates_non_capacity_error_and_restores_zone():
 
 def test_router_single_region_routes_to_region_fallback():
     """provision_with_fallback sends a single-DC config to the whole-cluster region loop."""
-    params = _make_params()
+    params = make_params()
     with (
         patch.object(rf, "GceAZResolver"),
         patch.object(rf, "provision_with_region_fallback") as region,
@@ -794,13 +805,21 @@ def test_router_single_region_routes_to_region_fallback():
             provision_once=MagicMock(),
             error_factory=ProvisionUnrecoverableError,
         )
-    region.assert_called_once()
+    region.assert_called_once_with(
+        params=params,
+        test_id="t",
+        network_name="qa-vpc",
+        region_candidates=ANY,
+        provision_once=ANY,
+        error_factory=ProvisionUnrecoverableError,
+        partial_cleanup=None,
+    )
     multi_dc.assert_not_called()
 
 
 def test_router_multi_dc_routes_to_dc_fallback():
     """provision_with_fallback sends a multi-DC config to the per-DC loop."""
-    params = _make_params(gce_datacenter="us-east1 us-west1")
+    params = make_params(gce_datacenter="us-east1 us-west1")
     with (
         patch.object(rf, "provision_with_region_fallback") as region,
         patch.object(rf, "provision_with_dc_fallback") as multi_dc,
@@ -812,7 +831,14 @@ def test_router_multi_dc_routes_to_dc_fallback():
             provision_once=MagicMock(),
             error_factory=ProvisionUnrecoverableError,
         )
-    multi_dc.assert_called_once()
+    multi_dc.assert_called_once_with(
+        params=params,
+        test_id="t",
+        network_name="qa-vpc",
+        provision_once=ANY,
+        error_factory=ProvisionUnrecoverableError,
+        partial_cleanup=None,
+    )
     region.assert_not_called()
 
 
@@ -821,30 +847,32 @@ def test_router_multi_dc_routes_to_dc_fallback():
 
 def test_provision_gce_resources_routes_to_fallback_when_enabled():
     """provision_sct_resources drives the fallback router when region fallback is enabled."""
-    params = _make_params(fallback_to_next_region=True)
+    params = make_params(fallback_to_next_region=True)
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver") as resolver,
         patch("sdcm.sct_provision.instances_provider.gce_region_fallback.provision_with_fallback") as fallback,
         patch("sdcm.sct_provision.instances_provider._provision_sct_resources_once") as once,
     ):
         provision_sct_resources(params=params, test_config=MagicMock())
-    resolver.return_value.resolve.assert_called_once()
-    fallback.assert_called_once()
+    resolver.return_value.resolve.assert_called_once_with()
+    fallback.assert_called_once_with(
+        params=params, test_id=ANY, network_name="qa-vpc", provision_once=ANY, error_factory=ProvisionUnrecoverableError
+    )
     once.assert_not_called()
 
 
 def test_provision_gce_resources_routes_to_plain_when_disabled():
     """Without region fallback, GCE provisions once (no fallback router)."""
-    params = _make_params(fallback_to_next_region=False)
+    params = make_params(fallback_to_next_region=False)
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver") as resolver,
         patch("sdcm.sct_provision.instances_provider.gce_region_fallback.provision_with_fallback") as fallback,
         patch("sdcm.sct_provision.instances_provider._provision_sct_resources_once") as once,
     ):
         provision_sct_resources(params=params, test_config=MagicMock())
-    resolver.return_value.resolve.assert_called_once()
+    resolver.return_value.resolve.assert_called_once_with()
     fallback.assert_not_called()
-    once.assert_called_once()
+    once.assert_called_once_with(params=params, test_config=ANY)
 
 
 def test_provision_gce_resources_wraps_provisioning_in_zone_fallback():
@@ -853,7 +881,7 @@ def test_provision_gce_resources_wraps_provisioning_in_zone_fallback():
     Regression: without this the modern path ignored fallback_to_next_availability_zone entirely, so a
     single exhausted zone relocated the whole cluster instead of trying the region's other zones.
     """
-    params = _make_params(fallback_to_next_region=True, fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_region=True, fallback_to_next_availability_zone=True)
     sentinel = MagicMock(name="zone_fallback_wrapper")
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
@@ -864,13 +892,13 @@ def test_provision_gce_resources_wraps_provisioning_in_zone_fallback():
         patch("sdcm.sct_provision.instances_provider.gce_region_fallback.provision_with_fallback") as fallback,
     ):
         provision_sct_resources(params=params, test_config=MagicMock())
-    az_fallback.assert_called_once()
+    az_fallback.assert_called_once_with(params=params, test_id=ANY, network_name="qa-vpc", provision_once=ANY)
     assert fallback.call_args.kwargs["provision_once"] is sentinel
 
 
 def test_provision_gce_resources_uses_zone_fallback_even_without_region_fallback():
     """Zone fallback is gated by its own flag, so it still applies when region fallback is off."""
-    params = _make_params(fallback_to_next_region=False, fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_region=False, fallback_to_next_availability_zone=True)
     wrapper = MagicMock(name="zone_fallback_wrapper")
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
@@ -882,7 +910,7 @@ def test_provision_gce_resources_uses_zone_fallback_even_without_region_fallback
     ):
         provision_sct_resources(params=params, test_config=MagicMock())
     fallback.assert_not_called()
-    wrapper.assert_called_once()  # provisioning still goes through the zone-retry wrapper
+    wrapper.assert_called_once_with()  # provisioning still goes through the zone-retry wrapper
 
 
 def test_provision_gce_resources_persists_zone_only_change():
@@ -892,7 +920,7 @@ def test_provision_gce_resources_persists_zone_only_change():
     zone-scoped (no AWS-style region-wide test_id search), so a Run Test step aimed at the configured
     zone would miss the instances and provision a duplicate cluster.
     """
-    params = _make_params(fallback_to_next_region=False, fallback_to_next_availability_zone=True)
+    params = make_params(fallback_to_next_region=False, fallback_to_next_availability_zone=True)
     test_config = MagicMock()
     test_config.test_id.return_value = "tid-1"
 
@@ -916,7 +944,7 @@ def test_provision_gce_resources_persists_resolver_selected_zone():
     With availability_zone unset the resolver chooses a random valid zone, so a separate Run Test
     step would roll its own pick unless the provisioning step's choice is handed off.
     """
-    params = _make_params(fallback_to_next_region=False, availability_zone=None)
+    params = make_params(fallback_to_next_region=False, availability_zone=None)
     test_config = MagicMock()
     test_config.test_id.return_value = "tid-1"
 
@@ -934,7 +962,7 @@ def test_provision_gce_resources_persists_resolver_selected_zone():
 
 def test_provision_gce_resources_skips_handoff_when_placement_unchanged():
     """No handoff file is written when provisioning ends up in the configured region and zone."""
-    params = _make_params(fallback_to_next_region=False)
+    params = make_params(fallback_to_next_region=False)
     test_config = MagicMock()
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
@@ -946,61 +974,63 @@ def test_provision_gce_resources_skips_handoff_when_placement_unchanged():
 
 def test_provision_gce_resources_routes_to_fallback_when_multi_dc_enabled():
     """Multi-DC GCE configs also go through the fallback router (it dispatches to per-DC fallback)."""
-    params = _make_params(fallback_to_next_region=True, gce_datacenter="us-east1 us-west1")
+    params = make_params(fallback_to_next_region=True, gce_datacenter="us-east1 us-west1")
     with (
         patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
         patch("sdcm.sct_provision.instances_provider.gce_region_fallback.provision_with_fallback") as fallback,
         patch("sdcm.sct_provision.instances_provider._provision_sct_resources_once") as once,
     ):
         provision_sct_resources(params=params, test_config=MagicMock())
-    fallback.assert_called_once()
+    fallback.assert_called_once_with(
+        params=params, test_id=ANY, network_name="qa-vpc", provision_once=ANY, error_factory=ProvisionUnrecoverableError
+    )
     once.assert_not_called()
 
 
 # --------------------------------------------------------- legacy path (tester) routing
 
 
-def _fake_tester(params):
-    """Build a MagicMock tester bound to the given params for exercising ClusterTester methods."""
-    fake = MagicMock()
-    fake.params = params
-    return fake
-
-
 def test_legacy_get_cluster_gce_dispatches_to_region_fallback_when_enabled():
     """get_cluster_gce routes to the fallback path for a single-DC config with fallback on."""
-    fake = _fake_tester(_make_params(fallback_to_next_region=True))
+    fake = fake_tester(make_params(fallback_to_next_region=True))
     ClusterTester.get_cluster_gce(fake, loader_info={}, db_info={}, monitor_info={})
-    fake._get_cluster_gce_with_region_fallback.assert_called_once()
+    fake._get_cluster_gce_with_region_fallback.assert_called_once_with({}, {}, {})
     fake._get_cluster_gce_once.assert_not_called()
 
 
 def test_legacy_get_cluster_gce_uses_once_path_when_disabled():
     """get_cluster_gce uses the single-attempt path when region fallback is disabled."""
-    fake = _fake_tester(_make_params(fallback_to_next_region=False))
+    fake = fake_tester(make_params(fallback_to_next_region=False))
     ClusterTester.get_cluster_gce(fake, loader_info={}, db_info={}, monitor_info={})
     fake._get_cluster_gce_with_region_fallback.assert_not_called()
-    fake._get_cluster_gce_once.assert_called_once()
+    fake._get_cluster_gce_once.assert_called_once_with({}, {}, {})
 
 
 def test_legacy_get_cluster_gce_dispatches_to_fallback_when_multi_dc():
     """get_cluster_gce routes multi-DC configs to the fallback path too (per-DC fallback)."""
-    fake = _fake_tester(_make_params(fallback_to_next_region=True, gce_datacenter="us-east1 us-west1"))
+    fake = fake_tester(make_params(fallback_to_next_region=True, gce_datacenter="us-east1 us-west1"))
     ClusterTester.get_cluster_gce(fake, loader_info={}, db_info={}, monitor_info={})
-    fake._get_cluster_gce_with_region_fallback.assert_called_once()
+    fake._get_cluster_gce_with_region_fallback.assert_called_once_with({}, {}, {})
     fake._get_cluster_gce_once.assert_not_called()
 
 
 def test_legacy_region_fallback_delegates_to_router():
     """The legacy wrapper delegates to the centralized router (which computes candidates itself)."""
-    fake = _fake_tester(_make_params(fallback_to_next_region=True))
+    fake = fake_tester(make_params(fallback_to_next_region=True))
     with (
         patch("sdcm.tester.TestConfig") as test_config,
         patch("sdcm.tester.gce_region_fallback.provision_with_fallback") as router,
     ):
         test_config.return_value.test_id.return_value = "test-id"
         ClusterTester._get_cluster_gce_with_region_fallback(fake, loader_info={}, db_info={}, monitor_info={})
-    router.assert_called_once()
+    router.assert_called_once_with(
+        params=fake.params,
+        test_id="test-id",
+        network_name="qa-vpc",
+        provision_once=ANY,
+        partial_cleanup=fake._cleanup_legacy_partial_gce_clusters,
+        error_factory=CriticalTestFailure,
+    )
     kwargs = router.call_args.kwargs
     assert kwargs["error_factory"] is CriticalTestFailure
     assert kwargs["network_name"] == "qa-vpc"

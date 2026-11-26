@@ -22,6 +22,7 @@ from sdcm.utils.sct_agent_installer import (
 
 
 def test_generate_agent_api_key():
+    """generate_agent_api_key returns a non-empty key, different on each call."""
     api_key = generate_agent_api_key()
     assert api_key, "API should be generated and not empty"
 
@@ -30,6 +31,7 @@ def test_generate_agent_api_key():
 
 
 def test_save_and_load_agent_api_key(tmp_path):
+    """save_agent_api_key writes a 0600 file that load_agent_api_key reads back unchanged."""
     api_key = "test-api-key-12345"
     save_agent_api_key(str(tmp_path), api_key)
 
@@ -44,5 +46,6 @@ def test_save_and_load_agent_api_key(tmp_path):
 
 
 def test_load_nonexistent_api_key(tmp_path):
+    """load_agent_api_key returns None when the directory has no key file."""
     nonexistent_dir = os.path.join(str(tmp_path), "nonexistent")
     assert load_agent_api_key(nonexistent_dir) is None, "Loading from nonexistent directory should return None"

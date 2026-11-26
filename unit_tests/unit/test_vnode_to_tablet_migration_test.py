@@ -23,6 +23,7 @@ HOST_3 = "017dd39a-3d06-4c8a-8ac4-379f9e595607"
 
 
 def node_with_output(stdout: str):
+    """Return a fake node whose run_nodetool returns stdout."""
     return SimpleNamespace(run_nodetool=lambda cmd: SimpleNamespace(stdout=stdout))
 
 
@@ -43,6 +44,7 @@ def node_with_output(stdout: str):
     ],
 )
 def test_migrate_to_tablets_status_parses_node_table(header, addresses):
+    """Node table rows map to vnodes, migrating and tablets statuses, with or without addresses."""
     stdout = (
         "Keyspace: ks\n"
         "Status: migrating_to_tablets\n"
@@ -65,6 +67,7 @@ def test_migrate_to_tablets_status_parses_node_table(header, addresses):
 
 
 def test_migrate_to_tablets_status_without_node_table():
+    """Status without a Nodes table yields the keyspace status and no node entries."""
     status = get_nodetool_migrate_to_tablets_status(node_with_output("Keyspace: ks\nStatus: vnodes\n"), "ks")
 
     assert status.status == "vnodes"
@@ -79,6 +82,7 @@ def test_migrate_to_tablets_status_without_node_table():
     ],
 )
 def test_migrate_to_tablets_status_rejects_unknown_node_status(line):
+    """Node row with an unknown state raises ValueError."""
     stdout = f"Keyspace: ks\nStatus: migrating_to_tablets\n\nNodes:\nHost ID  Address  Status\n{line}\n"
 
     with pytest.raises(ValueError, match="unknown state"):

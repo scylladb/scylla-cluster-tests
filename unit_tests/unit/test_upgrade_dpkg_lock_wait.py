@@ -24,7 +24,7 @@ UpgradeTest.__test__ = False
 pytestmark = pytest.mark.usefixtures("events")
 
 
-def _run_side_effect(orig_ver, new_ver):
+def run_side_effect(orig_ver, new_ver):
     """Return distinct ``scylla --version`` results across the two calls, empty stdout otherwise."""
     call_count = {"n": 0}
 
@@ -38,7 +38,7 @@ def _run_side_effect(orig_ver, new_ver):
     return _side_effect
 
 
-def _package_manager_calls(fake_node):
+def collect_apt_get_calls(fake_node):
     """Collect (cmd, kwargs) pairs for every apt-get invocation on ``fake_node.remoter``."""
     calls = list(fake_node.remoter.run.call_args_list) + list(fake_node.remoter.sudo.call_args_list)
     package_manager_calls = []
@@ -67,7 +67,7 @@ def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
     fake_node.distro.is_rhel_like = False
     fake_node.distro.is_sles = False
     fake_node.is_product_enterprise = False
-    fake_node.remoter.run.side_effect = _run_side_effect("2026.1.10", "2026.3.0")
+    fake_node.remoter.run.side_effect = run_side_effect("2026.1.10", "2026.3.0")
 
     UpgradeTest._upgrade_node(
         fake_self,
@@ -77,7 +77,7 @@ def test_upgrade_node_dist_upgrade_waits_for_dpkg_lock():
         new_version="2026.3.0",
     )
 
-    package_manager_calls = _package_manager_calls(fake_node)
+    package_manager_calls = collect_apt_get_calls(fake_node)
     dist_upgrade_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "dist-upgrade" in cmd]
     assert len(dist_upgrade_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
 
@@ -111,7 +111,7 @@ def test_upgrade_node_yum_update_downloads_then_installs_on_rhel():
     fake_node.distro.is_rhel_like = True
     fake_node.is_product_enterprise = False
     fake_node.scylla_pkg.return_value = "scylla"
-    fake_node.remoter.run.side_effect = _run_side_effect("2026.1.10", "2026.3.0")
+    fake_node.remoter.run.side_effect = run_side_effect("2026.1.10", "2026.3.0")
 
     UpgradeTest._upgrade_node(
         fake_self,
@@ -140,11 +140,11 @@ def test_rollback_node_apt_get_install_waits_for_dpkg_lock():
     fake_node.name = "node1"
     fake_node.distro.is_rhel_like = False
     fake_node.scylla_pkg.return_value = "scylla"
-    fake_node.remoter.run.side_effect = _run_side_effect("2026.3.0", "2026.1.10")
+    fake_node.remoter.run.side_effect = run_side_effect("2026.3.0", "2026.1.10")
 
     UpgradeTest._rollback_node(fake_self, node=fake_node, upgrade_sstables=False)
 
-    package_manager_calls = _package_manager_calls(fake_node)
+    package_manager_calls = collect_apt_get_calls(fake_node)
     install_calls = [(cmd, kwargs) for cmd, kwargs in package_manager_calls if "install" in cmd]
     assert len(install_calls) == 2, f"expected download + install calls, got: {package_manager_calls!r}"
 
@@ -175,7 +175,10 @@ def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
     finally:
         release.set()
 
-    fake_node.remoter.sudo.assert_called_once()
+    fake_node.remoter.sudo.assert_called_once_with(
+        'bash -c \'pgrep -a -x "yum|dnf|dnf5" || true; while pgrep -x "yum|dnf|dnf5" >/dev/null; do sleep 10; done\'',
+        timeout=600,
+    )
     cmd = fake_node.remoter.sudo.call_args.args[0]
     assert 'while pgrep -x "yum|dnf|dnf5"' in cmd, cmd
     assert "yum.pid" not in cmd, cmd
@@ -183,7 +186,10 @@ def test_upgrade_os_timeout_waits_for_yum_process_on_rhel():
 
 @pytest.mark.parametrize(
     "is_rhel_like, download_only, cache_only",
-    [(True, "--downloadonly", "-C"), (False, "--download-only", "--no-download")],
+    [
+        pytest.param(True, "--downloadonly", "-C", id="rhel-yum"),
+        pytest.param(False, "--download-only", "--no-download", id="debian-apt-get"),
+    ],
 )
 def test_download_then_install(is_rhel_like, download_only, cache_only):
     """SCT-1456: only the download runs under the remote deadline, the install runs from the local cache."""

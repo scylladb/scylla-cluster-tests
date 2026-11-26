@@ -14,33 +14,33 @@ from sdcm.utils.replication_strategy_utils import (
     SimpleReplicationStrategy,
 )
 
-_MODULE = "sdcm.nemesis.monkey.add_remove_dc"
+MODULE = "sdcm.nemesis.monkey.add_remove_dc"
 
 pytestmark = pytest.mark.usefixtures("events")
 
 
-def _keyspace_row(name, replication):
+def keyspace_row(name, replication):
     """Build a system_schema.keyspaces row for replication discovery tests."""
     return SimpleNamespace(keyspace_name=name, replication=replication)
 
 
-def _nts_row(name, **rf_per_dc):
+def nts_row(name, **rf_per_dc):
     """Build a NetworkTopologyStrategy system_schema.keyspaces row."""
-    return _keyspace_row(
+    return keyspace_row(
         name,
         {"class": "org.apache.cassandra.locator.NetworkTopologyStrategy"}
         | {dc: str(rf) for dc, rf in rf_per_dc.items()},
     )
 
 
-def _mock_keyspace_rows(runner, rows):
+def mock_keyspace_rows(runner, rows):
     """Make the CQL session return ``rows`` for the system_schema.keyspaces query."""
     session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
     session.execute.side_effect = None
     session.execute.return_value = MagicMock(current_rows=rows)
 
 
-def _clone_strategy(strategy):
+def clone_strategy(strategy):
     """Creates a deep copy of a replication strategy for comparison.
 
     Args:
@@ -102,7 +102,7 @@ class FakeReplicationStrategySetter:
         self.calls.append(keyspaces)
         for keyspace, strategy in keyspaces.items():
             if keyspace not in self.preserved:
-                self.preserved[keyspace] = _clone_strategy(ReplicationStrategy.get(None, keyspace))
+                self.preserved[keyspace] = clone_strategy(ReplicationStrategy.get(None, keyspace))
 
 
 @pytest.fixture()
@@ -137,14 +137,14 @@ def created_keyspace(runner):
     name = "created_during_nemesis"
     rf_per_dc = {monkey.initial_dc_name: monkey.new_ks_rf, "dc1_nemesis_dc": monkey.num_nodes_in_new_dc}
     runner.status_by_dc["dc1_nemesis_dc"] = object()
-    _mock_keyspace_rows(runner, [_nts_row(name, **rf_per_dc)])
+    mock_keyspace_rows(runner, [nts_row(name, **rf_per_dc)])
 
     def fake_get(node, keyspace):
         if keyspace == name:
             return NetworkTopologyReplicationStrategy(**rf_per_dc)
         return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
 
-    with patch(f"{_MODULE}.ReplicationStrategy.get", side_effect=fake_get):
+    with patch(f"{MODULE}.ReplicationStrategy.get", side_effect=fake_get):
         yield name
 
 
@@ -197,7 +197,7 @@ def test_disrupt_updates_replication_and_cleans_new_dc(runner):
     events = []
     first_setter = FakeReplicationStrategySetter("system-keyspaces", events)
     second_setter = FakeReplicationStrategySetter("new-dc-rf", events)
-    _mock_keyspace_rows(runner, [])
+    mock_keyspace_rows(runner, [])
 
     def add_nodes():
         monkey.new_nodes = new_nodes
@@ -224,19 +224,21 @@ def test_disrupt_updates_replication_and_cleans_new_dc(runner):
         return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
 
     with (
-        patch(f"{_MODULE}.temporary_replication_strategy_setter", side_effect=[first_setter, second_setter]),
-        patch(f"{_MODULE}.ReplicationStrategy.get", side_effect=fake_get),
-        patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False),
+        patch(f"{MODULE}.temporary_replication_strategy_setter", side_effect=[first_setter, second_setter]),
+        patch(f"{MODULE}.ReplicationStrategy.get", side_effect=fake_get),
+        patch(f"{MODULE}.is_tablets_feature_enabled", return_value=False),
     ):
         monkey.disrupt()
 
-    runner.tester.run_stress_thread.assert_called_once()
-    stress_kwargs = runner.tester.run_stress_thread.call_args.kwargs
-    expected_replication = f"replication(strategy=NetworkTopologyStrategy,{monkey.initial_dc_name}={monkey.new_ks_rf})"
-    assert f"keyspace={monkey.new_ks_name}" in stress_kwargs["stress_cmd"]
-    assert expected_replication in stress_kwargs["stress_cmd"]
-    assert stress_kwargs["round_robin"] is True
-    assert stress_kwargs["stop_test_on_failure"] is False
+    expected_write_cmd = (
+        f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace={monkey.new_ks_name} "
+        f"replication(strategy=NetworkTopologyStrategy,{monkey.initial_dc_name}={monkey.new_ks_rf}) "
+        f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' "
+        f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
+    )
+    runner.tester.run_stress_thread.assert_called_once_with(
+        stress_cmd=expected_write_cmd, round_robin=True, stop_test_on_failure=False
+    )
     runner.tester.verify_stress_thread.assert_called_once_with(
         runner.tester.run_stress_thread.return_value,
         error_handler=runner._nemesis_stress_failure_handler,
@@ -286,10 +288,12 @@ def test_temporary_new_dc_replication_factors_preserves_created_keyspaces_on_err
     monkey = AddRemoveDcNemesis(runner)
     setter = FakeReplicationStrategySetter("new-dc-rf", [])
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with patch(f"{_MODULE}.temporary_replication_strategy_setter", return_value=setter):
-            with monkey.temporary_new_dc_replication_factors():
-                raise RuntimeError("boom")
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        patch(f"{MODULE}.temporary_replication_strategy_setter", return_value=setter),
+        monkey.temporary_new_dc_replication_factors(),
+    ):
+        raise RuntimeError("boom")
 
     expected_keyspaces = ["system_distributed", "system_traces", monkey.new_ks_name, created_keyspace]
     assert list(setter.rollback_calls[0]) == expected_keyspaces
@@ -303,11 +307,11 @@ def test_temporary_new_dc_replication_factors_preserves_created_keyspaces_on_err
     "row",
     [
         pytest.param(
-            _keyspace_row("simple_ks", {"class": "org.apache.cassandra.locator.SimpleStrategy", "dc1_nemesis_dc": "3"}),
+            keyspace_row("simple_ks", {"class": "org.apache.cassandra.locator.SimpleStrategy", "dc1_nemesis_dc": "3"}),
             id="not-nts",
         ),
-        pytest.param(_nts_row("other_dc_ks", dc1=3), id="not-in-new-dc"),
-        pytest.param(_nts_row("already_preserved", dc1=3, dc1_nemesis_dc=3), id="already-preserved"),
+        pytest.param(nts_row("other_dc_ks", dc1=3), id="not-in-new-dc"),
+        pytest.param(nts_row("already_preserved", dc1=3, dc1_nemesis_dc=3), id="already-preserved"),
     ],
 )
 def test_preserve_keyspaces_with_new_dc_replication_skips_unrelated_keyspaces(runner, row):
@@ -316,10 +320,10 @@ def test_preserve_keyspaces_with_new_dc_replication_skips_unrelated_keyspaces(ru
     runner.status_by_dc["dc1_nemesis_dc"] = object()
     setter = FakeReplicationStrategySetter("new-dc-rf", [])
     setter.preserved["already_preserved"] = sentinel = object()
-    _mock_keyspace_rows(runner, [row])
+    mock_keyspace_rows(runner, [row])
     strategy = NetworkTopologyReplicationStrategy(dc1=3, dc1_nemesis_dc=3)
 
-    with patch(f"{_MODULE}.ReplicationStrategy.get", return_value=strategy):
+    with patch(f"{MODULE}.ReplicationStrategy.get", return_value=strategy):
         monkey._preserve_keyspaces_with_new_dc_replication(setter)
 
     assert setter.preserved == {"already_preserved": sentinel}
@@ -394,9 +398,8 @@ def test_assert_new_dc_state_methods_retry_three_times_before_raising(runner, me
     runner.tester.db_cluster.get_nodetool_status.return_value = status
     runner.tester.db_cluster.get_nodetool_status.reset_mock()
 
-    with patch("sdcm.utils.decorators.time.sleep") as sleep:
-        with pytest.raises(AssertionError, match=message):
-            getattr(monkey, method_name)()
+    with patch("sdcm.utils.decorators.time.sleep") as sleep, pytest.raises(AssertionError, match=message):
+        getattr(monkey, method_name)()
 
     assert runner.tester.db_cluster.get_nodetool_status.call_count == 3
     assert sleep.call_args_list == [call(30), call(30), call(30)]

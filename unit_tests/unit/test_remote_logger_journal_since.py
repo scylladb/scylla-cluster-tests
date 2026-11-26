@@ -27,7 +27,8 @@ TEST_ID = "7fba7abb-891c-4199-b61d-bf9ca12d671d"
 RUN_START = "@1791382530"  # 2026-10-07 14:15:30 UTC
 
 
-def _logger(logger_class, tmp_path, journal_since):
+def make_logger(logger_class, tmp_path, journal_since):
+    """Build a logger_class on a mock node whose journal_since is the given value."""
     node = MagicMock(journal_since=journal_since)
     node.name = "db-node-7fba7abb-0"
     node.test_config.test_id.return_value = TEST_ID
@@ -36,7 +37,7 @@ def _logger(logger_class, tmp_path, journal_since):
     return logger
 
 
-def _read_since(logger, reads: int = 2) -> list[str | None]:
+def read_since(logger, reads: int = 2) -> list[str | None]:
     """Run the journal task for `reads` reads (the follower reconnecting in between) and return their `since`."""
     seen = []
 
@@ -50,36 +51,50 @@ def _read_since(logger, reads: int = 2) -> list[str | None]:
     return seen
 
 
-@pytest.mark.parametrize("logger_class", [SSHScyllaSystemdLogger, SSHGeneralSystemdLogger])
+@pytest.mark.parametrize(
+    "logger_class",
+    [
+        pytest.param(SSHScyllaSystemdLogger, id="scylla-systemd"),
+        pytest.param(SSHGeneralSystemdLogger, id="general-systemd"),
+    ],
+)
 def test_a_reused_host_is_read_from_the_start_of_the_run(logger_class, tmp_path):
-    logger = _logger(logger_class, tmp_path, journal_since=RUN_START)
+    """A reused host is read from RUN_START and the log file says so; older entries belong to earlier runs."""
+    logger = make_logger(logger_class, tmp_path, journal_since=RUN_START)
 
-    assert _read_since(logger)[0] == RUN_START
+    assert read_since(logger)[0] == RUN_START
     assert (tmp_path / "system.log").read_text() == (
         f"==== SCT test {TEST_ID} starts on db-node-7fba7abb-0: reading its journal from 2026-10-07 14:15:30 UTC, "
         "older entries there belong to earlier runs on this host ====\n"
     )
 
 
-@pytest.mark.parametrize("logger_class", [SSHScyllaSystemdLogger, SSHGeneralSystemdLogger])
+@pytest.mark.parametrize(
+    "logger_class",
+    [
+        pytest.param(SSHScyllaSystemdLogger, id="scylla-systemd"),
+        pytest.param(SSHGeneralSystemdLogger, id="general-systemd"),
+    ],
+)
 def test_a_new_node_is_read_from_the_beginning(logger_class, tmp_path):
-    logger = _logger(logger_class, tmp_path, journal_since=None)
+    """A node created for the run has its whole journal to read, so no start point is passed and nothing is marked."""
+    logger = make_logger(logger_class, tmp_path, journal_since=None)
 
-    assert _read_since(logger)[0] is None
+    assert read_since(logger)[0] is None
     assert not (tmp_path / "system.log").exists()
 
 
 def test_a_log_file_follower_ignores_the_start_of_the_run(tmp_path):
     """Tail reads the whole file whatever it is told, so there is nothing to mark."""
-    logger = _logger(SSHGeneralFileLogger, tmp_path, journal_since=RUN_START)
+    logger = make_logger(SSHGeneralFileLogger, tmp_path, journal_since=RUN_START)
 
-    assert _read_since(logger)[0] is None
+    assert read_since(logger)[0] is None
     assert not (tmp_path / "system.log").exists()
 
 
 def test_a_reconnect_reads_on_from_a_time_free_of_zones(tmp_path, monkeypatch):
     """Journalctl reads a date without a zone in the host's local time, and systemd < 220 rejects one with a zone."""
     monkeypatch.setattr("sdcm.utils.remote_logger.time.time", lambda: 1791382590.7)
-    logger = _logger(SSHGeneralSystemdLogger, tmp_path, journal_since=None)
+    logger = make_logger(SSHGeneralSystemdLogger, tmp_path, journal_since=None)
 
-    assert _read_since(logger)[1] == "@1791382590"
+    assert read_since(logger)[1] == "@1791382590"

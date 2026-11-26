@@ -38,7 +38,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from sdcm.sct_config.mixins import CONFIG_GROUPS
 
 
-class _AlphaMixin(BaseModel):
+class AlphaMixin(BaseModel):
     """Stands in for a domain mixin owning `alpha`."""
 
     alpha: int = 1
@@ -51,7 +51,7 @@ class _AlphaMixin(BaseModel):
         return value
 
 
-class _BetaMixin(BaseModel):
+class BetaMixin(BaseModel):
     """Stands in for a second domain mixin owning `beta`."""
 
     beta: int = 1
@@ -71,23 +71,24 @@ class _BetaMixin(BaseModel):
         return self
 
 
-class _Assembled(_AlphaMixin, _BetaMixin):
+class AssembledModel(AlphaMixin, BetaMixin):
     """Stands in for SCTConfiguration: assembled from the mixins, adding nothing itself."""
 
 
 def test_field_validator_declared_on_a_mixin_runs_on_the_assembled_model():
+    """A field_validator on a mixin rejects bad values on the assembled model."""
     with pytest.raises(ValueError, match="alpha must be positive"):
-        _Assembled(alpha=-1)
+        AssembledModel(alpha=-1)
 
 
 def test_field_validators_from_several_mixins_all_run():
     """Multiple inheritance must not shadow a sibling mixin's validators."""
     with pytest.raises(ValueError, match="beta must be even"):
-        _Assembled(alpha=10, beta=3)
+        AssembledModel(alpha=10, beta=3)
 
     # and the other mixin's validator is still live
     with pytest.raises(ValueError, match="alpha must be positive"):
-        _Assembled(alpha=-2, beta=2)
+        AssembledModel(alpha=-2, beta=2)
 
 
 def test_model_validator_on_a_mixin_can_read_fields_owned_by_another_mixin():
@@ -97,14 +98,14 @@ def test_model_validator_on_a_mixin_can_read_fields_owned_by_another_mixin():
     truly spans domains it does not have to move back into a central `verify_configuration()`.
     """
     with pytest.raises(ValueError, match="beta must not exceed alpha"):
-        _Assembled(alpha=2, beta=4)
+        AssembledModel(alpha=2, beta=4)
 
-    assert _Assembled(alpha=4, beta=2).beta == 2
+    assert AssembledModel(alpha=4, beta=2).beta == 2
 
 
 def test_model_construct_bypasses_mixin_validation():
     """How a test builds a config without satisfying every rule."""
-    built = _Assembled.model_construct(alpha=-1, beta=3)
+    built = AssembledModel.model_construct(alpha=-1, beta=3)
     assert built.alpha == -1
     assert built.beta == 3
 

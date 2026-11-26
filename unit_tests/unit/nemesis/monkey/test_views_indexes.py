@@ -7,7 +7,7 @@ objects, and registry discovery / target-pool resolution.
 """
 
 from contextlib import nullcontext
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -20,7 +20,7 @@ from sdcm.nemesis.monkey.views_indexes import (
 )
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS
 
-_MODULE = "sdcm.nemesis.monkey.views_indexes"
+MODULE = "sdcm.nemesis.monkey.views_indexes"
 
 pytestmark = pytest.mark.usefixtures("events")
 
@@ -38,236 +38,6 @@ def runner(base_runner):
     base_runner.node_allocator = MagicMock()
     base_runner.current_disruption = "disruption-1"
     return base_runner
-
-
-# ---------------------------------------------------------------------------
-# CreateIndexNemesis
-# ---------------------------------------------------------------------------
-
-
-def test_create_index_precheck_skips_on_parallel_nemesis(runner):
-    """Parallel nemesis run + open issue -> skip reason returned."""
-    runner.cluster.nemesis_count = 2
-    with patch(f"{_MODULE}.SkipPerIssues", return_value=True):
-        monkey = CreateIndexNemesis(runner)
-        assert "parallel nemesis run" in monkey.precheck(runner.target_node)
-
-
-def test_create_index_precheck_skips_on_old_version_with_tablets(runner):
-    """Tablets enabled + Scylla version <= 2025.3.99 -> skip reason returned."""
-    runner.target_node.scylla_version = "2025.3.0"
-    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True):
-        monkey = CreateIndexNemesis(runner)
-        assert "MV/SI for tablets" in monkey.precheck(runner.target_node)
-
-
-def test_create_index_precheck_runnable(runner):
-    """No static blockers -> precheck returns None."""
-    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False):
-        monkey = CreateIndexNemesis(runner)
-        assert monkey.precheck(runner.target_node) is None
-
-
-def test_create_index_raises_when_no_tables(runner):
-    """No non-system table -> UnsupportedNemesis."""
-    runner.cluster.get_non_system_ks_cf_list.return_value = []
-    monkey = CreateIndexNemesis(runner)
-    with pytest.raises(UnsupportedNemesis, match="No table found to create index"):
-        monkey.disrupt()
-
-
-def test_create_index_raises_when_no_column(runner):
-    """No suitable column -> UnsupportedNemesis."""
-    with patch(f"{_MODULE}.get_random_column_name", return_value=None):
-        monkey = CreateIndexNemesis(runner)
-        with pytest.raises(UnsupportedNemesis, match="No column found to create index"):
-            monkey.disrupt()
-
-
-def test_create_index_happy_path_creates_and_drops(runner):
-    """Full flow builds the index, verifies the query, and always drops it."""
-    with (
-        patch(f"{_MODULE}.get_random_column_name", return_value="col1"),
-        patch(f"{_MODULE}.DbNodeLogger"),
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.create_index", return_value="idx1") as mock_create,
-        patch(f"{_MODULE}.wait_for_index_to_be_built") as mock_wait,
-        patch(f"{_MODULE}.verify_query_by_index_works") as mock_verify,
-        patch(f"{_MODULE}.sleep_for_percent_of_duration"),
-        patch(f"{_MODULE}.drop_index") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
-    ):
-        mock_timeout.return_value.__enter__.return_value = 100
-        monkey = CreateIndexNemesis(runner)
-        monkey.disrupt()
-
-    mock_create.assert_called_once()
-    mock_wait.assert_called_once()
-    mock_verify.assert_called_once()
-    mock_drop.assert_called_once()
-    assert mock_drop.call_args[0][2] == "idx1"
-    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "idx1_index")
-
-
-def test_create_index_drops_index_even_when_verify_fails(runner):
-    """If verification raises, the index is still dropped (finally block)."""
-    with (
-        patch(f"{_MODULE}.get_random_column_name", return_value="col1"),
-        patch(f"{_MODULE}.DbNodeLogger"),
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.create_index", return_value="idx1"),
-        patch(f"{_MODULE}.wait_for_index_to_be_built", side_effect=RuntimeError("boom")),
-        patch(f"{_MODULE}.drop_index") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
-    ):
-        mock_timeout.return_value.__enter__.return_value = 100
-        monkey = CreateIndexNemesis(runner)
-        with pytest.raises(RuntimeError, match="boom"):
-            monkey.disrupt()
-
-    mock_drop.assert_called_once()
-    mock_clear.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# AddRemoveMvNemesis
-# ---------------------------------------------------------------------------
-
-
-def test_add_remove_mv_precheck_skips_on_old_version_with_tablets(runner):
-    """Tablets enabled + Scylla version <= 2025.3.99 -> skip reason returned."""
-    runner.target_node.scylla_version = "2025.3.0"
-    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True):
-        monkey = AddRemoveMvNemesis(runner)
-        assert "MV for tablets" in monkey.precheck(runner.target_node)
-
-
-def test_add_remove_mv_precheck_runnable(runner):
-    """No static blockers -> precheck returns None."""
-    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False):
-        monkey = AddRemoveMvNemesis(runner)
-        assert monkey.precheck(runner.target_node) is None
-
-
-def test_add_remove_mv_raises_when_no_free_nodes(runner):
-    """All data nodes busy -> UnsupportedNemesis."""
-    # base_runner mock nodes have a truthy ``running_nemesis`` by default.
-    monkey = AddRemoveMvNemesis(runner)
-    with pytest.raises(UnsupportedNemesis, match="Not enough free nodes"):
-        monkey.disrupt()
-
-
-def test_add_remove_mv_raises_when_no_tables(runner):
-    """Free node available but no eligible table -> UnsupportedNemesis."""
-    for node in runner.cluster.data_nodes:
-        node.running_nemesis = None
-    runner.cluster.get_non_system_ks_cf_list.return_value = []
-    with patch(f"{_MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()):
-        monkey = AddRemoveMvNemesis(runner)
-        with pytest.raises(UnsupportedNemesis, match="Non-system keyspace and table"):
-            monkey.disrupt()
-
-
-def test_add_remove_mv_happy_path(runner):
-    """Node is stopped, MV created & built, then dropped and scylla restarted."""
-    for node in runner.cluster.data_nodes:
-        node.running_nemesis = None
-    with (
-        patch(f"{_MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()),
-        patch(f"{_MODULE}.create_materialized_view_for_random_column") as mock_create,
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.wait_for_view_to_be_built") as mock_wait,
-        patch(f"{_MODULE}.sleep_for_percent_of_duration"),
-        patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
-    ):
-        mock_timeout.return_value.__enter__.return_value = 100
-        monkey = AddRemoveMvNemesis(runner)
-        monkey.disrupt()
-
-    runner.target_node.stop_scylla.assert_called_once()
-    runner.target_node.start_scylla.assert_called_once()
-    mock_create.assert_called_once()
-    mock_wait.assert_called_once()
-    mock_drop.assert_called_once()
-    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "tbl1_view")
-
-
-def test_add_remove_mv_restarts_scylla_when_create_fails(runner):
-    """If MV creation fails, scylla is restarted and the error re-raised."""
-    for node in runner.cluster.data_nodes:
-        node.running_nemesis = None
-    with (
-        patch(f"{_MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()),
-        patch(
-            f"{_MODULE}.create_materialized_view_for_random_column",
-            side_effect=RuntimeError("mv boom"),
-        ),
-    ):
-        monkey = AddRemoveMvNemesis(runner)
-        with pytest.raises(RuntimeError, match="mv boom"):
-            monkey.disrupt()
-
-    runner.target_node.stop_scylla.assert_called_once()
-    runner.target_node.start_scylla.assert_called_once()
-
-
-def test_add_remove_mv_restarts_scylla_when_connection_fails(runner):
-    """If opening the CQL session itself fails, scylla is still restarted (not just
-    when MV creation fails after a session was successfully opened).
-    """
-    for node in runner.cluster.data_nodes:
-        node.running_nemesis = None
-    runner.cluster.cql_connection_patient.side_effect = RuntimeError("connection boom")
-    with patch(f"{_MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()):
-        monkey = AddRemoveMvNemesis(runner)
-        with pytest.raises(RuntimeError, match="connection boom"):
-            monkey.disrupt()
-
-    runner.target_node.stop_scylla.assert_called_once()
-    runner.target_node.start_scylla.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# KillMVBuildingCoordinator
-# ---------------------------------------------------------------------------
-
-
-def test_kill_mv_coordinator_precheck_skips_without_consistent_topology(runner):
-    """Consistent topology changes disabled -> skip reason returned."""
-    runner.target_node.raft.is_consistent_topology_changes_enabled = False
-    monkey = KillMVBuildingCoordinator(runner)
-    assert "Consistent topology changes" in monkey.precheck(runner.target_node)
-
-
-def test_kill_mv_coordinator_precheck_skips_without_tablets(runner):
-    """Tablets feature disabled -> skip reason returned."""
-    runner.target_node.raft.is_consistent_topology_changes_enabled = True
-    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False):
-        monkey = KillMVBuildingCoordinator(runner)
-        assert "works only with tablets" in monkey.precheck(runner.target_node)
-
-
-def test_kill_mv_coordinator_precheck_skips_without_views_with_tablets(runner):
-    """Tablets enabled but the views-with-tablets feature isn't -> skip reason returned."""
-    runner.target_node.raft.is_consistent_topology_changes_enabled = True
-    with (
-        patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True),
-        patch(f"{_MODULE}.is_views_with_tablets_enabled", return_value=False),
-    ):
-        monkey = KillMVBuildingCoordinator(runner)
-        assert "works only with tablets" in monkey.precheck(runner.target_node)
-
-
-def test_kill_mv_coordinator_precheck_runnable(runner):
-    """No static blockers -> precheck returns None."""
-    runner.target_node.raft.is_consistent_topology_changes_enabled = True
-    with (
-        patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True),
-        patch(f"{_MODULE}.is_views_with_tablets_enabled", return_value=True),
-    ):
-        monkey = KillMVBuildingCoordinator(runner)
-        assert monkey.precheck(runner.target_node) is None
 
 
 @pytest.fixture()
@@ -290,47 +60,289 @@ def kill_runner(runner):
     return runner
 
 
+# ---------------------------------------------------------------------------
+# CreateIndexNemesis
+# ---------------------------------------------------------------------------
+
+
+def test_create_index_precheck_skips_on_parallel_nemesis(runner):
+    """Parallel nemesis run + open issue -> skip reason returned."""
+    runner.cluster.nemesis_count = 2
+    with patch(f"{MODULE}.SkipPerIssues", return_value=True):
+        monkey = CreateIndexNemesis(runner)
+        assert "parallel nemesis run" in monkey.precheck(runner.target_node)
+
+
+def test_create_index_precheck_skips_on_old_version_with_tablets(runner):
+    """Tablets enabled + Scylla version <= 2025.3.99 -> skip reason returned."""
+    runner.target_node.scylla_version = "2025.3.0"
+    with patch(f"{MODULE}.is_tablets_feature_enabled", return_value=True):
+        monkey = CreateIndexNemesis(runner)
+        assert "MV/SI for tablets" in monkey.precheck(runner.target_node)
+
+
+def test_create_index_precheck_runnable(runner):
+    """No static blockers -> precheck returns None."""
+    with patch(f"{MODULE}.is_tablets_feature_enabled", return_value=False):
+        monkey = CreateIndexNemesis(runner)
+        assert monkey.precheck(runner.target_node) is None
+
+
+def test_create_index_raises_when_no_tables(runner):
+    """No non-system table -> UnsupportedNemesis."""
+    runner.cluster.get_non_system_ks_cf_list.return_value = []
+    monkey = CreateIndexNemesis(runner)
+    with pytest.raises(UnsupportedNemesis, match="No table found to create index"):
+        monkey.disrupt()
+
+
+def test_create_index_raises_when_no_column(runner):
+    """No suitable column -> UnsupportedNemesis."""
+    with patch(f"{MODULE}.get_random_column_name", return_value=None):
+        monkey = CreateIndexNemesis(runner)
+        with pytest.raises(UnsupportedNemesis, match="No column found to create index"):
+            monkey.disrupt()
+
+
+def test_create_index_happy_path_creates_and_drops(runner):
+    """Full flow builds the index, verifies the query, and always drops it."""
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    with (
+        patch(f"{MODULE}.get_random_column_name", return_value="col1"),
+        patch(f"{MODULE}.DbNodeLogger"),
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.create_index", return_value="idx1") as mock_create,
+        patch(f"{MODULE}.wait_for_index_to_be_built") as mock_wait,
+        patch(f"{MODULE}.verify_query_by_index_works") as mock_verify,
+        patch(f"{MODULE}.sleep_for_percent_of_duration"),
+        patch(f"{MODULE}.drop_index") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
+    ):
+        mock_timeout.return_value.__enter__.return_value = 100
+        monkey = CreateIndexNemesis(runner)
+        monkey.disrupt()
+
+    mock_create.assert_called_once_with(session, "ks1", "tbl1", "col1")
+    mock_wait.assert_called_once_with(runner.target_node, "ks1", "idx1", timeout=200)
+    mock_verify.assert_called_once_with(session, "ks1", "tbl1", "col1")
+    mock_drop.assert_called_once_with(session, "ks1", "idx1")
+    assert mock_drop.call_args[0][2] == "idx1"
+    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "idx1_index")
+
+
+def test_create_index_drops_index_even_when_verify_fails(runner):
+    """If verification raises, the index is still dropped (finally block)."""
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    with (
+        patch(f"{MODULE}.get_random_column_name", return_value="col1"),
+        patch(f"{MODULE}.DbNodeLogger"),
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.create_index", return_value="idx1"),
+        patch(f"{MODULE}.wait_for_index_to_be_built", side_effect=RuntimeError("boom")),
+        patch(f"{MODULE}.drop_index") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
+    ):
+        mock_timeout.return_value.__enter__.return_value = 100
+        monkey = CreateIndexNemesis(runner)
+        with pytest.raises(RuntimeError, match="boom"):
+            monkey.disrupt()
+
+    mock_drop.assert_called_once_with(session, "ks1", "idx1")
+    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "idx1_index")
+
+
+# ---------------------------------------------------------------------------
+# AddRemoveMvNemesis
+# ---------------------------------------------------------------------------
+
+
+def test_add_remove_mv_precheck_skips_on_old_version_with_tablets(runner):
+    """Tablets enabled + Scylla version <= 2025.3.99 -> skip reason returned."""
+    runner.target_node.scylla_version = "2025.3.0"
+    with patch(f"{MODULE}.is_tablets_feature_enabled", return_value=True):
+        monkey = AddRemoveMvNemesis(runner)
+        assert "MV for tablets" in monkey.precheck(runner.target_node)
+
+
+def test_add_remove_mv_precheck_runnable(runner):
+    """No static blockers -> precheck returns None."""
+    with patch(f"{MODULE}.is_tablets_feature_enabled", return_value=False):
+        monkey = AddRemoveMvNemesis(runner)
+        assert monkey.precheck(runner.target_node) is None
+
+
+def test_add_remove_mv_raises_when_no_free_nodes(runner):
+    """All data nodes busy -> UnsupportedNemesis."""
+    # base_runner mock nodes have a truthy ``running_nemesis`` by default.
+    monkey = AddRemoveMvNemesis(runner)
+    with pytest.raises(UnsupportedNemesis, match="Not enough free nodes"):
+        monkey.disrupt()
+
+
+def test_add_remove_mv_raises_when_no_tables(runner):
+    """Free node available but no eligible table -> UnsupportedNemesis."""
+    for node in runner.cluster.data_nodes:
+        node.running_nemesis = None
+    runner.cluster.get_non_system_ks_cf_list.return_value = []
+    with patch(f"{MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()):
+        monkey = AddRemoveMvNemesis(runner)
+        with pytest.raises(UnsupportedNemesis, match="Non-system keyspace and table"):
+            monkey.disrupt()
+
+
+def test_add_remove_mv_happy_path(runner):
+    """Node is stopped, MV created & built, then dropped and scylla restarted."""
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    for node in runner.cluster.data_nodes:
+        node.running_nemesis = None
+    with (
+        patch(f"{MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()),
+        patch(f"{MODULE}.create_materialized_view_for_random_column") as mock_create,
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.wait_for_view_to_be_built") as mock_wait,
+        patch(f"{MODULE}.sleep_for_percent_of_duration"),
+        patch(f"{MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
+    ):
+        mock_timeout.return_value.__enter__.return_value = 100
+        monkey = AddRemoveMvNemesis(runner)
+        monkey.disrupt()
+
+    runner.target_node.stop_scylla.assert_called_once_with()
+    runner.target_node.start_scylla.assert_called_once_with()
+    mock_create.assert_called_once_with(session, "ks1", "tbl1", "tbl1_view", random_generator=runner.random)
+    mock_wait.assert_called_once_with(runner.target_node, "ks1", "tbl1_view", timeout=200)
+    mock_drop.assert_called_once_with(session, "ks1", "tbl1_view")
+    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "tbl1_view")
+
+
+def test_add_remove_mv_restarts_scylla_when_create_fails(runner):
+    """If MV creation fails, scylla is restarted and the error re-raised."""
+    for node in runner.cluster.data_nodes:
+        node.running_nemesis = None
+    with (
+        patch(f"{MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()),
+        patch(
+            f"{MODULE}.create_materialized_view_for_random_column",
+            side_effect=RuntimeError("mv boom"),
+        ),
+    ):
+        monkey = AddRemoveMvNemesis(runner)
+        with pytest.raises(RuntimeError, match="mv boom"):
+            monkey.disrupt()
+
+    runner.target_node.stop_scylla.assert_called_once_with()
+    runner.target_node.start_scylla.assert_called_once_with()
+
+
+def test_add_remove_mv_restarts_scylla_when_connection_fails(runner):
+    """If opening the CQL session itself fails, scylla is still restarted (not just
+    when MV creation fails after a session was successfully opened).
+    """
+    for node in runner.cluster.data_nodes:
+        node.running_nemesis = None
+    runner.cluster.cql_connection_patient.side_effect = RuntimeError("connection boom")
+    with patch(f"{MODULE}.suppress_expected_unavailability_errors", return_value=nullcontext()):
+        monkey = AddRemoveMvNemesis(runner)
+        with pytest.raises(RuntimeError, match="connection boom"):
+            monkey.disrupt()
+
+    runner.target_node.stop_scylla.assert_called_once_with()
+    runner.target_node.start_scylla.assert_called_once_with()
+
+
+# ---------------------------------------------------------------------------
+# KillMVBuildingCoordinator
+# ---------------------------------------------------------------------------
+
+
+def test_kill_mv_coordinator_precheck_skips_without_consistent_topology(runner):
+    """Consistent topology changes disabled -> skip reason returned."""
+    runner.target_node.raft.is_consistent_topology_changes_enabled = False
+    monkey = KillMVBuildingCoordinator(runner)
+    assert "Consistent topology changes" in monkey.precheck(runner.target_node)
+
+
+def test_kill_mv_coordinator_precheck_skips_without_tablets(runner):
+    """Tablets feature disabled -> skip reason returned."""
+    runner.target_node.raft.is_consistent_topology_changes_enabled = True
+    with patch(f"{MODULE}.is_tablets_feature_enabled", return_value=False):
+        monkey = KillMVBuildingCoordinator(runner)
+        assert "works only with tablets" in monkey.precheck(runner.target_node)
+
+
+def test_kill_mv_coordinator_precheck_skips_without_views_with_tablets(runner):
+    """Tablets enabled but the views-with-tablets feature isn't -> skip reason returned."""
+    runner.target_node.raft.is_consistent_topology_changes_enabled = True
+    with (
+        patch(f"{MODULE}.is_tablets_feature_enabled", return_value=True),
+        patch(f"{MODULE}.is_views_with_tablets_enabled", return_value=False),
+    ):
+        monkey = KillMVBuildingCoordinator(runner)
+        assert "works only with tablets" in monkey.precheck(runner.target_node)
+
+
+def test_kill_mv_coordinator_precheck_runnable(runner):
+    """No static blockers -> precheck returns None."""
+    runner.target_node.raft.is_consistent_topology_changes_enabled = True
+    with (
+        patch(f"{MODULE}.is_tablets_feature_enabled", return_value=True),
+        patch(f"{MODULE}.is_views_with_tablets_enabled", return_value=True),
+    ):
+        monkey = KillMVBuildingCoordinator(runner)
+        assert monkey.precheck(runner.target_node) is None
+
+
 def test_kill_mv_coordinator_happy_path(kill_runner):
     """Full orchestration: coordinator switch/restart loop, successful build and
     query, and MV cleanup in the finally block.
     """
+    session = kill_runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    working_node = kill_runner.node_allocator.run_nemesis.return_value.__enter__.return_value
     coordinator = MagicMock(name="coordinator")
     with (
-        patch(f"{_MODULE}.get_topology_coordinator_node", return_value=coordinator),
-        patch(f"{_MODULE}.create_materialized_view_for_random_column") as mock_create,
-        patch(f"{_MODULE}.wait_materialized_view_building_tasks_started"),
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.wait_for_view_to_be_built") as mock_wait,
-        patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
+        patch(f"{MODULE}.get_topology_coordinator_node", return_value=coordinator),
+        patch(f"{MODULE}.create_materialized_view_for_random_column") as mock_create,
+        patch(f"{MODULE}.wait_materialized_view_building_tasks_started"),
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.wait_for_view_to_be_built") as mock_wait,
+        patch(f"{MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
         monkey.disrupt()
 
-    mock_create.assert_called_once()
-    mock_wait.assert_called_once()
-    mock_drop.assert_called_once()
+    # The view name carries a random uuid suffix.
+    mock_create.assert_called_once_with(session, "ks1", "tbl1", ANY, random_generator=kill_runner.random)
+    mock_wait.assert_called_once_with(working_node, "ks1", ANY, timeout=200)
+    mock_drop.assert_called_once_with(session, "ks1", ANY)
     mock_clear.assert_called_once_with(kill_runner.cluster.data_nodes, "pre-drop-", "ks1", mock_drop.call_args[0][2])
     # runner delegation: coordinator is targeted and killed once (len(nodes) // 2 == 1).
     kill_runner.switch_target_node.assert_called_with(coordinator)
-    kill_runner._kill_scylla_daemon.assert_called_once()
+    kill_runner._kill_scylla_daemon.assert_called_once_with()
 
 
-@pytest.mark.parametrize("base_has_rows", [False, True])
+@pytest.mark.parametrize(
+    "base_has_rows",
+    [
+        pytest.param(False, id="base-without-rows"),
+        pytest.param(True, id="base-with-rows"),
+    ],
+)
 def test_kill_mv_coordinator_empty_view(kill_runner, base_has_rows):
     """An empty view passes only when the base table has no live row with the view key column set."""
     session = kill_runner.cluster.cql_connection_patient.return_value.__enter__.return_value
     session.execute.return_value = []
     with (
-        patch(f"{_MODULE}.get_topology_coordinator_node", return_value=MagicMock(name="coordinator")),
-        patch(f"{_MODULE}.create_materialized_view_for_random_column", return_value="col1"),
-        patch(f"{_MODULE}.wait_materialized_view_building_tasks_started"),
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.wait_for_view_to_be_built"),
-        patch(f"{_MODULE}.base_table_has_rows_with_column", return_value=base_has_rows) as mock_base_check,
-        patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
+        patch(f"{MODULE}.get_topology_coordinator_node", return_value=MagicMock(name="coordinator")),
+        patch(f"{MODULE}.create_materialized_view_for_random_column", return_value="col1"),
+        patch(f"{MODULE}.wait_materialized_view_building_tasks_started"),
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.wait_for_view_to_be_built"),
+        patch(f"{MODULE}.base_table_has_rows_with_column", return_value=base_has_rows) as mock_base_check,
+        patch(f"{MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
@@ -338,29 +350,30 @@ def test_kill_mv_coordinator_empty_view(kill_runner, base_has_rows):
             monkey.disrupt()
 
     mock_base_check.assert_called_once_with(session, "ks1", "tbl1", "col1")
-    mock_drop.assert_called_once()
-    mock_clear.assert_called_once()
+    mock_drop.assert_called_once_with(session, "ks1", ANY)
+    mock_clear.assert_called_once_with(kill_runner.cluster.data_nodes, "pre-drop-", "ks1", ANY)
 
 
 def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
     """If the view never finishes building, the MV is still dropped (finally)."""
+    session = kill_runner.cluster.cql_connection_patient.return_value.__enter__.return_value
     coordinator = MagicMock(name="coordinator")
     with (
-        patch(f"{_MODULE}.get_topology_coordinator_node", return_value=coordinator),
-        patch(f"{_MODULE}.create_materialized_view_for_random_column"),
-        patch(f"{_MODULE}.wait_materialized_view_building_tasks_started"),
-        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
-        patch(f"{_MODULE}.wait_for_view_to_be_built", side_effect=RuntimeError("not built")),
-        patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
-        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
+        patch(f"{MODULE}.get_topology_coordinator_node", return_value=coordinator),
+        patch(f"{MODULE}.create_materialized_view_for_random_column"),
+        patch(f"{MODULE}.wait_materialized_view_building_tasks_started"),
+        patch(f"{MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{MODULE}.wait_for_view_to_be_built", side_effect=RuntimeError("not built")),
+        patch(f"{MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
         with pytest.raises(RuntimeError, match="not built"):
             monkey.disrupt()
 
-    mock_drop.assert_called_once()
-    mock_clear.assert_called_once()
+    mock_drop.assert_called_once_with(session, "ks1", ANY)
+    mock_clear.assert_called_once_with(kill_runner.cluster.data_nodes, "pre-drop-", "ks1", ANY)
 
 
 # ---------------------------------------------------------------------------
@@ -371,9 +384,9 @@ def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
 @pytest.mark.parametrize(
     "monkey_cls, expected_pool",
     [
-        (CreateIndexNemesis, NEMESIS_TARGET_POOLS.data_nodes),
-        (AddRemoveMvNemesis, NEMESIS_TARGET_POOLS.data_nodes),
-        (KillMVBuildingCoordinator, NEMESIS_TARGET_POOLS.all_nodes),
+        pytest.param(CreateIndexNemesis, NEMESIS_TARGET_POOLS.data_nodes, id="create-index"),
+        pytest.param(AddRemoveMvNemesis, NEMESIS_TARGET_POOLS.data_nodes, id="add-remove-mv"),
+        pytest.param(KillMVBuildingCoordinator, NEMESIS_TARGET_POOLS.all_nodes, id="kill-mv-coordinator"),
     ],
 )
 def test_monkey_discovered_with_expected_target_pool(monkey_cls, expected_pool):

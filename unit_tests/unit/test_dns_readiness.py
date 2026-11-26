@@ -13,7 +13,7 @@
 
 import logging
 from types import MethodType
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from invoke.exceptions import UnexpectedExit
@@ -23,7 +23,8 @@ from sdcm.cluster import BaseNode, BaseScyllaCluster, NodeSetupFailed, _is_dns_n
 from sdcm.exceptions import WaitForTimeoutError
 
 
-def _fake_result(stdout="", stderr="", exit_status=0):
+def fake_result(stdout="", stderr="", exit_status=0):
+    """Result stand-in carrying the given stdout, stderr and exit status."""
     result = MagicMock(spec=Result)
     result.stdout = stdout
     result.stderr = stderr
@@ -35,11 +36,13 @@ def _fake_result(stdout="", stderr="", exit_status=0):
     return result
 
 
-def _make_unexpected_exit(stderr: str = "", stdout: str = "") -> UnexpectedExit:
-    return UnexpectedExit(result=_fake_result(stdout=stdout, stderr=stderr, exit_status=1))
+def make_unexpected_exit(stderr: str = "", stdout: str = "") -> UnexpectedExit:
+    """UnexpectedExit raised by a command that failed with exit status 1."""
+    return UnexpectedExit(result=fake_result(stdout=stdout, stderr=stderr, exit_status=1))
 
 
-def _setup_params():
+def setup_params():
+    """Params mock returning empty defaults, with no unified package, for scylla_setup."""
     params = MagicMock()
     params.get.side_effect = lambda key: {
         "append_scylla_setup_args": "",
@@ -50,6 +53,7 @@ def _setup_params():
 
 @pytest.fixture
 def existing_node():
+    """BaseNode mock with the real DNS and setup methods bound to it."""
     node = MagicMock(spec=BaseNode)
     node.remoter = MagicMock()
     node.log = logging.getLogger("test_node")
@@ -61,7 +65,7 @@ def existing_node():
     node._append_minicloud_no_io_setup = MethodType(BaseNode._append_minicloud_no_io_setup, node)
     node.scylla_setup = MethodType(BaseNode.scylla_setup, node)
     node.parent_cluster = MagicMock()
-    node.parent_cluster.params = _setup_params()
+    node.parent_cluster.params = setup_params()
     node.distro = MagicMock()
     node.distro.is_rhel_like = False
     return node
@@ -69,7 +73,8 @@ def existing_node():
 
 @pytest.fixture
 def dns_wait_success(existing_node):
-    existing_node.remoter.run.return_value = _fake_result(exit_status=0, stdout="93.184.216.34 scylladb.com")
+    """Make the DNS lookup succeed and run wait_for inline; yields the wait_for mock."""
+    existing_node.remoter.run.return_value = fake_result(exit_status=0, stdout="93.184.216.34 scylladb.com")
     with patch("sdcm.cluster.wait.wait_for") as mock_wait_for:
         mock_wait_for.side_effect = lambda func, **kwargs: func()
         yield mock_wait_for
@@ -77,26 +82,28 @@ def dns_wait_success(existing_node):
 
 @pytest.fixture
 def setup_command_runner(existing_node):
+    """Factory that scripts scylla_setup, apt-get and yum responses for one retry scenario."""
+
     def factory(*, first_error: str | None, use_yum: bool = False, mount_output: str = " /var/lib/scylla "):
         attempts = {"scylla_setup": 0, "apt_get": 0, "yum_makecache": 0}
 
         def run(cmd, **kwargs):
             if "scylla_setup --help" in cmd:
-                return _fake_result(stdout="--swap-directory")
+                return fake_result(stdout="--swap-directory")
             if "scylla_setup --nic" in cmd:
                 attempts["scylla_setup"] += 1
                 if attempts["scylla_setup"] == 1 and first_error is not None:
-                    raise _make_unexpected_exit(stderr=first_error)
-                return _fake_result()
+                    raise make_unexpected_exit(stderr=first_error)
+                return fake_result()
             if "apt-get" in cmd and "update" in cmd:
                 attempts["apt_get"] += 1
-                return _fake_result()
+                return fake_result()
             if "sudo yum makecache" in cmd:
                 attempts["yum_makecache"] += 1
-                return _fake_result()
+                return fake_result()
             if "cat /proc/mounts" in cmd:
-                return _fake_result(stdout=mount_output)
-            return _fake_result()
+                return fake_result(stdout=mount_output)
+            return fake_result()
 
         existing_node.distro.is_rhel_like = use_yum
         existing_node.remoter.run.side_effect = run
@@ -108,12 +115,13 @@ def setup_command_runner(existing_node):
 def test_check_dns_ready_returns_true_on_first_success(existing_node, dns_wait_success):
     """Return True when the first DNS lookup succeeds."""
     assert existing_node.check_dns_ready(timeout=10, interval=1) is True
-    dns_wait_success.assert_called_once()
+    dns_wait_success.assert_called_once_with(ANY, step=1, text="DNS readiness on test-node", timeout=10)
+    existing_node.remoter.run.assert_called_once_with("getent hosts scylladb.com", ignore_status=True, verbose=False)
 
 
 def test_check_dns_ready_uses_requested_host(existing_node):
     """Query the provided hostname when checking DNS readiness."""
-    existing_node.remoter.run.return_value = _fake_result(exit_status=0, stdout="1.2.3.4 custom.host.example.com")
+    existing_node.remoter.run.return_value = fake_result(exit_status=0, stdout="1.2.3.4 custom.host.example.com")
 
     with patch("sdcm.cluster.wait.wait_for") as mock_wait_for:
         mock_wait_for.side_effect = lambda func, **kwargs: func()
@@ -128,7 +136,7 @@ def test_check_dns_ready_uses_requested_host(existing_node):
 
 def test_check_dns_ready_passes_wait_for_configuration(existing_node):
     """Forward timeout, interval, and log text into wait.wait_for."""
-    existing_node.remoter.run.return_value = _fake_result(exit_status=0)
+    existing_node.remoter.run.return_value = fake_result(exit_status=0)
 
     with patch("sdcm.cluster.wait.wait_for") as mock_wait_for:
         mock_wait_for.side_effect = lambda func, **kwargs: func()
@@ -142,7 +150,7 @@ def test_check_dns_ready_passes_wait_for_configuration(existing_node):
 
 def test_check_dns_ready_returns_false_after_timeout(existing_node):
     """Return False and capture diagnostics when DNS never becomes ready."""
-    existing_node.remoter.run.return_value = _fake_result(exit_status=2)
+    existing_node.remoter.run.return_value = fake_result(exit_status=2)
 
     with patch("sdcm.cluster.wait.wait_for", side_effect=WaitForTimeoutError("timed out")):
         assert existing_node.check_dns_ready(timeout=60, interval=5) is False
@@ -152,7 +160,7 @@ def test_check_dns_ready_returns_false_after_timeout(existing_node):
 
 def test_capture_dns_diagnostics_runs_expected_commands(existing_node):
     """Collect the three DNS diagnostic commands in a fixed order."""
-    existing_node.remoter.run.return_value = _fake_result(stdout="diagnostic output")
+    existing_node.remoter.run.return_value = fake_result(stdout="diagnostic output")
 
     existing_node._capture_dns_diagnostics()
 
@@ -235,12 +243,12 @@ def test_scylla_setup_raises_after_dns_retries_are_exhausted(mock_sleep, existin
 
     def run(cmd, **kwargs):
         if "scylla_setup --help" in cmd:
-            return _fake_result(stdout="--swap-directory")
+            return fake_result(stdout="--swap-directory")
         if "scylla_setup --nic" in cmd:
-            raise _make_unexpected_exit(stderr="Temporary failure resolving 'archive.ubuntu.com'")
+            raise make_unexpected_exit(stderr="Temporary failure resolving 'archive.ubuntu.com'")
         if "apt-get" in cmd and "update" in cmd:
-            return _fake_result()
-        return _fake_result()
+            return fake_result()
+        return fake_result()
 
     existing_node.remoter.run.side_effect = run
 

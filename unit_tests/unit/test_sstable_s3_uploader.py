@@ -13,10 +13,11 @@
 
 """Tests for the S3 uploads which stream the files over an SSH session to the node."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 from sdcm.cluster import BaseNode
 from sdcm.cluster_k8s import BasePodContainer
+from sdcm.utils.common import S3Storage
 from sdcm.utils.sstable.s3_uploader import upload_sstables_to_s3, upload_system_table_to_s3
 
 TEST_ID = "4352b7b6-0630-4ceb-ac5b-3ba5bd44ceba"
@@ -42,6 +43,7 @@ def make_remoter() -> MagicMock:
 
 
 def make_db_node() -> Mock:
+    """A DB node mock with an SSH remoter and the SSH login info the uploads read."""
     node = Mock(spec=BaseNode)
     node.name = "db-node-1"
     node.remoter = make_remoter()
@@ -50,6 +52,7 @@ def make_db_node() -> Mock:
 
 
 def commands_run(node: Mock) -> list[str]:
+    """Commands passed to node.remoter.run, in call order."""
     return [call.args[0] for call in node.remoter.run.call_args_list]
 
 
@@ -59,6 +62,7 @@ def test_k8s_nodes_report_being_docker():
 
 
 def test_upload_system_table_to_s3_uploads_from_ssh_node():
+    """upload_system_table_to_s3 exports the table over SSH and uploads the file from the node."""
     node = make_db_node()
 
     with patch(
@@ -70,13 +74,21 @@ def test_upload_system_table_to_s3_uploads_from_ssh_node():
 
     assert s3_link == S3_LINK
     assert s3_filename.startswith("system_compaction_history-")
-    upload_mock.assert_called_once()
+    upload_mock.assert_called_once_with(
+        SSH_LOGIN_INFO,
+        [ANY],
+        s3_bucket=S3Storage.bucket_name,
+        s3_key=ANY,
+        max_size_gb=80,
+        public_read_acl=True,
+    )
     node._gen_cqlsh_cmd.assert_called_once_with(
         command="SELECT JSON * FROM system.compaction_history", keyspace=None, timeout=300, connect_timeout=60
     )
 
 
 def test_upload_sstables_to_s3_uploads_from_ssh_node():
+    """upload_sstables_to_s3 snapshots the keyspace, uploads its sstables from the node and clears the snapshot."""
     node = make_db_node()
 
     with patch(

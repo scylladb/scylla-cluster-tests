@@ -19,12 +19,13 @@ Another region can have the quota, so region fallback moves the cluster there in
 """
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import google.api_core.exceptions
 import pytest
 
 from sdcm.keystore import SSHKey
+from sdcm.provision.gce import region_fallback as rf
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider
 from sdcm.provision.provisioner import (
     InstanceConfigurationError,
@@ -34,6 +35,7 @@ from sdcm.provision.provisioner import (
     ZeroQuotaError,
     ZoneResourcesExhaustedError,
 )
+from sdcm.sct_provision.instances_provider import _is_capacity_exhaustion
 from unit_tests.lib.dot_dict import DotDict
 
 FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", private_key=b"fake-private\n")
@@ -43,18 +45,7 @@ WAIT = "sdcm.provision.gce.instance_provider.wait_for_extended_operation"
 ZERO_CPU_QUOTA = "QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 0.0 in region us-central1."
 ZERO_SSD_QUOTA = "QUOTA_EXCEEDED: Quota 'LOCAL_SSD_TOTAL_GB_PER_VM_FAMILY' exceeded.  Limit: 0.0 in region us-central1."
 USED_UP_CPU_QUOTA = "QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 24.0 in region us-central1."
-
-
-def _definition(name: str) -> InstanceDefinition:
-    return InstanceDefinition(
-        name=name,
-        image_id="projects/scylla-images/global/images/test-image",
-        type="z4d-highmem-8-highlssd",
-        user_name="scylla-test",
-        ssh_key=FAKE_SSH_KEY,
-        root_disk_size=50,
-        root_disk_type="pd-ssd",
-    )
+CONFIG_ERROR = "Error 400: [pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance."
 
 
 @pytest.fixture
@@ -74,35 +65,92 @@ def vm_provider():
 
 
 @pytest.fixture(autouse=True)
-def _no_retry_sleep():
+def no_retry_sleep():
+    """The retry decorator's sleep is stubbed out, so retries run at once."""
     with patch("sdcm.utils.decorators.time.sleep"):
         yield
 
 
-def _create(vm_provider):
-    return vm_provider.get_or_create(definitions=[_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
+@pytest.fixture
+def region_fallback(monkeypatch):
+    """`sdcm.provision.gce.region_fallback`, with its cleanup sweep stubbed out."""
+    monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
+    with patch.object(rf, "cleanup_region"):
+        yield rf
 
 
-@pytest.mark.parametrize("message", [ZERO_CPU_QUOTA, ZERO_SSD_QUOTA])
+def instance_definition(name: str) -> InstanceDefinition:
+    """A GCE instance definition named ``name``, on the test image."""
+    return InstanceDefinition(
+        name=name,
+        image_id="projects/scylla-images/global/images/test-image",
+        type="z4d-highmem-8-highlssd",
+        user_name="scylla-test",
+        ssh_key=FAKE_SSH_KEY,
+        root_disk_size=50,
+        root_disk_type="pd-ssd",
+    )
+
+
+def create_instances(vm_provider):
+    """Create one on-demand node named ``node-1`` through ``vm_provider``."""
+    return vm_provider.get_or_create(definitions=[instance_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
+
+
+def zero_quota_in(region: str) -> ZeroQuotaError:
+    """A ZeroQuotaError for the CPU quota of ``region``."""
+    return ZeroQuotaError(f"QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 0.0 in region {region}.")
+
+
+class GceParams(DotDict):
+    """Params stand-in whose ``gce_datacenters`` follows ``gce_datacenter``, as the real property does."""
+
+    @property
+    def gce_datacenters(self) -> list[str]:
+        """The space-separated DCs of ``gce_datacenter``."""
+        return self.get("gce_datacenter", "").split()
+
+
+def make_params(**overrides) -> GceParams:
+    """GCE params with region and AZ fallback enabled, with ``overrides`` applied on top."""
+    return GceParams(
+        {
+            "cluster_backend": "gce",
+            "gce_datacenter": "us-central1",
+            "availability_zone": "a",
+            "gce_network": "qa-vpc",
+            "fallback_to_next_region": True,
+            "fallback_to_next_availability_zone": True,
+            **overrides,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [pytest.param(ZERO_CPU_QUOTA, id="zero-cpu-quota"), pytest.param(ZERO_SSD_QUOTA, id="zero-ssd-quota")],
+)
 def test_zero_quota_on_the_insert_operation_fails_without_retry(vm_provider, message):
+    """A zero quota reported by the insert operation raises ZeroQuotaError on the first attempt."""
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()) as insert,
         patch(WAIT, side_effect=google.api_core.exceptions.Forbidden(message)),
         pytest.raises(ZeroQuotaError, match="quota limit is 0"),
     ):
-        _create(vm_provider)
+        create_instances(vm_provider)
 
     assert insert.call_count == 1
 
 
 def test_zero_quota_on_the_insert_request_fails_without_retry(vm_provider):
+    """A zero quota on the insert request itself raises ZeroQuotaError without a retry."""
     with (
         patch.object(
             vm_provider, "_build_and_insert_instance", side_effect=google.api_core.exceptions.Forbidden(ZERO_CPU_QUOTA)
         ) as insert,
         pytest.raises(ZeroQuotaError),
     ):
-        _create(vm_provider)
+        create_instances(vm_provider)
 
     assert insert.call_count == 1
 
@@ -120,7 +168,7 @@ def test_zero_quota_during_the_retry_stops_the_retry(vm_provider):
         ),
         pytest.raises(ZeroQuotaError),
     ):
-        _create(vm_provider)
+        create_instances(vm_provider)
 
     assert insert.call_count == 2
 
@@ -131,18 +179,18 @@ def test_used_up_quota_is_still_retried(vm_provider):
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()) as insert,
         patch(WAIT, side_effect=[google.api_core.exceptions.Forbidden(USED_UP_CPU_QUOTA), None]),
     ):
-        instances = _create(vm_provider)
+        instances = create_instances(vm_provider)
 
     assert insert.call_count == 2
     assert len(instances) == 1
 
 
-CONFIG_ERROR = "Error 400: [pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance."
-
-
 @pytest.mark.parametrize(
     "message,expected_error",
-    [(ZERO_CPU_QUOTA, ZeroQuotaError), (CONFIG_ERROR, InstanceConfigurationError)],
+    [
+        pytest.param(ZERO_CPU_QUOTA, ZeroQuotaError, id="zero-quota"),
+        pytest.param(CONFIG_ERROR, InstanceConfigurationError, id="config-error"),
+    ],
 )
 def test_insert_request_error_drains_the_inserts_already_sent(vm_provider, message, expected_error):
     """Node 1's insert is in flight when node 2's request fails: it must be waited out, so a VM it
@@ -159,50 +207,13 @@ def test_insert_request_error_drains_the_inserts_already_sent(vm_provider, messa
         pytest.raises(expected_error),
     ):
         vm_provider.get_or_create(
-            definitions=[_definition("node-1"), _definition("node-2")], pricing_model=PricingModel.ON_DEMAND
+            definitions=[instance_definition("node-1"), instance_definition("node-2")],
+            pricing_model=PricingModel.ON_DEMAND,
         )
 
-    drain.assert_called_once()
+    drain.assert_called_once_with(ANY, PricingModel.ON_DEMAND)
     pending = drain.call_args.args[0]
     assert [(entry[1], entry[2]) for entry in pending] == [(node_1_operation, "node-1")]
-
-
-def _zero_quota_in(region: str) -> ZeroQuotaError:
-    return ZeroQuotaError(f"QUOTA_EXCEEDED: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 0.0 in region {region}.")
-
-
-class _GceParams(DotDict):
-    """Params stand-in whose ``gce_datacenters`` follows ``gce_datacenter``, as the real property does."""
-
-    @property
-    def gce_datacenters(self) -> list[str]:
-        return self.get("gce_datacenter", "").split()
-
-
-def _params(**overrides) -> _GceParams:
-    return _GceParams(
-        {
-            "cluster_backend": "gce",
-            "gce_datacenter": "us-central1",
-            "availability_zone": "a",
-            "gce_network": "qa-vpc",
-            "fallback_to_next_region": True,
-            "fallback_to_next_availability_zone": True,
-            **overrides,
-        }
-    )
-
-
-@pytest.fixture
-def region_fallback(monkeypatch):
-    """`sdcm.provision.gce.region_fallback`, with its cleanup sweep stubbed out."""
-    # Imported here: at module level, right after instance_provider, region_fallback hits a circular
-    # import through sdcm.provision.common.fallback.
-    from sdcm.provision.gce import region_fallback as rf  # noqa: PLC0415
-
-    monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
-    with patch.object(rf, "cleanup_region"):
-        yield rf
 
 
 def test_zero_quota_error_relocates_the_region_but_never_the_zone(region_fallback):
@@ -215,15 +226,13 @@ def test_zero_quota_error_relocates_the_region_but_never_the_zone(region_fallbac
 
 def test_zero_quota_alone_never_reaches_the_on_demand_last_resort():
     """On-demand needs the same quota, so a zero limit must not be retried on-demand."""
-    # Imported here for the same circular import as in the region_fallback fixture.
-    from sdcm.sct_provision.instances_provider import _is_capacity_exhaustion  # noqa: PLC0415
-
     assert not _is_capacity_exhaustion(ZeroQuotaError(ZERO_CPU_QUOTA))
 
 
 def test_zone_fallback_skips_a_zero_quota(region_fallback):
-    params = _params()
-    provision_once = MagicMock(side_effect=_zero_quota_in("us-central1"))
+    """Zone fallback does not try other zones on a zero quota and keeps the original AZ."""
+    params = make_params()
+    provision_once = MagicMock(side_effect=zero_quota_in("us-central1"))
     with (
         patch.object(region_fallback, "GceAZResolver") as resolver,
         pytest.raises(ZeroQuotaError),
@@ -232,15 +241,15 @@ def test_zone_fallback_skips_a_zero_quota(region_fallback):
             params=params, test_id="t", network_name="qa-vpc", provision_once=provision_once
         )()
 
-    provision_once.assert_called_once()
+    provision_once.assert_called_once_with()
     resolver.return_value.get_az_fallback_candidates.assert_not_called()
     assert params["availability_zone"] == "a"
 
 
 def test_region_fallback_moves_a_zero_quota_to_the_region_that_has_it(region_fallback):
     """SCT-1550: z4d has no quota in us-central1 or us-east1, only in us-east4."""
-    params = _params()
-    provision_once = MagicMock(side_effect=[_zero_quota_in("us-central1"), _zero_quota_in("us-east1"), None])
+    params = make_params()
+    provision_once = MagicMock(side_effect=[zero_quota_in("us-central1"), zero_quota_in("us-east1"), None])
 
     region_fallback.provision_with_region_fallback(
         params=params,
@@ -259,12 +268,9 @@ def test_region_fallback_moves_a_zero_quota_to_the_region_that_has_it(region_fal
 
 def test_region_fallback_raises_zero_quota_error_when_no_region_has_the_quota(region_fallback):
     """Fails fast with a ZeroQuotaError, which the on-demand last resort leaves alone."""
-    # Imported here for the same circular import as in the region_fallback fixture.
-    from sdcm.sct_provision.instances_provider import _is_capacity_exhaustion  # noqa: PLC0415
-
-    params = _params()
+    params = make_params()
     provision_once = MagicMock(
-        side_effect=[_zero_quota_in("us-central1"), _zero_quota_in("us-east1"), _zero_quota_in("us-east4")]
+        side_effect=[zero_quota_in("us-central1"), zero_quota_in("us-east1"), zero_quota_in("us-east4")]
     )
 
     with pytest.raises(ZeroQuotaError, match="all fallback candidates") as error:
@@ -285,9 +291,9 @@ def test_region_fallback_raises_zero_quota_error_when_no_region_has_the_quota(re
 
 def test_region_fallback_keeps_the_callers_error_when_capacity_ran_out_too(region_fallback):
     """A region that ran out of spot capacity may have it on-demand, so the last resort stays open."""
-    params = _params()
+    params = make_params()
     provision_once = MagicMock(
-        side_effect=[ZoneResourcesExhaustedError("ZONE_RESOURCE_POOL_EXHAUSTED"), _zero_quota_in("us-east4")]
+        side_effect=[ZoneResourcesExhaustedError("ZONE_RESOURCE_POOL_EXHAUSTED"), zero_quota_in("us-east4")]
     )
 
     with pytest.raises(ProvisionUnrecoverableError) as error:
@@ -304,8 +310,9 @@ def test_region_fallback_keeps_the_callers_error_when_capacity_ran_out_too(regio
 
 
 def test_multi_dc_fallback_moves_only_the_dc_without_the_quota(region_fallback):
-    params = _params(gce_datacenter="us-east1 us-central1")
-    provision_once = MagicMock(side_effect=[_zero_quota_in("us-central1"), None])
+    """Multi-DC fallback moves only the DC whose region has a zero quota."""
+    params = make_params(gce_datacenter="us-east1 us-central1")
+    provision_once = MagicMock(side_effect=[zero_quota_in("us-central1"), None])
     with patch.object(region_fallback, "GceAZResolver") as resolver:
         resolver.return_value.get_dc_fallback_candidates.side_effect = lambda index: (
             [("us-east4", ["a"])] if index == 1 else []
@@ -324,12 +331,12 @@ def test_multi_dc_fallback_moves_only_the_dc_without_the_quota(region_fallback):
 
 def test_multi_dc_fallback_keeps_the_callers_error_when_another_dc_ran_out_of_capacity(region_fallback):
     """The relocation errors are collected over all DCs: one capacity error keeps the last resort open."""
-    params = _params(gce_datacenter="us-east1 us-central1")
+    params = make_params(gce_datacenter="us-east1 us-central1")
     provision_once = MagicMock(
         side_effect=[
             ZoneResourcesExhaustedError("ZONE_RESOURCE_POOL_EXHAUSTED in us-east1-b"),
-            _zero_quota_in("us-central1"),
-            _zero_quota_in("us-east4"),
+            zero_quota_in("us-central1"),
+            zero_quota_in("us-east4"),
         ]
     )
     with (

@@ -19,12 +19,12 @@ LOGGER = logging.getLogger(__name__)
 @pytest.mark.parametrize(
     "parent, result",
     [
-        (LocalMinimalScyllaPodCluster, True),
-        (GkeScyllaPodCluster, True),
-        (EksScyllaPodCluster, True),
-        (ScyllaGCECluster, False),
-        (ScyllaAWSCluster, False),
-        (ScyllaDockerCluster, False),
+        pytest.param(LocalMinimalScyllaPodCluster, True, id="mini-k8s"),
+        pytest.param(GkeScyllaPodCluster, True, id="gke"),
+        pytest.param(EksScyllaPodCluster, True, id="eks"),
+        pytest.param(ScyllaGCECluster, False, id="gce"),
+        pytest.param(ScyllaAWSCluster, False, id="aws"),
+        pytest.param(ScyllaDockerCluster, False, id="docker"),
     ],
 )
 def test_is_it_on_kubernetes(parent, result):

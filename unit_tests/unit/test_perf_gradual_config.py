@@ -6,14 +6,15 @@ from sdcm.sct_config import SCTConfiguration
 
 
 @pytest.fixture(autouse=True)
-def _set_env(monkeypatch):
+def sct_backend_env(monkeypatch):
+    """Set the AWS backend env vars that SCTConfiguration needs to build a config."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
 
 
 def test_string_format_backward_compatibility():
-    """Test that string format (cassandra-stress) still works."""
+    """Plain string step lists (cassandra-stress format) pass verify_configuration."""
     config = SCTConfiguration()
     config.update(
         {
@@ -25,7 +26,7 @@ def test_string_format_backward_compatibility():
 
 
 def test_dict_format_with_all_fields():
-    """Test dict format with threads, concurrency, and rate."""
+    """Dict steps carrying threads, concurrency and rate pass verify_configuration."""
     config = SCTConfiguration()
     config.update(
         {
@@ -41,7 +42,7 @@ def test_dict_format_with_all_fields():
 
 
 def test_dict_format_with_only_threads_and_concurrency():
-    """Test dict format with threads and concurrency but no rate (unthrottled)."""
+    """Dict steps with threads and concurrency but no rate pass verify_configuration (unthrottled)."""
     config = SCTConfiguration()
     config.update(
         {
@@ -54,7 +55,7 @@ def test_dict_format_with_only_threads_and_concurrency():
 
 
 def test_dict_format_requires_perf_gradual_threads_when_missing_threads():
-    """Test that dict without threads field requires perf_gradual_threads."""
+    """A dict step without threads is rejected when perf_gradual_threads is not set."""
     config = SCTConfiguration()
     config.update({"perf_gradual_throttle_steps": {"write": [{"concurrency": 128, "rate": "100000"}]}})
     with pytest.raises(ValueError, match="perf_gradual_threads should be defined"):
@@ -62,7 +63,7 @@ def test_dict_format_requires_perf_gradual_threads_when_missing_threads():
 
 
 def test_mixed_threads_without_fallback():
-    """Test that mixing dict steps with and without threads, but no perf_gradual_threads fallback, raises."""
+    """Mixing dict steps with and without threads, with no perf_gradual_threads fallback, is rejected."""
     config = SCTConfiguration()
     config.update(
         {
@@ -79,7 +80,7 @@ def test_mixed_threads_without_fallback():
 
 
 def test_mixed_format_same_workload():
-    """Test that mixing string and dict in same workload works when fallback is provided."""
+    """String and dict steps in one workload pass verify_configuration when perf_gradual_threads is provided."""
     config = SCTConfiguration()
     config.update(
         {
@@ -96,7 +97,7 @@ def test_mixed_format_same_workload():
 
 
 def test_mixed_format_different_workloads():
-    """Test using string format for one workload, dict for another."""
+    """String steps for one workload and dict steps for another pass verify_configuration together."""
     config = SCTConfiguration()
     config.update(
         {
@@ -154,7 +155,7 @@ def test_mixed_format_different_workloads():
     ],
 )
 def test_invalid_step_values(steps, match):
-    """Test that invalid step values are rejected with clear error messages."""
+    """Invalid step values are rejected with an error message naming the bad field."""
     config = SCTConfiguration()
     extra = {}
     # list step type needs perf_gradual_threads to avoid hitting that error first
@@ -166,7 +167,7 @@ def test_invalid_step_values(steps, match):
 
 
 def test_rate_unthrottled_string():
-    """Test that 'unthrottled' is a valid rate value."""
+    """The 'unthrottled' rate string is accepted alongside numeric rates."""
     config = SCTConfiguration()
     config.update(
         {

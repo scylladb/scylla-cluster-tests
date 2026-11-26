@@ -36,27 +36,30 @@ from sdcm import sct_abs_path
 from sdcm.utils.lint.validator import _CLOUD_API_PATCHES
 
 
-def _target_ids():
+def patch_target_ids():
+    """Every key of _CLOUD_API_PATCHES, sorted for stable parametrize ids."""
     return sorted(_CLOUD_API_PATCHES)
 
 
-def _module_level_target_ids():
+def module_level_patch_target_ids():
     """Targets naming a module attribute -- the only kind an import can shadow.
 
     A `<module>.<Class>.<method>` target patches the class object itself, which every reference to
     the class shares, so it has nothing to shadow.
     """
-    return [target for target in _target_ids() if inspect.ismodule(pkgutil.resolve_name(target.rpartition(".")[0]))]
+    return [
+        target for target in patch_target_ids() if inspect.ismodule(pkgutil.resolve_name(target.rpartition(".")[0]))
+    ]
 
 
-@pytest.mark.parametrize("target", _target_ids())
+@pytest.mark.parametrize("target", patch_target_ids())
 def test_patch_target_attribute_exists(target):
     """The dotted path must resolve, or `mock.patch` raises at linting time."""
     with patch(target):
         pass
 
 
-@pytest.mark.parametrize("target", _module_level_target_ids())
+@pytest.mark.parametrize("target", module_level_patch_target_ids())
 def test_no_call_site_shadows_the_patch_target(target):
     """No module may `from <other> import <attr>` and call it bare while we patch `<other>`.
 

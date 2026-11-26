@@ -23,47 +23,87 @@ from sdcm.utils.common import time_period_str_to_seconds
 from sdcm.utils.hdrhistogram import _HdrRangeHistogramBuilder
 
 
+@pytest.fixture()
+def hdr_tag_stub():
+    """Bare CassandraStressThread with only the hdr_tags attribute set_hdr_tags writes to."""
+    stub = object.__new__(CassandraStressThread)
+    stub.hdr_tags = []
+    return stub
+
+
 @pytest.mark.parametrize(
     "duration,seconds",
     (
-        ("1h1m20s", 3680),
-        ("1m20s", 80),
-        ("1h20s", 3620),
-        ("25m", 1500),
-        ("10h", 36000),
-        ("25s", 25),
+        pytest.param("1h1m20s", 3680, id="hours-minutes-seconds"),
+        pytest.param("1m20s", 80, id="minutes-seconds"),
+        pytest.param("1h20s", 3620, id="hours-seconds"),
+        pytest.param("25m", 1500, id="minutes"),
+        pytest.param("10h", 36000, id="hours"),
+        pytest.param("25s", 25, id="seconds"),
     ),
 )
 def test_duration_str_to_seconds_function(duration, seconds):
+    """time_period_str_to_seconds converts h/m/s duration strings to seconds."""
     assert time_period_str_to_seconds(duration) == seconds
 
 
 @pytest.mark.parametrize(
     "stress_cmd, timeout",
     (
-        (
+        pytest.param(
             "cassandra-stress counter_write cl=QUORUM duration=20m"
             " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' no-warmup",
             1200 + 900,
+            id="cassandra-stress-counter-write",
         ),
-        ("scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data", 3600 + 900),
-        ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
-        ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),
-        ("latte run --duration 10m --sampling 5s", 600 + 900),
+        pytest.param(
+            "scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data",
+            3600 + 900,
+            id="scylla-bench-uniform",
+        ),
+        pytest.param(
+            "scylla-bench -partition-count=20000 -duration=250s",
+            250 + 900,
+            id="scylla-bench-partition-count",
+        ),
+        pytest.param(
+            "gemini -d --duration 10m --warmup 10s -c 5 -m write",
+            610 + 900,
+            id="gemini-with-warmup",
+        ),
+        pytest.param(
+            "latte run --duration 10m --sampling 5s",
+            600 + 900,
+            id="latte-run",
+        ),
         # Gemini commands from the issue - test case with 24h duration
-        (
+        pytest.param(
             "--duration 24h --warmup 10m --concurrency 200 --mode mixed --max-mutation-retries-backoff 10s",
             86400 + 600 + 900,
+            id="gemini-24h-from-issue",
         ),
         # Gemini with equals sign format
-        ("--duration=3h --warmup=30m --concurrency=50 --mode=mixed", 10800 + 1800 + 900),
+        pytest.param(
+            "--duration=3h --warmup=30m --concurrency=50 --mode=mixed",
+            10800 + 1800 + 900,
+            id="gemini-equals-sign-format",
+        ),
         # Gemini command without warmup
-        ("--duration 1h --concurrency 100 --mode write", 3600 + 900),
+        pytest.param(
+            "--duration 1h --concurrency 100 --mode write",
+            3600 + 900,
+            id="gemini-without-warmup",
+        ),
         # Critical case: YAML multiline format with newlines (the actual issue scenario)
-        ("--duration 24h\n--warmup 10m\n--concurrency 200", 86400 + 600 + 900),
+        pytest.param(
+            "--duration 24h\n--warmup 10m\n--concurrency 200",
+            86400 + 600 + 900,
+            id="gemini-yaml-multiline",
+        ),
     ),
 )
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
+    """get_timeout_from_stress_cmd returns the run duration plus warmup plus a 900s margin."""
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
 
 
@@ -130,6 +170,7 @@ def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     ),
 )
 def test_extract_user_profile_op_names(stress_cmd, expected):
+    """_extract_user_profile_op_names returns the op names listed in the ops() clause."""
     assert CassandraStressThread._extract_user_profile_op_names(stress_cmd) == expected
 
 
@@ -145,14 +186,7 @@ def test_extract_user_profile_op_names_no_ops_clause_read():
     assert CassandraStressThread._extract_user_profile_op_names(stress_cmd) == ["read"]
 
 
-# --- set_hdr_tags tests (using a lightweight stub to avoid full CassandraStressThread init) ---
-
-
-def _make_hdr_tag_stub():
-    """Create a minimal stub with the attributes set_hdr_tags needs."""
-    stub = object.__new__(CassandraStressThread)
-    stub.hdr_tags = []
-    return stub
+# --- set_hdr_tags tests ---
 
 
 @pytest.mark.parametrize(
@@ -215,17 +249,16 @@ def _make_hdr_tag_stub():
         ),
     ),
 )
-def test_set_hdr_tags(stress_cmd, expected_tags):
-    stub = _make_hdr_tag_stub()
-    stub.set_hdr_tags(stress_cmd)
-    assert stub.hdr_tags == expected_tags
+def test_set_hdr_tags(hdr_tag_stub, stress_cmd, expected_tags):
+    """set_hdr_tags tags each operation with its kind (st/rt) and workload from the stress command."""
+    hdr_tag_stub.set_hdr_tags(stress_cmd)
+    assert hdr_tag_stub.hdr_tags == expected_tags
 
 
-def test_set_hdr_tags_user_profile_no_known_ops_raises():
+def test_set_hdr_tags_user_profile_no_known_ops_raises(hdr_tag_stub):
     """set_hdr_tags should raise ValueError when no ops clause and no insert=/read= found."""
-    stub = _make_hdr_tag_stub()
     with pytest.raises(ValueError, match="Cannot detect stress operation type"):
-        stub.set_hdr_tags("cassandra-stress user profile=/tmp/test.yaml -mode cql3 native -rate threads=50")
+        hdr_tag_stub.set_hdr_tags("cassandra-stress user profile=/tmp/test.yaml -mode cql3 native -rate threads=50")
 
 
 # --- literal user-profile hdr_tags must still classify via the downstream
@@ -248,6 +281,7 @@ def test_set_hdr_tags_user_profile_no_known_ops_raises():
     ),
 )
 def test_user_profile_hdr_tag_classified_by_workload_type(hdr_tag, expected_workload):
+    """A user-profile hdr tag is classified as READ or WRITE by its op-name keywords."""
     builder = _HdrRangeHistogramBuilder(hdr_tags=[hdr_tag], stress_operation="user", start_time=0, end_time=0)
     assert builder._get_workload_type_by_hdr_tag(hdr_tag) == expected_workload
 
@@ -315,6 +349,7 @@ def test_user_profile_hdr_tag_unrecognized_op_name_raises():
     ],
 )
 def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cmd):
+    """apply_gemini_stress_duration rewrites --duration in minutes, or appends it, leaving warmup alone."""
     assert apply_gemini_stress_duration(original_cmd, stress_duration) == expected_cmd
 
 
@@ -342,16 +377,18 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
     ],
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
+    """extract_gemini_seed reads --seed in = or space form, and returns -1 when absent."""
     assert extract_gemini_seed(gemini_cmd) == expected_seed
 
 
 @pytest.mark.parametrize(
     "mem_total_kib,percent,expected",
     (
-        (8_000_000, 25, " --memory=2000000k --memory-swap=2000000k"),
-        (8_000_003, 25, " --memory=2000000k --memory-swap=2000000k"),
-        (16_000_000, 100, " --memory=16000000k --memory-swap=16000000k"),
+        pytest.param(8_000_000, 25, " --memory=2000000k --memory-swap=2000000k", id="quarter-of-8gb"),
+        pytest.param(8_000_003, 25, " --memory=2000000k --memory-swap=2000000k", id="quarter-rounds-down"),
+        pytest.param(16_000_000, 100, " --memory=16000000k --memory-swap=16000000k", id="full-16gb"),
     ),
 )
 def test_docker_memory_opts(mem_total_kib, percent, expected):
+    """_docker_memory_opts sets memory and swap to the given percent of total memory, in KiB."""
     assert CassandraStressThread._docker_memory_opts(mem_total_kib, percent) == expected

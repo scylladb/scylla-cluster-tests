@@ -87,8 +87,8 @@ def test_unfinished_task_is_stopped(base_runner, restore_task, status):
 
     stop_unfinished_restore_task(base_runner, restore_task)
 
-    restore_task.stop.assert_called_once()
-    restore_task.wait_for_status.assert_called_once()
+    restore_task.stop.assert_called_once_with()
+    restore_task.wait_for_status.assert_called_once_with(list_status=FINAL_STATUSES, timeout=600, step=30)
     assert restore_task.wait_for_status.call_args.kwargs["list_status"] == FINAL_STATUSES
 
 
@@ -99,7 +99,7 @@ def test_slow_stop_falls_through_to_longer_wait(base_runner, restore_task):
 
     stop_unfinished_restore_task(base_runner, restore_task)
 
-    restore_task.wait_for_status.assert_called_once()
+    restore_task.wait_for_status.assert_called_once_with(list_status=FINAL_STATUSES, timeout=600, step=30)
 
 
 # ---------------------------------------------------------------------------
@@ -126,4 +126,8 @@ def test_sctool_failure_is_swallowed(base_runner, restore_task, failing_call):
 
     stop_unfinished_restore_task(base_runner, restore_task)
 
-    base_runner.log.warning.assert_called()
+    base_runner.log.warning.assert_called_with(
+        "Failed to stop the restore task %s: %s",
+        restore_task.id,
+        error,
+    )

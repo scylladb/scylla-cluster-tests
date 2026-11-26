@@ -15,6 +15,7 @@ from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 
 
 def test_cql_quote_if_needed():
+    """cql_quote_if_needed quotes only identifiers that are not valid unquoted CQL names."""
     assert cql_quote_if_needed("v") == "v"
     assert cql_quote_if_needed("0") == '"0"'
     assert cql_quote_if_needed("v0") == "v0"
@@ -29,6 +30,7 @@ def test_cql_quote_if_needed():
 
 
 def test_cql_unquote_if_needed():
+    """cql_unquote_if_needed strips only a matching pair of outer double quotes."""
     assert cql_unquote_if_needed('"quoted"') == "quoted"
     assert cql_unquote_if_needed("unquoted") == "unquoted"
     assert cql_unquote_if_needed('"quoted_left') == '"quoted_left'

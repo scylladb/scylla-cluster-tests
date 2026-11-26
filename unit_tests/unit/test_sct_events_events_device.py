@@ -25,21 +25,25 @@ from sdcm.wait import wait_for
 
 @pytest.fixture
 def events_processes_registry(tmp_path):
+    """Provide an EventsProcessesRegistry logging into tmp_path."""
     return EventsProcessesRegistry(log_dir=str(tmp_path))
 
 
 @pytest.fixture
 def events_device(events_processes_registry):
+    """Provide an EventsDevice bound to the test registry."""
     return EventsDevice(_registry=events_processes_registry)
 
 
 def test_defaults(events_device, events_processes_registry):
+    """EventsDevice starts with no events and derives its log paths from the registry log dir."""
     assert events_device.events_counter == 0
     assert events_device.events_log_base_dir == events_processes_registry.log_dir / "events_log"
     assert events_device.raw_events_log == events_device.events_log_base_dir / "raw_events.log"
 
 
 def test_publish_subscribe(events_device):
+    """Published events are delivered in order to the outbound subscriber and counted."""
     event1 = ClusterHealthValidatorEvent.NodeStatus()
     event2 = ClusterHealthValidatorEvent.NodePeersNulls()
 
@@ -75,6 +79,7 @@ def test_publish_subscribe(events_device):
 
 
 def test_start_get_events_main_device(events_processes_registry):
+    """start_events_main_device registers a live main device that get_events_main_device returns."""
     assert get_events_main_device(_registry=events_processes_registry) is None
     start_events_main_device(_registry=events_processes_registry)
     events_device = get_events_main_device(_registry=events_processes_registry)

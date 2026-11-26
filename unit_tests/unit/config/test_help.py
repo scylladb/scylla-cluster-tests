@@ -23,6 +23,7 @@ import pytest
     ],
 )
 def test_dump_help_config_yaml_defaults(help_yaml, field_name, default_value):
+    """YAML help dump lists each checked field with its default value."""
     assert f"{field_name}: {default_value}" in help_yaml
 
 
@@ -36,6 +37,7 @@ def test_dump_help_config_yaml_defaults(help_yaml, field_name, default_value):
     ],
 )
 def test_dump_help_config_markdown_defaults(help_markdown, field_name, default_value):
+    """Markdown help dump shows each checked field heading with its default value."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     assert f"**default:** {default_value}" in help_markdown
 
@@ -48,6 +50,7 @@ def test_dump_help_config_markdown_defaults(help_markdown, field_name, default_v
     ],
 )
 def test_dump_help_config_markdown_types(help_markdown, field_name, type_text):
+    """Markdown help dump shows each checked field's type and no bare appendable bullet."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     assert f"**type:** {type_text}" in help_markdown
     assert "* appendable" not in help_markdown
@@ -89,6 +92,7 @@ def test_dump_help_config_markdown_types(help_markdown, field_name, type_text):
     ],
 )
 def test_dump_help_config_markdown_backend_overrides(help_markdown, field_name, backend_override_text, should_exist):
+    """Markdown help dump lists a field's backend overrides per value and drops N/A-only ones."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     if should_exist:
         assert backend_override_text in help_markdown

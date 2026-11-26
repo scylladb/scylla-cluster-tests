@@ -23,6 +23,7 @@ from sdcm.utils.issues import Issue, JiraIssueRetriever
 
 
 def test_jira_cache_miss_falls_back_to_live_api(monkeypatch):
+    """get_issue fetches the issue live from Jira when the S3 cache has no entry for its project."""
     live_issue = SimpleNamespace(
         key="SCT-999999",
         fields=SimpleNamespace(summary="live", status=SimpleNamespace(name="Open"), labels=["sct-2026.1-skip"]),

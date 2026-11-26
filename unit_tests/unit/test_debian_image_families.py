@@ -25,7 +25,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEBIAN_FAMILY_RE = re.compile(r"debian-cloud/global/images/family/(debian-\d+)")
 
 
-def _iter_scanned_files():
+def iter_scanned_files():
+    """Yield the test-case YAML and Jenkinsfile paths that reference GCE images."""
     for pattern in ("test-cases/**/*.yaml", "jenkins-pipelines/**/*.jenkinsfile"):
         yield from PROJECT_ROOT.glob(pattern)
 
@@ -36,11 +37,11 @@ def test_only_supported_debian_image_families_referenced():
     removed, like debian-11).
 
     The scan is scoped to test-cases/ and jenkins-pipelines/ only (see
-    _iter_scanned_files) — it never traverses unit_tests/, which contains an
+    iter_scanned_files) — it never traverses unit_tests/, which contains an
     intentional, offline debian-10 fixture unrelated to any live GCP call.
     """
     violations = []
-    for file_path in _iter_scanned_files():
+    for file_path in iter_scanned_files():
         content = file_path.read_text(encoding="utf-8")
         for match in DEBIAN_FAMILY_RE.finditer(content):
             family = match.group(1)

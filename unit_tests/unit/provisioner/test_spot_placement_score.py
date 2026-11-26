@@ -36,19 +36,30 @@ from sdcm.provision.aws.spot_placement_score import (
 
 
 @pytest.fixture(autouse=True)
-def _clear_score_cache():
-    """The module memoizes scores in a TTLCache; drop it between tests so each starts clean."""
+def clear_score_cache():
+    """Drop the memoized scores before and after each test so each one starts clean."""
     get_scores.cache_clear()
     yield
     get_scores.cache_clear()
 
 
-def _score(region, zone_id, score):
+def score_row(region, zone_id, score):
+    """Build one SpotPlacementScores entry as the EC2 API returns it."""
     return {"Region": region, "AvailabilityZoneId": zone_id, "Score": score}
 
 
-@pytest.fixture(name="mock_ec2")
-def mock_ec2_fixture():
+def make_client_error(code):
+    """Build the ClientError botocore raises for an EC2 error code."""
+    return ClientError({"Error": {"Code": code, "Message": code}}, "GetSpotPlacementScores")
+
+
+def role_scores(mapping):
+    """Build PlacementScore rows for us-west-2 from an AZ-letter to score mapping."""
+    return [PlacementScore(region="us-west-2", az_letter=letter, score=score) for letter, score in mapping.items()]
+
+
+@pytest.fixture()
+def mock_ec2():
     """Patch the cached EC2 client dict and the AZ-id -> letter lookup."""
     client = MagicMock()
     zone_maps = {
@@ -62,16 +73,13 @@ def mock_ec2_fixture():
         yield client
 
 
-def _client_error(code):
-    return ClientError({"Error": {"Code": code, "Message": code}}, "GetSpotPlacementScores")
-
-
 def test_scores_sorted_best_first_with_az_letters(mock_ec2):
+    """get_scores sorts the AZs by score, best first, and maps each zone id to its letter."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az3", 3),
-            _score("eu-west-1", "euw1-az1", 9),
-            _score("eu-west-1", "euw1-az2", 7),
+            score_row("eu-west-1", "euw1-az3", 3),
+            score_row("eu-west-1", "euw1-az1", 9),
+            score_row("eu-west-1", "euw1-az2", 7),
         ]
     }
     scores = get_scores(["i4i.large", "i4i.xlarge", "i7i.large"], 6, ["eu-west-1"])
@@ -85,11 +93,12 @@ def test_scores_sorted_best_first_with_az_letters(mock_ec2):
 
 
 def test_az_letters_reordered_by_score(mock_ec2):
+    """rank_az_letters_for_roles orders the AZ letters by their placement score, best first."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az3", 1),  # a
-            _score("eu-west-1", "euw1-az1", 9),  # b
-            _score("eu-west-1", "euw1-az2", 5),  # c
+            score_row("eu-west-1", "euw1-az3", 1),  # a
+            score_row("eu-west-1", "euw1-az1", 9),  # b
+            score_row("eu-west-1", "euw1-az2", 5),  # c
         ]
     }
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b", "c"]) == ["b", "c", "a"]
@@ -98,17 +107,18 @@ def test_az_letters_reordered_by_score(mock_ec2):
 def test_unscored_az_letters_kept_last_in_original_order(mock_ec2):
     """An AZ absent from the top-10 response was not proven bad, so it must not be dropped."""
     mock_ec2.get_spot_placement_scores.return_value = {
-        "SpotPlacementScores": [_score("eu-west-1", "euw1-az2", 8)]  # only 'c'
+        "SpotPlacementScores": [score_row("eu-west-1", "euw1-az2", 8)]  # only 'c'
     }
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b", "c"]) == ["c", "a", "b"]
 
 
 def test_min_score_drops_low_scoring_azs(mock_ec2):
+    """AZs scoring below min_score are dropped from the ranking."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az3", 2),  # a
-            _score("eu-west-1", "euw1-az1", 8),  # b
-            _score("eu-west-1", "euw1-az2", 5),  # c
+            score_row("eu-west-1", "euw1-az3", 2),  # a
+            score_row("eu-west-1", "euw1-az1", 8),  # b
+            score_row("eu-west-1", "euw1-az2", 5),  # c
         ]
     }
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b", "c"], min_score=5) == [
@@ -121,9 +131,9 @@ def test_min_score_zero_keeps_everything(mock_ec2):
     """Default min_score=0 must never drop an AZ - the API contract is 'recommendation only'."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az3", 1),
-            _score("eu-west-1", "euw1-az1", 1),
-            _score("eu-west-1", "euw1-az2", 1),
+            score_row("eu-west-1", "euw1-az3", 1),
+            score_row("eu-west-1", "euw1-az1", 1),
+            score_row("eu-west-1", "euw1-az2", 1),
         ]
     }
     assert sorted(rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b", "c"])) == [
@@ -134,6 +144,7 @@ def test_min_score_zero_keeps_everything(mock_ec2):
 
 
 def test_region_ranking_uses_region_granularity(mock_ec2):
+    """rank_regions asks for region-level scores, not single-AZ ones, and orders regions by score."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
             {"Region": "eu-west-1", "Score": 2},
@@ -145,14 +156,22 @@ def test_region_ranking_uses_region_granularity(mock_ec2):
 
 
 def test_unscored_regions_kept_last(mock_ec2):
+    """A region absent from the response is kept, ordered after the scored regions."""
     mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [{"Region": "eu-west-2", "Score": 4}]}
     assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-2", "eu-west-1"]
 
 
-@pytest.mark.parametrize("error_code", ["AccessDenied", "UnauthorizedOperation", "InvalidParameterValue"])
+@pytest.mark.parametrize(
+    "error_code",
+    [
+        pytest.param("AccessDenied", id="access-denied"),
+        pytest.param("UnauthorizedOperation", id="unauthorized-operation"),
+        pytest.param("InvalidParameterValue", id="invalid-parameter"),
+    ],
+)
 def test_client_errors_fall_back_to_given_order(mock_ec2, error_code):
     """Any API failure - notably a missing IAM permission - must preserve the caller's ordering."""
-    mock_ec2.get_spot_placement_scores.side_effect = _client_error(error_code)
+    mock_ec2.get_spot_placement_scores.side_effect = make_client_error(error_code)
 
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
     # None (not []) signals "unavailable" so a min_score rejecting everything stays distinguishable
@@ -161,9 +180,10 @@ def test_client_errors_fall_back_to_given_order(mock_ec2, error_code):
 
 
 def test_pagination_follows_next_token(mock_ec2):
+    """Scores from every page are merged, and the second request carries the NextToken of the first."""
     mock_ec2.get_spot_placement_scores.side_effect = [
-        {"SpotPlacementScores": [_score("eu-west-1", "euw1-az3", 4)], "NextToken": "page-2"},
-        {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]},
+        {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az3", 4)], "NextToken": "page-2"},
+        {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]},
     ]
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b"]) == ["b", "a"]
     assert mock_ec2.get_spot_placement_scores.call_count == 2
@@ -171,14 +191,16 @@ def test_pagination_follows_next_token(mock_ec2):
 
 
 def test_results_are_cached_across_calls(mock_ec2):
-    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]}
+    """A repeated identical query is answered from the cache, not the API."""
+    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]}
     get_scores(["i4i.large"], 6, ["eu-west-1"])
     get_scores(["i4i.large"], 6, ["eu-west-1"])
     assert mock_ec2.get_spot_placement_scores.call_count == 1
 
 
 def test_cache_key_ignores_argument_order(mock_ec2):
-    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]}
+    """Reordering the instance types and regions hits the same cache entry."""
+    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]}
     get_scores(["a1.large", "b2.large"], 6, ["eu-west-2", "eu-west-1"])
     get_scores(["b2.large", "a1.large"], 6, ["eu-west-1", "eu-west-2"])
     assert mock_ec2.get_spot_placement_scores.call_count == 1
@@ -187,8 +209,8 @@ def test_cache_key_ignores_argument_order(mock_ec2):
 def test_failed_query_is_not_cached(mock_ec2):
     """A throttled or briefly-unauthorized call must not blind the next hour of provisioning."""
     mock_ec2.get_spot_placement_scores.side_effect = [
-        _client_error("RequestLimitExceeded"),
-        {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]},
+        make_client_error("RequestLimitExceeded"),
+        {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]},
     ]
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == [PlacementScore(region="eu-west-1", score=6, az_letter="b")]
@@ -199,7 +221,7 @@ def test_unexpected_error_is_not_cached_either(mock_ec2):
     """The total guard returns [] for anything at all; none of it is an answer worth remembering."""
     mock_ec2.get_spot_placement_scores.side_effect = [
         RuntimeError("boom"),
-        {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]},
+        {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]},
     ]
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) != []
@@ -210,7 +232,7 @@ def test_empty_answer_is_not_cached(mock_ec2):
     """An empty response is a valid answer, but a cheap one to ask again - and indistinguishable from a miss."""
     mock_ec2.get_spot_placement_scores.side_effect = [
         {"SpotPlacementScores": []},
-        {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 6)]},
+        {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 6)]},
     ]
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) != []
@@ -218,10 +240,11 @@ def test_empty_answer_is_not_cached(mock_ec2):
 
 
 def test_unmappable_zone_id_is_skipped(mock_ec2):
+    """A zone id missing from the account's zone map is dropped; the mappable ones are kept."""
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az9", 9),  # not in the account's zone map
-            _score("eu-west-1", "euw1-az1", 4),
+            score_row("eu-west-1", "euw1-az9", 9),  # not in the account's zone map
+            score_row("eu-west-1", "euw1-az1", 4),
         ]
     }
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == [PlacementScore(region="eu-west-1", score=4, az_letter="b")]
@@ -229,9 +252,14 @@ def test_unmappable_zone_id_is_skipped(mock_ec2):
 
 @pytest.mark.parametrize(
     "types, capacity, regions",
-    [([], 6, ["eu-west-1"]), (["i4i.large"], 6, []), (["i4i.large"], 0, ["eu-west-1"])],
+    [
+        pytest.param([], 6, ["eu-west-1"], id="no-types"),
+        pytest.param(["i4i.large"], 6, [], id="no-regions"),
+        pytest.param(["i4i.large"], 0, ["eu-west-1"], id="zero-capacity"),
+    ],
 )
 def test_degenerate_inputs_never_call_the_api(mock_ec2, types, capacity, regions):
+    """Empty types, empty regions or zero capacity return [] without calling the API."""
     assert get_scores(types, capacity, regions) == []
     mock_ec2.get_spot_placement_scores.assert_not_called()
 
@@ -246,6 +274,7 @@ def test_region_lists_are_chunked_to_api_limit():
 
 
 def test_more_than_ten_regions_issues_multiple_calls(mock_ec2):
+    """Regions beyond the API limit are split into several requests of at most 10 regions each."""
     mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": []}
     # `eu-west-1` first: the client is looked up by the first region, and only that one is patched
     regions = ["eu-west-1"] + [f"synthetic-region-{index}" for index in range(11)]
@@ -267,6 +296,7 @@ def test_transport_errors_fall_back_to_given_order(mock_ec2):
 
 
 def test_credentials_error_falls_back_to_given_order(mock_ec2):
+    """Missing credentials degrade to the given region and AZ order instead of raising."""
     mock_ec2.get_spot_placement_scores.side_effect = NoCredentialsError()
     assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b"]) is None
@@ -299,10 +329,10 @@ def test_response_parser_error_falls_back_to_given_order(mock_ec2):
 @pytest.mark.parametrize(
     "exc",
     [
-        ResponseParserError("bad xml"),
-        ValueError("something unexpected"),
-        KeyError("missing"),
-        RuntimeError("boom"),
+        pytest.param(ResponseParserError("bad xml"), id="response-parser-error"),
+        pytest.param(ValueError("something unexpected"), id="value-error"),
+        pytest.param(KeyError("missing"), id="key-error"),
+        pytest.param(RuntimeError("boom"), id="runtime-error"),
     ],
 )
 def test_any_exception_degrades_rather_than_raising(mock_ec2, exc):
@@ -313,7 +343,7 @@ def test_any_exception_degrades_rather_than_raising(mock_ec2, exc):
 
 def test_zone_id_lookup_failure_degrades(mock_ec2):
     """The AZ-id -> letter lookup is a second API call, with the same total-failure contract."""
-    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 9)]}
+    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [score_row("eu-west-1", "euw1-az1", 9)]}
     with patch.object(spot_placement_score, "_zone_id_to_letter", side_effect=ResponseParserError("bad xml")):
         # the real _zone_id_to_letter swallows this itself; assert the caller survives either way
         try:
@@ -331,71 +361,71 @@ def test_all_azs_below_min_score_returns_empty_not_input(mock_ec2):
     """
     mock_ec2.get_spot_placement_scores.return_value = {
         "SpotPlacementScores": [
-            _score("eu-west-1", "euw1-az3", 1),
-            _score("eu-west-1", "euw1-az1", 2),
-            _score("eu-west-1", "euw1-az2", 1),
+            score_row("eu-west-1", "euw1-az3", 1),
+            score_row("eu-west-1", "euw1-az1", 2),
+            score_row("eu-west-1", "euw1-az2", 1),
         ]
     }
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", ["a", "b", "c"], min_score=8) == []
 
 
 def test_empty_input_returns_empty(mock_ec2):
+    """No AZ letters to rank returns [] without calling the API."""
     assert rank_az_letters_for_roles([("db", ["i4i.large"], 6)], "eu-west-1", [], min_score=8) == []
     mock_ec2.get_spot_placement_scores.assert_not_called()
 
 
-class TestRoleAwareRanking:
-    """An AZ has to hold the loaders and the monitor too, not just the DB nodes.
+# An AZ has to hold the loaders and the monitor too, not just the DB nodes.
+# Measured in us-west-2: the DB type scored 3 in every AZ while `c` scored 1 for both the loader and the
+# monitor. Ranking on DB types alone sees four equal AZs, falls back to the alphabetical tiebreak, and can
+# land on the one AZ that cannot supply the rest of the cluster.
 
-    Measured in us-west-2: the DB type scored 3 in every AZ while `c` scored 1 for both the loader and the
-    monitor. Ranking on DB types alone sees four equal AZs, falls back to the alphabetical tiebreak, and can
-    land on the one AZ that cannot supply the rest of the cluster.
+
+def test_the_scarcest_role_decides_the_az():
+    """The AZ with the lowest score for any role ranks last, even if its db score is the best."""
+    roles = [("db", ["i7i.2xlarge"], 6), ("loaders", ["c7g.xlarge"], 2)]
+    with patch(
+        "sdcm.provision.aws.spot_placement_score.get_scores",
+        side_effect=[
+            role_scores({"a": 3, "b": 3, "c": 3}),  # db: indistinguishable
+            role_scores({"a": 3, "b": 1, "c": 3}),  # loaders: b is the trap
+        ],
+    ):
+        ranked = rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b", "c"])
+
+    assert ranked == ["a", "c", "b"], "b must sort last on its loader score, not first on its db score"
+
+
+def test_a_role_without_scores_abandons_the_ranking():
+    """A minimum over a partly-unknown set is a guess; today's order is the honest fallback."""
+    roles = [("db", ["i7i.2xlarge"], 6), ("loaders", ["c7g.xlarge"], 2)]
+    with patch(
+        "sdcm.provision.aws.spot_placement_score.get_scores",
+        side_effect=[role_scores({"a": 3, "b": 1}), []],
+    ):
+        assert rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b"]) is None
+
+
+def test_roles_are_scored_separately_never_merged():
+    """Merged into one request the types become interchangeable alternatives, and a plentiful
+    monitor type answers for the whole cluster.
     """
+    roles = [("db", ["i7i.2xlarge"], 6), ("monitor", ["t3.large"], 1)]
+    with patch(
+        "sdcm.provision.aws.spot_placement_score.get_scores",
+        side_effect=[role_scores({"a": 1}), role_scores({"a": 9})],
+    ) as get:
+        rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a"])
 
-    @staticmethod
-    def _scores(mapping):
-        return [PlacementScore(region="us-west-2", az_letter=letter, score=score) for letter, score in mapping.items()]
+    assert [call.kwargs["instance_types"] for call in get.call_args_list] == [["i7i.2xlarge"], ["t3.large"]]
+    assert [call.kwargs["target_capacity"] for call in get.call_args_list] == [6, 1]
 
-    def test_the_scarcest_role_decides_the_az(self):
-        roles = [("db", ["i7i.2xlarge"], 6), ("loaders", ["c7g.xlarge"], 2)]
-        with patch(
-            "sdcm.provision.aws.spot_placement_score.get_scores",
-            side_effect=[
-                self._scores({"a": 3, "b": 3, "c": 3}),  # db: indistinguishable
-                self._scores({"a": 3, "b": 1, "c": 3}),  # loaders: b is the trap
-            ],
-        ):
-            ranked = rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b", "c"])
 
-        assert ranked == ["a", "c", "b"], "b must sort last on its loader score, not first on its db score"
-
-    def test_a_role_without_scores_abandons_the_ranking(self):
-        """A minimum over a partly-unknown set is a guess; today's order is the honest fallback."""
-        roles = [("db", ["i7i.2xlarge"], 6), ("loaders", ["c7g.xlarge"], 2)]
-        with patch(
-            "sdcm.provision.aws.spot_placement_score.get_scores",
-            side_effect=[self._scores({"a": 3, "b": 1}), []],
-        ):
-            assert rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b"]) is None
-
-    def test_roles_are_scored_separately_never_merged(self):
-        """Merged into one request the types become interchangeable alternatives, and a plentiful
-        monitor type answers for the whole cluster.
-        """
-        roles = [("db", ["i7i.2xlarge"], 6), ("monitor", ["t3.large"], 1)]
-        with patch(
-            "sdcm.provision.aws.spot_placement_score.get_scores",
-            side_effect=[self._scores({"a": 1}), self._scores({"a": 9})],
-        ) as get:
-            rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a"])
-
-        assert [call.kwargs["instance_types"] for call in get.call_args_list] == [["i7i.2xlarge"], ["t3.large"]]
-        assert [call.kwargs["target_capacity"] for call in get.call_args_list] == [6, 1]
-
-    def test_empty_or_zero_count_roles_are_skipped(self):
-        roles = [("db", ["i7i.2xlarge"], 6), ("loaders", [], 2), ("monitor", ["t3.large"], 0)]
-        with patch(
-            "sdcm.provision.aws.spot_placement_score.get_scores", side_effect=[self._scores({"a": 3, "b": 2})]
-        ) as get:
-            assert rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b"]) == ["a", "b"]
-        assert get.call_count == 1
+def test_empty_or_zero_count_roles_are_skipped():
+    """A role with no instance types or a zero count is not scored; only the db role is queried."""
+    roles = [("db", ["i7i.2xlarge"], 6), ("loaders", [], 2), ("monitor", ["t3.large"], 0)]
+    with patch(
+        "sdcm.provision.aws.spot_placement_score.get_scores", side_effect=[role_scores({"a": 3, "b": 2})]
+    ) as get:
+        assert rank_az_letters_for_roles(roles, region="us-west-2", az_letters=["a", "b"]) == ["a", "b"]
+    assert get.call_count == 1

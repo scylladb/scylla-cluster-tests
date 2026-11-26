@@ -1,11 +1,14 @@
 import copy
 
+import pytest
+
 from sdcm.cluster_gce import GCENode
 from sdcm.utils.gce_utils import GceLoggingClient
-from unit_tests.lib.fake_events import FakeEventsMixin
 
 
 class FakeGceLogClient(GceLoggingClient):
+    """GceLoggingClient replacement that returns canned system events."""
+
     def __init__(self):
         pass
 
@@ -55,46 +58,48 @@ class FakeGceLogClient(GceLoggingClient):
 
 
 class FakeGceNode(GCENode):
+    """GCENode with only the logging client and last fetch time set."""
+
     def __init__(self, logging_client: GceLoggingClient):
         self._gce_logging_client = logging_client
         self._last_logs_fetch_time = 1656590843.0
 
 
-class TestGceErrorLog(FakeEventsMixin):
-    @staticmethod
-    def logging_client():
-        use_real_gce = False
-        if use_real_gce:
-            return GceLoggingClient(instance_name="longevity-10gb-3h-master-db-node-fac7b27a-0-6", zone="us-east1-d")
-        else:
-            return FakeGceLogClient()
+@pytest.fixture()
+def logging_client():
+    """Fake GCE logging client that returns canned system events."""
+    use_real_gce = False
+    if use_real_gce:
+        return GceLoggingClient(instance_name="longevity-10gb-3h-master-db-node-fac7b27a-0-6", zone="us-east1-d")
+    return FakeGceLogClient()
 
-    def test_host_error_log_entry_creates_sct_error_event(self):
-        node = FakeGceNode(logging_client=self.logging_client())
-        node.check_spot_termination()
 
-        # Check events captured in-memory by FakeEventsDevice
-        events_by_category = self.events.get_events_by_category()
-        error_events = "\n".join(events_by_category.get("ERROR", []))
-        assert (
-            "compute.instances.hostError on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
-            "at 2022-06-30" in error_events
-        )
-        assert (
-            "compute.instances.automaticRestart on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
-            "at 2022-06-30 " in error_events
-        )
-        warning_events = "\n".join(events_by_category.get("WARNING", []))
-        assert (
-            "compute.instances.some on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
-            "at 2022-06-30" in warning_events
-        )
-        critical_events = "\n".join(events_by_category.get("CRITICAL", []))
-        assert (
-            "compute.instances.migrateOnHostMaintenance on node "
-            "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
-        )
-        assert (
-            "compute.instances.terminateOnHostMaintenance on node "
-            "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
-        )
+def test_host_error_log_entry_creates_sct_error_event(logging_client, events_function_scope):
+    """check_spot_termination publishes GCE system events as SCT events by severity."""
+    node = FakeGceNode(logging_client=logging_client)
+    node.check_spot_termination()
+
+    # Check events captured in-memory by FakeEventsDevice
+    events_by_category = events_function_scope.get_events_by_category()
+    error_events = "\n".join(events_by_category.get("ERROR", []))
+    assert (
+        "compute.instances.hostError on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
+        "at 2022-06-30" in error_events
+    )
+    assert (
+        "compute.instances.automaticRestart on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
+        "at 2022-06-30 " in error_events
+    )
+    warning_events = "\n".join(events_by_category.get("WARNING", []))
+    assert (
+        "compute.instances.some on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in warning_events
+    )
+    critical_events = "\n".join(events_by_category.get("CRITICAL", []))
+    assert (
+        "compute.instances.migrateOnHostMaintenance on node "
+        "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
+    )
+    assert (
+        "compute.instances.terminateOnHostMaintenance on node "
+        "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
+    )

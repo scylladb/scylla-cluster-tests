@@ -11,9 +11,13 @@ from sdcm.utils.gce_utils import gce_public_addresses
 
 @pytest.mark.parametrize(
     "running, expected",
-    [(False, ["running-vm", "preempted-vm"]), (True, ["running-vm"])],
+    [
+        pytest.param(False, ["running-vm", "preempted-vm"], id="all-states"),
+        pytest.param(True, ["running-vm"], id="running-only"),
+    ],
 )
 def test_list_instances_gce_filters_by_status_only_when_running(running, expected):
+    """list_instances_gce returns only RUNNING VMs when running=True and every VM otherwise."""
     instances = [MagicMock(status="RUNNING"), MagicMock(status="TERMINATED")]
     instances[0].name, instances[1].name = "running-vm", "preempted-vm"
     client = MagicMock()

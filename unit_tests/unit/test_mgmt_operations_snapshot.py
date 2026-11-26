@@ -10,21 +10,24 @@ OCI_ENDPOINT = "https://ns.compat.objectstorage.us-phoenix-1.oci.customer-oci.co
 OCI_CREDS = {"access_key_id": "SENTINEL_OCI_ACCESS_KEY_ID", "secret_access_key": "SENTINEL_OCI_SECRET_ACCESS_KEY"}
 
 
-def _snapshot_ops(params: dict) -> SnapshotOperations:
+def snapshot_ops(params: dict) -> SnapshotOperations:
+    """SnapshotOperations with only ``params`` set, bypassing the constructor."""
     ops = SnapshotOperations.__new__(SnapshotOperations)
     ops.params = params
     return ops
 
 
 def test_backup_s3_client_uses_plain_boto3_outside_oci():
-    ops = _snapshot_ops({"cluster_backend": "aws"})
+    """_backup_s3_client calls plain boto3 with the given region when the backend is not OCI."""
+    ops = snapshot_ops({"cluster_backend": "aws"})
     with patch("sdcm.mgmt.operations.boto3.client") as mock_client:
         ops._backup_s3_client("us-east-1")
     mock_client.assert_called_once_with("s3", region_name="us-east-1")
 
 
 def test_backup_s3_client_uses_oci_endpoint_and_credentials():
-    ops = _snapshot_ops(
+    """_backup_s3_client targets the OCI endpoint with OCI credentials and path-style addressing."""
+    ops = snapshot_ops(
         {
             "cluster_backend": "oci",
             "append_scylla_yaml": {"object_storage_endpoints": [{"name": OCI_ENDPOINT, "aws_region": "us-phoenix-1"}]},
@@ -46,10 +49,13 @@ def test_backup_s3_client_uses_oci_endpoint_and_credentials():
     assert kwargs["config"].s3 == {"addressing_style": "path"}
 
 
-@pytest.mark.parametrize("region_name", [None, "us-east-1"])
+@pytest.mark.parametrize(
+    "region_name",
+    [pytest.param(None, id="no-region"), pytest.param("us-east-1", id="aws-region")],
+)
 def test_backup_s3_client_uses_endpoint_region_on_oci(region_name):
     """OCI rejects requests signed for another region, so the AWS `region_name` param must not leak in."""
-    ops = _snapshot_ops(
+    ops = snapshot_ops(
         {
             "cluster_backend": "oci",
             "append_scylla_yaml": {"object_storage_endpoints": [{"name": OCI_ENDPOINT, "aws_region": "us-phoenix-1"}]},
@@ -66,7 +72,8 @@ def test_backup_s3_client_uses_endpoint_region_on_oci(region_name):
 
 
 def test_backup_s3_client_fills_region_placeholder_from_oci_region_name():
-    ops = _snapshot_ops(
+    """The {region} placeholder in the OCI endpoint is filled from oci_region_name."""
+    ops = snapshot_ops(
         {
             "cluster_backend": "oci",
             "oci_region_name": ["us-ashburn-1"],

@@ -109,7 +109,8 @@ lint.select = [
     "I",  # isort: import groups and order
     "D200", "D202", "D209", "D300", "D402", "D403",  # docstring formatting
     "D405", "D410", "D411", "D412", "D416",  # docstring sections
-    "D101", "D102", "D103",  # missing docstrings, enforced only under sdcm/nemesis
+    "D101", "D102", "D103",  # missing docstrings, enforced only under sdcm/nemesis and unit_tests/unit
+    "SIM117",  # nested with, enforced only under unit_tests/unit
 ]
 lint.ignore = ["E501", "PLR2004", "PLR0917"]
 # Only bare underscores are placeholders. The default regex also exempts every `_private` name,
@@ -127,7 +128,8 @@ line-length = 120
 respect-gitignore = true
 
 [tool.ruff.lint.per-file-ignores]
-"!sdcm/nemesis/**" = ["D101", "D102", "D103"]
+"!{sdcm/nemesis,unit_tests/unit}/**" = ["D101", "D102", "D103"]
+"!unit_tests/unit/**" = ["SIM117"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

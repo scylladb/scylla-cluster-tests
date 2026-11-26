@@ -13,12 +13,13 @@ from sdcm.nemesis.monkey.encryption import (
 )
 from sdcm.nemesis.utils.node_allocator import AllNodesRunNemesisError
 
-_MODULE = "sdcm.nemesis.monkey.encryption"
+MODULE = "sdcm.nemesis.monkey.encryption"
 
 pytestmark = pytest.mark.usefixtures("events")
 
 
-def _make_scylla_yaml(user_info_encryption_enabled=False):
+def make_scylla_yaml(user_info_encryption_enabled=False):
+    """Return a mock scylla.yaml with no KMS hosts and the given user_info_encryption state."""
     scylla_yaml = MagicMock()
     scylla_yaml.kms_hosts = {}
     scylla_yaml.user_info_encryption = (
@@ -67,7 +68,7 @@ def runner(base_runner):
     base_runner._nemesis_stress_failure_handler = MagicMock()
     base_runner.node_allocator = node_allocator_mock()
 
-    scylla_yaml = _make_scylla_yaml()
+    scylla_yaml = make_scylla_yaml()
     for node in base_runner.cluster.data_nodes:
         node.remote_scylla_yaml.return_value.__enter__.return_value = scylla_yaml
         node.region = "us-east-1"
@@ -79,9 +80,9 @@ def runner(base_runner):
 def mocked_deps():
     """Skip real sleeps and heavy AWS/sstable interactions used by every test."""
     with (
-        patch(f"{_MODULE}.time") as mock_time,
-        patch(f"{_MODULE}.AwsKms") as mock_aws_kms_cls,
-        patch(f"{_MODULE}.SstableUtils") as mock_sstable_cls,
+        patch(f"{MODULE}.time") as mock_time,
+        patch(f"{MODULE}.AwsKms") as mock_aws_kms_cls,
+        patch(f"{MODULE}.SstableUtils") as mock_sstable_cls,
     ):
         yield mock_time, mock_aws_kms_cls, mock_sstable_cls
 
@@ -143,7 +144,7 @@ def test_without_rotation_never_rotates_key(runner):
 
 def test_skips_disable_when_user_info_encryption_enabled(runner):
     """If user_info_encryption is already enabled cluster-wide, encryption can't be disabled."""
-    scylla_yaml = _make_scylla_yaml(user_info_encryption_enabled=True)
+    scylla_yaml = make_scylla_yaml(user_info_encryption_enabled=True)
     for node in runner.cluster.data_nodes:
         node.remote_scylla_yaml.return_value.__enter__.return_value = scylla_yaml
 
@@ -163,8 +164,8 @@ def test_kms_host_reconfiguration_only_restarts_nodes_missing_it(runner):
     """
     node1, node2 = runner.cluster.data_nodes
 
-    yaml1 = _make_scylla_yaml()
-    yaml2 = _make_scylla_yaml()
+    yaml1 = make_scylla_yaml()
+    yaml2 = make_scylla_yaml()
     yaml2.kms_hosts = {"kms-host": {"master_key": "pre-existing-alias"}}
     node1.remote_scylla_yaml.return_value.__enter__.return_value = yaml1
     node2.remote_scylla_yaml.return_value.__enter__.return_value = yaml2
@@ -179,7 +180,7 @@ def test_kms_host_reconfiguration_only_restarts_nodes_missing_it(runner):
             "aws_use_ec2_credentials": True,
         }
     }
-    node1.restart_scylla.assert_called_once()
+    node1.restart_scylla.assert_called_once_with()
 
     assert yaml2.kms_hosts == {"kms-host": {"master_key": "pre-existing-alias"}}
     node2.restart_scylla.assert_not_called()

@@ -18,23 +18,26 @@ from sdcm.cluster import BaseNode, NodeSetupFailed
 from sdcm.utils.apt import APT_LOCK_FILES
 
 
-def _fake_node(*, is_rhel_like=False, is_sles=False):
+def fake_node(*, is_rhel_like=False, is_sles=False):
+    """MagicMock node whose distro flags select the package manager family."""
     node = MagicMock()
     node.distro.is_rhel_like = is_rhel_like
     node.distro.is_sles = is_sles
     return node
 
 
-def _sudo_calls(node):
+def sudo_calls(node):
+    """Return (command, kwargs) pairs of every remoter.sudo call made on node."""
     return [(call.args[0], call.kwargs) for call in node.remoter.sudo.call_args_list]
 
 
 def test_update_repo_cache_debian_waits_for_apt_lock_and_retries():
-    node = _fake_node()
+    """update_repo_cache runs apt-get clean and update with a dpkg lock wait and retry=3 on Debian."""
+    node = fake_node()
 
     BaseNode.update_repo_cache(node)
 
-    apt_calls = [(cmd, kwargs) for cmd, kwargs in _sudo_calls(node) if "apt-get" in cmd]
+    apt_calls = [(cmd, kwargs) for cmd, kwargs in sudo_calls(node) if "apt-get" in cmd]
     assert len(apt_calls) == 2, f"expected 'apt-get clean' and 'apt-get update' calls, got: {apt_calls!r}"
     for cmd, kwargs in apt_calls:
         assert "DPkg::Lock::Timeout" in cmd, f"apt command missing dpkg lock-wait option: {cmd!r}"
@@ -51,12 +54,13 @@ def test_update_repo_cache_debian_waits_for_apt_lock_and_retries():
 
 
 def test_update_repo_cache_rhel_like_waits_for_rpm_lock_and_retries():
-    node = _fake_node(is_rhel_like=True)
+    """update_repo_cache runs yum clean all with an rpm lock wait and retry=3 on RHEL-like distros."""
+    node = fake_node(is_rhel_like=True)
 
     BaseNode.update_repo_cache(node)
 
-    yum_calls = [(cmd, kwargs) for cmd, kwargs in _sudo_calls(node) if "yum clean all" in cmd]
-    assert len(yum_calls) == 1, f"expected exactly one 'yum clean all' call, got: {_sudo_calls(node)!r}"
+    yum_calls = [(cmd, kwargs) for cmd, kwargs in sudo_calls(node) if "yum clean all" in cmd]
+    assert len(yum_calls) == 1, f"expected exactly one 'yum clean all' call, got: {sudo_calls(node)!r}"
 
     cmd, kwargs = yum_calls[0]
     assert "/var/lib/rpm/.rpm.lock" in cmd, f"'yum clean all' missing rpm lock wait: {cmd!r}"
@@ -64,11 +68,12 @@ def test_update_repo_cache_rhel_like_waits_for_rpm_lock_and_retries():
 
 
 def test_update_repo_cache_sles_retries_cache_cleanup():
-    node = _fake_node(is_sles=True)
+    """update_repo_cache runs zypper clean all and refresh with retry=3 on SLES."""
+    node = fake_node(is_sles=True)
 
     BaseNode.update_repo_cache(node)
 
-    zypper_calls = [(cmd, kwargs) for cmd, kwargs in _sudo_calls(node) if cmd.startswith("zypper")]
+    zypper_calls = [(cmd, kwargs) for cmd, kwargs in sudo_calls(node) if cmd.startswith("zypper")]
     assert [cmd for cmd, _ in zypper_calls] == ["zypper clean all", "zypper refresh"], (
         f"unexpected zypper calls: {zypper_calls!r}"
     )
@@ -76,9 +81,17 @@ def test_update_repo_cache_sles_retries_cache_cleanup():
         assert kwargs.get("retry") == 3, f"zypper command missing retry=3: {cmd!r} {kwargs!r}"
 
 
-@pytest.mark.parametrize("distro", ["debian", "rhel_like", "sles"])
+@pytest.mark.parametrize(
+    "distro",
+    [
+        pytest.param("debian", id="debian"),
+        pytest.param("rhel_like", id="rhel-like"),
+        pytest.param("sles", id="sles"),
+    ],
+)
 def test_update_repo_cache_failure_is_fatal(distro):
-    node = _fake_node(is_rhel_like=distro == "rhel_like", is_sles=distro == "sles")
+    """A failing repo cache command raises NodeSetupFailed on every distro family instead of being swallowed."""
+    node = fake_node(is_rhel_like=distro == "rhel_like", is_sles=distro == "sles")
     node.remoter.sudo.side_effect = Exception("Could not get lock /var/cache/apt/archives/lock")
 
     with pytest.raises(NodeSetupFailed, match="Failed to update repo cache"):

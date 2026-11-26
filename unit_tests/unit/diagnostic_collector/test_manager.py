@@ -295,9 +295,8 @@ def test_diagnostic_manager_context_manager_with_exception(caplog):
     collectors = [MockDiagnosticCollector(name="Collector1")]
     manager = DiagnosticManager(collectors=collectors, interval=0.1)
 
-    with pytest.raises(ValueError, match="Test exception"):
-        with manager:
-            raise ValueError("Test exception")
+    with pytest.raises(ValueError, match="Test exception"), manager:
+        raise ValueError("Test exception")
 
     # Manager should still be stopped
     assert not manager.is_running, "Manager thread should be stopped even when context body raises"
@@ -326,9 +325,8 @@ def test_collect_diagnostics_helper_cleans_up_on_exception():
     """The helper stops the manager and cleans collectors even when the context body raises."""
     collector = MockDiagnosticCollector(name="Collector1")
 
-    with pytest.raises(ValueError, match="boom"):
-        with collect_diagnostics(collector, interval=0.1) as manager:
-            raise ValueError("boom")
+    with pytest.raises(ValueError, match="boom"), collect_diagnostics(collector, interval=0.1) as manager:
+        raise ValueError("boom")
 
     assert not manager.is_running, "helper must stop the manager when the body raises"
     assert collector.clean_count == 1, f"helper must clean collectors when the body raises, got {collector.clean_count}"

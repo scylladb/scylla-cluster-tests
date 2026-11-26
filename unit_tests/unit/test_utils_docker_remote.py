@@ -15,8 +15,8 @@ from sdcm.remote.base import RetryableNetworkException
 from sdcm.utils.docker_remote import RemoteDocker
 
 
-@pytest.fixture(name="remote_docker")
-def fixture_remote_docker():
+@pytest.fixture
+def remote_docker():
     """A RemoteDocker whose container host is a mock remoter, built without starting a container."""
     remote_docker = RemoteDocker.__new__(RemoteDocker)  # __init__ would 'docker run' over ssh
     remote_docker.log = MagicMock()
@@ -33,7 +33,7 @@ def fixture_remote_docker():
         yield remote_docker
 
 
-def _failing_docker_cp(tempfile_path):
+def failing_docker_cp(tempfile_path):
     """Return a remoter.run() side effect where 'mktemp' succeeds and 'docker cp' exits non-zero."""
 
     def run(cmd, *_args, **_kwargs):
@@ -47,7 +47,7 @@ def _failing_docker_cp(tempfile_path):
     return run
 
 
-def _cleanup_commands(remote_docker):
+def cleanup_commands(remote_docker):
     """The 'rm -f' commands the container host was asked to run, with the 'sudo_needed' padding
     normalized away.
     """
@@ -58,7 +58,7 @@ def _cleanup_commands(remote_docker):
     ]
 
 
-def _cleanup_ran_last(remote_docker):
+def cleanup_ran_last(remote_docker):
     """Whether the cleanup was the transfer's final command."""
     return "rm -f" in remote_docker.node.remoter.run.call_args_list[-1].args[0]
 
@@ -75,18 +75,18 @@ def test_send_files_success_removes_staging_file(remote_docker):
     result = remote_docker.send_files("/local/file.tsv", "/container/dst/file.tsv")
 
     assert result is True
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpABC"]
-    assert _cleanup_ran_last(remote_docker)
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpABC"]
+    assert cleanup_ran_last(remote_docker)
 
 
 def test_send_files_docker_cp_failure_removes_staging_file(remote_docker):
     """A failed 'docker cp' still removes the staging file, and is still reported as a failure."""
-    remote_docker.node.remoter.run.side_effect = _failing_docker_cp("/tmp/tmpFAIL")
+    remote_docker.node.remoter.run.side_effect = failing_docker_cp("/tmp/tmpFAIL")
 
     result = remote_docker.send_files("/local/file.tsv", "/container/dst/file.tsv")
 
     assert result is False
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpFAIL"]
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpFAIL"]
 
 
 def test_send_files_transfer_exception_removes_staging_file(remote_docker):
@@ -97,7 +97,7 @@ def test_send_files_transfer_exception_removes_staging_file(remote_docker):
     with pytest.raises(UnexpectedExit):
         remote_docker.send_files("/local/file.tsv", "/container/dst/file.tsv")
 
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRSYNC"]
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRSYNC"]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -112,18 +112,18 @@ def test_receive_files_success_removes_staging_file(remote_docker):
     result = remote_docker.receive_files("/container/src/file.tsv", "/local/dst/file.tsv")
 
     assert result is True
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCV"]
-    assert _cleanup_ran_last(remote_docker)
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCV"]
+    assert cleanup_ran_last(remote_docker)
 
 
 def test_receive_files_docker_cp_failure_removes_staging_file(remote_docker):
     """A failed 'docker cp' still removes the staging file, and is still reported as a failure."""
-    remote_docker.node.remoter.run.side_effect = _failing_docker_cp("/tmp/tmpRCVFAIL")
+    remote_docker.node.remoter.run.side_effect = failing_docker_cp("/tmp/tmpRCVFAIL")
 
     result = remote_docker.receive_files("/container/src/file.tsv", "/local/dst/file.tsv")
 
     assert result is False
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCVFAIL"]
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCVFAIL"]
 
 
 def test_receive_files_transfer_exception_removes_staging_file(remote_docker):
@@ -134,7 +134,7 @@ def test_receive_files_transfer_exception_removes_staging_file(remote_docker):
     with pytest.raises(OSError):
         remote_docker.receive_files("/container/src/file.tsv", "/local/dst/file.tsv")
 
-    assert _cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCVEXC"]
+    assert cleanup_commands(remote_docker) == ["rm -f -- /tmp/tmpRCVEXC"]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -142,7 +142,10 @@ def test_receive_files_transfer_exception_removes_staging_file(remote_docker):
 # --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("transfer", ["send_files", "receive_files"])
+@pytest.mark.parametrize(
+    "transfer",
+    [pytest.param("send_files", id="send-files"), pytest.param("receive_files", id="receive-files")],
+)
 def test_cleanup_uses_the_same_sudo_as_docker_cp(transfer, remote_docker):
     """The removal runs with the privileges 'docker cp' had -- see '_remove_staging_file()'."""
     remote_docker.sudo_needed = "sudo "
@@ -150,17 +153,21 @@ def test_cleanup_uses_the_same_sudo_as_docker_cp(transfer, remote_docker):
 
     getattr(remote_docker, transfer)("/some/src", "/some/dst")
 
-    assert _cleanup_commands(remote_docker) == ["sudo rm -f -- /tmp/tmpSUDO"]
+    assert cleanup_commands(remote_docker) == ["sudo rm -f -- /tmp/tmpSUDO"]
 
 
-@pytest.mark.parametrize("transfer", ["send_files", "receive_files"])
+@pytest.mark.parametrize(
+    "transfer",
+    [pytest.param("send_files", id="send-files"), pytest.param("receive_files", id="receive-files")],
+)
 def test_cleanup_failure_does_not_mask_the_transfer_error(transfer, remote_docker):
     """A staging file that cannot be removed must not replace the error that broke the transfer."""
     transfer_error = UnexpectedExit(MagicMock())
+    cleanup_error = RetryableNetworkException("connection lost", original=OSError("connection lost"))
 
     def run(cmd, *_args, **_kwargs):
         if "rm -f" in cmd:
-            raise RetryableNetworkException("connection lost", original=OSError("connection lost"))
+            raise cleanup_error
         return MagicMock(stdout="/tmp/tmpMASK\n", ok=True)
 
     remote_docker.node.remoter.run.side_effect = run
@@ -170,7 +177,9 @@ def test_cleanup_failure_does_not_mask_the_transfer_error(transfer, remote_docke
     with pytest.raises(UnexpectedExit):
         getattr(remote_docker, transfer)("/some/src", "/some/dst")
 
-    remote_docker.log.warning.assert_called_once()
+    remote_docker.log.warning.assert_called_once_with(
+        "Failed to remove the staging file '%s': %s", "/tmp/tmpMASK", cleanup_error
+    )
 
 
 def test_cleanup_quotes_a_staging_path_that_needs_it(remote_docker):
@@ -189,16 +198,19 @@ def test_cleanup_quotes_a_staging_path_that_needs_it(remote_docker):
 
 def test_cleanup_failure_is_logged_and_keeps_a_good_transfer_successful(remote_docker):
     """A staging file that cannot be removed is logged, but does not fail a transfer that worked."""
+    cleanup_error = UnexpectedExit(MagicMock(exited=1, stderr="rm: cannot remove: Operation not permitted"))
 
     def run(cmd, *_args, **_kwargs):
         if "rm -f" in cmd:
-            raise UnexpectedExit(MagicMock(exited=1, stderr="rm: cannot remove: Operation not permitted"))
+            raise cleanup_error
         return MagicMock(stdout="/tmp/tmpNOPERM\n", ok=True)
 
     remote_docker.node.remoter.run.side_effect = run
 
     assert remote_docker.send_files("/local/file.tsv", "/container/dst/file.tsv") is True
-    remote_docker.log.warning.assert_called_once()
+    remote_docker.log.warning.assert_called_once_with(
+        "Failed to remove the staging file '%s': %s", "/tmp/tmpNOPERM", cleanup_error
+    )
     assert "/tmp/tmpNOPERM" in str(remote_docker.log.warning.call_args)
 
 
@@ -219,8 +231,11 @@ def test_kill_runs_docker_rm_with_a_bounded_timeout(remote_docker):
 @pytest.mark.parametrize(
     "stuck_teardown_exc",
     [
-        RetryableNetworkException("connection lost", original=OSError("connection lost")),
-        TimeoutError("command timed out"),
+        pytest.param(
+            RetryableNetworkException("connection lost", original=OSError("connection lost")),
+            id="retryable-network",
+        ),
+        pytest.param(TimeoutError("command timed out"), id="timeout"),
     ],
 )
 def test_kill_swallows_a_stuck_teardown_and_logs_a_warning(remote_docker, stuck_teardown_exc):
@@ -232,7 +247,9 @@ def test_kill_swallows_a_stuck_teardown_and_logs_a_warning(remote_docker, stuck_
     result = remote_docker.kill()
 
     assert result is None
-    remote_docker.log.warning.assert_called_once()
+    remote_docker.log.warning.assert_called_once_with(
+        "Failed to remove docker container '%s' within timeout: %s", "dummy-container-id", stuck_teardown_exc
+    )
     assert "dummy-container-id" in str(remote_docker.log.warning.call_args)
 
 

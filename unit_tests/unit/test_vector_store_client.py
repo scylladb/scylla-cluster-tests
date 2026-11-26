@@ -28,11 +28,13 @@ from sdcm.utils.vector_store_client import VectorStoreClient
 
 
 @pytest.fixture(autouse=True)
-def _no_sleep(monkeypatch):
+def no_sleep(monkeypatch):
+    """Replace time.sleep in the vector-store client with a no-op so polling loops run instantly."""
     monkeypatch.setattr(vector_store_client_module.time, "sleep", lambda _seconds: None)
 
 
-def _http_error(status_code):
+def http_error(status_code):
+    """Build an HTTPError whose attached response carries the given status code."""
     response = MagicMock()
     response.status_code = status_code
     error = requests.exceptions.HTTPError(f"{status_code} error")
@@ -41,6 +43,7 @@ def _http_error(status_code):
 
 
 def test_get_index_status_or_none_returns_status_on_success():
+    """get_index_status_or_none returns the status dict and queries the given keyspace and index."""
     client = VectorStoreClient(base_url="http://vs.example")
     with patch.object(client, "get_index_status", return_value={"status": "SERVING", "count": 5}) as mocked:
         assert client.get_index_status_or_none("ks", "idx") == {"status": "SERVING", "count": 5}
@@ -48,16 +51,20 @@ def test_get_index_status_or_none_returns_status_on_success():
 
 
 def test_get_index_status_or_none_returns_none_on_404():
+    """A 404 from the index status endpoint means the index is not discovered yet, so None is returned."""
     client = VectorStoreClient(base_url="http://vs.example")
-    with patch.object(client, "get_index_status", side_effect=_http_error(404)):
+    with patch.object(client, "get_index_status", side_effect=http_error(404)):
         assert client.get_index_status_or_none("ks", "idx") is None
 
 
 def test_get_index_status_or_none_reraises_non_404_http_errors():
+    """Any HTTP error other than 404 propagates, so a real server failure is not hidden as 'absent'."""
     client = VectorStoreClient(base_url="http://vs.example")
-    with patch.object(client, "get_index_status", side_effect=_http_error(500)):
-        with pytest.raises(requests.exceptions.HTTPError):
-            client.get_index_status_or_none("ks", "idx")
+    with (
+        patch.object(client, "get_index_status", side_effect=http_error(500)),
+        pytest.raises(requests.exceptions.HTTPError),
+    ):
+        client.get_index_status_or_none("ks", "idx")
 
 
 def test_get_index_status_or_none_reraises_when_response_is_missing():
@@ -67,12 +74,12 @@ def test_get_index_status_or_none_reraises_when_response_is_missing():
     client = VectorStoreClient(base_url="http://vs.example")
     error = requests.exceptions.HTTPError("no response")
     error.response = None
-    with patch.object(client, "get_index_status", side_effect=error):
-        with pytest.raises(requests.exceptions.HTTPError):
-            client.get_index_status_or_none("ks", "idx")
+    with patch.object(client, "get_index_status", side_effect=error), pytest.raises(requests.exceptions.HTTPError):
+        client.get_index_status_or_none("ks", "idx")
 
 
 def test_wait_for_index_absent_returns_once_the_index_is_gone():
+    """wait_for_index_absent returns as soon as the index status reads None (dropped)."""
     client = VectorStoreClient(base_url="http://vs.example")
     statuses = [{"status": "SERVING", "count": 5}, None]
     with patch.object(client, "get_index_status_or_none", side_effect=statuses):
@@ -80,21 +87,27 @@ def test_wait_for_index_absent_returns_once_the_index_is_gone():
 
 
 def test_wait_for_index_absent_raises_past_the_deadline():
+    """wait_for_index_absent raises RuntimeError when the index is still present at the deadline."""
     client = VectorStoreClient(base_url="http://vs.example")
-    with patch.object(client, "get_index_status_or_none", return_value={"status": "SERVING"}):
-        with pytest.raises(RuntimeError, match="was not dropped"):
-            client.wait_for_index_absent("ks", "idx", timeout=0)
+    with (
+        patch.object(client, "get_index_status_or_none", return_value={"status": "SERVING"}),
+        pytest.raises(RuntimeError, match="was not dropped"),
+    ):
+        client.wait_for_index_absent("ks", "idx", timeout=0)
 
 
 def test_wait_for_index_absent_treats_a_failed_request_as_still_there():
     """A network hiccup must not be mistaken for the index having disappeared."""
     client = VectorStoreClient(base_url="http://vs.example")
-    with patch.object(client, "get_index_status_or_none", side_effect=RuntimeError("connection reset")):
-        with pytest.raises(RuntimeError, match="request failed: connection reset"):
-            client.wait_for_index_absent("ks", "idx", timeout=0)
+    with (
+        patch.object(client, "get_index_status_or_none", side_effect=RuntimeError("connection reset")),
+        pytest.raises(RuntimeError, match="request failed: connection reset"),
+    ):
+        client.wait_for_index_absent("ks", "idx", timeout=0)
 
 
 def test_wait_for_ready_accepts_bootstrapping_by_default():
+    """wait_for_ready treats BOOTSTRAPPING as ready when no required statuses are given."""
     client = VectorStoreClient(base_url="http://vs.example")
     with patch.object(client, "get_status", return_value="BOOTSTRAPPING"):
         assert client.wait_for_ready(timeout=1, check_interval=0) is True

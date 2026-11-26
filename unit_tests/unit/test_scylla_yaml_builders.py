@@ -26,19 +26,24 @@ from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.distro import Distro
 
-__builtin__ = [].__class__.__module__
+BUILTINS_MODULE = [].__class__.__module__
 
 
 def is_builtin(inst):
-    return inst.__module__ == __builtin__
+    """is_builtin is True for objects whose class lives in the builtins module."""
+    return inst.__module__ == BUILTINS_MODULE
 
 
 class FakeCluster:
+    """Cluster stub exposing seed_nodes_addresses."""
+
     seed_nodes_addresses = ["1.1.1.1"]
 
 
 @pytest.fixture
 def scylla_yaml_test_context():
+    """Factory for SimpleNamespace test configs with LDAP, SSH and SCT flags."""
+
     def make_context(ldap_address=None, ip_ssh_connections="private"):
         return SimpleNamespace(
             LDAP_ADDRESS=ldap_address,
@@ -56,6 +61,8 @@ def scylla_yaml_test_context():
 
 
 class FakeNode:
+    """Node stub with fixed private and public IPs and a FakeCluster parent."""
+
     parent_cluster = FakeCluster()
     public_ip_address = "2.2.2.2"
     private_ip_address = "1.1.1.1"
@@ -65,6 +72,7 @@ class FakeNode:
 def assert_builder_output(
     builder_class: ScyllaYamlAttrBuilderBase, builder_params: dict, expected_as_dict: dict = None
 ):
+    """Compare a builder's non-default output with expected_as_dict and check it validates as ScyllaYaml."""
     instance = builder_class(**builder_params)
     resulted_as_dict = instance.model_dump(exclude_defaults=True, exclude_unset=True)
     if expected_as_dict:
@@ -72,345 +80,21 @@ def assert_builder_output(
         ScyllaYaml(**resulted_as_dict)
 
 
-def test_scylla_yaml_cluster_attr_builder_aws_single_noldap(scylla_yaml_test_context):
-    assert_builder_output(
-        ScyllaYamlClusterAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "test_config": scylla_yaml_test_context(),
-            "cluster_name": "test-cluster",
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1",
-                "intra_node_comm_public": False,
-                "authenticator": None,
-                "authorizer": None,
-                "alternator_port": None,
-                "use_ldap_authorization": None,
-                "use_ldap": None,
-                "internode_encryption": False,
-                "client_encrypt": False,
-                "hinted_handoff": None,
-            },
-        },
-        expected_as_dict={
-            "cluster_name": "test-cluster",
-            "alternator_enforce_authorization": False,
-            "experimental_features": [],
-        },
-    )
-
-
-def test_scylla_yaml_cluster_attr_builder_aws_multi_openldap(scylla_yaml_test_context):
-    assert_builder_output(
-        ScyllaYamlClusterAttrBuilder,
-        builder_params={
-            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
-            "cluster_name": "test-cluster",
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1 eu-west-2",
-                "intra_node_comm_public": False,
-                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-                "authorizer": "AllowAllAuthorizer",
-                "alternator_port": None,
-                "use_ldap_authorization": True,
-                "use_ldap": None,
-                "internode_encryption": False,
-                "client_encrypt": False,
-                "hinted_handoff": None,
-                "prepare_saslauthd": True,
-            },
-        },
-        expected_as_dict={
-            "cluster_name": "test-cluster",
-            "alternator_enforce_authorization": False,
-            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-            "authorizer": "AllowAllAuthorizer",
-            "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
-            "experimental_features": [],
-            "ldap_attr_role": "cn",
-            "ldap_bind_dn": "cn=admin,dc=scylla-qa,dc=com",
-            "ldap_bind_passwd": "scylla-0",
-            "ldap_url_template": "ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?"
-            "(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)",
-            "role_manager": "com.scylladb.auth.LDAPRoleManager",
-            "saslauthd_socket_path": "/run/saslauthd/mux",
-        },
-    )
-
-
-def test_scylla_yaml_cluster_attr_builder_gce_single_openldap(scylla_yaml_test_context):
-    assert_builder_output(
-        ScyllaYamlClusterAttrBuilder,
-        builder_params={
-            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
-            "cluster_name": "test-cluster",
-            "params": {
-                "cluster_backend": "gce",
-                "gce_datacenter": "eu-west-1",
-                "intra_node_comm_public": False,
-                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-                "authorizer": "CassandraAuthorizer",
-                "alternator_port": "1",
-                "use_ldap_authorization": True,
-                "ldap_server_type": "openldap",
-                "internode_encryption": False,
-                "client_encrypt": False,
-                "hinted_handoff": None,
-                "prepare_saslauthd": True,
-            },
-        },
-        expected_as_dict={
-            "cluster_name": "test-cluster",
-            "alternator_enforce_authorization": False,
-            "alternator_port": "1",
-            "alternator_write_isolation": "always_use_lwt",
-            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-            "authorizer": "CassandraAuthorizer",
-            "experimental_features": [],
-            "ldap_attr_role": "cn",
-            "ldap_bind_dn": "cn=admin,dc=scylla-qa,dc=com",
-            "ldap_bind_passwd": "scylla-0",
-            "ldap_url_template": "ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?"
-            "(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)",
-            "role_manager": "com.scylladb.auth.LDAPRoleManager",
-            "saslauthd_socket_path": "/run/saslauthd/mux",
-        },
-    )
-
-
-@pytest.mark.parametrize(
-    "run_setting,db_setting,expected",
-    [
-        ("private", None, "1.1.1.1:389"),
-        ("public", None, "127.0.0.1:5001"),
-        ("public", "private", "1.1.1.1:389"),
-        ("private", "public", "127.0.0.1:5001"),
-    ],
-)
-def test_openldap_address_follows_the_db_clusters_ip_ssh_connections(
-    scylla_yaml_test_context, run_setting, db_setting, expected
-):
-    """DB nodes reach OpenLDAP through their own tunnel only when the runner reaches them over `public`."""
-    builder = ScyllaYamlClusterAttrBuilder(
-        test_config=scylla_yaml_test_context(ldap_address=("1.1.1.1", "389"), ip_ssh_connections=run_setting),
-        cluster_name="test-cluster",
-        params={"cluster_backend": "baremetal"},
-        ip_ssh_connections=db_setting,
-    )
-
-    assert builder._open_ldap_server_address_port == expected
-
-
-def test_scylla_yaml_cluster_attr_builder_gce_multi_msldap(scylla_yaml_test_context):
-    assert_builder_output(
-        ScyllaYamlClusterAttrBuilder,
-        builder_params={
-            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
-            "cluster_name": "test-cluster",
-            "msldap_server_info": {
-                "ldap_bind_dn": "SOMEDN",
-                "admin_password": "PASSWORD",
-                "server_address": "3.3.3.3",
-            },
-            "params": {
-                "cluster_backend": "gce",
-                "gce_datacenter": "eu-west-1 eu-west-2",
-                "intra_node_comm_public": False,
-                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-                "authorizer": "CassandraAuthorizer",
-                "alternator_port": None,
-                "use_ldap_authorization": True,
-                "ldap_server_type": "ms_ad",
-                "internode_encryption": True,
-                "client_encrypt": True,
-                "hinted_handoff": False,
-                "prepare_saslauthd": True,
-            },
-        },
-        expected_as_dict={
-            "cluster_name": "test-cluster",
-            "alternator_enforce_authorization": False,
-            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
-            "authorizer": "CassandraAuthorizer",
-            "endpoint_snitch": "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
-            "experimental_features": [],
-            "hinted_handoff_enabled": False,
-            "ldap_attr_role": "cn",
-            "ldap_bind_dn": "SOMEDN",
-            "ldap_bind_passwd": "PASSWORD",
-            "ldap_url_template": "ldap://3.3.3.3:389/dc=scylla-qa,dc=com?cn?sub?(member=CN={USER},dc=scylla-qa,dc=com)",
-            "role_manager": "com.scylladb.auth.LDAPRoleManager",
-            "saslauthd_socket_path": "/run/saslauthd/mux",
-        },
-    )
-
-
-def test_scylla_yaml_cluster_attr_builder_validation_gce_raises(scylla_yaml_test_context):
-    with pytest.raises(RuntimeError):
-        assert_builder_output(
-            ScyllaYamlClusterAttrBuilder,
-            builder_params={
-                "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
-                "cluster_name": "test-cluster",
-                "params": {
-                    "cluster_backend": "gce",
-                    "use_ldap_authorization": True,
-                    "ldap_server_type": "ms_ad",
-                },
-            },
-        )
-
-
-def test_scylla_yaml_cluster_attr_builder_validation_aws_raises(scylla_yaml_test_context):
-    with pytest.raises(RuntimeError):
-        assert_builder_output(
-            ScyllaYamlClusterAttrBuilder,
-            builder_params={
-                "test_config": scylla_yaml_test_context(),
-                "cluster_name": "test-cluster",
-                "params": {
-                    "cluster_backend": "aws",
-                    "use_ldap_authorization": True,
-                    "ip_ssh_connections": "private",
-                },
-            },
-        )
-
-
-def test_scylla_yaml_node_attr_builder_aws_single_private_noextra():
-    assert_builder_output(
-        ScyllaYamlNodeAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1",
-                "ip_ssh_connections": "private",
-                "extra_network_interface": False,
-                "intra_node_comm_public": False,
-            },
-        },
-        expected_as_dict={
-            "enable_ipv6_dns_lookup": False,
-            "listen_address": "1.1.1.1",
-            "rpc_address": "1.1.1.1",
-            "seed_provider": [
-                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
-            ],
-            "prometheus_address": "0.0.0.0",
-        },
-    )
-
-
-def test_scylla_yaml_node_attr_builder_aws_single_public_noextra():
-    assert_builder_output(
-        ScyllaYamlNodeAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1",
-                "ip_ssh_connections": "private",
-                "extra_network_interface": False,
-                "intra_node_comm_public": True,
-            },
-        },
-        expected_as_dict={
-            "broadcast_address": "2.2.2.2",
-            "broadcast_rpc_address": "2.2.2.2",
-            "enable_ipv6_dns_lookup": False,
-            "listen_address": "1.1.1.1",
-            "rpc_address": "1.1.1.1",
-            "seed_provider": [
-                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
-            ],
-            "prometheus_address": "0.0.0.0",
-        },
-    )
-
-
-def test_scylla_yaml_node_attr_builder_aws_single_public_extra():
-    assert_builder_output(
-        ScyllaYamlNodeAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1",
-                "ip_ssh_connections": "private",
-                "extra_network_interface": True,
-                "intra_node_comm_public": True,
-            },
-        },
-        expected_as_dict={
-            "broadcast_address": "1.1.1.1",
-            "broadcast_rpc_address": "1.1.1.1",
-            "enable_ipv6_dns_lookup": False,
-            "listen_address": "0.0.0.0",
-            "rpc_address": "0.0.0.0",
-            "seed_provider": [
-                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
-            ],
-            "prometheus_address": "0.0.0.0",
-        },
-    )
-
-
-def test_scylla_yaml_node_attr_builder_aws_multi_private_extra():
-    assert_builder_output(
-        ScyllaYamlNodeAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1 eu-west-2",
-                "ip_ssh_connections": "private",
-                "extra_network_interface": True,
-                "intra_node_comm_public": False,
-            },
-        },
-        expected_as_dict={
-            "broadcast_address": "1.1.1.1",
-            "broadcast_rpc_address": "1.1.1.1",
-            "enable_ipv6_dns_lookup": False,
-            "listen_address": "0.0.0.0",
-            "rpc_address": "0.0.0.0",
-            "seed_provider": [
-                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
-            ],
-            "prometheus_address": "0.0.0.0",
-        },
-    )
-
-
-def test_scylla_yaml_node_attr_builder_negative_aws_single_public_noextra():
-    assert_builder_output(
-        ScyllaYamlNodeAttrBuilder,
-        builder_params={
-            "node": FakeNode(),
-            "params": {
-                "cluster_backend": "aws",
-                "region_name": "eu-west-1",
-                "ip_ssh_connections": "private",
-                "extra_network_interface": False,
-                "intra_node_comm_public": True,
-            },
-        },
-    )
-
-
 class FakeRemoter:
+    """Remoter stub whose file and command methods do nothing."""
+
     def send_file(self, *_, **__):
-        pass
+        """Accept any arguments and do nothing."""
 
     send_files = stop = start = run = sudo = send_file
 
 
 class ObjectDict(dict):
+    """dict with attribute access by a CamelCase key read as snake_case."""
+
     @staticmethod
     def fix_name(name):
+        """Convert a CamelCase key to snake_case."""
         output = [name[0].lower()]
         for char in name[1:]:
             if char.isupper():
@@ -427,6 +111,8 @@ class ObjectDict(dict):
 
 
 class DummyCluster(BaseScyllaCluster, BaseCluster):
+    """BaseScyllaCluster stub with an in-memory node list and no cloud calls."""
+
     nodes: List["DummyNode"]
 
     def __init__(self, params):
@@ -438,17 +124,21 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):
 
     @property
     def seed_nodes_addresses(self):
+        """IP addresses of all nodes, used as seeds."""
         return [node.ip_address for node in self.nodes]
 
     def init_nodes(self):
+        """Run config_setup on every node with the Scylla args."""
         for node in self.nodes:
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
-        pass
+        """No-op: this stub never provisions nodes."""
 
 
 class DummyNode(BaseNode):
+    """BaseNode stub with fixed fake IPs, no background threads and no remoting."""
+
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -469,6 +159,7 @@ class DummyNode(BaseNode):
         )
 
     def init(self):
+        """Initialize the node and build the AWS network configuration when the backend is aws."""
         super().init()
         if self.parent_cluster.params.environment["cluster_backend"] == "aws":
             self.scylla_network_configuration = ScyllaNetworkConfiguration(
@@ -477,10 +168,12 @@ class DummyNode(BaseNode):
             )
 
     def do_default_installations(self):
-        pass  # we don't need to install anything for this unittests
+        """Skip default package installation, not needed for unit tests."""
+        # we don't need to install anything for this unittests
 
     @property
     def network_interfaces(self):
+        """Two NICs: eth0 with public and private IPv4, eth1 with private IPv4 only."""
         return [
             NetworkInterface(
                 ipv4_public_address=self._public_ip_address[0],
@@ -513,6 +206,7 @@ class DummyNode(BaseNode):
 
     @contextlib.contextmanager
     def remote_scylla_yaml(self):
+        """Yield the in-memory ScyllaYaml instead of a remote one."""
         yield self._scylla_yaml
 
     def _get_private_ip_address(self):
@@ -522,36 +216,38 @@ class DummyNode(BaseNode):
         return self._public_ip_address[0]
 
     def process_scylla_args(self, append_scylla_args=""):
-        pass
+        """No-op: skip Scylla args processing."""
 
     def fix_scylla_server_systemd_config(self):
-        pass
+        """No-op: skip the systemd config fix."""
 
     def _get_ipv6_ip_address(self):
         return self._ipv6_ip_address[0]
 
     def start_task_threads(self):
+        """No-op: keep background task threads off."""
         # disable all background threads
-        pass
 
     def wait_for_cloud_init(self):
-        pass
+        """No-op: there is no cloud-init to wait for."""
 
     def set_hostname(self):
-        pass
+        """No-op: there is no hostname to set."""
 
     def configure_remote_logging(self):
-        pass
+        """No-op: there is no remote logging to configure."""
 
     def set_keep_alive(self):
-        pass
+        """No-op: there is no SSH keep-alive to set."""
 
     @property
     def system_log(self):
+        """Return the system log stored by the setter."""
         return self._system_log
 
     @property
     def is_nonroot_install(self):
+        """Always False: the stub installs as root."""
         return False
 
     @system_log.setter
@@ -559,9 +255,10 @@ class DummyNode(BaseNode):
         self._system_log = log
 
     def wait_ssh_up(self, verbose=True, timeout=500):
-        pass
+        """No-op: SSH is always reachable."""
 
     def validate_scylla_yaml(self, expected_node_config, seed_node_ips):
+        """Assert the node yaml equals the expected JSON after substituting the IP placeholders."""
         with self.remote_scylla_yaml() as node_yaml:
             expected_node_yaml = expected_node_config.replace("__NODE_PRIVATE_ADDRESS_2__", self._private_ip_address[1])
             expected_node_yaml = expected_node_yaml.replace("__NODE_PRIVATE_ADDRESS__", self.private_ip_address)
@@ -581,6 +278,7 @@ def run_scylla_yaml_config_case(
     expected_node_config: str,
     region_names: str,
 ):
+    """Generate node yaml for a 3-node AWS cluster from config_path and validate it on every node."""
     scylla_ami_version_output = ObjectDict(
         Architecture="x86_64",
         CreationDate="2022-10-13T13:17:17.000Z",
@@ -662,21 +360,362 @@ def run_scylla_yaml_config_case(
             node.validate_scylla_yaml(expected_node_config=expected_node_config, seed_node_ips=seed_node_ips)
 
 
+def test_scylla_yaml_cluster_attr_builder_aws_single_noldap(scylla_yaml_test_context):
+    """Single-region AWS cluster without LDAP renders only the cluster name and default auth flags."""
+    assert_builder_output(
+        ScyllaYamlClusterAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "test_config": scylla_yaml_test_context(),
+            "cluster_name": "test-cluster",
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1",
+                "intra_node_comm_public": False,
+                "authenticator": None,
+                "authorizer": None,
+                "alternator_port": None,
+                "use_ldap_authorization": None,
+                "use_ldap": None,
+                "internode_encryption": False,
+                "client_encrypt": False,
+                "hinted_handoff": None,
+            },
+        },
+        expected_as_dict={
+            "cluster_name": "test-cluster",
+            "alternator_enforce_authorization": False,
+            "experimental_features": [],
+        },
+    )
+
+
+def test_scylla_yaml_cluster_attr_builder_aws_multi_openldap(scylla_yaml_test_context):
+    """Multi-region AWS cluster with OpenLDAP and SaslauthdAuthenticator renders the LDAP settings."""
+    assert_builder_output(
+        ScyllaYamlClusterAttrBuilder,
+        builder_params={
+            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
+            "cluster_name": "test-cluster",
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1 eu-west-2",
+                "intra_node_comm_public": False,
+                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+                "authorizer": "AllowAllAuthorizer",
+                "alternator_port": None,
+                "use_ldap_authorization": True,
+                "use_ldap": None,
+                "internode_encryption": False,
+                "client_encrypt": False,
+                "hinted_handoff": None,
+                "prepare_saslauthd": True,
+            },
+        },
+        expected_as_dict={
+            "cluster_name": "test-cluster",
+            "alternator_enforce_authorization": False,
+            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+            "authorizer": "AllowAllAuthorizer",
+            "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
+            "experimental_features": [],
+            "ldap_attr_role": "cn",
+            "ldap_bind_dn": "cn=admin,dc=scylla-qa,dc=com",
+            "ldap_bind_passwd": "scylla-0",
+            "ldap_url_template": "ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?"
+            "(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)",
+            "role_manager": "com.scylladb.auth.LDAPRoleManager",
+            "saslauthd_socket_path": "/run/saslauthd/mux",
+        },
+    )
+
+
+def test_scylla_yaml_cluster_attr_builder_gce_single_openldap(scylla_yaml_test_context):
+    """Single-DC GCE cluster with OpenLDAP renders the LDAP settings and alternator port."""
+    assert_builder_output(
+        ScyllaYamlClusterAttrBuilder,
+        builder_params={
+            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
+            "cluster_name": "test-cluster",
+            "params": {
+                "cluster_backend": "gce",
+                "gce_datacenter": "eu-west-1",
+                "intra_node_comm_public": False,
+                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+                "authorizer": "CassandraAuthorizer",
+                "alternator_port": "1",
+                "use_ldap_authorization": True,
+                "ldap_server_type": "openldap",
+                "internode_encryption": False,
+                "client_encrypt": False,
+                "hinted_handoff": None,
+                "prepare_saslauthd": True,
+            },
+        },
+        expected_as_dict={
+            "cluster_name": "test-cluster",
+            "alternator_enforce_authorization": False,
+            "alternator_port": "1",
+            "alternator_write_isolation": "always_use_lwt",
+            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+            "authorizer": "CassandraAuthorizer",
+            "experimental_features": [],
+            "ldap_attr_role": "cn",
+            "ldap_bind_dn": "cn=admin,dc=scylla-qa,dc=com",
+            "ldap_bind_passwd": "scylla-0",
+            "ldap_url_template": "ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?"
+            "(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)",
+            "role_manager": "com.scylladb.auth.LDAPRoleManager",
+            "saslauthd_socket_path": "/run/saslauthd/mux",
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "run_setting,db_setting,expected",
+    [
+        pytest.param("private", None, "1.1.1.1:389", id="run-private"),
+        pytest.param("public", None, "127.0.0.1:5001", id="run-public"),
+        pytest.param("public", "private", "1.1.1.1:389", id="run-public-db-private"),
+        pytest.param("private", "public", "127.0.0.1:5001", id="run-private-db-public"),
+    ],
+)
+def test_openldap_address_follows_the_db_clusters_ip_ssh_connections(
+    scylla_yaml_test_context, run_setting, db_setting, expected
+):
+    """DB nodes reach OpenLDAP through their own tunnel only when the runner reaches them over `public`."""
+    builder = ScyllaYamlClusterAttrBuilder(
+        test_config=scylla_yaml_test_context(ldap_address=("1.1.1.1", "389"), ip_ssh_connections=run_setting),
+        cluster_name="test-cluster",
+        params={"cluster_backend": "baremetal"},
+        ip_ssh_connections=db_setting,
+    )
+
+    assert builder._open_ldap_server_address_port == expected
+
+
+def test_scylla_yaml_cluster_attr_builder_gce_multi_msldap(scylla_yaml_test_context):
+    """Multi-DC GCE cluster with MS AD LDAP renders the LDAP settings from msldap server info."""
+    assert_builder_output(
+        ScyllaYamlClusterAttrBuilder,
+        builder_params={
+            "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
+            "cluster_name": "test-cluster",
+            "msldap_server_info": {
+                "ldap_bind_dn": "SOMEDN",
+                "admin_password": "PASSWORD",
+                "server_address": "3.3.3.3",
+            },
+            "params": {
+                "cluster_backend": "gce",
+                "gce_datacenter": "eu-west-1 eu-west-2",
+                "intra_node_comm_public": False,
+                "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+                "authorizer": "CassandraAuthorizer",
+                "alternator_port": None,
+                "use_ldap_authorization": True,
+                "ldap_server_type": "ms_ad",
+                "internode_encryption": True,
+                "client_encrypt": True,
+                "hinted_handoff": False,
+                "prepare_saslauthd": True,
+            },
+        },
+        expected_as_dict={
+            "cluster_name": "test-cluster",
+            "alternator_enforce_authorization": False,
+            "authenticator": "com.scylladb.auth.SaslauthdAuthenticator",
+            "authorizer": "CassandraAuthorizer",
+            "endpoint_snitch": "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
+            "experimental_features": [],
+            "hinted_handoff_enabled": False,
+            "ldap_attr_role": "cn",
+            "ldap_bind_dn": "SOMEDN",
+            "ldap_bind_passwd": "PASSWORD",
+            "ldap_url_template": "ldap://3.3.3.3:389/dc=scylla-qa,dc=com?cn?sub?(member=CN={USER},dc=scylla-qa,dc=com)",
+            "role_manager": "com.scylladb.auth.LDAPRoleManager",
+            "saslauthd_socket_path": "/run/saslauthd/mux",
+        },
+    )
+
+
+def test_scylla_yaml_cluster_attr_builder_validation_gce_raises(scylla_yaml_test_context):
+    """GCE cluster with MS AD LDAP authorization and no msldap server info raises RuntimeError."""
+    with pytest.raises(RuntimeError):
+        assert_builder_output(
+            ScyllaYamlClusterAttrBuilder,
+            builder_params={
+                "test_config": scylla_yaml_test_context(ldap_address=("1.1.1.1", "389")),
+                "cluster_name": "test-cluster",
+                "params": {
+                    "cluster_backend": "gce",
+                    "use_ldap_authorization": True,
+                    "ldap_server_type": "ms_ad",
+                },
+            },
+        )
+
+
+def test_scylla_yaml_cluster_attr_builder_validation_aws_raises(scylla_yaml_test_context):
+    """AWS cluster with LDAP authorization and no LDAP server address raises RuntimeError."""
+    with pytest.raises(RuntimeError):
+        assert_builder_output(
+            ScyllaYamlClusterAttrBuilder,
+            builder_params={
+                "test_config": scylla_yaml_test_context(),
+                "cluster_name": "test-cluster",
+                "params": {
+                    "cluster_backend": "aws",
+                    "use_ldap_authorization": True,
+                    "ip_ssh_connections": "private",
+                },
+            },
+        )
+
+
+def test_scylla_yaml_node_attr_builder_aws_single_private_noextra():
+    """Single-region AWS node on private IP without extra interface listens and broadcasts on the private IP."""
+    assert_builder_output(
+        ScyllaYamlNodeAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1",
+                "ip_ssh_connections": "private",
+                "extra_network_interface": False,
+                "intra_node_comm_public": False,
+            },
+        },
+        expected_as_dict={
+            "enable_ipv6_dns_lookup": False,
+            "listen_address": "1.1.1.1",
+            "rpc_address": "1.1.1.1",
+            "seed_provider": [
+                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
+            ],
+            "prometheus_address": "0.0.0.0",
+        },
+    )
+
+
+def test_scylla_yaml_node_attr_builder_aws_single_public_noextra():
+    """Public intra-node comm without extra interface broadcasts the public IP."""
+    assert_builder_output(
+        ScyllaYamlNodeAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1",
+                "ip_ssh_connections": "private",
+                "extra_network_interface": False,
+                "intra_node_comm_public": True,
+            },
+        },
+        expected_as_dict={
+            "broadcast_address": "2.2.2.2",
+            "broadcast_rpc_address": "2.2.2.2",
+            "enable_ipv6_dns_lookup": False,
+            "listen_address": "1.1.1.1",
+            "rpc_address": "1.1.1.1",
+            "seed_provider": [
+                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
+            ],
+            "prometheus_address": "0.0.0.0",
+        },
+    )
+
+
+def test_scylla_yaml_node_attr_builder_aws_single_public_extra():
+    """Public intra-node comm with extra interface listens on all addresses and broadcasts the private IP."""
+    assert_builder_output(
+        ScyllaYamlNodeAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1",
+                "ip_ssh_connections": "private",
+                "extra_network_interface": True,
+                "intra_node_comm_public": True,
+            },
+        },
+        expected_as_dict={
+            "broadcast_address": "1.1.1.1",
+            "broadcast_rpc_address": "1.1.1.1",
+            "enable_ipv6_dns_lookup": False,
+            "listen_address": "0.0.0.0",
+            "rpc_address": "0.0.0.0",
+            "seed_provider": [
+                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
+            ],
+            "prometheus_address": "0.0.0.0",
+        },
+    )
+
+
+def test_scylla_yaml_node_attr_builder_aws_multi_private_extra():
+    """Multi-region AWS node with extra interface and private comm listens on all addresses."""
+    assert_builder_output(
+        ScyllaYamlNodeAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1 eu-west-2",
+                "ip_ssh_connections": "private",
+                "extra_network_interface": True,
+                "intra_node_comm_public": False,
+            },
+        },
+        expected_as_dict={
+            "broadcast_address": "1.1.1.1",
+            "broadcast_rpc_address": "1.1.1.1",
+            "enable_ipv6_dns_lookup": False,
+            "listen_address": "0.0.0.0",
+            "rpc_address": "0.0.0.0",
+            "seed_provider": [
+                {"class_name": "org.apache.cassandra.locator.SimpleSeedProvider", "parameters": [{"seeds": "1.1.1.1"}]}
+            ],
+            "prometheus_address": "0.0.0.0",
+        },
+    )
+
+
+def test_scylla_yaml_node_attr_builder_negative_aws_single_public_noextra():
+    """Public intra-node comm without extra interface builds the builder without error when no output is expected."""
+    assert_builder_output(
+        ScyllaYamlNodeAttrBuilder,
+        builder_params={
+            "node": FakeNode(),
+            "params": {
+                "cluster_backend": "aws",
+                "region_name": "eu-west-1",
+                "ip_ssh_connections": "private",
+                "extra_network_interface": False,
+                "intra_node_comm_public": True,
+            },
+        },
+    )
+
+
 @pytest.mark.parametrize(
     "config_name",
     [
-        "PR-provision-test.yaml",
-        "functional.yaml",
-        "jepsen.yaml",
-        "longevity-10gb-3h.yaml",
-        "manager-backup-1TB-gce.yaml",
-        "perf-regression.100threads.30M-keys.yaml",
-        "rolling-upgrade.yaml",
+        pytest.param("PR-provision-test.yaml", id="pr-provision-test"),
+        pytest.param("functional.yaml", id="functional"),
+        pytest.param("jepsen.yaml", id="jepsen"),
+        pytest.param("longevity-10gb-3h.yaml", id="longevity-10gb-3h"),
+        pytest.param("manager-backup-1TB-gce.yaml", id="manager-backup-1tb-gce"),
+        pytest.param("perf-regression.100threads.30M-keys.yaml", id="perf-regression-100threads-30m-keys"),
+        pytest.param("rolling-upgrade.yaml", id="rolling-upgrade"),
     ],
 )
 def test_scylla_yaml_generated_from_config_fixture(
     monkeypatch, tmp_path, test_data_dir, scylla_yaml_test_context, config_name
 ):
+    """Node yaml generated from each single-interface config matches its stored result JSON."""
     base_folder = test_data_dir / "test_scylla_yaml_builders"
     result_path = base_folder / config_name.replace(".yaml", ".result.json")
     expected_node_config = result_path.read_text(encoding="utf-8")
@@ -690,10 +729,17 @@ def test_scylla_yaml_generated_from_config_fixture(
     )
 
 
-@pytest.mark.parametrize("config_name", ["cdc-replication-longevity.yaml", "longevity-10gb-3h.yaml"])
+@pytest.mark.parametrize(
+    "config_name",
+    [
+        pytest.param("cdc-replication-longevity.yaml", id="cdc-replication-longevity"),
+        pytest.param("longevity-10gb-3h.yaml", id="longevity-10gb-3h"),
+    ],
+)
 def test_scylla_yaml_generated_from_multi_interface_config_fixture(
     monkeypatch, tmp_path, test_data_dir, scylla_yaml_test_context, config_name
 ):
+    """Node yaml generated from each multi-interface config matches its stored result JSON."""
     base_folder = test_data_dir / "test_scylla_yaml_builders" / "multi_network_interfaces"
     result_path = base_folder / config_name.replace(".yaml", ".result.json")
     expected_node_config = result_path.read_text(encoding="utf-8")
