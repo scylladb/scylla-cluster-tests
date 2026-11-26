@@ -586,6 +586,9 @@ class DecommissionStreamingErrMonkey(NemesisBaseClass):
 
     disruptive = True
     topology_changes = True
+    supports_high_disk_utilization = (
+        False  # Decommissioning a node cause increase of disk space across rest of the nodes
+    )
 
     def disrupt(self):
         """Decommission with a streaming error."""
