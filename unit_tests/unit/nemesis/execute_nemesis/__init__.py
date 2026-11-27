@@ -30,6 +30,7 @@ class CustomTestNemesis(TestExecuteBaseClass):
     """A simple nemesis for testing."""
 
     def disrupt(self):
+        """Print a disruption message."""
         print("Disrupting cluster")
 
 
@@ -37,6 +38,7 @@ class FailingTestNemesis(TestExecuteBaseClass):
     """A nemesis that fails during disruption."""
 
     def disrupt(self):
+        """Raise RuntimeError."""
         raise RuntimeError("Intentional failure")
 
 
@@ -44,6 +46,7 @@ class SkippingTestNemesis(TestExecuteBaseClass):
     """A nemesis that skips."""
 
     def disrupt(self):
+        """Raise UnsupportedNemesis."""
         raise UnsupportedNemesis("Intentional skip")
 
 
@@ -51,6 +54,7 @@ class KillTestNemesis(TestExecuteBaseClass):
     """A nemesis that raises KillNemesis."""
 
     def disrupt(self):
+        """Raise KillNemesis."""
         raise KillNemesis("Intentional kill")
 
 
@@ -58,6 +62,7 @@ class VersionNotFoundTestNemesis(TestExecuteBaseClass):
     """A nemesis that raises MethodVersionNotFound."""
 
     def disrupt(self):
+        """Raise MethodVersionNotFound."""
         raise MethodVersionNotFound("Intentional version skip")
 
 
@@ -65,9 +70,11 @@ class PrecheckSkipNemesis(TestExecuteBaseClass):
     """A nemesis whose precheck() returns a skip reason."""
 
     def precheck(self, node) -> str | None:
+        """Return a static skip reason."""
         return "static condition not met"
 
     def disrupt(self):
+        """Print a disruption message."""
         print("Disrupting cluster")
 
 
@@ -75,9 +82,11 @@ class PrecheckErrorNemesis(TestExecuteBaseClass):
     """A nemesis whose precheck() raises an exception."""
 
     def precheck(self, node) -> str | None:
+        """Raise RuntimeError."""
         raise RuntimeError("precheck blew up")
 
     def disrupt(self):
+        """Print a disruption message."""
         print("Disrupting cluster")
 
 
@@ -95,6 +104,7 @@ class TestNemesisRunner(NemesisRunner):
         self.nemesis_registry = NemesisRegistry(base_class=TestExecuteBaseClass, flag_class=TestExecuteBaseClass)
 
     def set_target_node(self):
+        """Target the first DB node."""
         self.target_node = self.tester.db_cluster.nodes[0]
 
     @contextmanager

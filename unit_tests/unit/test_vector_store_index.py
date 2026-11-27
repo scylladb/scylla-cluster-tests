@@ -48,11 +48,13 @@ def _write_log(tmp_path, content):
 
 
 def test_parse_full_scan_seconds_aws_shipper_format(tmp_path):
+    """The scan duration is read from log lines carrying the AWS log-shipper prefix."""
     log = _write_log(tmp_path, AWS_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_10m_20tok_0") == pytest.approx(66.00668)
 
 
 def test_parse_full_scan_seconds_docker_raw_format(tmp_path):
+    """The scan duration is read from raw docker tracing lines."""
     log = _write_log(tmp_path, DOCKER_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") == pytest.approx(2.561197)
 
@@ -64,30 +66,36 @@ def test_parse_full_scan_seconds_matches_case_insensitively(tmp_path):
 
 
 def test_parse_full_scan_seconds_ignores_other_indexes(tmp_path):
+    """Each index gets its own scan duration from a log interleaving several indexes."""
     log = _write_log(tmp_path, DOCKER_SCAN_LINES + AWS_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") == pytest.approx(2.561197)
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_10m_20tok_0") == pytest.approx(66.00668)
 
 
 def test_parse_full_scan_seconds_none_without_a_finish(tmp_path):
+    """A scan start with no matching finish line yields None."""
     log = _write_log(tmp_path, DOCKER_SCAN_LINES.splitlines(keepends=True)[0])
     assert parse_full_scan_seconds(log, "fts_bench.fts_idx_local_tiny_0") is None
 
 
 def test_parse_full_scan_seconds_none_for_unknown_index(tmp_path):
+    """An index absent from the log yields None."""
     log = _write_log(tmp_path, DOCKER_SCAN_LINES)
     assert parse_full_scan_seconds(log, "fts_bench.nope") is None
 
 
 def test_parse_full_scan_seconds_none_when_log_missing(tmp_path):
+    """A missing log file yields None."""
     assert parse_full_scan_seconds(str(tmp_path / "absent.log"), "fts_bench.idx") is None
 
 
 def test_index_key_folds_case():
+    """index_key joins keyspace and index name, lowercasing the result."""
     assert index_key("fts_bench", "fts_idx_10M_20tok_0") == "fts_bench.fts_idx_10m_20tok_0"
 
 
 def test_wait_for_index_build_seconds_returns_the_measurement(tmp_path):
+    """wait_for_index_build_seconds returns the parsed scan duration once the lines are present."""
     log = _write_log(tmp_path, DOCKER_SCAN_LINES)
     assert wait_for_index_build_seconds(log, "fts_bench", "fts_idx_local_tiny_0") == pytest.approx(2.561197)
 

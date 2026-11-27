@@ -58,6 +58,7 @@ class ShardsNode(BaseNode):
 
     @property
     def is_nonroot_install(self) -> bool:
+        """Reports a root install of Scylla."""
         return False
 
 
@@ -68,6 +69,7 @@ class FakeSession:
         self.config = config
 
     def execute(self, query: str) -> MagicMock:
+        """Returns a row whose value is the config entry named in the query's name='...' clause."""
         name = re.search(r"name='(\w+)'", query).group(1)
         return MagicMock(**{"one.return_value.value": self.config[name]})
 
@@ -83,12 +85,14 @@ class FakeDbCluster:
 
     @contextlib.contextmanager
     def cql_connection_patient(self, node, connect_timeout):
+        """Yields a FakeSession over the config, asserting the connection targets the data node."""
         assert node is self.data_nodes[0], "commitlog params must be collected from a data node"
         yield FakeSession(self.config)
 
 
 @pytest.fixture(name="db_cluster")
 def fixture_db_cluster(fake_remoter):
+    """A cluster of one 14-shard data node whose commitlog is hard-limited with 32 MB segments."""
     fake_remoter.result_map = {
         re.compile(r".*seastar-cpu-map\.sh.*"): Result(stdout=SEASTAR_CPU_MAP_STDOUT, exited=0),
         re.compile(r'.*grep "\^SCYLLA_ARGS=".*'): Result(stdout=SCYLLA_ARGS_STDOUT, exited=0),
@@ -105,6 +109,7 @@ def fixture_db_cluster(fake_remoter):
 
 @contextlib.contextmanager
 def mocked_max_disk_size(value: int = MAX_DISK_SIZE):
+    """Patches the commitlog max_disk_size API call to return value; yields the RemoteCurlClient mock."""
     with patch("sdcm.commit_log_check_thread.RemoteCurlClient") as curl_client:
         curl_client.return_value.run_remoter_curl.return_value.stdout = str(value)
         yield curl_client

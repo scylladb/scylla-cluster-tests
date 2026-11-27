@@ -20,28 +20,35 @@ YCSB = "bin/ycsb run dynamodb -P workloads/workloada -threads 100 -target 1200 -
 
 
 def test_duration_bound_cmd_limits_cassandra_stress_and_ycsb_by_time():
+    """Turns c-s n= into duration=5m and adds a 300s YCSB max execution time; returns None for c-s without -pop."""
     assert duration_bound_cmd(CS_WRITE) == CS_WRITE.replace(" n=15000000 ", " duration=5m ")
     assert duration_bound_cmd(CS_WRITE.replace(" -pop seq=1..15000000", "")) is None
     assert duration_bound_cmd(YCSB) == YCSB + " -p maxexecutiontime=300"
 
 
 class FakePool:
+    """Stress thread pool stand-in whose `done` event marks the stress run as finished."""
+
     def __init__(self):
         self.done = threading.Event()
 
 
 class FakeTester:
+    """Tester stand-in that records verified pools and controls the pass result and teardown state."""
+
     def __init__(self):
         self.verified, self.actions_log, self.log = [], MagicMock(), MagicMock()
         self.pass_ok, self.teardown_started = True, False
 
     def verify_stress_thread(self, pool):
+        """Wait for the pool to finish, record it, and return the configured pass result."""
         assert pool.done.wait(timeout=5)
         self.verified.append(pool)
         return self.pass_ok
 
 
 def test_keep_alive_relaunches_until_finish():
+    """Relaunches the stress as a duration-bound command after a passing run, until stop() and finish()."""
     tester, first, second, launched = FakeTester(), FakePool(), FakePool(), []
 
     def relaunch(cmd):
@@ -60,6 +67,7 @@ def test_keep_alive_relaunches_until_finish():
 
 
 def test_keep_alive_does_not_relaunch_after_a_failed_pass():
+    """Ends the keep-alive loop after a failed verification pass, with no relaunch."""
     tester, first, relaunch = FakeTester(), FakePool(), MagicMock()
     tester.pass_ok = False
     keeper = StressKeepAlive(tester, CS_WRITE, [first], relaunch)
@@ -70,6 +78,7 @@ def test_keep_alive_does_not_relaunch_after_a_failed_pass():
 
 
 def test_keep_alive_stops_relaunching_once_teardown_started():
+    """Ends the keep-alive loop when the tester teardown has started, with no relaunch."""
     tester, first, relaunch = FakeTester(), FakePool(), MagicMock()
     tester.teardown_started = True
     keeper = StressKeepAlive(tester, CS_WRITE, [first], relaunch)
@@ -80,6 +89,7 @@ def test_keep_alive_stops_relaunching_once_teardown_started():
 
 
 def test_finish_all_raises_the_first_failure_and_logs_the_others():
+    """finish_all() raises the first keeper failure and logs the remaining failures as errors."""
     tester = FakeTester()
     keepers = [StressKeepAlive(tester, CS_WRITE, [FakePool()], None) for _ in range(2)]
     tester.verify_stress_thread = MagicMock(side_effect=[ValueError("read failed"), ValueError("write failed")])
@@ -98,6 +108,7 @@ def test_finish_all_raises_the_first_failure_and_logs_the_others():
     ],
 )
 def test_upgrade_keep_alive_only_verifies(params, commands):
+    """With keep-alive off or a stress multiplier, UpgradeTest only verifies the original pools."""
     tester, pools, relaunch = FakeTester(), [FakePool() for _ in commands], MagicMock()
     tester.params = params
     for pool in pools:

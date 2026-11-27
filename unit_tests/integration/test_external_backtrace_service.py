@@ -38,6 +38,7 @@ SAMPLE_BACKTRACE_ADDRESSES = "0x4a3c9b7\n0x11ddd33\n0x11ddcec"
 
 @pytest.fixture(name="node")
 def node_fixture(tmp_path):
+    """Return a DummyNode with a DummyRemote remoter, logging under tmp_path."""
     node = DummyNode(name="test_node", parent_cluster=None, base_logdir=tmp_path)
     node.remoter = DummyRemote()
     return node

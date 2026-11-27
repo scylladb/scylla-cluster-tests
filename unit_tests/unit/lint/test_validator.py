@@ -26,6 +26,7 @@ from sdcm.utils.lint.validator import validate_pipeline
 def test_validate_pipeline_cloud_lookup_never_reaches_the_network(
     pipeline, test_data_dir, remote_connections, restore_root_logger
 ):
+    """Validating a pipeline with SCT_TEST_ID set completes without errors and opens no network connections."""
     pipeline_path = test_data_dir / "lint" / f"{pipeline}.jenkinsfile"
     # The capacity-reservation and dedicated-host lookups only run when `test_id` is set. A bare
     # local `sct.py lint-pipelines` leaves it unset; CI runs through `docker/env/hydra.sh`, which

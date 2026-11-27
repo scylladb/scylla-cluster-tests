@@ -38,6 +38,8 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class Node:
+    """Real SSH-connected node with a remoter to a hard-coded loader host."""
+
     def __init__(self):
         self.ssh_login_info = {
             "hostname": "34.253.205.91",
@@ -50,17 +52,22 @@ class Node:
 
 
 class DbNode:
+    """Static DB node stand-in exposing only an IP address and DC index."""
+
     ip_address = "34.244.157.61"
     dc_idx = 1
 
 
 class LoaderSetDummy:
+    """Loader-set stand-in holding one real Node and empty params."""
+
     def __init__(self):
         self.nodes = [Node()]
         self.params = {}
 
     @staticmethod
     def get_db_auth():
+        """Return no DB credentials, as for a cluster without authentication."""
         return None
 
     name = "LoaderSetDummy"
@@ -68,8 +75,11 @@ class LoaderSetDummy:
 
 @pytest.mark.skip(reason="manual tests")
 class EC2ClientTests:
+    """Manual checks of spot instance and spot fleet creation through the EC2 client."""
+
     @staticmethod
     def test_01():
+        """Request spot instances (with and without duration) and a spot fleet, printing each result."""
         network_if = [
             {
                 "DeviceIndex": 0,
@@ -95,12 +105,16 @@ class EC2ClientTests:
 
 @pytest.mark.skip(reason="manual tests")
 class TestCassandraStressExporter:
+    """Manual checks that CassandraStressExporter publishes cassandra-stress log lines as Prometheus metrics."""
+
     @classmethod
     def setup_class(cls):
+        """Start the Prometheus metrics server and create the nemesis metrics object for the class."""
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
     def test_01(self):
+        """A total line, also when written in chunks, is exported as the write ops gauge for the loader."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         cs_exporter = CassandraStressExporter(
             "127.0.0.1", self.metrics, "write", tmp_file.name, loader_idx=1, cpu_idx=0
@@ -139,12 +153,16 @@ class TestCassandraStressExporter:
 
 @pytest.mark.skip(reason="manual tests")
 class TestCassandraStressHDRExporter:
+    """Manual checks that CassandraStressHDRExporter publishes HDR histogram latencies as Prometheus metrics."""
+
     @classmethod
     def setup_class(cls):
+        """Start the Prometheus metrics server and create the nemesis metrics object for the class."""
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
     def test_01_mixed(self):
+        """A mixed workload exports both WRITE p50 and READ p99.9 latency gauges from HDR lines."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         cs_exporter = CassandraStressHDRExporter(
             "127.0.0.1", self.metrics, "mixed", tmp_file.name, loader_idx=1, cpu_idx=0
@@ -179,6 +197,7 @@ class TestCassandraStressHDRExporter:
         res.result(10)
 
     def test_02_write(self):
+        """A write workload exports the WRITE p50 latency gauge from an HDR line."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         cs_exporter = CassandraStressHDRExporter(
             "127.0.0.1", self.metrics, "write", tmp_file.name, loader_idx=1, cpu_idx=0
@@ -203,6 +222,7 @@ class TestCassandraStressHDRExporter:
         res.result(10)
 
     def test_03_read(self):
+        """A read workload exports the READ p99.9 latency gauge from an HDR line."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         cs_exporter = CassandraStressHDRExporter(
             "127.0.0.1", self.metrics, "read", tmp_file.name, loader_idx=1, cpu_idx=0
@@ -227,6 +247,7 @@ class TestCassandraStressHDRExporter:
         res.result(10)
 
     def test_04_mixed_only_write(self):
+        """A mixed workload exports the WRITE-rt latency and skips the READ-st (service time) HDR tag."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         cs_exporter = CassandraStressHDRExporter(
             "127.0.0.1", self.metrics, "mixed", tmp_file.name, loader_idx=1, cpu_idx=0
@@ -263,20 +284,27 @@ class TestCassandraStressHDRExporter:
 
 
 class BaseSCTEventsTest:
+    """Base for manual tests that need the SCT events device running."""
+
     @classmethod
     def setup_class(cls):
+        """Start the events device in a temp dir and give it time to come up."""
         cls.temp_dir = tempfile.mkdtemp()
         start_events_device(cls.temp_dir)
         time.sleep(10)
 
     @classmethod
     def teardown_class(cls):
+        """Stop the events device."""
         stop_events_device()
 
 
 @pytest.mark.skip(reason="manual tests")
 class TestStressThread(BaseSCTEventsTest):
+    """Manual checks of cassandra-stress threads and their event publisher against a live loader."""
+
     def test_01(self):
+        """Run two concurrent cassandra-stress writes, kill them, and log their parsed results."""
         start_metrics_server()
         cstress = CassandraStressThread(
             LoaderSetDummy(),
@@ -308,6 +336,7 @@ class TestStressThread(BaseSCTEventsTest):
 
     @staticmethod
     def test_02():
+        """CassandraStressEventsPublisher tails a stress log containing a stats line and a consistency error."""
         tmp_file = tempfile.NamedTemporaryFile(mode="w+")
         tailer = CassandraStressEventsPublisher(node=Node(), cs_log_filename=tmp_file.name)
 
@@ -328,7 +357,10 @@ class TestStressThread(BaseSCTEventsTest):
 
 @pytest.mark.skip(reason="manual tests")
 class TestYcsbStressThread(BaseSCTEventsTest):
+    """Manual checks of YCSB stress threads against a live Alternator node."""
+
     def test_01(self):
+        """Run a YCSB DynamoDB load followed by a run phase, then kill the remaining ycsb processes."""
         params = dict(alternator_port=8080)  # , dynamodb_primarykey_type='HASH_AND_RANGE')
         loader_set = LoaderSetDummy()
         thread1 = YcsbStressThread(

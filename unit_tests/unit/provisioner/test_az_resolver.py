@@ -62,6 +62,7 @@ def mock_aws_region_cls_fixture():
 
 
 def test_required_instance_types_collects_all_role_types_when_active():
+    """required_instance_types gathers the instance type of every role whose nodes or feature are active."""
     params = _make_params(
         instance_type_db="i4i.large",
         instance_type_loader="t3.small",
@@ -93,6 +94,7 @@ def test_required_instance_types_collects_all_role_types_when_active():
 
 
 def test_required_instance_types_skips_empty_and_missing():
+    """required_instance_types leaves out empty, None and absent instance type params."""
     params = _make_params(
         instance_type_db="i4i.large",
         instance_type_loader="",
@@ -124,12 +126,14 @@ def test_required_instance_types_excludes_types_with_zero_node_count():
 
 
 def test_resolve_disabled_returns_unchanged(mock_aws_region_cls):
+    """With AZ pre-filtering off, resolve keeps the configured availability_zone as is."""
     params = _make_params(pre_filter_unavailable_availability_zones=False, availability_zone="a,b")
     AZResolver(params).resolve()
     assert params["availability_zone"] == "a,b"
 
 
 def test_resolve_replaces_invalid_az_with_valid_alternative(mock_aws_region_cls):
+    """AZResolver.resolve replaces a configured AZ that lacks the required types with a supported one."""
     _, region_instance = mock_aws_region_cls
     # configured "a" not in the supported list - must be replaced
     region_instance.get_common_availability_zones.return_value = ["us-east-1b", "us-east-1c"]
@@ -139,6 +143,7 @@ def test_resolve_replaces_invalid_az_with_valid_alternative(mock_aws_region_cls)
 
 
 def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_aws_region_cls):
+    """AZResolver.resolve keeps the supported AZs of a multi-AZ config and fills the rest with other supported ones."""
     _, region_instance = mock_aws_region_cls
     region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1c", "us-east-1d"]
     # configured a,b,e — only "a" supported; must replace b + e with valid alternatives
@@ -154,6 +159,7 @@ def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_aws_regi
 
 
 def test_resolve_raises_when_no_valid_az_in_region(mock_aws_region_cls):
+    """AZResolver.resolve raises NoValidAvailabilityZoneError when no AZ of the region supports the required types."""
     _, region_instance = mock_aws_region_cls
     region_instance.get_common_availability_zones.return_value = []
     params = _make_params(availability_zone="a")
@@ -162,6 +168,7 @@ def test_resolve_raises_when_no_valid_az_in_region(mock_aws_region_cls):
 
 
 def test_resolve_target_intersection_when_target_differs_from_db(mock_aws_region_cls):
+    """AZResolver.resolve picks the AZ supporting both the DB and the differing target instance type."""
     _, region_instance = mock_aws_region_cls
     # only "c" supports both db (x86) and target (arm)
     region_instance.get_common_availability_zones.return_value = ["us-east-1c"]
@@ -191,6 +198,7 @@ def mock_multi_region_fixture():
 
 
 def test_resolve_multi_region_intersects_supported_az_letters(mock_multi_region):
+    """For multiple regions, resolve picks an AZ letter supported in every region."""
     mock_multi_region["us-east-1"] = ["us-east-1a", "us-east-1b"]
     mock_multi_region["eu-west-1"] = ["eu-west-1b", "eu-west-1c"]
     params = _make_params(region_name="us-east-1 eu-west-1", availability_zone="a")
@@ -199,6 +207,7 @@ def test_resolve_multi_region_intersects_supported_az_letters(mock_multi_region)
 
 
 def test_resolve_multi_region_raises_when_no_common_letter(mock_multi_region):
+    """AZResolver.resolve raises NoValidAvailabilityZoneError when the regions share no supported AZ letter."""
     mock_multi_region["us-east-1"] = ["us-east-1a", "us-east-1b"]
     mock_multi_region["eu-west-1"] = ["eu-west-1c", "eu-west-1d"]
     params = _make_params(region_name="us-east-1 eu-west-1", availability_zone="a")
@@ -243,6 +252,7 @@ def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_re
     ],
 )
 def test_node_count_positive(value, expected):
+    """_node_count_positive is true for True, a positive number or a list with a positive entry; strings are false."""
     assert _node_count_positive(value) is expected
 
 
@@ -278,11 +288,13 @@ def test_resolve_with_unset_availability_zone_stays_unset(mock_aws_region_cls, a
     ],
 )
 def test_is_az_fallback_enabled(new_param, alias, expected):
+    """is_az_fallback_enabled uses the new param when set and falls back to the AWS alias otherwise."""
     params = _make_params(fallback_to_next_availability_zone=new_param, aws_fallback_to_next_availability_zone=alias)
     assert is_az_fallback_enabled(params) is expected
 
 
 def test_get_fallback_candidates_single_az(mock_aws_region_cls):
+    """For a single AZ, the candidates are the configured AZ followed by each other supported AZ."""
     _, region_instance = mock_aws_region_cls
     region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
     params = _make_params(availability_zone="a")
@@ -290,6 +302,7 @@ def test_get_fallback_candidates_single_az(mock_aws_region_cls):
 
 
 def test_get_fallback_candidates_multi_az(mock_aws_region_cls):
+    """For several AZs, the configured set comes first, then sets with one slot swapped for a spare AZ."""
     _, region_instance = mock_aws_region_cls
     region_instance.get_common_availability_zones.return_value = [
         "us-east-1a",
@@ -349,6 +362,7 @@ def mock_probe_aws_fixture():
 
 
 def test_probe_capacity_returns_true_on_successful_launch(mock_probe_aws):
+    """A successful probe launch reports the type available and terminates the probe instance."""
     mock_probe_aws.run_instances.return_value = {"Instances": [{"InstanceId": "i-1"}]}
     params = _make_params(test_id="t-1", instance_type_db_target="m6g.large")
 
@@ -359,6 +373,7 @@ def test_probe_capacity_returns_true_on_successful_launch(mock_probe_aws):
 
 
 def test_probe_capacity_returns_false_on_capacity_error(mock_probe_aws):
+    """A capacity error on the probe launch reports the type unavailable, with nothing to terminate."""
     mock_probe_aws.run_instances.side_effect = _capacity_error()
     resolver = AZResolver(_make_params(test_id="t-1"))
 
@@ -396,6 +411,7 @@ def test_run_pre_flight_capacity_probe_noop(mock_probe_aws, overrides):
 
 
 def test_run_pre_flight_capacity_probe_succeeds_when_all_types_available(mock_probe_aws):
+    """The pre-flight probe launches and terminates one instance per dynamic type per configured AZ."""
     mock_probe_aws.run_instances.return_value = {"Instances": [{"InstanceId": "i-1"}]}
     run_pre_flight_capacity_probe(
         _make_params(
@@ -412,6 +428,7 @@ def test_run_pre_flight_capacity_probe_succeeds_when_all_types_available(mock_pr
 
 
 def test_run_pre_flight_capacity_probe_raises_on_capacity_failure(mock_probe_aws):
+    """The pre-flight probe raises ProvisioningCapacityExhausted naming the type@AZ without capacity."""
     mock_probe_aws.run_instances.side_effect = _capacity_error()
     with pytest.raises(ProvisioningCapacityExhausted, match="m6g.large@a"):
         run_pre_flight_capacity_probe(
@@ -528,6 +545,7 @@ class TestSpotPlacementScoreOrdering:
         return _make_params(**{**defaults, **overrides})
 
     def test_disabled_by_default(self):
+        """Spot placement scoring is off unless use_spot_placement_scores is set."""
         params = _make_params(instance_provision="spot")
         assert is_spot_placement_scoring_enabled(params) is False
 
@@ -537,10 +555,12 @@ class TestSpotPlacementScoreOrdering:
         assert is_spot_placement_scoring_enabled(params) is False
 
     def test_skipped_for_non_aws_backend(self):
+        """Spot placement scoring is off for non-AWS backends."""
         params = self._spot_params(cluster_backend="gce")
         assert is_spot_placement_scoring_enabled(params) is False
 
     def test_enabled_for_aws_spot(self):
+        """Spot placement scoring is on for AWS spot and spot_fleet provisioning."""
         assert is_spot_placement_scoring_enabled(self._spot_params()) is True
         assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is True
 
@@ -550,10 +570,12 @@ class TestSpotPlacementScoreOrdering:
         assert resolver.spot_target_capacity() == 6
 
     def test_target_capacity_handles_multi_dc_lists(self):
+        """spot_target_capacity sums per-DC DB node counts."""
         resolver = AZResolver(self._spot_params(n_db_nodes=[3, 3], n_loaders=[1, 1], n_monitor_nodes=1))
         assert resolver.spot_target_capacity() == 6
 
     def test_target_capacity_includes_zero_token_nodes(self):
+        """spot_target_capacity adds zero-token DB nodes when they are in use."""
         resolver = AZResolver(
             self._spot_params(n_db_nodes=6, n_db_zero_token_nodes=2, use_zero_nodes=True, n_loaders=2)
         )
@@ -587,10 +609,12 @@ class TestSpotPlacementScoreOrdering:
         mock_rank_az.assert_not_called()
 
     def test_target_capacity_is_at_least_one(self):
+        """spot_target_capacity is 1 when no nodes are configured."""
         resolver = AZResolver(self._spot_params(n_db_nodes=0, n_loaders=0, n_monitor_nodes=0))
         assert resolver.spot_target_capacity() == 1
 
     def test_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        """With the override flag, the best-scoring AZ becomes the first fallback candidate."""
         mock_aws_region_cls[1].get_common_availability_zones.return_value = [
             "us-east-1a",
             "us-east-1b",
@@ -649,6 +673,7 @@ class TestSpotPlacementScoreOrdering:
         mock_rank.assert_not_called()
 
     def test_region_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        """Region fallback candidates follow the spot placement score ranking."""
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
         params = self._spot_params(availability_zone="a")
         with (
@@ -678,6 +703,7 @@ class TestSpotPlacementScoreOrdering:
         assert AZResolver(self._spot_params()).get_preferred_spot_region() is None
 
     def test_upfront_relocation_when_margin_exceeded(self, mock_aws_region_cls):
+        """A fallback region beating the current score by at least the margin is chosen for upfront relocation."""
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
         params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=3)
         scores = [
@@ -691,6 +717,7 @@ class TestSpotPlacementScoreOrdering:
             assert AZResolver(params).get_preferred_spot_region() == ("us-west-2", ["a"])
 
     def test_no_upfront_relocation_when_margin_not_met(self, mock_aws_region_cls):
+        """A score lead below the relocation margin keeps the current region."""
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
         params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=5)
         scores = [
@@ -815,6 +842,7 @@ class TestDefaultAzIsNotAChoice:
         return params
 
     def test_a_defaults_only_az_lets_the_score_choose(self):
+        """An AZ that comes only from defaults leaves the choice to the placement score."""
         assert AZResolver(self._params(explicit=False))._score_may_choose_az() is True
 
     def test_a_deliberate_pin_is_honoured(self):
@@ -822,10 +850,12 @@ class TestDefaultAzIsNotAChoice:
         assert AZResolver(self._params(explicit=True))._score_may_choose_az() is False
 
     def test_the_override_flag_still_beats_a_deliberate_pin(self):
+        """spot_score_overrides_configured_az lets the score choose even over an explicitly set AZ."""
         params = self._params(explicit=True, spot_score_overrides_configured_az=True)
         assert AZResolver(params)._score_may_choose_az() is True
 
     def test_on_demand_runs_never_reorder_regardless_of_provenance(self):
+        """On-demand runs keep the configured AZ even when it comes only from defaults."""
         params = self._params(explicit=False, instance_provision="on_demand")
         assert AZResolver(params)._score_may_choose_az() is False
 
@@ -876,6 +906,7 @@ class TestRolesNeverSplitAcrossAzs:
         ]
 
     def test_one_configured_az_resolves_to_exactly_one(self, mock_aws_region_cls):
+        """With roles preferring different AZs, one configured AZ still resolves to a single AZ for all roles."""
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
         params = self._params("a")
 

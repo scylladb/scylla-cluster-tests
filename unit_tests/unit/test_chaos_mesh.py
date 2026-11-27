@@ -31,6 +31,8 @@ from sdcm.utils.k8s.chaos_mesh import (
 
 @dataclass
 class DummyK8sCluster:
+    """K8s cluster fake: prints applied manifests and answers kubectl with pre-registered results."""
+
     _commands: Dict[str, Result] = field(default_factory=dict)
     region_name: str = "fake-region-1"
 
@@ -40,6 +42,7 @@ class DummyK8sCluster:
             print(yaml.safe_load(config_file))
 
     def kubectl(self, command, *args, **kwargs):
+        """Return the registered result whose command key is contained in the given command."""
         result = [result for cmd, result in self._commands.items() if cmd in command]
         assert result, (
             f"given command: {command} was not registered, failing test."
@@ -48,22 +51,28 @@ class DummyK8sCluster:
         return result[0]
 
     def register_kubectl_result(self, command: str, command_result: Result):
+        """Register the result kubectl returns for commands containing `command`."""
         self._commands[command] = command_result
 
 
 @dataclass
 class DummyPodCluster:
+    """Fake parent cluster providing the pod namespace."""
+
     namespace: str = "scylla"
 
 
 @dataclass
 class DummyPod:
+    """Fake pod with its parent cluster, k8s cluster and name."""
+
     parent_cluster: DummyPodCluster
     k8s_cluster: DummyK8sCluster
     name: str
 
 
 def test_podchaos_experiment_configuration_is_valid(capsys):
+    """PodFailureExperiment.start() applies a PodChaos manifest targeting the pod by its statefulset label."""
     k8s_cluster = DummyK8sCluster()
     pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
     experiment = PodFailureExperiment(pod=pod, duration="10s")
@@ -87,6 +96,7 @@ def test_podchaos_experiment_configuration_is_valid(capsys):
 
 
 def test_memorystress_experiment_configuration_is_valid(capsys):
+    """MemoryStressExperiment.start() applies a StressChaos manifest with the given memory stressors."""
     k8s_cluster = DummyK8sCluster()
     pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
     experiment = MemoryStressExperiment(pod=pod, duration="10s", workers=4, size="512MB", time_to_reach="10s")
@@ -162,6 +172,7 @@ unknown_conditions = ""
     ),
 )
 def test_experiment_statuses_for_podchaos_condidtions(conditions, status):
+    """Each combination of PodChaos conditions maps to the matching ExperimentStatus."""
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(stdout=conditions))
     pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
@@ -171,6 +182,7 @@ def test_experiment_statuses_for_podchaos_condidtions(conditions, status):
 
 
 def test_wait_for_finished_returns_when_status_is_finished():
+    """wait_until_finished() returns once the experiment reports FINISHED."""
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(stdout=finished_conditions))
     pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
@@ -182,6 +194,7 @@ def test_wait_for_finished_returns_when_status_is_finished():
 
 
 def test_wait_for_finished_raises_exception_when_status_is_error():
+    """wait_until_finished() raises ChaosMeshExperimentException when the experiment is in ERROR."""
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(error_conditions))
     k8s_cluster.register_kubectl_result("describe PodChaos ", Result(stdout="pod description got from k8s"))
@@ -195,6 +208,7 @@ def test_wait_for_finished_raises_exception_when_status_is_error():
 
 
 def test_wait_for_finished_raises_exception_when_timeout_occurs():
+    """wait_until_finished() raises ChaosMeshTimeout when the experiment is still running at timeout."""
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(running_conditions))
     k8s_cluster.register_kubectl_result("describe PodChaos ", Result(stdout="pod description got from k8s"))

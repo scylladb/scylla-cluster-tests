@@ -21,6 +21,7 @@ class FakeLoaderMixin(LoaderUtilsMixin):
 
 @pytest.mark.parametrize("major", [False, True])
 def test_no_timeout_skips_waiting(major):
+    """Without prepare_wait_no_compactions_timeout, it returns at once, skipping both compaction and wait."""
     tester = FakeLoaderMixin({"prepare_wait_no_compactions_trigger_major": major})
 
     tester.wait_prepare_compactions()
@@ -31,6 +32,7 @@ def test_no_timeout_skips_waiting(major):
 
 
 def test_major_compaction_runs_on_every_node_before_waiting():
+    """With trigger_major, every node runs `nodetool compact` before waiting up to the configured timeout."""
     tester = FakeLoaderMixin(
         {"prepare_wait_no_compactions_timeout": 60, "prepare_wait_no_compactions_trigger_major": True}
     )
@@ -43,6 +45,7 @@ def test_major_compaction_runs_on_every_node_before_waiting():
 
 
 def test_without_major_compaction_only_waits():
+    """Without trigger_major, only the wait for running compactions to finish happens."""
     tester = FakeLoaderMixin(
         {"prepare_wait_no_compactions_timeout": 90, "prepare_wait_no_compactions_trigger_major": False}
     )

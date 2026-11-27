@@ -21,14 +21,17 @@ T2 = T1 + timedelta(seconds=5)
 
 
 def test_expected_hosts_are_replicas_present_before_and_after_the_truncate():
+    """Expects records only on tablet replicas that hold the table both before and after the truncate."""
     assert expected_record_hosts({"a", "b", "c"}, {"a", "b", "d"}, {"a", "b", "c", "d", "e", "f"}) == {"a", "b"}
 
 
 def test_vnode_table_expects_a_record_on_every_host():
+    """Expects a record on every host when the table has no tablet replicas."""
     assert expected_record_hosts(set(), set(), {"a", "b", "c"}) == {"a", "b", "c"}
 
 
 def test_missing_fresh_records_reports_absent_and_stale_rows():
+    """Reports hosts with no record and hosts whose record is not newer than the baseline."""
     baseline = {"node-1": T1, "node-2": None, "node-3": T1, "node-4": None}
     found = {"node-1": T2, "node-2": None, "node-3": T1, "node-4": T1}
     assert missing_fresh_records(baseline, found) == {
@@ -38,6 +41,7 @@ def test_missing_fresh_records_reports_absent_and_stale_rows():
 
 
 def test_changed_records_reports_gone_and_rewritten_rows():
+    """Reports hosts whose recorded truncation row disappeared or changed its time."""
     recorded = {"node-1": T2, "node-2": T2, "node-3": T2}
     found = {"node-1": T2, "node-2": None, "node-3": T1}
     assert changed_records(recorded, found) == {
@@ -47,6 +51,7 @@ def test_changed_records_reports_gone_and_rewritten_rows():
 
 
 def test_host_ids_and_records_are_read_from_each_node_over_its_own_connection():
+    """Maps host IDs to nodes and keeps the oldest shard record per table, None for a table without one."""
     host_id, table_id = uuid4(), uuid4()
     tester = MagicMock()
     session = tester.db_cluster.cql_connection_patient_exclusive.return_value.__enter__.return_value
@@ -69,6 +74,7 @@ def _raise(msg):
 
 
 def test_truncate_check_fails_when_every_replica_moved_during_the_truncate():
+    """Fails the check when no replica held the table both before and after the truncate."""
     tester = MagicMock()
     tester.fail.side_effect = _raise
     tester._tablet_replica_hosts.return_value = {"h2"}

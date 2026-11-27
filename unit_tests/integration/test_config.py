@@ -34,6 +34,7 @@ def _get_latest_scylla_release(product="scylla"):
 
 @pytest.fixture(autouse=True)
 def fixture_env(monkeypatch):
+    """Quiet noisy loggers and default each test to a docker backend on the latest Scylla release."""
     logging.basicConfig(level=logging.ERROR)
     logging.getLogger("botocore").setLevel(logging.CRITICAL)
     logging.getLogger("boto3").setLevel(logging.CRITICAL)
@@ -51,6 +52,7 @@ def fixture_env(monkeypatch):
 
 @pytest.mark.integration
 def test_04_check_env_parse(monkeypatch):
+    """A two-region AWS config from JSON-list env values passes verification and keeps the space-separated AMI list."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
     monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
@@ -67,6 +69,7 @@ def test_04_check_env_parse(monkeypatch):
 
 @pytest.mark.integration
 def test_10_longevity(monkeypatch):
+    """The user_prefix from the longevity config is truncated to 35 characters on AWS."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/complex_test_case_with_version.yaml")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA_DESC", "master")
@@ -95,6 +98,7 @@ def test_10_oci_user_prefix_fits_x509_cn_limit(monkeypatch):
 
 @pytest.mark.integration
 def test_10_mananger_regression(monkeypatch):
+    """The multi-region manager regression config with explicit AMIs passes verification."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
@@ -104,6 +108,7 @@ def test_10_mananger_regression(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_ami(monkeypatch):
+    """A release scylla_version resolves to one Scylla AMI per region of a two-region AWS config."""
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -117,6 +122,7 @@ def test_12_scylla_version_ami(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_ami_case1(monkeypatch):
+    """A release scylla_version with no explicit AMI passes verification for a two-region AWS config."""
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -127,6 +133,7 @@ def test_12_scylla_version_ami_case1(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_ami_case2(monkeypatch):
+    """A nonexistent scylla_version raises ValueError naming the region with no matching AMI."""
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "99.0.3")
@@ -138,6 +145,7 @@ def test_12_scylla_version_ami_case2(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_repo(monkeypatch):
+    """A release scylla_version without an explicit AMI resolves the Scylla AMI and passes verification on AWS."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
@@ -146,6 +154,7 @@ def test_12_scylla_version_repo(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_repo_case1(monkeypatch):
+    """A release scylla_version without an explicit AMI resolves the Scylla AMI and passes verification on AWS."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
@@ -154,6 +163,7 @@ def test_12_scylla_version_repo_case1(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_repo_case2(monkeypatch):
+    """A nonexistent scylla_version with an explicit AMI raises ValueError for the missing repo."""
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "99.0.3")
@@ -164,6 +174,7 @@ def test_12_scylla_version_repo_case2(monkeypatch):
 
 @pytest.mark.integration
 def test_13_scylla_version_ami_branch_latest(monkeypatch):
+    """The `branch-X.Y:latest` image resolves to one Scylla AMI per region of a two-region AWS config."""
     latest_branch = ".".join(_get_latest_scylla_release().split(".")[0:2])
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -179,6 +190,7 @@ def test_13_scylla_version_ami_branch_latest(monkeypatch):
 
 @pytest.mark.integration
 def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
+    """check_required_files accepts a c-s user profile path that ships with SCT."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     ami_id = get_ssm_ami(
         "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id", region_name="eu-west-1"
@@ -197,6 +209,7 @@ def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
 
 @pytest.mark.integration
 def test_13_bool(monkeypatch):
+    """The string "False" in SCT_USE_PREINSTALLED_SCYLLA parses to boolean False."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "False")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
@@ -207,6 +220,7 @@ def test_13_bool(monkeypatch):
 
 @pytest.mark.integration
 def test_14_aws_siren_from_env(monkeypatch):
+    """Cloud Scylla on AWS reads the cluster id as an int and the authenticator credentials from env."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_DB_TYPE", "cloud_scylla")
     monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
@@ -227,6 +241,7 @@ def test_14_aws_siren_from_env(monkeypatch):
 
 @pytest.mark.integration
 def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
+    """mixed_scylla in eu-west-1 picks a default oracle AMI when no oracle version is given."""
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
@@ -241,6 +256,7 @@ def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
 
 @pytest.mark.integration
 def test_16_oracle_scylla_version_us_east_1(monkeypatch):
+    """oracle_scylla_version resolves an oracle AMI in us-east-1."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
@@ -256,6 +272,7 @@ def test_16_oracle_scylla_version_us_east_1(monkeypatch):
 
 @pytest.mark.integration
 def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
+    """oracle_scylla_version resolves an oracle AMI in eu-west-1."""
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -271,6 +288,7 @@ def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
 
 @pytest.mark.integration
 def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
+    """Setting oracle_scylla_version together with ami_id_db_oracle raises ValueError."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
     monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -286,6 +304,10 @@ def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
 
 @pytest.mark.integration
 def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
+    """Verification fails without a version, repo or image on each non-k8s, non-siren backend.
+
+    cloud_scylla on GCE asks for SCT_CLOUD_CLUSTER_ID and passes once it is set.
+    """
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.delenv("SCT_SCYLLA_VERSION", raising=False)
     for backend in sct_config.available_backends:
@@ -320,6 +342,7 @@ def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_aws(monkeypatch):
+    """A master AWS AMI and a release oracle AMI both use user-data format version 3."""
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
@@ -334,6 +357,7 @@ def test_20_user_data_format_version_aws(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_aws_2(monkeypatch):
+    """A plain Ubuntu AMI uses user-data format 3 and leaves the oracle format unset."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     ami_id = get_ssm_ami(
         "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id", region_name="eu-west-1"
@@ -348,6 +372,7 @@ def test_20_user_data_format_version_aws_2(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_gce_1(monkeypatch):
+    """A master GCE image uses user-data format version 3."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
     conf = sct_config.SCTConfiguration()
@@ -358,6 +383,7 @@ def test_20_user_data_format_version_gce_1(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_gce_2(monkeypatch):
+    """A release GCE image uses user-data format version 3."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
@@ -368,6 +394,7 @@ def test_20_user_data_format_version_gce_2(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_gce_3(monkeypatch):
+    """A plain Ubuntu GCE image uses user-data format version 2."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv(
         "SCT_GCE_IMAGE_DB",
@@ -381,6 +408,7 @@ def test_20_user_data_format_version_gce_3(monkeypatch):
 
 @pytest.mark.integration
 def test_20_user_data_format_version_azure(monkeypatch):
+    """A master Azure image passes verification and URL validity checks."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_AZURE_REGION_NAME", "eastus")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")

@@ -40,14 +40,15 @@ class HangingSetupCluster:
         self.release = threading.Event()
 
     def node_setup(self, node, **kwargs):
+        """Block until the test releases the node or NODE_SETUP_BLOCK_SEC passes."""
         self.release.wait(NODE_SETUP_BLOCK_SEC)
 
     def node_startup(self, node, **kwargs):
-        pass
+        """Stub: accept the node startup and return immediately."""
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
-        pass
+        """Wrapped by wait_for_init_wrap, which runs the hanging setup under the given timeout."""
 
 
 @pytest.fixture(name="cluster")

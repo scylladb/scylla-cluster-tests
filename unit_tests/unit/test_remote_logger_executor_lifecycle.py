@@ -109,6 +109,7 @@ def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, ca
 
 
 def test_k8s_client_logger_reads_multibyte_char_split_across_chunks():
+    """A UTF-8 character split across two read chunks is decoded whole into its log line."""
     data = "2026-10-06T00:00:00Z duration=530µs\n2026-10-06T00:00:01Z next\n".encode()
     cut = data.index("µ".encode()) + 1
     chunks = [data[:cut], data[cut:], b""]

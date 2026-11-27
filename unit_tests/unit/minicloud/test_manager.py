@@ -20,6 +20,7 @@ REAL_RUNNING_LIGHTWEIGHT_CMD = MinicloudManager.running_lightweight_cmd
 
 
 def test_start_runs_docker_container(tmp_path, monkeypatch):
+    """With no healthy endpoint, start() launches the configured image detached via docker run on the minicloud port."""
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
@@ -126,6 +127,7 @@ def test_start_without_guest_locking_runs_container_as_before(tmp_path, containe
 
 
 def test_start_passes_intercept_s3(tmp_path):
+    """start() passes --intercept-s3 to the container."""
     cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
     assert "--intercept-s3" in cmd
 
@@ -150,6 +152,7 @@ def test_start_omits_memory_flags_without_meminfo(tmp_path):
 
 
 def test_container_memory_gib_falls_back_to_host_total(tmp_path):
+    """The container memory cap falls back to the host's MemTotal in GiB."""
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemTotal:       65536000 kB\nMemAvailable:   1024 kB\n")
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
@@ -158,6 +161,7 @@ def test_container_memory_gib_falls_back_to_host_total(tmp_path):
 
 
 def test_container_memory_gib_unset_without_guest_locking(tmp_path):
+    """With guest memory locking off and no cap, the container memory size is 0."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lock_guest_memory=False))
     assert manager._container_memory_gib() == 0.0
 
@@ -190,6 +194,7 @@ def test_start_uses_configured_container_name(tmp_path):
 
 
 def test_start_passes_azure_credentials_by_env_file(tmp_path):
+    """For azure, credentials go in through an env file and the subscription, scratch group and TLS port are passed."""
     cfg = MinicloudConfig(state_dir=str(tmp_path), backend="azure", azure_subscription_id="real-sub")
     with (
         patch("sdcm.utils.minicloud.manager.setup_azure_credentials"),
@@ -204,6 +209,7 @@ def test_start_passes_azure_credentials_by_env_file(tmp_path):
 
 
 def test_start_reuses_healthy_endpoint(tmp_path):
+    """A healthy endpoint is reused without a new docker run."""
     config = MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
 
@@ -219,6 +225,7 @@ def test_start_reuses_healthy_endpoint(tmp_path):
 
 
 def test_container_gce_gaps_detects_both_missing(tmp_path):
+    """A container with neither GCP credentials nor --gcs-bucket reports both GCE gaps."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
     result = MagicMock(returncode=0, stdout=b'["AWS_REGION=us-east-1"]')
     with patch("sdcm.utils.minicloud.manager.subprocess.run", return_value=result):
@@ -237,6 +244,7 @@ def test_container_gce_gaps_detects_missing_bucket(tmp_path):
 
 
 def test_container_gce_gaps_none_when_fully_configured(tmp_path):
+    """A container with GCP credentials and --gcs-bucket reports no GCE gaps."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
     with patch.object(
         MinicloudManager,
@@ -290,6 +298,7 @@ def test_start_restarts_gce_container_with_gaps(tmp_path, monkeypatch):
 
 
 def test_start_reuses_fully_configured_gce_container(tmp_path, monkeypatch):
+    """A healthy, fully configured GCE container is reused without a new docker run."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     config = MinicloudConfig(
         backend="gce", docker_image="minicloud:test", state_dir=str(tmp_path), log_file=str(tmp_path / "mc.log")
@@ -442,6 +451,7 @@ def test_container_sizing_gaps_detects_changed_docker_caps(tmp_path):
 
 
 def test_container_sizing_gaps_ignores_unchanged_docker_caps(tmp_path):
+    """Docker memory and CPU caps that match the config report no sizing gaps."""
     manager = MinicloudManager(
         config=MinicloudConfig(state_dir=str(tmp_path), container_memory="48GiB", container_cpus="4")
     )
@@ -461,6 +471,7 @@ def test_container_sizing_gaps_empty_when_not_inspectable(tmp_path):
 
 
 def test_start_restarts_container_with_stale_sizing(tmp_path):
+    """A healthy container with different guest sizing is replaced by a docker run with the new sizing."""
     config = MinicloudConfig(
         docker_image="minicloud:test",
         state_dir=str(tmp_path),
@@ -488,6 +499,7 @@ def test_start_restarts_container_with_stale_sizing(tmp_path):
 
 
 def test_start_sets_aws_endpoint_url(tmp_path):
+    """start() exports AWS_ENDPOINT_URL pointing at the configured port."""
     config = MinicloudConfig(port=5000, state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
 
@@ -503,6 +515,7 @@ def test_start_sets_aws_endpoint_url(tmp_path):
 
 
 def test_stop_calls_docker_rm_force(tmp_path):
+    """stop() disconnects the container from the host network and force-removes it."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -515,6 +528,7 @@ def test_stop_calls_docker_rm_force(tmp_path):
 
 
 def test_stop_clears_env_vars(tmp_path, monkeypatch):
+    """stop() removes the AWS and GCE endpoint env vars."""
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:5000")
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:5000")
 
@@ -529,6 +543,7 @@ def test_stop_clears_env_vars(tmp_path, monkeypatch):
 
 
 def test_stop_terminates_log_process(tmp_path):
+    """stop() terminates the container log streaming process and clears it."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
     mock_log_proc = MagicMock()
@@ -542,6 +557,7 @@ def test_stop_terminates_log_process(tmp_path):
 
 
 def test_stop_is_idempotent(tmp_path):
+    """A second stop() runs no further commands."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -553,6 +569,7 @@ def test_stop_is_idempotent(tmp_path):
 
 
 def test_stop_skipped_when_keep_alive(tmp_path):
+    """With keep_alive set, stop() runs no commands."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
     manager.keep_alive = True
@@ -593,6 +610,7 @@ def test_set_env_overrides_sets_endpoint_vars_only(tmp_path, monkeypatch):
 
 
 def test_set_env_overrides_uses_config_port(tmp_path):
+    """The exported endpoint env vars use the configured port."""
     config = MinicloudConfig(port=9876, state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
     manager.set_env_overrides()
@@ -601,6 +619,7 @@ def test_set_env_overrides_uses_config_port(tmp_path):
 
 
 def test_set_env_overrides_sets_gce_endpoint_url_when_backend_is_gce(tmp_path):
+    """For the gce backend, set_env_overrides exports GCE_ENDPOINT_URL."""
     config = MinicloudConfig(port=5000, state_dir=str(tmp_path), backend="gce")
     manager = MinicloudManager(config=config)
     manager.set_env_overrides()
@@ -609,6 +628,7 @@ def test_set_env_overrides_sets_gce_endpoint_url_when_backend_is_gce(tmp_path):
 
 
 def test_set_env_overrides_does_not_set_gce_endpoint_url_when_backend_is_aws(tmp_path):
+    """For the aws backend, set_env_overrides leaves GCE_ENDPOINT_URL unset."""
     config = MinicloudConfig(port=5000, state_dir=str(tmp_path), backend="aws")
     manager = MinicloudManager(config=config)
     manager.set_env_overrides()
@@ -617,6 +637,7 @@ def test_set_env_overrides_does_not_set_gce_endpoint_url_when_backend_is_aws(tmp
 
 
 def test_set_env_overrides_does_not_set_gce_endpoint_url_when_no_backend(tmp_path, monkeypatch):
+    """With no backend configured, set_env_overrides leaves GCE_ENDPOINT_URL unset."""
     monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
 
     config = MinicloudConfig(port=5000, state_dir=str(tmp_path))
@@ -627,6 +648,7 @@ def test_set_env_overrides_does_not_set_gce_endpoint_url_when_no_backend(tmp_pat
 
 
 def test_prepare_regions_configures_every_region(tmp_path):
+    """prepare_regions builds and configures an AwsRegion for every configured region, in order."""
     config = MinicloudConfig(regions=["eu-west-1", "us-east-1", "eu-north-1"], state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -643,6 +665,7 @@ def test_prepare_regions_configures_every_region(tmp_path):
 
 
 def test_prepare_regions_calls_configure(tmp_path):
+    """prepare_regions configures the single configured region once."""
     config = MinicloudConfig(regions=["eu-west-1"], state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -656,6 +679,7 @@ def test_prepare_regions_calls_configure(tmp_path):
 
 
 def test_prepare_regions_silences_ssm_failures(tmp_path):
+    """prepare_regions swallows configure errors mentioning SSM."""
     config = MinicloudConfig(regions=["eu-west-1"], state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -667,6 +691,7 @@ def test_prepare_regions_silences_ssm_failures(tmp_path):
 
 
 def test_prepare_regions_silences_ssm_lowercase(tmp_path):
+    """prepare_regions swallows configure errors mentioning ssm in lowercase."""
     config = MinicloudConfig(regions=["eu-west-1"], state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -678,6 +703,7 @@ def test_prepare_regions_silences_ssm_lowercase(tmp_path):
 
 
 def test_prepare_regions_reraises_non_ssm_exceptions(tmp_path):
+    """prepare_regions re-raises configure errors unrelated to SSM."""
     config = MinicloudConfig(regions=["eu-west-1"], state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -690,6 +716,7 @@ def test_prepare_regions_reraises_non_ssm_exceptions(tmp_path):
 
 
 def test_is_running_true_when_container_running(tmp_path):
+    """is_running is True when docker inspect reports the container running."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -701,6 +728,7 @@ def test_is_running_true_when_container_running(tmp_path):
 
 
 def test_is_running_false_when_container_not_running(tmp_path):
+    """is_running is False when docker inspect fails."""
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -733,6 +761,7 @@ def test_death_watch_reports_even_with_keep_alive(tmp_path):
 
 
 def test_death_watch_silent_when_we_stopped_it(tmp_path):
+    """A container exit after our own stop() raises no death event."""
     config = MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
     manager._stopping = True
@@ -744,6 +773,7 @@ def test_death_watch_silent_when_we_stopped_it(tmp_path):
 
 
 def test_build_ca_bundle_concatenates_system_store_and_minicloud_cert(tmp_path, monkeypatch):
+    """build_ca_bundle writes the system CA store plus the minicloud cert to a 0644 bundle in the state dir."""
     system = tmp_path / "system.pem"
     system.write_text("SYSTEM\n")
     monkeypatch.setenv("SSL_CERT_FILE", str(system))
@@ -773,6 +803,7 @@ def test_system_ca_bundle_skips_the_minicloud_bundle(tmp_path, monkeypatch):
 
 
 def test_write_azure_env_file_is_private_and_complete(tmp_path):
+    """The Azure env file is written with mode 0600 and holds tenant, client ID and secret."""
     path = tmp_path / "azure-credentials.env"
     write_azure_env_file(str(path), {"tenant_id": "t", "client_id": "c", "client_secret": "s", "subscription_id": "x"})
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -780,12 +811,14 @@ def test_write_azure_env_file_is_private_and_complete(tmp_path):
 
 
 def test_start_refuses_unresolved_auto(tmp_path):
+    """start() raises MinicloudError while sizes are still auto."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), unresolved_auto=True))
     with pytest.raises(MinicloudError, match="auto"):
         manager.start()
 
 
 def test_resolve_minicloud_sizing_does_nothing_without_auto():
+    """Without auto sizes, resolve_minicloud_sizing returns False without probing the endpoint."""
     with patch.object(MinicloudManager, "is_endpoint_healthy") as healthy:
         assert (
             resolve_minicloud_sizing({"minicloud_lightweight_memory": "4GiB", "minicloud_lightweight_vcpus": 2})
@@ -795,6 +828,7 @@ def test_resolve_minicloud_sizing_does_nothing_without_auto():
 
 
 def test_running_lightweight_cmd_follows_the_container_not_the_health_probe(tmp_path):
+    """The running container's lightweight flags are read even when the health probe fails."""
     # a busy minicloud that misses a health probe must still be adopted, not re-derived
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
     cmd = ["--lightweight", "--lightweight-memory", "4GiB", "--lightweight-vcpus", "2"]

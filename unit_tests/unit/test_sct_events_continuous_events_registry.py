@@ -19,40 +19,50 @@ from sdcm.sct_events.system import InfoEvent
 
 
 class TestContinuousEventsRegistry:
+    """Tracking of begun continuous events and nemesis subcontext attachment by ContinuousEventsRegistry."""
+
     @pytest.fixture(scope="function")
     def registry(self):
+        """Provide a ContinuousEventsRegistry instance."""
         yield ContinuousEventsRegistry()
 
     @pytest.fixture(scope="function")
     def nodetool_event(self) -> Generator[NodetoolEvent, None, None]:
+        """Provide an unpublished NodetoolEvent."""
         yield NodetoolEvent(nodetool_command="mock_cmd", publish_event=False)
 
     @pytest.fixture(scope="function")
     def disruption_event(self) -> Generator[DisruptionEvent, None, None]:
+        """Provide an unpublished DisruptionEvent."""
         yield DisruptionEvent(nemesis_name="test", node="mock_node", publish_event=False)
 
     @pytest.fixture(scope="function")
     def gemini_stress_event(self) -> Generator[GeminiStressEvent, None, None]:
+        """Provide an unpublished GeminiStressEvent."""
         yield GeminiStressEvent(node="mock_node", cmd="gemini mock cmd", publish_event=False)
 
     @pytest.fixture(scope="function")
     def info_event(self) -> Generator[InfoEvent, None, None]:
+        """Provide an InfoEvent, a non-continuous event."""
         yield InfoEvent(message="This is a mock InfoEvent")
 
     @pytest.fixture(scope="function")
     def populated_registry(self, registry: ContinuousEventsRegistry) -> Generator[ContinuousEventsRegistry, None, None]:
+        """Provide the registry after creating 100 NodetoolEvents."""
         for _ in range(100):
             NodetoolEvent(nodetool_command="mock cmd", publish_event=False)
 
         yield registry
 
     def test_add_event(self, registry: ContinuousEventsRegistry):
+        """Beginning a continuous event adds it to the registry."""
         # continuous events are added to the registry on event instantiation
         event = NodetoolEvent(nodetool_command="mock cmd").begin_event(publish=False)
 
         assert event in registry.continuous_events
 
     def test_add_multiple_events(self, registry: ContinuousEventsRegistry):
+        """Each begun continuous event adds one entry to the registry."""
         pre_insertion_item_count = len(list(registry.continuous_events))
         number_of_insertions = 10
         for _ in range(number_of_insertions):
@@ -60,6 +70,7 @@ class TestContinuousEventsRegistry:
         assert pre_insertion_item_count + number_of_insertions == len(list(registry.continuous_events))
 
     def test_add_nemesis_sub_context_to_continuous_event(self):
+        """A continuous event lists the nemeses running at its begin and at its end in its message."""
         event = ScyllaServerStatusEvent(node=str(uuid.uuid1()), publish_event=False).begin_event(publish=False)
         # event not during nemesis
         assert event.subcontext == []
@@ -93,6 +104,7 @@ class TestContinuousEventsRegistry:
         assert event.to_json()
 
     def test_add_nemesis_sub_context_to_information_event(self):
+        """An information event lists the running nemeses in its message and serializes to JSON."""
         event = IndexSpecialColumnErrorEvent(message="This is a mock Event")
         # event not during nemesis
         assert event.subcontext == []
@@ -113,6 +125,7 @@ class TestContinuousEventsRegistry:
         assert event.to_json()
 
     def test_add_nemesis_sub_context_to_db_log_event(self):
+        """A DB log event clone created during nemeses lists them in its message and serializes to JSON."""
         event = DatabaseLogEvent.ABORTING_ON_SHARD()
         # event not during nemesis
         assert event.subcontext == []
@@ -138,6 +151,7 @@ class TestContinuousEventsRegistry:
         assert event.to_json()
 
     def test_adding_a_non_continuous_event_raises_error(self, registry: ContinuousEventsRegistry, info_event):
+        """Adding a non-continuous event to the registry raises ContinuousEventRegistryException."""
         with pytest.raises(ContinuousEventRegistryException):
             registry.add_event(info_event)
 
@@ -160,6 +174,7 @@ class TestContinuousEventsRegistry:
     def test_get_compact_events_by_continues_hash_from_log(
         self, populated_registry: ContinuousEventsRegistry, test_data_dir
     ):
+        """Compaction start and end log lines register and then remove a CompactionEvent found by its hash."""
         self._read_events_from_file(test_data_dir, "compaction_event_start.log")
 
         continues_hash = CompactionEvent.get_continuous_hash_from_dict(

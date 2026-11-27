@@ -41,6 +41,7 @@ def test_snippets_are_quote_free(snippet):
 
 
 def test_free_lock_passes_silently(tmp_path):
+    """With the lock free, the wait snippet succeeds at once and the following command runs."""
     lock_file = tmp_path / "lock"
     lock_file.touch()
 
@@ -51,6 +52,7 @@ def test_free_lock_passes_silently(tmp_path):
 
 
 def test_held_lock_logs_holder_and_keeps_it_without_kill_stale(held_lock):
+    """Without kill_stale, a held lock is logged with its holder's PID and command, and the holder keeps running."""
     lock_file, holder = held_lock
 
     result = _run(f"{lock_wait('apt', str(lock_file), lock_timeout=2, poll=1)} && echo done")
@@ -65,6 +67,7 @@ def test_held_lock_logs_holder_and_keeps_it_without_kill_stale(held_lock):
 
 
 def test_held_lock_kill_stale_kills_holder_and_repairs(held_lock, tmp_path):
+    """With kill_stale, the stale lock holder is killed after the timeout and the repair command runs."""
     lock_file, holder = held_lock
     repaired = tmp_path / "repaired"
 
@@ -80,6 +83,7 @@ def test_held_lock_kill_stale_kills_holder_and_repairs(held_lock, tmp_path):
 
 
 def test_apt_cmd_kill_stale_implies_lock_wait():
+    """apt_cmd with kill_stale adds a lock wait that kills the holders and runs a prompt-free dpkg repair."""
     cmd = apt_cmd("dist-upgrade scylla -y", lock_timeout=240, kill_stale=True)
 
     assert cmd.startswith("bash -c '")
@@ -91,4 +95,5 @@ def test_apt_cmd_kill_stale_implies_lock_wait():
 
 
 def test_apt_cmd_lock_wait_does_not_kill_by_default():
+    """apt_cmd with lock_wait alone waits for the lock and leaves its holders running."""
     assert "fuser -k" not in apt_cmd("update", lock_wait=True)

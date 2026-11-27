@@ -2,6 +2,7 @@ from test_lib.cql_types import ALL_COLUMN_TYPES, COLLECTION_COLUMN_TYPES, NOT_EM
 
 
 def test_get_random():
+    """get_random() yields each type variant once, at nesting levels 0 and 1, then returns None."""
     already_used = {}
     EMBEDDABLE_NON_COLLECTION_COLUMN_TYPES = [
         e for e in ALL_COLUMN_TYPES if e not in NOT_EMBEDDABLE_COLUMN_TYPES and e not in COLLECTION_COLUMN_TYPES
@@ -25,6 +26,7 @@ def test_get_random():
 
 
 def test_str_and_remember_forget_variants():
+    """Renders nested types as frozen CQL, filters the available variants, and remembers/forgets used variants."""
     type_int = CQLTypeBuilder("int")
     assert type_int._get_available_variants(
         already_created_info={},

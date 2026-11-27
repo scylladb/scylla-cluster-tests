@@ -140,12 +140,14 @@ def _make_catalog(*instances: InstanceTypeInfo) -> InstanceCatalog:
 
 @pytest.fixture(autouse=True)
 def silence_loggers():
+    """Raise the anyconfig and boto log levels to keep config loading quiet."""
     logging.getLogger("anyconfig").setLevel(logging.ERROR)
     logging.getLogger("botocore").setLevel(logging.CRITICAL)
     logging.getLogger("boto3").setLevel(logging.CRITICAL)
 
 
 def test_dict_constraint_resolved_to_instance_type(monkeypatch):
+    """A vcpu constraint for instance_type_db is resolved to a concrete type from the catalog."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -158,6 +160,7 @@ def test_dict_constraint_resolved_to_instance_type(monkeypatch):
 
 
 def test_literal_instance_type_passes_through_unchanged(monkeypatch):
+    """A literal instance_type_db is kept as given, even when absent from the catalog."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -170,6 +173,7 @@ def test_literal_instance_type_passes_through_unchanged(monkeypatch):
 
 
 def test_docker_backend_skips_resolution(monkeypatch):
+    """The docker backend loads no instance catalog."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -189,6 +193,7 @@ def test_docker_backend_skips_resolution(monkeypatch):
 
 
 def test_missing_vcpu_in_constraint_raises_value_error(monkeypatch):
+    """A constraint without vcpu fails config load with 'Invalid constraint for instance_type_db'."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -202,6 +207,7 @@ def test_missing_vcpu_in_constraint_raises_value_error(monkeypatch):
 
 
 def test_no_matching_instance_raises_value_error(monkeypatch):
+    """An unsatisfiable constraint fails config load with 'Cannot resolve instance_type_db'."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -215,6 +221,7 @@ def test_no_matching_instance_raises_value_error(monkeypatch):
 
 
 def test_env_var_dot_notation_vcpu_and_memory_resolved(monkeypatch):
+    """SCT_INSTANCE_TYPE_DB.vcpu/.memory env vars build a constraint that resolves to a type."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -242,6 +249,7 @@ def test_env_var_double_underscore_notation_vcpu_and_memory_resolved(monkeypatch
 
 
 def test_missing_catalog_directory_logs_warning_and_skips(monkeypatch, caplog):
+    """A missing catalog directory logs a warning and leaves the constraint unresolved."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -260,6 +268,7 @@ def test_missing_catalog_directory_logs_warning_and_skips(monkeypatch, caplog):
 
 
 def test_resolve_instance_sizes_method_direct(monkeypatch):
+    """_resolve_instance_sizes() replaces a constraint dict in the env with the selected type."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -279,6 +288,7 @@ def test_resolve_instance_sizes_method_direct(monkeypatch):
 
 
 def test_aws_loader_ami_resolves_amd64_for_x86_instance_type(monkeypatch):
+    """An x86 AWS loader type gets the amd64 Ubuntu SSM AMI path."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -296,6 +306,7 @@ def test_aws_loader_ami_resolves_amd64_for_x86_instance_type(monkeypatch):
 
 
 def test_aws_loader_ami_resolves_arm64_for_arm_instance_type(monkeypatch):
+    """An ARM AWS loader type gets the arm64 Ubuntu SSM AMI path."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -313,6 +324,7 @@ def test_aws_loader_ami_resolves_arm64_for_arm_instance_type(monkeypatch):
 
 
 def test_aws_loader_ami_not_overridden_when_explicitly_set(monkeypatch):
+    """An explicit ami_id_loader is kept regardless of the loader arch."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -329,6 +341,7 @@ def test_aws_loader_ami_not_overridden_when_explicitly_set(monkeypatch):
 
 
 def test_azure_loader_image_resolves_x86_sku_for_x86_instance_type(monkeypatch):
+    """An x86 Azure loader type gets the x86 Ubuntu server SKU."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_LOADER", "Standard_F4s_v2")
@@ -340,6 +353,7 @@ def test_azure_loader_image_resolves_x86_sku_for_x86_instance_type(monkeypatch):
 
 
 def test_azure_loader_image_resolves_arm_sku_for_arm_instance_type(monkeypatch):
+    """An ARM Azure loader type gets the server-arm64 Ubuntu SKU."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_LOADER", "Standard_D4ps_v6")
@@ -351,6 +365,7 @@ def test_azure_loader_image_resolves_arm_sku_for_arm_instance_type(monkeypatch):
 
 
 def test_gce_loader_image_resolves_amd64_for_x86_instance_type(monkeypatch):
+    """An x86 GCE loader type gets the amd64 Ubuntu image."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n2-standard-8")
@@ -362,6 +377,7 @@ def test_gce_loader_image_resolves_amd64_for_x86_instance_type(monkeypatch):
 
 
 def test_gce_loader_image_resolves_arm64_for_arm_instance_type(monkeypatch):
+    """An ARM GCE loader type gets the arm64 Ubuntu image."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
@@ -373,6 +389,7 @@ def test_gce_loader_image_resolves_arm64_for_arm_instance_type(monkeypatch):
 
 
 def test_gce_loader_image_not_overridden_when_explicitly_set(monkeypatch):
+    """An explicit gce_image_loader is kept regardless of the loader arch."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
@@ -386,6 +403,7 @@ def test_gce_loader_image_not_overridden_when_explicitly_set(monkeypatch):
 
 @pytest.mark.parametrize("backend", ["aws", "aws-siren", "k8s-eks", "k8s-local-kind-aws"])
 def test_aws_family_backends_resolve_the_loader_ami_arch_marker(monkeypatch, backend):
+    """Every AWS-based backend substitutes the {arch} marker in the loader AMI."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -403,6 +421,7 @@ def test_aws_family_backends_resolve_the_loader_ami_arch_marker(monkeypatch, bac
 
 @pytest.mark.parametrize("backend", ["gce", "gce-siren", "k8s-gke"])
 def test_gce_family_backends_resolve_the_loader_image_arch_marker(monkeypatch, backend):
+    """Every GCE-based backend substitutes the {arch} marker in the loader image."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
@@ -415,6 +434,7 @@ def test_gce_family_backends_resolve_the_loader_image_arch_marker(monkeypatch, b
 
 
 def test_aws_arch_lookup_failure_falls_back_instead_of_raising(monkeypatch):
+    """A failed AWS arch lookup for a non-ARM-named type falls back to the amd64 loader AMI."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -442,6 +462,7 @@ def test_aws_arch_lookup_failure_falls_back_instead_of_raising(monkeypatch):
 def test_xcloud_resolves_the_loader_image_arch_marker(
     monkeypatch, provider, instance_env, instance_type, image_param, expected_suffix
 ):
+    """The xcloud backend substitutes the loader image {arch} marker for its AWS or GCE provider."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
     monkeypatch.setenv("SCT_XCLOUD_PROVIDER", provider)
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
@@ -460,6 +481,7 @@ def test_xcloud_resolves_the_loader_image_arch_marker(
 
 
 def test_arm_loader_instance_with_undetectable_arch_raises(monkeypatch):
+    """An ARM-named AWS loader type whose arch lookup fails is rejected, naming the type."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
@@ -477,6 +499,7 @@ def test_arm_loader_instance_with_undetectable_arch_raises(monkeypatch):
 
 
 def test_arm_loader_instance_resolved_as_x86_raises(monkeypatch):
+    """An ARM-named loader type that the catalog lists as x86 is rejected, naming the type."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
@@ -490,6 +513,7 @@ def test_arm_loader_instance_resolved_as_x86_raises(monkeypatch):
 
 
 def test_literal_loader_instance_type_wins_over_sizing_arch_hint(monkeypatch):
+    """A literal x86 loader type picks the amd64 image despite an arm64 sizing_loader arch."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n2-standard-8")
@@ -502,6 +526,7 @@ def test_literal_loader_instance_type_wins_over_sizing_arch_hint(monkeypatch):
 
 
 def test_unknown_arch_marker_value_raises():
+    """substitute_arch_markers() raises for an arch it has no mapping for."""
     with pytest.raises(ValueError, match="riscv64"):
         sct_config.substitute_arch_markers("ubuntu-2604-lts-{arch}", "riscv64")
 
@@ -524,10 +549,12 @@ def test_unknown_arch_marker_value_raises():
     ],
 )
 def test_arm_instance_type_detection(cloud, instance_type, expected):
+    """is_arm_instance_type() recognises ARM type names per cloud."""
     assert sct_config.is_arm_instance_type(cloud, instance_type) is expected
 
 
 def test_every_catalog_entry_matches_its_arm_pattern():
+    """Each shipped catalog entry's arch agrees with is_arm_instance_type() for its name."""
     catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
     for instance in catalog.instances:
         is_arm = instance.arch in ("arm64", "aarch64")
@@ -549,6 +576,7 @@ def test_every_catalog_entry_matches_its_arm_pattern():
     ],
 )
 def test_amd64_only_stress_tools_detected_from_stress_commands(monkeypatch, stress_cmd, expected_tools):
+    """Stress commands of amd64-only tools are detected; multi-arch tools are left out."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", stress_cmd)
@@ -564,6 +592,7 @@ def test_amd64_only_stress_tools_detected_from_stress_commands(monkeypatch, stre
 
 
 def test_ycsb_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
+    """YCSB with Alternator DNS routing requires the amd64-only alternator-dns image."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "bin/ycsb load scylla -P workloads/workloada")
@@ -579,6 +608,7 @@ def test_ycsb_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
 
 
 def test_ycsb_upgrade_test_stress_params_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
+    """YCSB in upgrade stress params with DNS routing also requires alternator-dns and x86 loaders."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_BEFORE_UPGRADE", "bin/ycsb load dynamodb -P workloads/workloada")
@@ -595,6 +625,7 @@ def test_ycsb_upgrade_test_stress_params_with_dns_routing_requires_the_amd64_onl
 
 
 def test_ycsb_without_dns_routing_keeps_arm_loaders(monkeypatch):
+    """YCSB without DNS routing leaves the sizing_loader arch unset."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "bin/ycsb load scylla -P workloads/workloada")
@@ -610,6 +641,7 @@ def test_ycsb_without_dns_routing_keeps_arm_loaders(monkeypatch):
 
 
 def test_amd64_only_stress_tool_constrains_sizing_loader_to_x86(monkeypatch):
+    """An amd64-only stress tool sets sizing_loader arch to x86_64 and picks the amd64 loader image."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-harry -mode cql3")
@@ -625,6 +657,7 @@ def test_amd64_only_stress_tool_constrains_sizing_loader_to_x86(monkeypatch):
 
 
 def test_explicit_arm_sizing_loader_with_an_amd64_only_stress_tool_raises(monkeypatch):
+    """An arm64 sizing_loader with an amd64-only stress tool fails config load."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-harry -mode cql3")
@@ -639,6 +672,7 @@ def test_explicit_arm_sizing_loader_with_an_amd64_only_stress_tool_raises(monkey
 
 
 def test_literal_arm_loader_with_an_amd64_only_stress_tool_raises(monkeypatch):
+    """A literal ARM loader type with an amd64-only stress tool fails config load, naming the tool."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "ndbench -p numKeys=100")
@@ -652,6 +686,7 @@ def test_literal_arm_loader_with_an_amd64_only_stress_tool_raises(monkeypatch):
 
 
 def test_env_sizing_loader_constraints_survive_the_x86_constraint(monkeypatch):
+    """The forced x86 arch is merged into sizing_loader, keeping the env vcpu and memory constraints."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_STRESS_CMD", "nosqlbench run driver=cql")
@@ -685,6 +720,7 @@ _OCI_LOADER_ARM = InstanceTypeInfo(
 
 
 def test_oci_loader_image_resolves_the_arch_marker(monkeypatch):
+    """The OCI loader image {arch} marker is replaced with the loader type's arch."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_LOADER", "VM.Standard.A1.Flex:4:16")
@@ -697,6 +733,7 @@ def test_oci_loader_image_resolves_the_arch_marker(monkeypatch):
 
 
 def test_oci_loader_image_without_a_marker_is_left_alone(monkeypatch):
+    """An OCI loader image without an {arch} marker is kept as given."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_LOADER", "VM.Standard.A1.Flex:4:16")

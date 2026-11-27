@@ -8,6 +8,7 @@ from sdcm.provision.provisioner import PricingModel, ProvisionError
 
 @pytest.fixture
 def provider():
+    """Provide an Azure VirtualMachineProvider with a mocked service and vm1 in its cache."""
     provider = VirtualMachineProvider(
         _resource_group_name="test-rg",
         _region="eastus",
@@ -21,6 +22,7 @@ def provider():
 @patch("sdcm.provision.azure.virtual_machine_provider.time.sleep")
 @patch("sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command")
 def test_reboot_soft_success(mock_run_command, mock_sleep, provider):
+    """A soft reboot runs 'reboot -f' on the VM and skips the SDK restart."""
     provider._azure_service.compute.virtual_machines.instance_view.return_value.statuses = [
         MagicMock(display_status="VM running")
     ]
@@ -33,6 +35,7 @@ def test_reboot_soft_success(mock_run_command, mock_sleep, provider):
     "sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command", side_effect=Exception("fail")
 )
 def test_reboot_fallback_to_sdk(mock_run_command, provider):
+    """When the in-guest reboot command fails, the VM is restarted through the Azure SDK and awaited."""
     mock_task = MagicMock()
     provider._azure_service.compute.virtual_machines.begin_restart.return_value = mock_task
     provider._azure_service.compute.virtual_machines.instance_view.return_value.statuses = [
@@ -45,6 +48,7 @@ def test_reboot_fallback_to_sdk(mock_run_command, provider):
 
 @patch("sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command")
 def test_reboot_no_wait(mock_run_command, provider):
+    """A reboot without wait runs 'reboot -f' only."""
     provider.reboot("vm1", wait=False, hard=False)
     mock_run_command.assert_called_once_with("vm1", "reboot -f")
     provider._azure_service.compute.virtual_machines.begin_restart.assert_not_called()
@@ -52,6 +56,7 @@ def test_reboot_no_wait(mock_run_command, provider):
 
 @pytest.mark.parametrize("power_state, provisioned", [("PowerState/starting", False), ("PowerState/running", True)])
 def test_minicloud_vm_is_provisioned_once_running(provider, monkeypatch, power_state, provisioned):
+    """On minicloud a VM counts as provisioned only once its power state is running."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     vm = MagicMock(provisioning_state="Succeeded", instance_view=MagicMock(statuses=[MagicMock(code=power_state)]))
     provider._azure_service.compute.virtual_machines.get.return_value = vm
@@ -59,6 +64,7 @@ def test_minicloud_vm_is_provisioned_once_running(provider, monkeypatch, power_s
 
 
 def test_minicloud_vm_that_failed_to_launch_raises(provider, monkeypatch):
+    """On minicloud a deallocated VM raises ProvisionError."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     provider._azure_service.compute.virtual_machines.get.return_value = MagicMock(
         provisioning_state="Succeeded",

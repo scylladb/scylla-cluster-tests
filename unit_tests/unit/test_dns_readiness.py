@@ -50,6 +50,7 @@ def _setup_params():
 
 @pytest.fixture
 def existing_node():
+    """Provide a BaseNode mock bound to the real DNS readiness and scylla_setup retry methods."""
     node = MagicMock(spec=BaseNode)
     node.remoter = MagicMock()
     node.log = logging.getLogger("test_node")
@@ -69,6 +70,7 @@ def existing_node():
 
 @pytest.fixture
 def dns_wait_success(existing_node):
+    """Make the node's DNS lookup succeed and run wait_for's callable once inline; yield the wait_for mock."""
     existing_node.remoter.run.return_value = _fake_result(exit_status=0, stdout="93.184.216.34 scylladb.com")
     with patch("sdcm.cluster.wait.wait_for") as mock_wait_for:
         mock_wait_for.side_effect = lambda func, **kwargs: func()
@@ -77,6 +79,11 @@ def dns_wait_success(existing_node):
 
 @pytest.fixture
 def setup_command_runner(existing_node):
+    """Provide a factory that scripts remoter.run for scylla_setup, optionally failing its first attempt.
+
+    The factory returns a dict counting scylla_setup, apt-get update and yum makecache calls.
+    """
+
     def factory(*, first_error: str | None, use_yum: bool = False, mount_output: str = " /var/lib/scylla "):
         attempts = {"scylla_setup": 0, "apt_get": 0, "yum_makecache": 0}
 

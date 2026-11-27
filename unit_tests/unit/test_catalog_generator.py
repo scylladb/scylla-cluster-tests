@@ -45,6 +45,7 @@ def _mock_oci_pricing(monkeypatch):
 
 @pytest.fixture()
 def sample_instances() -> list[InstanceTypeInfo]:
+    """Provide two AWS i8g instance types, one priced and one with no price."""
     return [
         InstanceTypeInfo(
             instance_type="i8g.2xlarge",
@@ -72,6 +73,7 @@ def sample_instances() -> list[InstanceTypeInfo]:
 
 
 def test_write_catalog_file_round_trip(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """A written catalog file loads back with all instances."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -85,6 +87,7 @@ def test_write_catalog_file_round_trip(tmp_path: Path, sample_instances: list[In
 
 
 def test_write_catalog_file_instance_fields_preserved(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """Instance specs and price survive a write and reload."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -103,6 +106,7 @@ def test_write_catalog_file_instance_fields_preserved(tmp_path: Path, sample_ins
 
 
 def test_write_catalog_file_none_price_preserved(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """A None price is reloaded as None."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -116,6 +120,7 @@ def test_write_catalog_file_none_price_preserved(tmp_path: Path, sample_instance
 
 
 def test_write_catalog_file_creates_parent_dirs(tmp_path: Path, sample_instances: list[InstanceTypeInfo]):
+    """write_catalog_file() creates missing parent directories."""
     output = tmp_path / "nested" / "deep" / "aws.yaml"
     write_catalog_file(
         instances=sample_instances,
@@ -126,6 +131,7 @@ def test_write_catalog_file_creates_parent_dirs(tmp_path: Path, sample_instances
 
 
 def test_write_catalog_file_empty_instances(tmp_path: Path):
+    """An empty instance list writes a catalog that loads with no instances."""
     output = tmp_path / "aws.yaml"
     write_catalog_file(
         instances=[],
@@ -137,6 +143,7 @@ def test_write_catalog_file_empty_instances(tmp_path: Path):
 
 
 def test_generate_oci_catalog_fallback_to_known_shapes():
+    """The OCI catalog lists known DenseIO shapes with vCPUs and local disks."""
     result = generate_oci_catalog(["BM.DenseIO", "VM.DenseIO"])
     assert len(result) > 0
     assert all(r.cloud == "oci" for r in result)
@@ -145,6 +152,7 @@ def test_generate_oci_catalog_fallback_to_known_shapes():
 
 
 def test_generate_oci_catalog_family_filter():
+    """generate_oci_catalog() returns only shapes of the requested families."""
     result = generate_oci_catalog(["BM.DenseIO"])
     assert all(r.family == "BM.DenseIO" for r in result)
 
@@ -159,16 +167,19 @@ def test_generate_oci_catalog_family_filter():
     ],
 )
 def test_generate_oci_catalog_vcpus_per_ocpu(instance_type, expected_vcpus):
+    """OCI flex shapes report vCPUs per OCPU by shape series: 1 on A1, 2 on A4, Standard3 and DenseIO.E5."""
     result = {r.instance_type: r for r in generate_oci_catalog(["VM.Standard", "VM.DenseIO"])}
     assert result[instance_type].vcpus == expected_vcpus
 
 
 def test_generate_oci_catalog_unknown_family_returns_empty():
+    """An unknown OCI family yields an empty catalog."""
     result = generate_oci_catalog(["NonExistentFamily99"])
     assert result == []
 
 
 def test_gce_spot_price_is_vcpu_plus_ram_per_region():
+    """GCE spot price is vCPUs*core rate + GB*RAM rate, only in regions with both rates."""
     rates = {"n2": {"us-central1": {"core": 0.01, "ram": 0.002}, "us-east1": {"core": 0.01}}}
     assert _gce_price_for(rates, "n2-highmem", 8, 64.0) == {"us-central1": pytest.approx(8 * 0.01 + 64 * 0.002)}
 
@@ -195,6 +206,7 @@ _SKUS = [
 
 
 def test_gce_resource_rates_parse_local_ssd_and_per_gb_ram(monkeypatch):
+    """Billing SKUs parse into spot/on-demand rates, with SSD per hour and GB-priced RAM converted to GiB."""
     session = SimpleNamespace(
         get=lambda *_, **__: SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"skus": _SKUS})
     )
@@ -214,6 +226,8 @@ def test_gce_resource_rates_parse_local_ssd_and_per_gb_ram(monkeypatch):
 
 
 def test_gce_catalog_lssd_machine_types(monkeypatch):
+    """-lssd and highlssd types get their families, bundled SSD sizes and prices; spot only with an SSD rate."""
+
     def machine_type(name, vcpus, memory_gb, partitions=0):
         return SimpleNamespace(
             name=name,

@@ -47,6 +47,7 @@ pytestmark = [
     ),
 )
 def test_02_scylla_bench_check_error_at_row_limit_addition(params, extra_cmd, error_at_row_limit_exists):
+    """-error-at-row-limit is added unless -error-limit or -retry-number >= 2 is set; a user-given value is kept."""
     loader_set = LocalLoaderSetDummy(nodes=[])
     cmd = (
         f"scylla-bench -workload=sequential {extra_cmd} -mode=write"

@@ -21,11 +21,13 @@ from unit_tests.lib.dot_dict import DotDict
 
 @pytest.fixture(autouse=True)
 def reset_hosts():
+    """Clear the class-level SCTDedicatedHosts registry before each test."""
     SCTDedicatedHosts.hosts = {}
 
 
 @pytest.fixture(name="params")
 def params_fixture():
+    """Provide AWS params for a one-region run on dedicated hosts in availability zone 'd'."""
     return DotDict(
         {
             "test_id": "example-test-id",
@@ -49,6 +51,7 @@ def params_fixture():
 
 @pytest.fixture(name="mock_ec2")
 def mock_ec2_fixture():
+    """Patch boto3.client with an EC2 mock that finds no existing dedicated hosts; yield the mock."""
     with patch("boto3.client") as mock_boto3_client:
         mock_ec2 = MagicMock()
         mock_boto3_client.return_value = mock_ec2
@@ -57,6 +60,7 @@ def mock_ec2_fixture():
 
 
 def test_allocate_success_existing(mock_ec2, params):
+    """reserve() reuses a dedicated host the test already owns and registers it under that host's zone."""
     mock_ec2.describe_hosts.side_effect = [
         {
             "Hosts": [
@@ -101,6 +105,7 @@ def test_allocate_success_existing(mock_ec2, params):
 
 
 def test_allocate_success(mock_ec2, params):
+    """reserve() allocates a new host in the configured availability zone and registers its ID per type."""
     mock_ec2.allocate_hosts.side_effect = [{"HostIds": ["h-0867aada366f84ff1"]}]
     mock_ec2.describe_instance_type_offerings.return_value = {
         "InstanceTypeOfferings": [
@@ -118,6 +123,7 @@ def test_allocate_success(mock_ec2, params):
 
 
 def test_release_success(mock_ec2, params):
+    """release() releases each registered host ID."""
     SCTDedicatedHosts.hosts["us-east-1d"] = {"i4i.4xlarge": "h-0867aada366f84ff1"}
     mock_ec2.release_hosts.side_effect = [{"Successful": ["h-0867aada366f84ff1"]}]
 
@@ -126,6 +132,7 @@ def test_release_success(mock_ec2, params):
 
 
 def test_release_retries(mock_ec2, params):
+    """release() retries after an unsuccessful release until it succeeds."""
     SCTDedicatedHosts.hosts["us-east-1d"] = {"i4i.4xlarge": "h-0867aada366f84ff1"}
     mock_ec2.release_hosts.side_effect = [
         {"Unsuccessful": [{"Error": {"Code": "000", "Message": "error"}}]},
@@ -138,6 +145,7 @@ def test_release_retries(mock_ec2, params):
 
 
 def test_release_retries_fails(mock_ec2, params):
+    """release() gives up with TimeoutError after 10 unsuccessful attempts."""
     SCTDedicatedHosts.hosts["us-east-1d"] = {"i4i.4xlarge": "h-0867aada366f84ff1"}
     mock_ec2.release_hosts.side_effect = [{"Unsuccessful": [{"Error": {"Code": "000", "Message": "error"}}]}] * 20
 
@@ -148,6 +156,7 @@ def test_release_retries_fails(mock_ec2, params):
 
 
 def test_release_by_tag_unit_unit(mock_ec2):
+    """release_by_tags() releases the hosts matching the tags, retrying an unsuccessful release."""
     mock_ec2.release_hosts.side_effect = [
         {"Unsuccessful": [{"Error": {"Code": "000", "Message": "error"}}]},
         {"Successful": ["h-0867aada366f84ff1"]},

@@ -37,6 +37,7 @@ class TestListSctRunners:
     """Test the enhanced list_sct_runners function."""
 
     def setup_method(self):
+        """Build one runner each on AWS, GCE, Azure and OCI with their own names and IPs; GCE alone has test-id-2."""
         self.aws_runner = SctRunnerInfo(
             sct_runner_class=AwsSctRunner,
             cloud_service_instance=None,
@@ -233,6 +234,7 @@ class TestCleanSctRunners:
     """Test the clean_sct_runners function."""
 
     def setup_method(self):
+        """Build runner mocks with and without keep tags."""
         self.mock_runner_with_keep = MagicMock(
             keep="24",
             keep_action="terminate",
@@ -352,6 +354,7 @@ class TestFindRunnerInstance:
 
     @pytest.fixture
     def runner_info(self):
+        """Provide an AWS runner with a test id and keep tags, as a candidate for reuse."""
         return SctRunnerInfo(
             sct_runner_class=AwsSctRunner,
             cloud_service_instance=None,

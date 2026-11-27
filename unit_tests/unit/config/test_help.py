@@ -23,6 +23,7 @@ import pytest
     ],
 )
 def test_dump_help_config_yaml_defaults(help_yaml, field_name, default_value):
+    """The YAML help lists each option with its default, showing N/A for options without one."""
     assert f"{field_name}: {default_value}" in help_yaml
 
 
@@ -36,6 +37,7 @@ def test_dump_help_config_yaml_defaults(help_yaml, field_name, default_value):
     ],
 )
 def test_dump_help_config_markdown_defaults(help_markdown, field_name, default_value):
+    """The Markdown help gives each option a heading with its env var and a default line, N/A when unset."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     assert f"**default:** {default_value}" in help_markdown
 
@@ -48,6 +50,7 @@ def test_dump_help_config_markdown_defaults(help_markdown, field_name, default_v
     ],
 )
 def test_dump_help_config_markdown_types(help_markdown, field_name, type_text):
+    """The Markdown help shows each option type, marking appendable options inline as "(appendable)"."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     assert f"**type:** {type_text}" in help_markdown
     assert "* appendable" not in help_markdown
@@ -89,6 +92,7 @@ def test_dump_help_config_markdown_types(help_markdown, field_name, type_text):
     ],
 )
 def test_dump_help_config_markdown_backend_overrides(help_markdown, field_name, backend_override_text, should_exist):
+    """Markdown help lists backend defaults that differ from the base default, grouped by value, omitting N/A ones."""
     assert f"## **{field_name}** / SCT_{field_name.upper()}" in help_markdown
     if should_exist:
         assert backend_override_text in help_markdown

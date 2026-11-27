@@ -71,12 +71,14 @@ def _run(tmp_path, sudo=FAKE_SUDO_TRANSPARENT, **env):
 
 
 def test_unzoned_tun_is_moved_into_the_trusted_zone(tmp_path):
+    """The script moves minicloud0 into the trusted firewalld zone through sudo."""
     result, calls = _run(tmp_path)
     assert result.returncode == 0, result.stderr
     assert "firewall-cmd (sudo) --zone=trusted --change-interface=minicloud0" in calls
 
 
 def test_polkit_denied_reads_fall_back_to_sudo(tmp_path):
+    """When polkit denies unprivileged reads, the script retries them with sudo and still applies the zone."""
     # if polkit blocks unprivileged reads, the script must retry with sudo and still apply the zone
     result, calls = _run(tmp_path, FAKE_POLKIT_DENIES="1")
     assert result.returncode == 0, result.stderr
@@ -84,6 +86,7 @@ def test_polkit_denied_reads_fall_back_to_sudo(tmp_path):
 
 
 def test_boot_unit_topology_needs_no_sudo(tmp_path):
+    """With minicloud0 already in the trusted zone the script succeeds without calling sudo or changing the zone."""
     result, calls = _run(tmp_path, sudo=FAKE_SUDO_NEEDS_PASSWORD, FAKE_ZONE="trusted")
     assert result.returncode == 0, result.stderr
     assert not [call for call in calls if "--change-interface" in call]
@@ -98,6 +101,7 @@ def test_boot_unit_topology_needs_no_sudo(tmp_path):
     ids=["no-passwordless-sudo", "change-interface-rejected"],
 )
 def test_failure_to_apply_the_zone_is_loud(tmp_path, kwargs, expected_stderr):
+    """A failed zone change exits non-zero and reports the underlying error and AuthenticationError on stderr."""
     result, _ = _run(tmp_path, **kwargs)
     assert result.returncode != 0, f"expected a non-zero exit, got: {result.stdout}"
     assert "could not move minicloud0" in result.stderr

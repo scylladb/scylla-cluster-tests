@@ -62,6 +62,7 @@ def _make_layout_params(**overrides):
 
 @pytest.fixture(name="patched_aws_region")
 def patched_aws_region_fixture():
+    """Patch AwsRegion in the AZ resolver to report AZs a, b and c of us-east-1."""
     with patch("sdcm.provision.aws.az_resolver.AwsRegion") as mock_cls:
         instance = mock_cls.return_value
         instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
@@ -71,6 +72,7 @@ def patched_aws_region_fixture():
 
 @pytest.fixture(name="patched_capacity_reservation")
 def patched_capacity_reservation_fixture():
+    """Patch capacity reservation (disabled, reserving nothing) and dedicated hosts in the AWS layout."""
     with (
         patch("sdcm.sct_provision.aws.layout.SCTCapacityReservation") as mock_cr,
         patch("sdcm.sct_provision.aws.layout.SCTDedicatedHosts"),
@@ -195,6 +197,7 @@ def _fake_aws_cluster(availability_zone: str) -> SimpleNamespace:
 
 @pytest.fixture(name="patched_ec2_for_get_instances")
 def patched_ec2_for_get_instances_fixture():
+    """Patch the AWS instance listing and EC2 wrapper; yield the listing mock for the test to fill."""
     with (
         patch("sdcm.cluster_aws.list_instances_aws") as mock_list,
         patch("sdcm.cluster_aws.ec2_client.EC2ClientWrapper") as mock_wrapper_cls,
@@ -250,6 +253,7 @@ def _raise_or_none(queue):
 
 
 def test_cleanup_destroys_existing_clusters_and_clears_credentials():
+    """Legacy partial cleanup destroys the DB, loader and monitor clusters, unsets them and clears the credentials."""
     stub = _make_tester_stub(_make_tester_params())
     db_cluster, loaders, monitors = MagicMock(), MagicMock(), MagicMock()
     stub.db_cluster = db_cluster
@@ -313,6 +317,7 @@ def test_provision_legacy_with_az_fallback_succeeds(
 
 
 def test_provision_legacy_with_az_fallback_returns_region_exhausted_when_all_candidates_fail():
+    """When every AZ candidate hits a capacity error, legacy fallback reports region exhaustion and the last error."""
     stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
     error = _capacity_error()
     stub._provision_legacy_aws_clusters = MagicMock(side_effect=error)
@@ -328,6 +333,7 @@ def test_provision_legacy_with_az_fallback_returns_region_exhausted_when_all_can
 
 
 def test_provision_legacy_with_az_fallback_non_capacity_error_propagates():
+    """A non-capacity error from legacy provisioning propagates after the first attempt, without trying the next AZ."""
     stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
     other_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "denied"}}, "RunInstances")
     stub._provision_legacy_aws_clusters = MagicMock(side_effect=other_error)
@@ -376,6 +382,7 @@ def _make_region_params(**overrides):
 
 @pytest.fixture(name="restore_region_env")
 def restore_region_env_fixture():
+    """Restore SCT_REGION_NAME and SCT_AVAILABILITY_ZONE to their original values after the test."""
     saved = {k: os.environ.get(k) for k in ("SCT_REGION_NAME", "SCT_AVAILABILITY_ZONE")}
 
     yield
@@ -388,6 +395,7 @@ def restore_region_env_fixture():
 
 
 def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    """On capacity exhaustion the layout cleans up, moves to the fallback region, resolves its AMIs and exports it."""
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
     seen_regions = []
@@ -413,6 +421,7 @@ def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reser
 
 
 def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    """A non-capacity error propagates without region cleanup and restores the original region."""
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
     auth_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "denied"}}, "RunInstances")
@@ -457,6 +466,7 @@ def test_get_cluster_aws_routing_by_region_count(region_name, expect_once, expec
 
 
 def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    """When the fallback region is exhausted too, provision raises RuntimeError and restores the region and env."""
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
 
@@ -474,6 +484,7 @@ def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capac
 
 
 def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    """A CapacityReservationError counts as exhaustion and relocates provisioning to the fallback region."""
     patched_capacity_reservation.is_capacity_reservation_enabled.return_value = True
     params = _make_region_params(use_capacity_reservation=True)
     layout = SCTProvisionAWSLayout(params)
@@ -497,6 +508,7 @@ def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capac
 
 
 def test_region_fallback_skips_region_without_equivalent_ami(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    """A region without an equivalent AMI is skipped; with none left, provision raises and restores the original."""
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
 
@@ -540,6 +552,7 @@ def _make_region_tester_stub(**param_overrides):
 
 
 def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # noqa: ARG001
+    """The legacy path relocates to the fallback region, persists the placement, cleans up and re-preps the KMS host."""
     stub = _make_region_tester_stub()
     seen_regions = []
 
@@ -562,6 +575,7 @@ def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # 
 
 
 def test_switch_region_legacy_re_preps_kms_host_for_target_region(restore_region_env):  # noqa: ARG001
+    """_switch_region_legacy sets the target region and prepares the KMS host there."""
     stub = _make_region_tester_stub()
 
     stub._switch_region_legacy("eu-west-1", ["a"], "us-east-1", {}, {}, {})
@@ -571,6 +585,7 @@ def test_switch_region_legacy_re_preps_kms_host_for_target_region(restore_region
 
 
 def test_legacy_region_fallback_restores_region_when_switch_region_kms_prep_fails(restore_region_env):  # noqa: ARG001
+    """A KMS prep failure while switching regions propagates and restores the original region and AZ."""
     stub = _make_region_tester_stub()
     stub.prepare_kms_host.side_effect = RuntimeError("KMS alias creation throttled")
     stub._attempt_region_legacy = MagicMock(return_value=(True, _capacity_error(), [["a"]]))
@@ -586,6 +601,7 @@ def test_legacy_region_fallback_restores_region_when_switch_region_kms_prep_fail
 
 
 def test_cleanup_region_deletes_abandoned_kms_alias():
+    """cleanup_region runs the partial cleanup, cleans the abandoned region and deletes the test's KMS alias there."""
     partial_cleanup = MagicMock()
 
     with (
@@ -601,6 +617,7 @@ def test_cleanup_region_deletes_abandoned_kms_alias():
 
 
 def test_cleanup_region_tolerates_kms_delete_failure():
+    """cleanup_region completes when deleting the KMS alias raises."""
     partial_cleanup = MagicMock()
 
     with (
@@ -615,6 +632,7 @@ def test_cleanup_region_tolerates_kms_delete_failure():
 
 
 def test_cleanup_region_skips_kms_cleanup_without_region():
+    """Without a region, cleanup_region runs only the partial cleanup."""
     partial_cleanup = MagicMock()
 
     with (
@@ -629,6 +647,7 @@ def test_cleanup_region_skips_kms_cleanup_without_region():
 
 
 def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_region_env):  # noqa: ARG001
+    """switch_region sets region and AZs in params and env, resolves AMIs, drops reservations and invalidates caches."""
     params = DotDict({"region_name": "us-east-1", "availability_zone": "a"})
     params.region_names = ["us-east-1"]
     params.resolve_amis = MagicMock()
@@ -647,6 +666,7 @@ def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_regi
 
 
 def test_cleanup_abandoned_region_cancels_crs_and_terminates_non_runner_instances():
+    """cleanup_abandoned_region cancels the test's capacity reservations and terminates its non-runner instances."""
     region = "us-east-1"
     instances = [
         {"InstanceId": "i-runner", "Tags": [{"Key": "NodeType", "Value": "sct-runner"}]},
@@ -668,6 +688,7 @@ def test_cleanup_abandoned_region_cancels_crs_and_terminates_non_runner_instance
 
 
 def test_cleanup_abandoned_region_never_raises_on_failure():
+    """cleanup_abandoned_region swallows failures of reservation cancelling and instance listing."""
     with (
         patch(
             "sdcm.provision.aws.capacity_reservation.SCTCapacityReservation.cancel_all_regions",

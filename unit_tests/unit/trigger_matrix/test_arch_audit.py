@@ -63,6 +63,7 @@ def _matrix(tmp_path, *jobs):
 
 
 def test_drift_is_reported_only_for_releases_whose_branch_disagrees(repo, tmp_path):
+    """A job whose master config resolves to aarch64 but the matrix says x86 is flagged as drift for master only."""
     matrix = _matrix(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws"})
 
     report = audit_matrices(matrix, ["master", "2026.1"])
@@ -72,6 +73,7 @@ def test_drift_is_reported_only_for_releases_whose_branch_disagrees(repo, tmp_pa
 
 
 def test_entries_split_by_release_have_no_drift(repo, tmp_path):
+    """Entries pinned to each release's arch via include/exclude_versions produce no drift and no unchecked jobs."""
     job = {"job_name": "tier1/mv-si-test", "backend": "aws"}
     matrix = _matrix(
         tmp_path,
@@ -86,6 +88,7 @@ def test_entries_split_by_release_have_no_drift(repo, tmp_path):
 
 
 def test_job_without_a_jenkinsfile_is_reported_unchecked(repo, tmp_path):
+    """A matrix job with no matching jenkinsfile lands in the unchecked list with the reason and versions."""
     matrix = _matrix(tmp_path, {"job_name": "tier1/not-there-test", "backend": "aws"})
 
     report = audit_matrices(matrix, ["master"])
@@ -97,6 +100,7 @@ def test_job_without_a_jenkinsfile_is_reported_unchecked(repo, tmp_path):
 
 
 def test_release_without_a_branch_is_skipped(repo, tmp_path):
+    """A release with no origin branch is dropped from the audited versions."""
     matrix = _matrix(tmp_path, {"job_name": "tier1/mv-si-test", "backend": "aws", "arch": "aarch64"})
 
     report = audit_matrices(matrix, ["master", "2099.1"])
@@ -106,6 +110,7 @@ def test_release_without_a_branch_is_skipped(repo, tmp_path):
 
 
 def test_drift_email_lists_each_entry():
+    """The arch audit email goes to the recipients, counts the drifts in its subject and lists each job and version."""
     report = AuditReport(
         drifts=[ArchDrift("tier1", "tier1/mv-si-test", "x86_64", "aarch64", "i8g.4xlarge", ["master", "2026.3"])],
         versions=["master", "2026.3"],

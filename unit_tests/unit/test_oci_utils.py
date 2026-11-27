@@ -189,6 +189,7 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
 @patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mock_get_client):
+    """With arch=ARM, the Ubuntu image lookup returns the aarch64 image rather than the amd64 one."""
     mock_client = MagicMock()
     mock_arm_image = MagicMock()
     mock_arm_image.id = "ocid1.image.oc1..ubuntu2404-aarch64"
@@ -206,6 +207,7 @@ def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mo
 
 
 def test_get_arch_from_oci_shape():
+    """OCI shapes with an "A" series are ARM; other shapes and a missing shape are x86."""
     assert get_arch_from_oci_shape("VM.Standard.A1.Flex") is VmArch.ARM
     assert get_arch_from_oci_shape("VM.Standard.A4.Flex") is VmArch.ARM
     assert get_arch_from_oci_shape("VM.Standard.E5.Flex") is VmArch.X86
@@ -385,6 +387,7 @@ def test_secondary_vnics_script_embedded_python_is_valid():
 
 
 def test_secondary_vnics_service_unit_renders_execstart():
+    """The secondary VNICs systemd unit runs the setup script with the NIC count and primary IP."""
     unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
         script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=2, primary_ip="10.0.1.10"
     )
@@ -393,6 +396,7 @@ def test_secondary_vnics_service_unit_renders_execstart():
 
 
 def test_oci_shape_arch_agrees_with_the_catalog_and_the_config_matcher():
+    """For every OCI catalog instance, both arch helpers agree with the catalog's ARM/x86 arch."""
     catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
     checked = 0
     for instance in catalog.instances:

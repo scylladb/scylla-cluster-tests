@@ -18,6 +18,7 @@ def _bucket_ops(params: dict) -> BucketOperations:
 
 
 def test_download_from_s3_uses_plain_aws_cli_outside_oci():
+    """Outside OCI the download runs a plain `aws s3 cp` and sends no AWS CLI config to the node."""
     ops = _bucket_ops({"cluster_backend": "aws"})
     node = Mock()
     ops.install_awscli_dependencies(node)
@@ -28,6 +29,7 @@ def test_download_from_s3_uses_plain_aws_cli_outside_oci():
 
 
 def test_download_from_s3_on_oci_uses_endpoint_and_installed_config():
+    """On OCI the node gets a path-style AWS CLI config with the creds, and the copy uses the OCI endpoint."""
     ops = _bucket_ops(
         {
             "cluster_backend": "oci",
@@ -59,6 +61,7 @@ def test_download_from_s3_on_oci_uses_endpoint_and_installed_config():
 
 
 def test_download_from_s3_on_oci_fills_region_placeholder_from_oci_region_name():
+    """On OCI the `{region}` placeholder in the endpoint and region is filled from oci_region_name."""
     ops = _bucket_ops(
         {
             "cluster_backend": "oci",

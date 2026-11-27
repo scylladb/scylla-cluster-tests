@@ -43,6 +43,7 @@ def _member_named(nemesis, name):
     ],
 )
 def test_categorical_monkey_simple(dist, output, capsys):
+    """Only members with a nonzero weight in the distribution are selected and disrupted."""
     nemesis = FakeCategorialMonkey(FakeTester(), None, dist, default_weight=0)
     method = nemesis.select_next_nemesis()
 

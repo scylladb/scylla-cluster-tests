@@ -17,13 +17,14 @@ from typing import Any, Dict, Optional
 
 
 class DefaultValue:
-    pass
+    """Sentinel marking an attribute that has no pickler action and is dropped on serialization."""
 
 
 __builtin__ = [].__class__.__module__
 
 
 def is_builtin(obj):
+    """Return True when the object is defined in the builtins module."""
     return obj.__module__ == __builtin__
 
 
@@ -34,10 +35,14 @@ def _init_invoke_result(instance_type, children):
 
 
 class PicklerAction(enum.Enum):
+    """Per-attribute serialization actions used in Pickler.class_info."""
+
     PASSTHROUGH = 1
 
 
 class Pickler:
+    """Serialize objects to JSON-compatible data and rebuild them, driven by the per-class rules in class_info."""
+
     class_info = {
         "fabric.runners.Result": {
             "init_args": {
@@ -65,12 +70,14 @@ class Pickler:
 
     @staticmethod
     def get_class_path(instance_class):
+        """Return the dotted import path of a class, or its bare name for builtins."""
         if is_builtin(instance_class):
             return f"{instance_class.__name__}"
         return f"{instance_class.__module__}.{instance_class.__name__}"
 
     @staticmethod
     def import_and_return(path):
+        """Import and return the object at a dotted path, caching it in the module globals."""
         global_vars = globals()
         tclass = global_vars.get(path, None)
         if tclass is not None:
@@ -124,6 +131,7 @@ class Pickler:
 
     @classmethod
     def to_data(cls, obj):
+        """Convert an object to JSON-compatible data, tagging non-builtin instances with their class path."""
         if isinstance(obj, (str, type(None), int, float)):
             return obj
         if isinstance(obj, dict):
@@ -138,6 +146,7 @@ class Pickler:
 
     @classmethod
     def from_data(cls, data):
+        """Rebuild objects from data produced by to_data."""
         if isinstance(data, (str, type(None), int, float)):
             return data
         if isinstance(data, dict):
@@ -193,16 +202,19 @@ class Pickler:
 
     @classmethod
     def load_from_file(cls, filepath):
+        """Load a JSON file and rebuild the objects it holds."""
         with open(filepath, encoding="utf-8") as file:
             return cls.from_data(json.load(file))
 
     @classmethod
     def load_data_from_file(cls, filepath):
+        """Return the raw JSON content of a file."""
         with open(filepath, encoding="utf-8") as file:
             return json.load(file)
 
     @classmethod
     def save_to_file(cls, filepath, data):
+        """Serialize data with to_data and write it to a JSON file."""
         with open(filepath, "w", encoding="utf-8") as file:
             return json.dump(cls.to_data(data), file)
 

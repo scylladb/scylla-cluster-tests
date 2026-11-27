@@ -11,6 +11,8 @@ from sdcm.kernel_panic_checker import BaseKernelPanicChecker
 
 
 class FakeKernelPanicChecker(BaseKernelPanicChecker):
+    """Kernel panic checker that serves scripted console outputs, repeating the last one once exhausted."""
+
     provider_name = "fake"
 
     def __init__(self, console_outputs=None, **kwargs):
@@ -42,31 +44,37 @@ PANIC_OUTPUT = """\
 
 @pytest.fixture
 def logdir(tmp_path):
+    """Provide a not-yet-created node log directory path under tmp_path."""
     return str(tmp_path / "node-logs")
 
 
 def test_detects_kernel_panic():
+    """A 'Kernel panic' line in the console output is detected as a panic."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert checker._check_for_panic(PANIC_OUTPUT) is True
 
 
 def test_no_panic_in_normal_output():
+    """Regular boot console output is reported as panic-free."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert checker._check_for_panic(NORMAL_BOOT_OUTPUT) is False
 
 
 def test_no_panic_in_empty_output():
+    """Empty console output is reported as panic-free."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert checker._check_for_panic("") is False
 
 
 def test_case_insensitive_detection():
+    """Panic detection matches 'kernel panic' regardless of letter case."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert checker._check_for_panic("KERNEL PANIC detected") is True
     assert checker._check_for_panic("Kernel Panic in module") is True
 
 
 def test_extract_panic_lines():
+    """Only the console lines that contain the panic message are extracted."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     lines = checker._extract_panic_lines(PANIC_OUTPUT)
     assert len(lines) == 1
@@ -74,12 +82,14 @@ def test_extract_panic_lines():
 
 
 def test_extract_no_panic_lines():
+    """Extracting panic lines from regular boot output yields an empty list."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     lines = checker._extract_panic_lines(NORMAL_BOOT_OUTPUT)
     assert lines == []
 
 
 def test_saves_to_logdir(logdir):
+    """Console output is written verbatim to console_output.log in the logdir."""
     checker = FakeKernelPanicChecker(node_name="node-1", logdir=logdir)
     checker._save_console_output("some console output")
 
@@ -90,6 +100,7 @@ def test_saves_to_logdir(logdir):
 
 
 def test_creates_logdir_if_missing(logdir):
+    """Saving console output creates the logdir when it is missing."""
     checker = FakeKernelPanicChecker(node_name="node-1", logdir=logdir)
     assert not os.path.exists(logdir)
     checker._save_console_output("output")
@@ -97,17 +108,20 @@ def test_creates_logdir_if_missing(logdir):
 
 
 def test_skips_save_if_no_logdir():
+    """Saving console output without a logdir completes quietly."""
     checker = FakeKernelPanicChecker(node_name="node-1", logdir=None)
     checker._save_console_output("output")
 
 
 def test_skips_save_if_empty_output(logdir):
+    """Empty console output leaves the logdir without a console_output.log file."""
     checker = FakeKernelPanicChecker(node_name="node-1", logdir=logdir)
     checker._save_console_output("")
     assert not os.path.exists(os.path.join(logdir, "console_output.log"))
 
 
 def test_overwrites_on_each_save(logdir):
+    """Each save replaces console_output.log with the latest console output."""
     checker = FakeKernelPanicChecker(node_name="node-1", logdir=logdir)
     checker._save_console_output("first")
     checker._save_console_output("second")
@@ -118,12 +132,14 @@ def test_overwrites_on_each_save(logdir):
 
 
 def test_ssh_no_host_returns_true():
+    """SSH connectivity counts as healthy when the checker has no host to probe."""
     checker = FakeKernelPanicChecker(node_name="node-1", host=None)
     assert checker._check_ssh_connectivity() is True
 
 
 @patch("sdcm.kernel_panic_checker.socket.create_connection")
 def test_ssh_reachable_host(mock_conn):
+    """SSH connectivity is reported when a TCP connection to the host succeeds."""
     mock_conn.return_value.__enter__ = MagicMock()
     mock_conn.return_value.__exit__ = MagicMock(return_value=False)
     checker = FakeKernelPanicChecker(node_name="node-1", host="10.0.0.1")
@@ -132,11 +148,13 @@ def test_ssh_reachable_host(mock_conn):
 
 @patch("sdcm.kernel_panic_checker.socket.create_connection", side_effect=OSError("refused"))
 def test_ssh_unreachable_host(_mock_conn):
+    """SSH connectivity is reported lost when connecting to the host raises OSError."""
     checker = FakeKernelPanicChecker(node_name="node-1", host="10.0.0.1")
     assert checker._check_ssh_connectivity() is False
 
 
 def test_ssh_lost_property():
+    """ssh_lost turns true once a previously reachable host reaches the failure threshold."""
     checker = FakeKernelPanicChecker(node_name="node-1", host="10.0.0.1")
     assert checker.ssh_lost is False
 
@@ -146,6 +164,7 @@ def test_ssh_lost_property():
 
 
 def test_ssh_lost_requires_was_reachable():
+    """ssh_lost stays false for a host that was never reachable, whatever the failure count."""
     checker = FakeKernelPanicChecker(node_name="node-1", host="10.0.0.1")
     checker._ssh_consecutive_failures = 10
     assert checker.ssh_lost is False
@@ -153,6 +172,7 @@ def test_ssh_lost_requires_was_reachable():
 
 @patch("sdcm.kernel_panic_checker.KernelPanicEvent")
 def test_detects_panic_and_stops(mock_event_cls, logdir):
+    """The thread publishes a KernelPanicEvent and stops itself when the console shows a panic."""
     checker = FakeKernelPanicChecker(
         console_outputs=[NORMAL_BOOT_OUTPUT, PANIC_OUTPUT],
         node_name="node-1",
@@ -170,6 +190,7 @@ def test_detects_panic_and_stops(mock_event_cls, logdir):
 
 
 def test_saves_output_every_iteration(logdir):
+    """The running checker saves the console output to the logdir on its polling iterations."""
     checker = FakeKernelPanicChecker(
         console_outputs=["boot line 1", "boot line 1\nboot line 2"],
         node_name="node-1",
@@ -191,6 +212,7 @@ def test_saves_output_every_iteration(logdir):
 
 
 def test_stop_saves_final_output(logdir):
+    """stop() saves the final console output to the logdir."""
     checker = FakeKernelPanicChecker(
         console_outputs=["final output"],
         node_name="node-1",
@@ -205,6 +227,7 @@ def test_stop_saves_final_output(logdir):
 
 
 def test_context_manager_starts_and_stops(logdir):
+    """The context manager starts the checker thread on enter and stops it on exit."""
     checker = FakeKernelPanicChecker(
         console_outputs=["output"],
         node_name="node-1",
@@ -220,11 +243,13 @@ def test_context_manager_starts_and_stops(logdir):
 
 
 def test_is_daemon_thread():
+    """The checker runs as a daemon thread so it lets the interpreter exit."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert checker.daemon is True
 
 
 def test_initial_state():
+    """A new checker keeps its node name, host and logdir and starts with all events cleared."""
     checker = FakeKernelPanicChecker(node_name="node-1", host="10.0.0.1", logdir="/tmp/test")
     assert checker.node_name == "node-1"
     assert checker.host == "10.0.0.1"
@@ -238,6 +263,7 @@ def test_initial_state():
 
 @patch("sdcm.kernel_panic_checker.KernelPanicEvent")
 def test_no_panic_while_suspended(mock_event_cls, logdir):
+    """A suspended checker ignores panic output and publishes no KernelPanicEvent."""
     checker = FakeKernelPanicChecker(
         console_outputs=[PANIC_OUTPUT, PANIC_OUTPUT, PANIC_OUTPUT],
         node_name="node-1",
@@ -261,6 +287,7 @@ def test_no_panic_while_suspended(mock_event_cls, logdir):
 
 @patch("sdcm.kernel_panic_checker.KernelPanicEvent")
 def test_panic_detected_after_resume(mock_event_cls, logdir):
+    """After resume() the checker detects a panic that appears in later console output."""
     call_count = 0
 
     class RebootThenPanicChecker(FakeKernelPanicChecker):
@@ -293,6 +320,7 @@ def test_panic_detected_after_resume(mock_event_cls, logdir):
 
 
 def test_suspend_resume_idempotent():
+    """Repeated suspend() and resume() calls leave the suspended flag in the expected state."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     checker.suspend()
     checker.suspend()
@@ -305,6 +333,7 @@ def test_suspend_resume_idempotent():
 
 
 def test_suspended_context_manager():
+    """suspended() sets the suspended flag inside the block and clears it on exit."""
     checker = FakeKernelPanicChecker(node_name="node-1")
     assert not checker._suspended.is_set()
 
@@ -327,6 +356,7 @@ class ScriptedSshProbe:
         self.calls = 0
 
     def __call__(self):
+        """Return the next scripted probe result, stopping the checker once the probe limit is reached."""
         self.calls += 1
         if self.calls >= self.limit:
             self.checker._stop_event.set()
@@ -343,6 +373,7 @@ def _run_with_ssh_probe(checker, probe):
 
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_ssh_lost_publishes_critical_event_and_stops(mock_event_cls):
+    """Losing SSH after it was reachable publishes NodeUnreachableEvent once the threshold is hit, when armed."""
     checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
     checker.fail_on_ssh_lost = True
     probe = ScriptedSshProbe(checker, [True])
@@ -357,6 +388,7 @@ def test_ssh_lost_publishes_critical_event_and_stops(mock_event_cls):
 
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_ssh_lost_does_not_fail_test_by_default(mock_event_cls):
+    """With fail_on_ssh_lost off by default, an SSH outage past the threshold publishes no event."""
     checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="db-1", host="10.0.0.1")
     probe = ScriptedSshProbe(checker, [True], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
 
@@ -368,6 +400,7 @@ def test_ssh_lost_does_not_fail_test_by_default(mock_event_cls):
 
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_ssh_recovery_resets_failure_count(mock_event_cls):
+    """A successful probe resets the failure count, so the event fires only after a full new outage."""
     checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
     checker.fail_on_ssh_lost = True
     almost_lost = [False] * (checker.SSH_LOST_CRITICAL_THRESHOLD - 1)
@@ -382,6 +415,7 @@ def test_ssh_recovery_resets_failure_count(mock_event_cls):
 
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_ssh_lost_never_reachable_does_not_fail(mock_event_cls):
+    """A host that was never reachable over SSH publishes no NodeUnreachableEvent."""
     checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
     checker.fail_on_ssh_lost = True
     probe = ScriptedSshProbe(checker, [], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
@@ -393,6 +427,7 @@ def test_ssh_lost_never_reachable_does_not_fail(mock_event_cls):
 
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_ssh_lost_disarmed_while_running_does_not_fail(mock_event_cls):
+    """Disarming fail_on_ssh_lost while the checker runs suppresses the NodeUnreachableEvent."""
     checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
     checker.fail_on_ssh_lost = True
     probe = ScriptedSshProbe(checker, [True], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
@@ -410,6 +445,7 @@ def test_ssh_lost_disarmed_while_running_does_not_fail(mock_event_cls):
 @patch("sdcm.kernel_panic_checker.KernelPanicEvent")
 @patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
 def test_kernel_panic_wins_over_ssh_lost(mock_unreachable_cls, mock_panic_cls):
+    """A kernel panic seen during an SSH outage publishes KernelPanicEvent instead of NodeUnreachableEvent."""
     outputs = [NORMAL_BOOT_OUTPUT] * FakeKernelPanicChecker.SSH_LOST_CRITICAL_THRESHOLD + [PANIC_OUTPUT]
     checker = FakeKernelPanicChecker(console_outputs=outputs, node_name="loader-1", host="10.0.0.1")
     checker.fail_on_ssh_lost = True

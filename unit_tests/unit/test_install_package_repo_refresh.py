@@ -53,6 +53,7 @@ def test_boot_time_vector_script_refreshes_the_repo_cache():
 
 @patch("sdcm.utils.decorators.time.sleep")
 def test_failed_apt_install_refreshes_the_lists_before_the_retry(_sleep):
+    """A failed apt install runs `apt-get update` and then retries the same install command."""
     node = _fake_node()
     node.remoter.sudo.side_effect = [UnexpectedExit(MagicMock()), MagicMock(), MagicMock()]
 

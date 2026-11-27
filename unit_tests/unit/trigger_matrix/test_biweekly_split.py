@@ -40,6 +40,7 @@ def biweekly_crons(config):
 
 @pytest.fixture(name="config", params=BIWEEKLY_MATRICES)
 def fixture_config(request):
+    """Load each biweekly matrix config (tier1, rolling-upgrade) from configurations/triggers."""
     return load_matrix_config(TRIGGERS_DIR / request.param)
 
 

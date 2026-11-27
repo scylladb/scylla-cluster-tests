@@ -38,6 +38,7 @@ def enable_safepoint_logging(params):
 
 
 def test_01_cassandra_stress(request, docker_scylla, params):
+    """A one-minute c-s write with debug and HDR histograms reports positive mean and p99 latencies."""
     params["cs_debug"] = True
     params["use_hdrhistogram"] = True
 
@@ -67,6 +68,7 @@ def test_01_cassandra_stress(request, docker_scylla, params):
 
 
 def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
+    """A c-s user-profile run with insert and query ops reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -93,6 +95,7 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
 
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
+    """c-s with client encryption against an SSL-enabled node reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -126,6 +129,7 @@ def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
 
 
 def test_04_cassandra_stress_multi_region(request, docker_scylla, params):
+    """c-s in multi-region mode against a single node reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
     loader_set.test_config.set_multi_region(True)
     request.addfinalizer(lambda: loader_set.test_config.set_multi_region(False))
@@ -156,6 +160,7 @@ def test_04_cassandra_stress_multi_region(request, docker_scylla, params):
     "compressor, cql_compression", [("Deflate", "none"), ("LZ4", "lz4"), ("Snappy", "snappy"), ("Zstd", "none")]
 )
 def test_05_cassandra_stress_compression(request, docker_scylla, params, compressor, cql_compression):
+    """c-s with each table compressor and CQL transport compression reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -181,6 +186,7 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
 
 
 def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params):
+    """cs_extra_jvm_opts and safepoint logging reach JVM_OPTS and the java command line inside the c-s container."""
     jvm_opts = "-XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx512m -XX:+AlwaysPreTouch"
     params["cs_extra_jvm_opts"] = jvm_opts
 

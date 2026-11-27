@@ -50,6 +50,7 @@ def _make_config(params=None, test_config=None, pipeline_function="longevityPipe
     ],
 )
 def test_count_regions(params, expected):
+    """count_regions counts AWS regions or GCE datacenters from a single value or a JSON list, defaulting to 1."""
     config = _make_config(params=params)
     assert count_regions(config) == expected
 
@@ -68,6 +69,7 @@ def test_count_regions(params, expected):
     ],
 )
 def test_parse_extra_env_vars(raw, expected):
+    """parse_extra_env_vars adds each space-separated KEY=VALUE pair to the env dict."""
     env = {}
     parse_extra_env_vars(raw, env)
     assert env == expected
@@ -77,6 +79,7 @@ def test_parse_extra_env_vars(raw, expected):
 
 
 def test_build_env_basic_aws():
+    """An AWS pipeline maps backend and region to SCT env vars and JSON-encodes the config files."""
     config = _make_config(
         params={
             "backend": "aws",
@@ -91,6 +94,7 @@ def test_build_env_basic_aws():
 
 
 def test_build_env_gce_backend():
+    """A GCE pipeline maps gce_datacenter to SCT_GCE_DATACENTER."""
     config = _make_config(
         params={
             "backend": "gce",
@@ -103,6 +107,7 @@ def test_build_env_gce_backend():
 
 
 def test_build_env_azure_backend():
+    """An Azure pipeline maps azure_region_name to SCT_AZURE_REGION_NAME."""
     config = _make_config(
         params={
             "backend": "azure",
@@ -115,6 +120,7 @@ def test_build_env_azure_backend():
 
 
 def test_build_env_docker_backend():
+    """The docker backend gets the backend env var and leaves out AMI and GCE image placeholders."""
     config = _make_config(
         params={
             "backend": "docker",
@@ -128,6 +134,7 @@ def test_build_env_docker_backend():
 
 
 def test_build_env_k8s_version_maps_to_both():
+    """k8s_version sets both the EKS and the GKE cluster version."""
     config = _make_config(
         params={
             "backend": "k8s-eks",
@@ -140,6 +147,7 @@ def test_build_env_k8s_version_maps_to_both():
 
 
 def test_build_env_provision_type_mapping():
+    """provision_type maps to SCT_INSTANCE_PROVISION."""
     config = _make_config(
         params={
             "backend": "aws",
@@ -151,6 +159,7 @@ def test_build_env_provision_type_mapping():
 
 
 def test_build_env_linux_distro_mapping():
+    """linux_distro maps to SCT_SCYLLA_LINUX_DISTRO."""
     config = _make_config(
         params={
             "backend": "gce",
@@ -162,6 +171,7 @@ def test_build_env_linux_distro_mapping():
 
 
 def test_build_env_test_email_title_mapping():
+    """test_email_title maps to SCT_EMAIL_SUBJECT_POSTFIX."""
     config = _make_config(
         params={
             "backend": "aws",
@@ -173,6 +183,7 @@ def test_build_env_test_email_title_mapping():
 
 
 def test_build_env_scylla_ami_id_mapping():
+    """scylla_ami_id maps to SCT_AMI_ID_DB_SCYLLA."""
     config = _make_config(
         params={
             "backend": "aws",
@@ -184,6 +195,7 @@ def test_build_env_scylla_ami_id_mapping():
 
 
 def test_build_env_extra_environment_variables():
+    """Pairs from extra_environment_variables are added to the env."""
     config = _make_config(
         params={
             "backend": "docker",
@@ -195,6 +207,7 @@ def test_build_env_extra_environment_variables():
 
 
 def test_build_env_baremetal_placeholder_ips():
+    """The baremetal backend gets placeholder DB node public IPs for at least two nodes."""
     config = _make_config(
         params={
             "backend": "baremetal",
@@ -207,6 +220,7 @@ def test_build_env_baremetal_placeholder_ips():
 
 
 def test_build_env_baremetal_scylla_repo_placeholder():
+    """The baremetal backend gets a placeholder SCT_SCYLLA_REPO."""
     config = _make_config(
         params={
             "backend": "baremetal",
@@ -217,6 +231,7 @@ def test_build_env_baremetal_scylla_repo_placeholder():
 
 
 def test_build_env_baremetal_keeps_pipeline_scylla_version():
+    """A baremetal pipeline's scylla_version is kept and replaces the scylla repo placeholder."""
     config = _make_config(
         params={
             "backend": "baremetal",
@@ -229,6 +244,7 @@ def test_build_env_baremetal_keeps_pipeline_scylla_version():
 
 
 def test_build_env_test_config_json_encoded():
+    """Multiple test_config files are JSON-encoded in order into SCT_CONFIG_FILES."""
     config = _make_config(
         params={"backend": "aws"},
         test_config=["test-cases/a.yaml", "configurations/b.yaml"],
@@ -257,6 +273,7 @@ def test_build_env_non_env_params_skipped():
 
 
 def test_build_env_post_behavior_params():
+    """post_behavior_* params map to the matching SCT_POST_BEHAVIOR_* env vars."""
     config = _make_config(
         params={
             "backend": "aws",
@@ -272,6 +289,7 @@ def test_build_env_post_behavior_params():
 
 
 def test_build_env_k8s_operator_params():
+    """Scylla operator helm repo, chart version and TLS params map to their SCT_K8S_* env vars."""
     config = _make_config(
         params={
             "backend": "k8s-eks",
@@ -287,6 +305,7 @@ def test_build_env_k8s_operator_params():
 
 
 def test_build_env_xcloud_params():
+    """The xcloud provider and env params map to SCT_XCLOUD_* and a placeholder scylla version is filled in."""
     config = _make_config(
         params={
             "backend": "xcloud",
@@ -341,6 +360,7 @@ def test_build_env_no_scylla_version_placeholder_for_aws():
 
 
 def test_build_env_pytest_addopts():
+    """pytest_addopts is passed through as PYTEST_ADDOPTS."""
     config = _make_config(
         params={
             "backend": "aws",

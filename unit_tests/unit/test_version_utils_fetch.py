@@ -64,6 +64,7 @@ class _ScriptedHandler(BaseHTTPRequestHandler):
 
 @pytest.fixture(name="repo_server")
 def fixture_repo_server(monkeypatch):
+    """Run a scripted local HTTP repository server with zero retry backoff and a cleared URL cache."""
     monkeypatch.setattr(version_utils, "SCYLLA_URL_REQUEST_BACKOFF", 0)
     version_utils.get_url_content.cache_clear()
     server = ThreadingHTTPServer(("127.0.0.1", 0), _ScriptedHandler)
@@ -92,6 +93,7 @@ def fixture_repo_server(monkeypatch):
     ],
 )
 def test_transient_failures_are_retried(repo_server, script):
+    """503, 429 and connection resets are retried until the repository answers."""
     repo_server.script = script
 
     assert version_utils.get_url_content(repo_server.url) == ["repo-content"]
@@ -107,6 +109,7 @@ def test_throttling_outlasting_a_second_is_ridden_out(repo_server, monkeypatch):
 
 
 def test_stalled_request_times_out_and_is_retried(repo_server, monkeypatch):
+    """A request stalling past the read timeout is retried and then succeeds."""
     monkeypatch.setattr(version_utils, "SCYLLA_URL_REQUEST_TIMEOUT", (1, 0.5))
     repo_server.script = ["stall", "200"]
 
@@ -115,6 +118,7 @@ def test_stalled_request_times_out_and_is_retried(repo_server, monkeypatch):
 
 
 def test_retries_are_bounded(repo_server):
+    """A persistent 503 raises RetryError after SCYLLA_URL_REQUEST_RETRIES retries."""
     repo_server.script = ["503"]
 
     with pytest.raises(requests.exceptions.RetryError):
@@ -123,6 +127,7 @@ def test_retries_are_bounded(repo_server):
 
 
 def test_each_fetch_closes_its_session(repo_server, monkeypatch):
+    """get_url_bytes and get_url_content each close the retry session they create."""
     sessions = []
     create_retry_session = version_utils.create_retry_session
 
@@ -140,6 +145,7 @@ def test_each_fetch_closes_its_session(repo_server, monkeypatch):
 
 
 def test_missing_url_fails_without_retrying(repo_server):
+    """A 404 fails on the first request: ValueError from get_url_content, HTTPError from get_url_bytes."""
     repo_server.script = ["404"]
 
     with pytest.raises(ValueError, match="is incorrect"):
@@ -191,6 +197,7 @@ def test_yum_lookup_outlasts_every_request_spending_its_retries(repo_server, mon
 
 
 def test_parser_parses_the_given_data():
+    """Parser parses the primary.xml bytes passed as data, listing its packages."""
     primary_xml = (
         b'<?xml version="1.0"?><metadata xmlns="http://linux.duke.edu/metadata/common" packages="1">'
         b'<package type="rpm"><name>scylla</name><version epoch="0" ver="2025.3.8" rel="0.1"/></package>'

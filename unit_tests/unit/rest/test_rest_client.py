@@ -20,20 +20,24 @@ from sdcm.rest.rest_client import RestClient
 
 @pytest.fixture()
 def client():
+    """Provide a RestClient for localhost."""
     return RestClient(host="localhost", endpoint="api")
 
 
 def test_session_has_retry_adapter_http(client):
+    """The session's HTTP adapter retries up to 5 times."""
     adapter = client.session.get_adapter("http://localhost")
     assert adapter.max_retries.total == 5
 
 
 def test_session_has_retry_adapter_https(client):
+    """The session's HTTPS adapter retries up to 5 times."""
     adapter = client.session.get_adapter("https://localhost")
     assert adapter.max_retries.total == 5
 
 
 def test_retry_targets_5xx_and_429(client):
+    """The retry status list covers 429, 502 and 503."""
     adapter = client.session.get_adapter("http://localhost")
     assert 429 in adapter.max_retries.status_forcelist
     assert 502 in adapter.max_retries.status_forcelist
@@ -41,6 +45,7 @@ def test_retry_targets_5xx_and_429(client):
 
 
 def test_get_uses_session(client):
+    """get() goes through the retrying session."""
     with patch.object(client.session, "get") as mock_get:
         mock_get.return_value.status_code = 200
         client.get("test")
@@ -48,6 +53,7 @@ def test_get_uses_session(client):
 
 
 def test_post_uses_session(client):
+    """post() goes through the retrying session."""
     with patch.object(client.session, "post") as mock_post:
         mock_post.return_value.status_code = 200
         client.post("test")
@@ -55,6 +61,7 @@ def test_post_uses_session(client):
 
 
 def test_prepare_request_still_works(client):
+    """_prepare_request() builds a request with the method, endpoint and query params."""
     prepared = client._prepare_request("GET", "test", params={"foo": "bar"})
     assert prepared.method == "GET"
     assert "test" in prepared.url

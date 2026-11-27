@@ -66,6 +66,7 @@ def raft_leader_host_mock(monkeypatch):
 
 
 def test_returns_node_matching_group0_leader(raft_leader_host_mock, storage_service_client_mock):
+    """The topology coordinator is the active node whose host id matches the group0 leader host id."""
     leader_node = _make_node("node-1", LEADER_HOST_ID)
     other_node = _make_node("node-2", OTHER_HOST_ID)
     verification_node = _make_verification_node([other_node, leader_node])
@@ -98,6 +99,7 @@ def test_raises_when_leader_unusable_or_missing_in_active_nodes(
     leader_host_id,
     error_match,
 ):
+    """An unknown leader, or one missing from the active nodes, raises after three retries."""
     verification_node = _make_verification_node([_make_node("node-1", OTHER_HOST_ID)])
     raft_leader_host_mock.return_value = leader_host_id
 

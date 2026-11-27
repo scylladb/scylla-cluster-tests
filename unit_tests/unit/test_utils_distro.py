@@ -340,90 +340,107 @@ VERSION_ID 18.04
 
 
 class TestDistro:
+    """Distro detection from /etc/os-release contents and its family predicates."""
+
     def test_unknown(self):
+        """An unrecognized os-release ID/VERSION_ID parses to Distro.UNKNOWN."""
         assert Distro.UNKNOWN.is_unknown
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])
         assert distro.is_unknown
 
     def test_debian11(self):
+        """Debian 11 os-release parses to the matching Distro, recognized as Debian."""
         assert Distro.DEBIAN11.is_debian11
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
         assert distro.is_debian11
         assert distro.is_debian
 
     def test_debian12(self):
+        """Debian 12 os-release parses to the matching Distro, recognized as Debian."""
         assert Distro.DEBIAN12.is_debian12
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 12"])
         assert distro.is_debian12
         assert distro.is_debian
 
     def test_centos7(self):
+        """CentOS 7 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.CENTOS7.is_centos7
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["CentOS 7"])
         assert distro.is_centos7
         assert distro.is_rhel_like
 
     def test_centos8(self):
+        """CentOS 8 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.CENTOS8.is_centos8
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["CentOS 8"])
         assert distro.is_centos8
         assert distro.is_rhel_like
 
     def test_rhel7(self):
+        """RHEL 7 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.RHEL7.is_rhel7
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["RHEL 7"])
         assert distro.is_rhel7
         assert distro.is_rhel_like
 
     def test_rhel8(self):
+        """RHEL 8 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.RHEL8.is_rhel8
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["RHEL 8"])
         assert distro.is_rhel8
         assert distro.is_rhel_like
 
     def test_oel7(self):
+        """Oracle Linux 7.3 os-release parses to the matching Distro, recognized as OEL7 and RHEL-like."""
         assert Distro.OEL7.is_oel7
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 7.3"])
         assert distro.is_oel7
         assert distro.is_rhel_like
 
     def test_oel8(self):
+        """Oracle Linux 8.1 os-release parses to the matching Distro, recognized as OEL8 and RHEL-like."""
         assert Distro.OEL8.is_oel8
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 8.1"])
         assert distro.is_oel8
         assert distro.is_rhel_like
 
     def test_oel9(self):
+        """Oracle Linux 9.3 os-release parses to the matching Distro, recognized as OEL9 and RHEL-like."""
         assert Distro.OEL9.is_oel9
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 9.3"])
         assert distro.is_oel9
         assert distro.is_rhel_like
 
     def test_oel10(self):
+        """Oracle Linux 10 os-release parses to the matching Distro, recognized as OEL10 and RHEL-like."""
         assert Distro.OEL10.is_oel10
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 10"])
         assert distro.is_oel10
         assert distro.is_rhel_like
 
     def test_sles15(self):
+        """SLES 15 SP3 os-release parses to the matching Distro, recognized as SLES."""
         assert Distro.SLES15.is_sles15
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["SLES 15"])
         assert distro.is_sles15
         assert distro.is_sles
 
     def test_ubuntu20(self):
+        """Ubuntu 20.04 os-release parses to the matching Distro, recognized as Ubuntu."""
         assert Distro.UBUNTU20.is_ubuntu20
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 20.04"])
         assert distro.is_ubuntu20
         assert distro.is_ubuntu
 
     def test_ubuntu22(self):
+        """Ubuntu 22.04 os-release parses to the matching Distro, recognized as Ubuntu."""
         assert Distro.UBUNTU22.is_ubuntu22
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 22.04"])
         assert distro.is_ubuntu22
         assert distro.is_ubuntu
 
     def test_ubuntu26(self):
+        """Ubuntu 26.04 os-release parses to the matching Distro, recognized as Ubuntu and Debian-like."""
         assert Distro.UBUNTU26.is_ubuntu26
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 26.04"])
         assert distro.is_ubuntu26
@@ -431,24 +448,28 @@ class TestDistro:
         assert distro.is_debian_like
 
     def test_amazon2023(self):
+        """Amazon Linux 2023 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.AMAZON2023.is_amazon2023
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2023"])
         assert distro.is_amazon2023
         assert distro.is_rhel_like
 
     def test_rocky8(self):
+        """Rocky Linux 8 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.ROCKY8.is_rocky8
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 8"])
         assert distro.is_rocky8
         assert distro.is_rhel_like
 
     def test_rocky9(self):
+        """Rocky Linux 9 os-release parses to the matching Distro, recognized as RHEL-like."""
         assert Distro.ROCKY9.is_rocky9
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 9"])
         assert distro.is_rocky9
         assert distro.is_rhel_like
 
     def test_fedora44(self):
+        """Fedora 44 os-release parses to the matching Distro, recognized as Fedora and RHEL-like."""
         assert Distro.FEDORA44.is_fedora44
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Fedora 44"])
         assert distro.is_fedora44
@@ -456,10 +477,12 @@ class TestDistro:
         assert distro.is_rhel_like
 
     def test_parsing_error(self):
+        """Malformed os-release lines (no '=' separator) raise DistroError."""
         with pytest.raises(DistroError):
             Distro.from_os_release(DISTROS_OS_RELEASE["Garbage"])
 
     def test_debian_like(self):
+        """Debian 11 counts as Debian-like while Amazon Linux 2 is outside that family."""
         assert Distro.DEBIAN11.is_debian11
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
         invalid_distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])

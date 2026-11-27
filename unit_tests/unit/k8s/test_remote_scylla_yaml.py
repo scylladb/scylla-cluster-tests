@@ -7,6 +7,8 @@ from sdcm.cluster_k8s import SCYLLA_NAMESPACE, KubernetesCluster
 
 
 class DummyCluster(KubernetesCluster):
+    """KubernetesCluster with deployment stubbed out and the Scylla config map kept in an in-memory dict."""
+
     POOL_LABEL_NAME = "dummy-pool"
     config_map_store = None
 
@@ -16,25 +18,28 @@ class DummyCluster(KubernetesCluster):
 
     @contextlib.contextmanager
     def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE):
+        """Yield the in-memory config map dict so callers can mutate it in place."""
         assert namespace == SCYLLA_NAMESPACE
         # Yield a real dict so context can mutate it
         yield self.config_map_store
 
     def deploy(self):
-        pass
+        """Stub: accept the deploy call and return immediately."""
 
     def create_kubectl_config(self):
-        pass
+        """Stub: accept the call and return immediately; the test uses no kubectl config."""
 
     def create_token_update_thread(self):
+        """Return None in place of a token update thread."""
         return None
 
     def deploy_node_pool(self, pool, wait_till_ready=True):
-        pass
+        """Stub: accept the node pool and return immediately."""
 
 
 @pytest.fixture()
 def dummy_cluster():
+    """Provide a DummyCluster and its backing config map dict."""
     params = {
         "k8s_scylla_cluster_name": "test-cluster",
         "cluster_backend": "k8s-local",

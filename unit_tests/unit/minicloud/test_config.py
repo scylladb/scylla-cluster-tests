@@ -24,6 +24,7 @@ DEFAULT_BUCKETS = ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scy
 
 
 def test_minicloud_config_defaults():
+    """A bare MinicloudConfig uses the default port, lightweight sizing, buckets, region and image."""
     config = MinicloudConfig()
     assert config.port == MINICLOUD_PORT
     assert config.lightweight is True
@@ -41,6 +42,7 @@ def test_default_minicloud_image_comes_from_values_file():
 
 
 def test_minicloud_config_from_env_defaults():
+    """from_env without params gives the default image, port, sizing, buckets and region and no GCS bucket."""
     config = MinicloudConfig.from_env()
     assert config.docker_image == default_minicloud_image()
     assert config.port == MINICLOUD_PORT
@@ -197,6 +199,7 @@ def test_minicloud_config_monitor_gets_db_size_with_manager():
 
 
 def test_minicloud_config_lightweight_can_be_disabled_by_param():
+    """minicloud_lightweight=False turns lightweight mode off."""
     config = MinicloudConfig.from_env(params={"minicloud_lightweight": False})
     assert config.lightweight is False
 
@@ -213,6 +216,7 @@ def test_minicloud_config_lightweight_stays_on_when_param_absent():
     ids=["disabled-by-param", "on-when-param-absent"],
 )
 def test_minicloud_config_lock_guest_memory(params, expected):
+    """lock_guest_memory follows minicloud_lock_guest_memory and defaults to on."""
     assert MinicloudConfig.from_env(params=params).lock_guest_memory is expected
 
 
@@ -231,6 +235,7 @@ def test_minicloud_config_falls_back_to_defaults_on_empty_params():
 
 
 def test_minicloud_config_gcs_bucket_param():
+    """minicloud_gcs_bucket sets the GCS bucket."""
     config = MinicloudConfig.from_env(params={"minicloud_gcs_bucket": "sct-project-1-minicloud-staging"})
     assert config.gcs_bucket == "sct-project-1-minicloud-staging"
 
@@ -254,6 +259,7 @@ def test_minicloud_config_sizing_params_are_honoured():
 
 
 def test_minicloud_config_sizing_defaults():
+    """Sizing defaults to default vCPUs, no container memory/CPU limit, and the default container name and state dir."""
     config = MinicloudConfig.from_env()
     assert config.lightweight_vcpus == MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
     assert config.container_memory == ""  # empty means "no docker limit"
@@ -285,6 +291,7 @@ def test_minicloud_config_state_dir_drives_log_file():
 
 
 def test_minicloud_config_state_dir_expands_tilde():
+    """A tilde in minicloud_state_dir expands to the home directory in state_dir and log_file."""
     config = MinicloudConfig.from_env(params={"minicloud_state_dir": "~/scratch/minicloud"})
     assert config.state_dir == os.path.expanduser("~/scratch/minicloud")
     assert "~" not in config.log_file
@@ -302,6 +309,7 @@ def test_minicloud_config_gce_project_param_wins_over_env(monkeypatch):
 
 
 def test_minicloud_config_gce_project_falls_back_to_env_then_default(monkeypatch):
+    """The GCP project falls back to SCT_GCE_PROJECT (prefix trimmed), then to the default, for blank params too."""
     monkeypatch.delenv("SCT_GCE_PROJECT", raising=False)
     assert MinicloudConfig.from_env().gcp_project == MINICLOUD_GCP_PROJECT_DEFAULT
     # a param mapping that carries a blank value must not blank out the fallbacks
@@ -340,27 +348,32 @@ def test_minicloud_config_gce_project_secret_name_trimmed_to_project(monkeypatch
 
 
 def test_minicloud_config_skip_memory_check_param():
+    """skip_memory_check defaults to False and follows minicloud_skip_memory_check."""
     assert MinicloudConfig.from_env().skip_memory_check is False
     assert MinicloudConfig.from_env(params={"minicloud_skip_memory_check": True}).skip_memory_check is True
 
 
 def test_minicloud_error_is_exception():
+    """MinicloudError is an Exception carrying its message."""
     err = MinicloudError("something went wrong")
     assert isinstance(err, Exception)
     assert "something went wrong" in str(err)
 
 
 def test_minicloud_error_preserves_message():
+    """MinicloudError's string form is exactly the message it was built with."""
     msg = "KVM not available on this host"
     err = MinicloudError(msg)
     assert str(err) == msg
 
 
 def test_minicloud_config_builds_with_unresolved_auto():
+    """With every auto-size param set to auto the config builds, flags unresolved_auto and uses placeholder sizes."""
     config = MinicloudConfig.from_env(params=dict.fromkeys(AUTO_SIZE_PARAMS, "auto"))
     assert config.unresolved_auto is True
     assert (config.lightweight_memory, config.lightweight_vcpus, config.lightweight_vcpus_loader) == ("4GiB", 1, None)
 
 
 def test_vcpu_knobs_accept_auto_in_any_case():
+    """The vCPU knob type normalizes auto in any case and with surrounding spaces to "auto"."""
     assert positive_int_auto_or_none(" AUTO ") == "auto"

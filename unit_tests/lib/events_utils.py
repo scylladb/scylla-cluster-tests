@@ -61,6 +61,7 @@ class EventsUtilsMixin:
 
     @classmethod
     def teardown_events_processes(cls):
+        """Stop the events device, undo the registry patch and remove the temp log dir."""
         stop_events_device(_registry=cls.events_processes_registry)
         if cls.events_processes_registry_patcher:
             cls.events_processes_registry_patcher.stop()
@@ -103,12 +104,15 @@ class EventsUtilsMixin:
 
     @classmethod
     def get_events_logger(cls):
+        """Return the file logger subscriber of this class events registry."""
         return get_events_logger(_registry=cls.events_processes_registry)
 
     @classmethod
     def get_events_counter(cls):
+        """Return the events counter subscriber of this class events registry."""
         return get_events_counter(_registry=cls.events_processes_registry)
 
     @classmethod
     def get_raw_events_log(cls):
+        """Return the path of the raw events log written by the main events device."""
         return get_events_main_device(_registry=cls.events_processes_registry).raw_events_log

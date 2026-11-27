@@ -37,11 +37,15 @@ SCT_RUNNER_AWS = {
 
 @patch("boto3.client")
 class TestCleanInstanceAws:
+    """clean_instances_aws(): tag validation, SCT runner protection and termination."""
+
     def test_empty_tags_dict(self, _):
+        """An empty tags dict raises AssertionError."""
         with pytest.raises(AssertionError, match="not provided"):
             clean_instances_aws({})
 
     def test_empty_list(self, ec2_client):
+        """With no matching instances, nothing is terminated."""
         with patch.object(resources_cleanup, "list_instances_aws", Mock(return_value={})) as list_instances_aws:
             resources_cleanup.clean_instances_aws(
                 {
@@ -57,6 +61,7 @@ class TestCleanInstanceAws:
         ec2_client().terminate_instances.assert_not_called()
 
     def test_sct_runner(self, ec2_client):
+        """An instance tagged as sct-runner is left running."""
         with patch.object(
             resources_cleanup, "list_instances_aws", Mock(return_value={"eu-north-1": [SCT_RUNNER_AWS]})
         ) as list_instances_aws:
@@ -74,6 +79,7 @@ class TestCleanInstanceAws:
         ec2_client().terminate_instances.assert_not_called()
 
     def test_terminate(self, ec2_client):
+        """A matching instance is terminated by its id."""
         with patch.object(
             resources_cleanup, "list_instances_aws", Mock(return_value={"eu-north-1": [{"InstanceId": "i-1111"}]})
         ) as list_instances_aws:
@@ -93,11 +99,15 @@ class TestCleanInstanceAws:
 
 @patch("boto3.client")
 class TestCleanElasticIpsAws:
+    """clean_elastic_ips_aws(): tag validation and disassociate-then-release of matching IPs."""
+
     def test_empty_tags_dict(self, _):
+        """An empty tags dict raises AssertionError."""
         with pytest.raises(AssertionError, match="not provided"):
             clean_elastic_ips_aws({})
 
     def test_empty_list(self, ec2_client):
+        """With no matching elastic IPs, nothing is disassociated or released."""
         with patch.object(resources_cleanup, "list_elastic_ips_aws", Mock(return_value={})) as list_elastic_ips_aws:
             clean_elastic_ips_aws(
                 {
@@ -114,6 +124,7 @@ class TestCleanElasticIpsAws:
         ec2_client().release_address.assert_not_called()
 
     def test_release(self, ec2_client):
+        """A matching elastic IP is disassociated and then released."""
         return_value = {
             "eu-north-1": [
                 {
@@ -142,11 +153,15 @@ class TestCleanElasticIpsAws:
 
 
 class TestCleanClustersGke:
+    """clean_clusters_gke(): tag validation and destroying matching clusters."""
+
     def test_empty_tags_dict(self):
+        """An empty tags dict raises AssertionError."""
         with pytest.raises(AssertionError, match="not provided"):
             clean_clusters_gke({})
 
     def test_destroy(self):
+        """A GKE cluster matching the tags is destroyed."""
         cluster = MagicMock()
         with patch.object(resources_cleanup, "list_clusters_gke", Mock(return_value=[cluster])) as list_clusters_gke:
             clean_clusters_gke(
@@ -163,11 +178,15 @@ class TestCleanClustersGke:
 
 
 class TestCleanInstancesGce:
+    """clean_instances_gce(): tag validation and deleting matching instances."""
+
     def test_empty_tags_dict(self):
+        """An empty tags dict raises AssertionError."""
         with pytest.raises(AssertionError, match="not provided"):
             clean_instances_gce({})
 
     def test_destroy(self):
+        """A GCE instance matching the tags is deleted in its project."""
         instance = MagicMock()
         with patch.object(resources_cleanup, "list_instances_gce", Mock(return_value=[instance])) as list_instances_gce:
             with patch.object(
@@ -190,6 +209,8 @@ class TestCleanInstancesGce:
 
 @pytest.fixture
 def oci_instance():
+    """Provide a factory of mock OCI instances tagged with TestId and a given keep_action and state."""
+
     def _create(keep_action: str = "terminate", lifecycle_state: str = "RUNNING"):
         instance = MagicMock()
         instance.region = "us-ashburn-1"
@@ -209,6 +230,7 @@ def oci_instance():
 
 
 def test_clean_instances_oci_terminate_calls_argus(oci_instance):
+    """keep_action=terminate terminates the OCI instance and marks it terminated in Argus."""
     instance = oci_instance(keep_action="terminate")
     mock_compute_client = MagicMock()
     mock_argus_client = MagicMock()
@@ -232,6 +254,7 @@ def test_clean_instances_oci_terminate_calls_argus(oci_instance):
 
 
 def test_clean_instances_oci_stop_when_keep_action_is_not_terminate(oci_instance):
+    """keep_action=stop stops the OCI instance, leaving it and its Argus record in place."""
     instance = oci_instance(keep_action="stop")
     mock_compute_client = MagicMock()
 
@@ -249,6 +272,8 @@ def test_clean_instances_oci_stop_when_keep_action_is_not_terminate(oci_instance
 
 @pytest.fixture
 def oci_block_volume():
+    """Provide a factory of mock OCI block volumes tagged with TestId and a given keep_action."""
+
     def _create(keep_action: str = "terminate"):
         volume = MagicMock()
         volume.id = "ocid1.volume.oc1..example"
@@ -273,6 +298,7 @@ def oci_block_volume():
     ],
 )
 def test_clean_orphan_block_volumes_oci_keep_action_behavior(oci_block_volume, keep_action, should_delete):
+    """An available orphan volume is deleted with keep_action=terminate and kept with keep_action=stop."""
     volume = oci_block_volume(keep_action=keep_action)
     mock_block_storage_client = MagicMock()
 
@@ -309,12 +335,16 @@ def test_clean_orphan_block_volumes_oci_keep_action_behavior(oci_block_volume, k
 
 
 class TestCleanResourcesDocker:
+    """clean_resources_docker(): tag validation and force-removal of containers and images."""
+
     def test_empty_tags_dict(self):
+        """An empty tags dict raises AssertionError."""
         with pytest.raises(AssertionError, match="not provided"):
             clean_resources_docker({})
 
     @staticmethod
     def test_destroy():
+        """A matching container (with its volumes) and image are force-removed."""
         image = MagicMock()
         container = MagicMock()
         with patch.object(
@@ -337,6 +367,8 @@ class TestCleanResourcesDocker:
 
 
 class TestCleanCloudResources:
+    """clean_cloud_resources() tag requirements and resilience, with every cleanup step patched."""
+
     integration = False  # set it to True if you want to run test with actual cloud operations.
     functions_to_patch = (
         "sdcm.utils.resources_cleanup.clean_emr_clusters",
@@ -363,6 +395,7 @@ class TestCleanCloudResources:
 
     @pytest.fixture(autouse=True)
     def fixture_config(self, monkeypatch):
+        """Set an AWS two-region config and patch all per-resource cleanup functions."""
         monkeypatch.setenv(name="SCT_CLUSTER_BACKEND", value="aws")
         monkeypatch.setenv(name="SCT_REGION_NAME", value="eu-north-1 eu-west-1")
 
@@ -375,36 +408,43 @@ class TestCleanCloudResources:
         patch.stopall()
 
     def test_no_tag_testid_and_runbyuser(self):
+        """With no tags, cleanup is refused and returns a falsy result."""
         params = {}
         res = clean_cloud_resources(params, self.config)
         assert not res
 
     def test_other_tags_and_no_testid_and_runbyuser(self):
+        """Without TestId or RunByUser, other tags alone get cleanup refused."""
         params = {"NodeType": "scylla-db"}
         res = clean_cloud_resources(params, self.config)
         assert not res
 
     def test_tag_testid_only(self):
+        """Cleanup runs when only RunByUser is given."""
         params = {"RunByUser": "test"}
         res = clean_cloud_resources(params, self.config)
         assert res
 
     def test_tag_runbyuser_only(self):
+        """Cleanup runs when only TestId is given."""
         params = {"TestId": "1111"}
         res = clean_cloud_resources(params, self.config)
         assert res
 
     def test_tags_testid_and_runbyuser(self):
+        """Cleanup runs when both TestId and RunByUser are given."""
         params = {"RunByUser": "test", "TestId": "1111"}
         res = clean_cloud_resources(params, self.config)
         assert res
 
     def test_tags_testid_and_runbyuser_with_other(self):
+        """Cleanup runs with TestId and RunByUser plus extra tags."""
         params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
         res = clean_cloud_resources(params, self.config)
         assert res
 
     def test_step_failure_does_not_abort_cleanup(self):
+        """After a cleanup step raises, the run completes and the next step still runs."""
         # SCT-507: a cleanup step that raises (e.g. an unreachable region) must not
         # abort the whole run; later steps still execute.
         resources_cleanup.SCTDedicatedHosts.release_by_tags.side_effect = RuntimeError("me-south-1 unreachable")
@@ -434,6 +474,7 @@ def _paginator_returning(configs):
 
 
 def test_clean_spot_fleet_requests_aws_cancels_matching_active_request():
+    """An active spot fleet request with matching tags is cancelled with its instances."""
     tags = {"TestId": "1111", "RunByUser": "test"}
     configs = [_fleet_config("sfr-match", "active", tags)]
     with patch("boto3.client") as ec2_client_factory:
@@ -450,6 +491,7 @@ def test_clean_spot_fleet_requests_aws_cancels_matching_active_request():
 
 
 def test_clean_spot_fleet_requests_aws_skips_non_matching_tags():
+    """A spot fleet request with other tags is left alone."""
     tags = {"TestId": "1111"}
     configs = [_fleet_config("sfr-other", "active", {"TestId": "2222"})]
     with patch("boto3.client") as ec2_client_factory:
@@ -461,6 +503,7 @@ def test_clean_spot_fleet_requests_aws_skips_non_matching_tags():
 
 
 def test_clean_spot_fleet_requests_aws_skips_terminal_state_requests():
+    """A spot fleet request already in a terminal state is left alone."""
     tags = {"TestId": "1111"}
     configs = [_fleet_config("sfr-old", "cancelled", tags)]
     with patch("boto3.client") as ec2_client_factory:
@@ -472,6 +515,7 @@ def test_clean_spot_fleet_requests_aws_skips_terminal_state_requests():
 
 
 def test_clean_spot_fleet_requests_aws_dry_run_does_not_cancel():
+    """Dry run leaves a matching spot fleet request in place and returns without waiting."""
     tags = {"TestId": "1111"}
     configs = [_fleet_config("sfr-match", "active", tags)]
     with patch("boto3.client") as ec2_client_factory:
@@ -485,6 +529,7 @@ def test_clean_spot_fleet_requests_aws_dry_run_does_not_cancel():
 
 
 def test_clean_spot_fleet_requests_aws_matches_list_valued_node_type():
+    """A list-valued NodeType filter matches a request whose NodeType is one of the values."""
     # clean_resources_according_post_behavior() passes NodeType as a list of allowed values (like
     # every other clean_*_aws tag filter), while a fleet request's own tag is a scalar string.
     tags = {"TestId": "1111", "NodeType": ["scylla-db", "loader"]}
@@ -501,6 +546,7 @@ def test_clean_spot_fleet_requests_aws_matches_list_valued_node_type():
 
 
 def test_clean_spot_fleet_requests_aws_error_in_one_region_does_not_abort_others():
+    """An API error in one region is skipped and matching requests in later regions are still cancelled."""
     tags = {"TestId": "1111"}
     match = [_fleet_config("sfr-ok", "active", tags)]
     with patch("boto3.client") as ec2_client_factory:
@@ -547,6 +593,7 @@ def test_clean_instances_oci_prices_only_instances_it_terminates(oci_instance, s
 
 
 def test_unattached_cleanup_keeps_the_builder_security_group():
+    """Of two unattached security groups, only the non-builder one is deleted."""
     # builders stop after 10 idle minutes, so the group is often attached to nothing
     groups = [
         {"GroupId": "sg-builder", "GroupName": "SCT-builder-sg", "Tags": [{"Key": "Name", "Value": "SCT-builder-sg"}]},

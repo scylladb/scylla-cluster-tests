@@ -64,12 +64,13 @@ class DummyScyllaDockerCluster(ScyllaDockerCluster):
 
     @staticmethod
     def check_aio_max_nr(node, recommended_value=0):
-        pass
+        """No-op: the aio-max-nr check is skipped."""
 
     def _generate_db_node_certs(self, node):
         pass
 
     def get_scylla_args(self):
+        """Return no extra Scylla arguments."""
         return ""
 
     def _create_node(self, node_index, container=None, after_config=None, rack=0):

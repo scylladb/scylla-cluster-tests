@@ -29,6 +29,7 @@ from sdcm.argus_results import (
 
 
 def test_send_latency_decorator_result_to_argus(test_data_dir):
+    """A latency decorator result is submitted as a latency table and a reactor stall table."""
     argus_mock = MagicMock()
     argus_mock.submit_results = MagicMock()
     result = json.loads((test_data_dir / "latency_decorator_result.json").read_text())

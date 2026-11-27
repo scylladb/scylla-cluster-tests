@@ -85,6 +85,7 @@ def _create(vm_provider):
 
 @pytest.mark.parametrize("message", [ZERO_CPU_QUOTA, ZERO_SSD_QUOTA])
 def test_zero_quota_on_the_insert_operation_fails_without_retry(vm_provider, message):
+    """A zero-limit quota error from the insert operation raises ZeroQuotaError after a single insert attempt."""
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()) as insert,
         patch(WAIT, side_effect=google.api_core.exceptions.Forbidden(message)),
@@ -96,6 +97,7 @@ def test_zero_quota_on_the_insert_operation_fails_without_retry(vm_provider, mes
 
 
 def test_zero_quota_on_the_insert_request_fails_without_retry(vm_provider):
+    """A zero-limit quota error raised by the insert request itself raises ZeroQuotaError after one attempt."""
     with (
         patch.object(
             vm_provider, "_build_and_insert_instance", side_effect=google.api_core.exceptions.Forbidden(ZERO_CPU_QUOTA)
@@ -222,6 +224,7 @@ def test_zero_quota_alone_never_reaches_the_on_demand_last_resort():
 
 
 def test_zone_fallback_skips_a_zero_quota(region_fallback):
+    """Zone fallback re-raises a zero quota at once, with no zone candidates queried and the zone left as is."""
     params = _params()
     provision_once = MagicMock(side_effect=_zero_quota_in("us-central1"))
     with (
@@ -304,6 +307,7 @@ def test_region_fallback_keeps_the_callers_error_when_capacity_ran_out_too(regio
 
 
 def test_multi_dc_fallback_moves_only_the_dc_without_the_quota(region_fallback):
+    """Multi-DC fallback relocates only the DC that hit the zero quota and keeps the other DC's region."""
     params = _params(gce_datacenter="us-east1 us-central1")
     provision_once = MagicMock(side_effect=[_zero_quota_in("us-central1"), None])
     with patch.object(region_fallback, "GceAZResolver") as resolver:

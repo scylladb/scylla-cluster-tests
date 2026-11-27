@@ -95,6 +95,7 @@ def test_configure_network_creates_resources(
     mock_get_username,
     mock_sources,
 ):
+    """configure_network on a fresh region creates the VCN, security lists, gateways and regional subnets."""
     compute_client = MagicMock()
     identity_client = MagicMock()
     network_client = MagicMock()
@@ -288,6 +289,7 @@ def test_configure_network_with_ipv6(
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_subnet_name_suffix(mock_compute, mock_identity, mock_network, mock_compartment, mock_ads):
+    """subnet_name returns the private subnet name by default and the public one when asked."""
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
     mock_network.return_value = MagicMock()
@@ -304,6 +306,7 @@ def test_subnet_name_suffix(mock_compute, mock_identity, mock_network, mock_comp
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_region_validation(mock_compute, mock_identity, mock_network, mock_compartment):
+    """Creating an OciRegion for a region outside SUPPORTED_REGIONS raises ValueError."""
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
     mock_network.return_value = MagicMock()
@@ -318,6 +321,7 @@ def test_region_validation(mock_compute, mock_identity, mock_network, mock_compa
     return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..no-dns", dns_label=None),
 )
 def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
+    """DNS validation fails naming the VCN when the VCN has no DNS label."""
     subnet = MagicMock(
         display_name="SCT-2-subnet-regional-private",
         id="ocid1.subnet.oc1..has-dns",
@@ -336,6 +340,7 @@ def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
     return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..has-dns", dns_label="vcn1"),
 )
 def test_validate_dns_infrastructure_fails_when_subnet_has_no_dns_label(mock_vcn):
+    """DNS validation fails naming the private subnet when the subnet has no DNS label."""
     subnet = MagicMock(display_name="SCT-2-subnet-regional-private", id="ocid1.subnet.oc1..no-dns", dns_label=None)
 
     err_msg_template = "Private subnet 'SCT-2-subnet-regional-private'.*has no DNS label"
@@ -409,6 +414,7 @@ def test_subnet_adds_ipv6_prefix_to_legacy_subnet(
 @patch("sdcm.utils.oci_region.OciRegion.identity_client", new_callable=PropertyMock)
 @patch("sdcm.utils.oci_region.OciRegion.compute_client", new_callable=PropertyMock)
 def test_subnet_keeps_ipv6_enabled_subnet_intact(mock_compute, mock_identity, mock_network, mock_compartment, mock_vcn):
+    """An existing subnet that already has an IPv6 CIDR is returned as is, without adding another CIDR."""
     network_client = MagicMock()
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
@@ -441,6 +447,7 @@ def test_subnet_keeps_ipv6_enabled_subnet_intact(mock_compute, mock_identity, mo
 def test_subnet_skips_ipv6_upgrade_when_vcn_has_no_ipv6(
     mock_compute, mock_identity, mock_network, mock_compartment, mock_vcn
 ):
+    """A legacy IPv4-only subnet in a VCN without IPv6 is returned as is, with no IPv6 CIDR added."""
     network_client = MagicMock()
     mock_compute.return_value = MagicMock()
     mock_identity.return_value = MagicMock()
@@ -580,4 +587,5 @@ def test_ensure_security_list_ipv6_skips_update_when_already_configured():
     ],
 )
 def test_has_ipv6_ssh_ingress(rule, expected):
+    """An ingress rule counts as IPv6 SSH only for `::/0` sources covering TCP port 22 (all protocols or ports)."""
     assert OciRegion._has_ipv6_ssh_ingress([rule]) is expected

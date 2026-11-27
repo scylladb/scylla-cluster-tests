@@ -25,6 +25,7 @@ from sdcm.utils.agent_client import AgentClient
     ],
 )
 def test_base_url_scheme(tls, expected_url):
+    """AgentClient.base_url uses https with TLS and http without."""
     client = AgentClient("192.168.1.10", "test-key", port=16000, tls=tls)
     assert client.base_url == expected_url
 
@@ -37,6 +38,7 @@ def test_base_url_scheme(tls, expected_url):
     ],
 )
 def test_session_verify_with_tls(ca_cert, expected_verify):
+    """With TLS, the session verifies against the given CA cert, or the system store when none is given."""
     client = AgentClient("192.168.1.10", "test-key", port=16000, tls=True, ca_cert=ca_cert)
     assert client.session.verify == expected_verify
 
@@ -49,6 +51,7 @@ def test_session_verify_with_tls(ca_cert, expected_verify):
     ],
 )
 def test_runner_tls_propagation(tls, expected_scheme):
+    """AgentCmdRunner passes its TLS settings to the client it creates and to its debug command."""
     runner = AgentCmdRunner(
         hostname="192.168.1.10",
         api_key="test-key",

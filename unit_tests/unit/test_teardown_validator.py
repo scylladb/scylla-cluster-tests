@@ -27,6 +27,8 @@ FAILING_EVENTS = {
 
 
 class FakeSCTConfiguration(SCTConfiguration):
+    """SCT configuration that enables the test_error_events teardown validator with the given failing events."""
+
     failing_events: list
 
     def __init__(self, failing_events: list):
@@ -38,11 +40,14 @@ class FakeSCTConfiguration(SCTConfiguration):
 
 @pytest.fixture
 def tester_mock():
+    """Provide a mock tester whose get_test_status the validator replaces."""
     return Mock()
 
 
 @pytest.fixture
 def make_validator(tester_mock):
+    """Provide a factory that builds an ErrorEventsValidator for the given failing events."""
+
     def _make(failing_events):
         params = FakeSCTConfiguration(failing_events)
         validator = ErrorEventsValidator(params, tester_mock)
@@ -53,6 +58,8 @@ def make_validator(tester_mock):
 
 @pytest.fixture
 def make_mocks(tester_mock):
+    """Provide a factory that sets the events log path and critical events count and returns an open() mock."""
+
     def _make(get_events_main_device_mock, event_data, critical_events=None):
         get_events_main_device_mock.return_value.raw_events_log = "raw_events.log"
         tester_mock.get_event_summary.return_value = {Severity.CRITICAL.name: critical_events}
@@ -65,6 +72,7 @@ def make_mocks(tester_mock):
 def test_validate_no_failing_events_no_critical_events(
     get_events_main_device_mock, tester_mock, make_validator, make_mocks
 ):
+    """Sets the test status to SUCCESS when no event matches the failing events and no critical event exists."""
     _, validator = make_validator(list(FAILING_EVENTS.values()))
     event_data = (
         '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'
@@ -79,6 +87,7 @@ def test_validate_no_failing_events_no_critical_events(
 
 @patch("sdcm.teardown_validators.events.get_events_main_device")
 def test_validate_with_failing_event_class(get_events_main_device_mock, tester_mock, make_validator, make_mocks):
+    """Sets the test status to FAILED when an ERROR event matches a failing event class."""
     _, validator = make_validator([FAILING_EVENTS["only_class"]])
     event_data = (
         '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'
@@ -95,6 +104,7 @@ def test_validate_with_failing_event_class(get_events_main_device_mock, tester_m
 def test_validate_with_failing_event_class_and_type(
     get_events_main_device_mock, tester_mock, make_validator, make_mocks
 ):
+    """Sets the test status to FAILED when an ERROR event matches a failing event class and type."""
     _, validator = make_validator([FAILING_EVENTS["class_and_type"]])
     event_data = (
         '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'
@@ -111,6 +121,7 @@ def test_validate_with_failing_event_class_and_type(
 def test_validate_with_failing_event_class_and_type_and_regex(
     get_events_main_device_mock, tester_mock, make_validator, make_mocks
 ):
+    """Sets the test status to FAILED when an ERROR event matches the class, type and line regex."""
     _, validator = make_validator([FAILING_EVENTS["class_and_type_and_regex"]])
     event_data = (
         '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'
@@ -127,6 +138,7 @@ def test_validate_with_failing_event_class_and_type_and_regex(
 def test_validate_with_failing_events_with_critical_events(
     get_events_main_device_mock, tester_mock, make_validator, make_mocks
 ):
+    """Sets the test status to FAILED when both a failing event and a critical event exist."""
     _, validator = make_validator([FAILING_EVENTS["class_and_type_and_regex"]])
     event_data = (
         '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'

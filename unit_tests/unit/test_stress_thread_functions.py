@@ -35,6 +35,7 @@ from sdcm.utils.hdrhistogram import _HdrRangeHistogramBuilder
     ),
 )
 def test_duration_str_to_seconds_function(duration, seconds):
+    """Converts h/m/s duration strings and their combinations to seconds."""
     assert time_period_str_to_seconds(duration) == seconds
 
 
@@ -64,6 +65,7 @@ def test_duration_str_to_seconds_function(duration, seconds):
     ),
 )
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
+    """Derives the stress timeout as duration plus gemini warmup plus a 900s margin, in all flag formats."""
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
 
 
@@ -130,6 +132,7 @@ def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     ),
 )
 def test_extract_user_profile_op_names(stress_cmd, expected):
+    """Extracts the op names from the ops() clause of a c-s user profile command, in order."""
     assert CassandraStressThread._extract_user_profile_op_names(stress_cmd) == expected
 
 
@@ -216,6 +219,7 @@ def _make_hdr_tag_stub():
     ),
 )
 def test_set_hdr_tags(stress_cmd, expected_tags):
+    """Builds one HDR tag per operation, with a -st suffix when unthrottled and -rt when rate-limited."""
     stub = _make_hdr_tag_stub()
     stub.set_hdr_tags(stress_cmd)
     assert stub.hdr_tags == expected_tags
@@ -248,6 +252,7 @@ def test_set_hdr_tags_user_profile_no_known_ops_raises():
     ),
 )
 def test_user_profile_hdr_tag_classified_by_workload_type(hdr_tag, expected_workload):
+    """Classifies user-profile HDR tags as READ or WRITE by the keywords in the op name."""
     builder = _HdrRangeHistogramBuilder(hdr_tags=[hdr_tag], stress_operation="user", start_time=0, end_time=0)
     assert builder._get_workload_type_by_hdr_tag(hdr_tag) == expected_workload
 
@@ -315,6 +320,7 @@ def test_user_profile_hdr_tag_unrecognized_op_name_raises():
     ],
 )
 def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cmd):
+    """Rewrites or appends the gemini --duration in minutes, in any format, and keeps --warmup as is."""
     assert apply_gemini_stress_duration(original_cmd, stress_duration) == expected_cmd
 
 
@@ -342,6 +348,7 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
     ],
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
+    """Extracts the gemini --seed in both = and space formats, and returns -1 when it is absent."""
     assert extract_gemini_seed(gemini_cmd) == expected_seed
 
 
@@ -354,4 +361,5 @@ def test_extract_gemini_seed(gemini_cmd, expected_seed):
     ),
 )
 def test_docker_memory_opts(mem_total_kib, percent, expected):
+    """Limits the container memory and swap to the given percent of the loader memory, in KiB."""
     assert CassandraStressThread._docker_memory_opts(mem_total_kib, percent) == expected

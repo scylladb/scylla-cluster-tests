@@ -18,6 +18,7 @@ def _runner() -> KubernetesRunner:
 
 
 def test_exec_failure_without_response_body_is_a_connection_error():
+    """An exec that fails with the body-less NoneType.decode AttributeError surfaces as a ConnectionError."""
     body_less = AttributeError("'NoneType' object has no attribute 'decode'")
     with mock.patch("sdcm.remote.kubernetes_cmd_runner.k8s.stream.stream", side_effect=body_less):
         with pytest.raises(ConnectionError, match="without a response body"):
@@ -25,6 +26,7 @@ def test_exec_failure_without_response_body_is_a_connection_error():
 
 
 def test_other_attribute_errors_still_raise():
+    """AttributeErrors unrelated to a missing response body propagate unchanged."""
     with mock.patch("sdcm.remote.kubernetes_cmd_runner.k8s.stream.stream", side_effect=AttributeError("other")):
         with pytest.raises(AttributeError, match="other"):
             _runner().start("true", "/bin/sh", {})

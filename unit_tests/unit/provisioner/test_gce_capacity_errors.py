@@ -48,6 +48,7 @@ class _FakeError(Exception):
     ],
 )
 def test_is_zone_capacity_error(message, expected):
+    """is_zone_capacity_error matches resource-pool exhaustion and stockouts, excluding incompatible-feature errors."""
     assert is_zone_capacity_error(_FakeError(message)) is expected
 
 
@@ -64,6 +65,7 @@ def test_is_zone_capacity_error(message, expected):
     ],
 )
 def test_is_config_error(message, expected):
+    """is_config_error matches incompatible feature and boot disk architecture mismatch errors."""
     assert is_config_error(_FakeError(message)) is expected
 
 
@@ -77,6 +79,7 @@ def test_is_config_error(message, expected):
     ],
 )
 def test_is_quota_error(message, expected):
+    """is_quota_error matches QUOTA_EXCEEDED and quotaExceeded errors."""
     assert is_quota_error(_FakeError(message)) is expected
 
 
@@ -94,6 +97,7 @@ def test_is_quota_error(message, expected):
     ],
 )
 def test_is_zero_quota_error(message, expected):
+    """is_zero_quota_error matches only quota errors whose limit is zero."""
     assert is_zero_quota_error(_FakeError(message)) is expected
 
 
@@ -107,6 +111,7 @@ def test_is_zero_quota_error(message, expected):
     ],
 )
 def test_is_type_unavailable_error(message, expected):
+    """is_type_unavailable_error matches errors reporting the machine type as not found."""
     assert is_type_unavailable_error(_FakeError(message)) is expected
 
 
@@ -123,6 +128,7 @@ def test_is_type_unavailable_error(message, expected):
     ],
 )
 def test_is_preemption_error(message, expected):
+    """is_preemption_error matches spot preemption errors, kept apart from capacity and quota errors."""
     assert is_preemption_error(_FakeError(message)) is expected
 
 
@@ -142,8 +148,10 @@ def test_is_preemption_error(message, expected):
     ],
 )
 def test_classify_provisioning_error(message, expected_class):
+    """classify_provisioning_error maps each error kind to its class name, and anything else to 'unknown'."""
     assert classify_provisioning_error(_FakeError(message)) == expected_class
 
 
 def test_non_exception_types_handled():
+    """is_zone_capacity_error returns False for an unrelated exception type."""
     assert is_zone_capacity_error(ValueError("just a value error")) is False

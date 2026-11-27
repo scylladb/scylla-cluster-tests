@@ -93,6 +93,7 @@ CFSTATS_ALL = CFSTATS_HEADER + CFSTATS_BY_KEYSPACE["ks1"] + CFSTATS_BY_KEYSPACE[
 
 
 def test_parse_cfstats_partitions():
+    """Partition estimates are parsed per table from cfstats output, including MVs, indexes and mixed-case names."""
     assert BaseCluster._parse_cfstats_partitions(CFSTATS_ALL) == {
         "ks1.t1_v_idx_index": 2,
         "ks1.MixedCase": 1,
@@ -119,6 +120,7 @@ def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
 
 
 def test_get_any_ks_cf_list_runs_cfstats_once():
+    """One cfstats call without args covers all keyspaces; tables with zero partitions are filtered out."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.return_value = Result(stdout=CFSTATS_ALL)
 
@@ -136,6 +138,7 @@ def test_get_any_ks_cf_list_runs_cfstats_once():
     ],
 )
 def test_get_any_ks_cf_list_keeps_all_tables_when_cfstats_failed(run_nodetool):
+    """A failed or estimate-less cfstats run keeps every table, empty ones included, as candidates."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.configure_mock(**run_nodetool)
 
@@ -151,6 +154,7 @@ def test_get_any_ks_cf_list_keeps_all_tables_when_cfstats_failed(run_nodetool):
 
 
 def test_get_any_ks_cf_list_cfstats_timeout_scales_with_tables():
+    """The cfstats timeout is 300s by default and grows with the table count (500s for 5000 tables)."""
     db_node = unittest.mock.MagicMock()
     db_node.run_nodetool.return_value = Result(stdout=CFSTATS_ALL)
 

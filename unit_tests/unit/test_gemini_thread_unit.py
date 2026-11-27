@@ -29,6 +29,7 @@ class MockCluster:
         self._ips = ips or ["10.0.0.1"]
 
     def get_node_cql_ips(self):
+        """Return the configured CQL IPs."""
         return self._ips
 
 
@@ -161,6 +162,7 @@ def _gemini_summary(tmp_path, name, result):
 
 
 def test_parse_results_reports_gemini_error_counters(gemini_thread_unit, tmp_path):
+    """Non-zero gemini error counters in the summary are reported as ERROR events per loader."""
     summary = _gemini_summary(tmp_path, "clean.json", {"write_errors": 3, "read_errors": 0, "errors": []})
 
     with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
@@ -172,6 +174,7 @@ def test_parse_results_reports_gemini_error_counters(gemini_thread_unit, tmp_pat
 
 
 def test_parse_results_passes_a_clean_gemini_run(gemini_thread_unit, tmp_path):
+    """A summary with zero error counters yields results and an empty error map."""
     summary = _gemini_summary(tmp_path, "ok.json", {"write_errors": 0, "read_errors": 0, "errors": []})
 
     with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
@@ -181,6 +184,7 @@ def test_parse_results_passes_a_clean_gemini_run(gemini_thread_unit, tmp_path):
 
 
 def test_parse_results_reports_a_missing_summary_file(gemini_thread_unit):
+    """A loader without a summary file gets a 'results aren't available' ERROR."""
     with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, "")]):
         results, errors = gemini_thread_unit.parse_results()
 
@@ -189,6 +193,7 @@ def test_parse_results_reports_a_missing_summary_file(gemini_thread_unit):
 
 
 def test_parse_results_reports_an_unparsable_summary(gemini_thread_unit, tmp_path):
+    """A summary that is not valid JSON is reported as a parse ERROR for its loader."""
     path = tmp_path / "broken.json"
     path.write_text("not json at all", encoding="utf-8")
 

@@ -59,12 +59,15 @@ class FakeEventsDevice:
 
     @property
     def events_main_device(self):
+        """Return this device, which plays the main events device role."""
         return self
 
     def get_events_logger(self):
+        """Return this device, which plays the events file logger role."""
         return self
 
     def get_events_counter(self):
+        """Return this device, which plays the events counter role."""
         return self
 
     # ---- formatted events log (in-memory replacement for events.log file) ----
@@ -78,15 +81,18 @@ class FakeEventsDevice:
 
     @property
     def events_counter(self) -> int:
+        """Return the number of events captured so far."""
         with self.lock:
             return len(self.snapshots)
 
     def is_alive(self) -> bool:
+        """Report the device as running."""
         return True
 
     # ---- publish (called by SctEvent.publish via registry lookup) ----
 
     def publish_event(self, event: SctEvent, timeout=None) -> None:
+        """Snapshot a published event in memory; SystemEvent instances are skipped like the real outbound stream."""
         # The real EventsDevice.outbound_events() skips SystemEvent instances
         # (filters, etc.) before forwarding to EventsFileLogger.  Replicate
         # that behaviour so event counts match the real pipeline.
@@ -157,6 +163,7 @@ class FakeEventsDevice:
         return summary
 
     def clear(self) -> None:
+        """Drop all captured event snapshots."""
         with self.lock:
             self.snapshots.clear()
 
@@ -217,21 +224,25 @@ class FakeEventsMixin:
 
     @classmethod
     def setup_class(cls):
+        """Wire a fresh FakeEventsDevice into the events registry for the test class."""
         cls._setup_fake_events()
 
     @classmethod
     def teardown_class(cls):
+        """Unwire the class FakeEventsDevice and restore the events registry."""
         cls._teardown_fake_events()
 
     # -- unittest hooks (only called by the plain unittest runner) --
 
     @classmethod
     def setUpClass(cls):
+        """Run the parent setUpClass, then wire a fresh FakeEventsDevice for the class."""
         super().setUpClass()
         cls._setup_fake_events()
 
     @classmethod
     def tearDownClass(cls):
+        """Unwire the class FakeEventsDevice, then run the parent tearDownClass."""
         cls._teardown_fake_events()
         super().tearDownClass()
 

@@ -56,15 +56,18 @@ class FakeClock:
         self.sleeps = []
 
     def monotonic(self) -> float:
+        """Return the fake current time."""
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        """Record the sleep and advance the fake time by it."""
         self.sleeps.append(seconds)
         self.now += seconds
 
 
 @pytest.fixture(name="clock")
 def fixture_clock(monkeypatch):
+    """Patch the instance provider's monotonic clock and sleep with a FakeClock and return it."""
     clock = FakeClock()
     monkeypatch.setattr(instance_provider.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(instance_provider.time, "sleep", clock.sleep)
@@ -73,6 +76,7 @@ def fixture_clock(monkeypatch):
 
 @pytest.fixture(name="vm_provider")
 def fixture_vm_provider():
+    """Yield a VirtualMachineProvider with stubbed GCE client, instance insert and operation wait."""
     with patch("sdcm.provision.gce.instance_provider.get_gce_compute_instances_client") as client:
         client.return_value = (MagicMock(), {"project_id": "test-project"})
         provider = VirtualMachineProvider(
@@ -120,6 +124,7 @@ def test_staging_instance_is_waited_for_until_running(vm_provider, clock):
 
 @pytest.mark.parametrize("status", ["TERMINATED", "STOPPING", "SUSPENDED"])
 def test_instance_that_cannot_start_fails_without_waiting_and_is_deleted(vm_provider, clock, status):
+    """A VM in a terminal status raises ProvisionError at once and is deleted and left uncached."""
     vm_provider._instances_client.get.return_value = _instance(status)
 
     with (
@@ -135,6 +140,7 @@ def test_instance_that_cannot_start_fails_without_waiting_and_is_deleted(vm_prov
 
 
 def test_instance_that_never_leaves_staging_times_out_and_is_deleted(vm_provider, clock):
+    """A VM stuck in STAGING is polled until INSTANCE_RUNNING_TIMEOUT, then raises and is deleted."""
     vm_provider._instances_client.get.return_value = _instance("STAGING")
 
     with (
@@ -176,6 +182,7 @@ def test_spot_instance_preempted_while_booting_raises_preempted(vm_provider, clo
 
 
 def test_spot_instance_that_never_leaves_staging_is_not_treated_as_preempted(vm_provider, clock):
+    """A spot VM stuck in STAGING raises a plain ProvisionError timeout rather than a preemption."""
     vm_provider._instances_client.get.return_value = _instance("STAGING")
 
     with patch.object(vm_provider, "delete"), pytest.raises(ProvisionError, match="still STAGING"):
@@ -204,6 +211,7 @@ def test_failed_start_drains_the_rest_of_the_batch(vm_provider, clock):
 
 
 def test_drained_instance_that_does_not_start_is_not_cached(vm_provider, clock):
+    """When the drained sibling fails to start too, each VM is deleted once and nothing is cached."""
     statuses = {"node-1": iter([_instance("TERMINATED")]), "node-2": iter([_instance("SUSPENDED")])}
     vm_provider._instances_client.get.side_effect = lambda project, zone, instance: next(statuses[instance])
 

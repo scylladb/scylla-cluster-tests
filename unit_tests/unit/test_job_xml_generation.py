@@ -23,6 +23,7 @@ PIPELINES_DIR = SCT_ROOT / "jenkins-pipelines"
 
 @pytest.fixture()
 def jenkins_pipelines():
+    """Provide a JenkinsPipelines with keystore and Jenkins client mocked out and no existing jobs."""
     with (
         patch("utils.build_system.create_test_release_jobs.KeyStore"),
         patch("utils.build_system.create_test_release_jobs.jenkins.Jenkins"),
@@ -78,6 +79,7 @@ def test_markup_in_test_metadata_description_is_escaped(jenkins_pipelines, tmp_p
     ids=lambda path: str(path.relative_to(PIPELINES_DIR)),
 )
 def test_every_pipeline_renders_valid_xml(jenkins_pipelines, jenkins_file):
+    """Every jenkinsfile in the repo renders job XML that parses."""
     ET.fromstring(_render(jenkins_pipelines, jenkins_file))
 
 
@@ -116,4 +118,5 @@ def test_tree_walk_continues_past_a_failing_job(jenkins_pipelines, tmp_path, cap
 
 
 def test_raise_on_failures_is_quiet_when_everything_worked(jenkins_pipelines):
+    """raise_on_failures() returns quietly when no job failed."""
     jenkins_pipelines.raise_on_failures()

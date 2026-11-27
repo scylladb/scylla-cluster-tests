@@ -53,6 +53,7 @@ FORK = "https://github.com/someone/vector-store.git"
     ids=["unset", "both-empty", "repo-only", "ref-only", "both"],
 )
 def test_source_build_inference(params, expected):
+    """A non-empty source repo or ref, alone or together, selects the source-build mode."""
     assert is_vector_store_source_build(params) is expected
 
 
@@ -66,6 +67,7 @@ def test_source_build_inference(params, expected):
     ids=["repo-only-defaults-ref", "ref-only-defaults-repo", "both-kept"],
 )
 def test_resolve_applies_defaults(params, expected):
+    """The unset one of repo/ref falls back to its upstream default; both set are kept as given."""
     assert resolve_vector_store_source(params) == expected
 
 
@@ -82,6 +84,7 @@ def test_resolve_defaults_to_upstream_master():
 
 
 def test_default_repo_is_upstream():
+    """The source-build defaults point at upstream scylladb/vector-store, branch master."""
     assert DEFAULT_VECTOR_STORE_SOURCE_REPO == "https://github.com/scylladb/vector-store.git"
     assert DEFAULT_VECTOR_STORE_SOURCE_REF == "master"
 
@@ -106,6 +109,7 @@ def test_source_build_rejected_off_aws(backend):
 
 
 def test_source_build_and_version_are_mutually_exclusive():
+    """On AWS, a source build combined with vector_store_version raises ValueError."""
     config = _FakeConfig(cluster_backend="aws", vector_store_source_ref="master", vector_store_version="0.5.0")
     with pytest.raises(ValueError, match="can't be used together with 'vector_store_version'"):
         config._validate_vector_store_source_params()
@@ -193,14 +197,17 @@ def test_base_ami_is_not_resolved_without_a_backend(monkeypatch):
 
 
 def test_a_source_build_starts_from_the_newest_ami(monkeypatch):
+    """A source build looks up the newest base AMI (version None)."""
     assert _resolve_calls(monkeypatch, "aws") == [None]
 
 
 def test_the_newest_ami_is_the_default(monkeypatch):
+    """Without a source build or version, the newest vector-store AMI is looked up."""
     assert _resolve_calls(monkeypatch, "aws", source_build=False) == [None]
 
 
 def test_a_pinned_version_wins(monkeypatch):
+    """A pinned vector_store_version is the version passed to the AMI lookup."""
     assert _resolve_calls(monkeypatch, "aws", source_build=False, version="1.14.0") == ["1.14.0"]
 
 
@@ -283,6 +290,7 @@ def _install_cmd(repo: str, ref: str) -> str:
 
 
 def test_install_command_passes_the_repo_and_ref():
+    """The installer command carries the configured repo and ref as --repo/--ref arguments."""
     cmd = _install_cmd(FORK, "my-branch")
     assert f"--repo {FORK}" in cmd
     assert "--ref my-branch" in cmd

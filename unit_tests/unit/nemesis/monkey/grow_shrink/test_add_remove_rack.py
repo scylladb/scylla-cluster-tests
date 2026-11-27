@@ -19,6 +19,7 @@ def test_grows_and_shrinks_a_brand_new_rack(runner):
 
 
 def test_precheck_passes_on_kubernetes(runner):
+    """On Kubernetes the precheck returns no skip reason."""
     runner._is_it_on_kubernetes.return_value = True
 
     assert AddRemoveRackNemesis(runner).precheck(runner.target_node) is None

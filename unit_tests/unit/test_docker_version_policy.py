@@ -30,6 +30,7 @@ def make_node(client_version: str, server_version: str, server_failed: bool = Fa
     ids=["moby-engine", "docker-ce", "docker.io", "oldest-accepted"],
 )
 def test_supported_docker_is_left_alone(server_version):
+    """Docker 20.10 or newer from any packaging passes the check with no sudo changes to the host."""
     node = make_node("Docker version 29.6.2, build 1", server_version)
 
     ensure_docker_version(node)
@@ -38,6 +39,7 @@ def test_supported_docker_is_left_alone(server_version):
 
 
 def test_too_old_docker_fails_naming_both_versions_and_is_never_upgraded():
+    """Docker older than 20.10 fails setup with both versions in the message and the host left as is."""
     node = make_node("Docker version 19.03.13", "19.03.13")
 
     with pytest.raises(NodeSetupFailed, match=r"Docker 19\.03\.13 is older than 20\.10"):
@@ -47,6 +49,7 @@ def test_too_old_docker_fails_naming_both_versions_and_is_never_upgraded():
 
 
 def test_podman_shim_is_rejected():
+    """A podman docker shim fails setup with a message naming Podman."""
     node = make_node("podman version 5.6.1", "5.6.1")
 
     with pytest.raises(NodeSetupFailed, match="Podman"):
@@ -54,6 +57,7 @@ def test_podman_shim_is_rejected():
 
 
 def test_missing_docker_fails_with_a_clear_message():
+    """A host without docker fails setup with 'Docker is not installed'."""
     node = MagicMock()
     node.remoter.run.return_value.failed = True
 
@@ -63,6 +67,7 @@ def test_missing_docker_fails_with_a_clear_message():
 
 @pytest.mark.parametrize("server_failed", [True, False], ids=["server-query-fails", "no-server-version"])
 def test_docker_the_ssh_user_cannot_use_fails_naming_the_fix(server_failed):
+    """When the SSH user gets no server version from docker, setup fails telling to add it to the docker group."""
     node = make_node("Docker version 29.6.2, build 1", "", server_failed=server_failed)
 
     with pytest.raises(NodeSetupFailed, match="add the user to the `docker` group"):
@@ -70,6 +75,7 @@ def test_docker_the_ssh_user_cannot_use_fails_naming_the_fix(server_failed):
 
 
 def test_node_setup_failure_repr_names_the_node_and_the_error():
+    """NodeSetupFailed's repr shows the node name, the exception name and the error message."""
     assert repr(NodeSetupFailed(node="loader-1", error_msg="Docker is not installed")) == (
         "[loader-1] NodeSetupFailed: Docker is not installed"
     )
@@ -77,6 +83,7 @@ def test_node_setup_failure_repr_names_the_node_and_the_error():
 
 @pytest.mark.parametrize("owns_host", [True, False], ids=["vm-the-run-created", "shared-lab-host"])
 def test_loader_installs_docker_only_on_a_host_it_owns(monkeypatch, owns_host):
+    """Loader setup installs docker and adds the user to its group only on a host the run owns."""
     for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "docker_host_preflight"):
         monkeypatch.setattr(f"sdcm.cluster.{name}", MagicMock())
     monkeypatch.setattr("sdcm.cluster.TestConfig.return_value.REUSE_CLUSTER", False)
@@ -93,6 +100,7 @@ def test_loader_installs_docker_only_on_a_host_it_owns(monkeypatch, owns_host):
 
 
 def test_prepared_loader_image_skips_the_docker_preflight(monkeypatch):
+    """A loader on a prepared image (~/PREPARED-LOADER present) skips the docker host preflight."""
     for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "docker_host_preflight"):
         monkeypatch.setattr(f"sdcm.cluster.{name}", MagicMock())
     monkeypatch.setattr("sdcm.cluster.TestConfig.return_value.REUSE_CLUSTER", False)

@@ -70,6 +70,7 @@ def _no_retry_sleep():
 
 
 def test_insert_is_given_more_than_the_generic_operation_timeout(vm_provider):
+    """The insert wait uses INSTANCE_CREATION_TIMEOUT, which exceeds the generic 300s operation timeout."""
     with (
         patch.object(vm_provider, "_build_and_insert_instance", return_value=MagicMock()),
         patch(WAIT) as waited,
@@ -142,6 +143,7 @@ def test_timeout_on_the_single_node_retry_drains_the_rest_of_the_batch(vm_provid
 
 
 def test_delete_is_retried_while_gce_still_holds_the_insert(vm_provider):
+    """Releasing the name retries the delete while GCE answers that the resource is not ready."""
     not_ready = google.api_core.exceptions.BadRequest("The resource 'node-1' is not ready")
     vm_provider._instances_client.delete.side_effect = [not_ready, not_ready, MagicMock()]
 
@@ -152,6 +154,7 @@ def test_delete_is_retried_while_gce_still_holds_the_insert(vm_provider):
 
 
 def test_delete_of_an_insert_that_never_produced_a_vm_is_not_an_error(vm_provider):
+    """A NotFound delete after the insert finished is accepted as the name being free, after one attempt."""
     vm_provider._instances_client.delete.side_effect = google.api_core.exceptions.NotFound("node-1")
     insert_operation = MagicMock()
     insert_operation.done.return_value = True
@@ -187,6 +190,7 @@ def test_delete_that_times_out_is_not_repeated(vm_provider):
 
 
 def test_failure_to_free_the_name_does_not_mask_the_timeout(vm_provider):
+    """When the delete keeps failing, provisioning still raises the insert timeout as ProvisionError."""
     vm_provider._instances_client.delete.side_effect = google.api_core.exceptions.BadRequest("not ready")
 
     with (

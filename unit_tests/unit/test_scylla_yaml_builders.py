@@ -30,15 +30,20 @@ __builtin__ = [].__class__.__module__
 
 
 def is_builtin(inst):
+    """Return True when the object's class is defined in the builtins module."""
     return inst.__module__ == __builtin__
 
 
 class FakeCluster:
+    """Cluster stub exposing a single seed address."""
+
     seed_nodes_addresses = ["1.1.1.1"]
 
 
 @pytest.fixture
 def scylla_yaml_test_context():
+    """Provide a factory of minimal test_config namespaces with a configurable LDAP address and SSH IP type."""
+
     def make_context(ldap_address=None, ip_ssh_connections="private"):
         return SimpleNamespace(
             LDAP_ADDRESS=ldap_address,
@@ -56,6 +61,8 @@ def scylla_yaml_test_context():
 
 
 class FakeNode:
+    """Node stub with fixed public and private IPs and no network configuration."""
+
     parent_cluster = FakeCluster()
     public_ip_address = "2.2.2.2"
     private_ip_address = "1.1.1.1"
@@ -65,6 +72,7 @@ class FakeNode:
 def assert_builder_output(
     builder_class: ScyllaYamlAttrBuilderBase, builder_params: dict, expected_as_dict: dict = None
 ):
+    """Build the builder from params; given an expected dict, assert its dump and that ScyllaYaml accepts it."""
     instance = builder_class(**builder_params)
     resulted_as_dict = instance.model_dump(exclude_defaults=True, exclude_unset=True)
     if expected_as_dict:
@@ -73,6 +81,7 @@ def assert_builder_output(
 
 
 def test_scylla_yaml_cluster_attr_builder_aws_single_noldap(scylla_yaml_test_context):
+    """A single-region AWS cluster without LDAP sets only the cluster name, alternator authorization and features."""
     assert_builder_output(
         ScyllaYamlClusterAttrBuilder,
         builder_params={
@@ -102,6 +111,7 @@ def test_scylla_yaml_cluster_attr_builder_aws_single_noldap(scylla_yaml_test_con
 
 
 def test_scylla_yaml_cluster_attr_builder_aws_multi_openldap(scylla_yaml_test_context):
+    """A multi-region AWS cluster with OpenLDAP authorization gets saslauthd auth and the LDAP role manager config."""
     assert_builder_output(
         ScyllaYamlClusterAttrBuilder,
         builder_params={
@@ -141,6 +151,7 @@ def test_scylla_yaml_cluster_attr_builder_aws_multi_openldap(scylla_yaml_test_co
 
 
 def test_scylla_yaml_cluster_attr_builder_gce_single_openldap(scylla_yaml_test_context):
+    """A single-DC GCE cluster with OpenLDAP authorization gets saslauthd auth and an OpenLDAP role manager config."""
     assert_builder_output(
         ScyllaYamlClusterAttrBuilder,
         builder_params={
@@ -204,6 +215,7 @@ def test_openldap_address_follows_the_db_clusters_ip_ssh_connections(
 
 
 def test_scylla_yaml_cluster_attr_builder_gce_multi_msldap(scylla_yaml_test_context):
+    """A GCE cluster with MS AD authorization takes the LDAP bind DN, password and server from msldap_server_info."""
     assert_builder_output(
         ScyllaYamlClusterAttrBuilder,
         builder_params={
@@ -248,6 +260,7 @@ def test_scylla_yaml_cluster_attr_builder_gce_multi_msldap(scylla_yaml_test_cont
 
 
 def test_scylla_yaml_cluster_attr_builder_validation_gce_raises(scylla_yaml_test_context):
+    """LDAP authorization against MS AD raises RuntimeError when msldap_server_info is missing."""
     with pytest.raises(RuntimeError):
         assert_builder_output(
             ScyllaYamlClusterAttrBuilder,
@@ -264,6 +277,7 @@ def test_scylla_yaml_cluster_attr_builder_validation_gce_raises(scylla_yaml_test
 
 
 def test_scylla_yaml_cluster_attr_builder_validation_aws_raises(scylla_yaml_test_context):
+    """LDAP authorization raises RuntimeError when no OpenLDAP server address is available."""
     with pytest.raises(RuntimeError):
         assert_builder_output(
             ScyllaYamlClusterAttrBuilder,
@@ -280,6 +294,7 @@ def test_scylla_yaml_cluster_attr_builder_validation_aws_raises(scylla_yaml_test
 
 
 def test_scylla_yaml_node_attr_builder_aws_single_private_noextra():
+    """A private-IP AWS node listens and serves RPC on its private IP, with the cluster's seeds."""
     assert_builder_output(
         ScyllaYamlNodeAttrBuilder,
         builder_params={
@@ -305,6 +320,7 @@ def test_scylla_yaml_node_attr_builder_aws_single_private_noextra():
 
 
 def test_scylla_yaml_node_attr_builder_aws_single_public_noextra():
+    """With intra_node_comm_public, the node broadcasts its public IP and listens on its private IP."""
     assert_builder_output(
         ScyllaYamlNodeAttrBuilder,
         builder_params={
@@ -332,6 +348,7 @@ def test_scylla_yaml_node_attr_builder_aws_single_public_noextra():
 
 
 def test_scylla_yaml_node_attr_builder_aws_single_public_extra():
+    """With an extra network interface, the node listens on 0.0.0.0 and broadcasts its private IP."""
     assert_builder_output(
         ScyllaYamlNodeAttrBuilder,
         builder_params={
@@ -359,6 +376,7 @@ def test_scylla_yaml_node_attr_builder_aws_single_public_extra():
 
 
 def test_scylla_yaml_node_attr_builder_aws_multi_private_extra():
+    """A multi-region node with an extra network interface listens on 0.0.0.0 and broadcasts its private IP."""
     assert_builder_output(
         ScyllaYamlNodeAttrBuilder,
         builder_params={
@@ -386,6 +404,7 @@ def test_scylla_yaml_node_attr_builder_aws_multi_private_extra():
 
 
 def test_scylla_yaml_node_attr_builder_negative_aws_single_public_noextra():
+    """The node attribute builder builds for a public-comm AWS node without an extra interface."""
     assert_builder_output(
         ScyllaYamlNodeAttrBuilder,
         builder_params={
@@ -402,15 +421,20 @@ def test_scylla_yaml_node_attr_builder_negative_aws_single_public_noextra():
 
 
 class FakeRemoter:
+    """Remoter stub whose every operation accepts any arguments and does nothing."""
+
     def send_file(self, *_, **__):
-        pass
+        """Accept a file transfer and do nothing."""
 
     send_files = stop = start = run = sudo = send_file
 
 
 class ObjectDict(dict):
+    """Dict that also exposes its CamelCase keys as snake_case attributes."""
+
     @staticmethod
     def fix_name(name):
+        """Convert a CamelCase name to snake_case."""
         output = [name[0].lower()]
         for char in name[1:]:
             if char.isupper():
@@ -427,6 +451,8 @@ class ObjectDict(dict):
 
 
 class DummyCluster(BaseScyllaCluster, BaseCluster):
+    """Scylla cluster stub holding the given params and nodes, with a no-op add_nodes."""
+
     nodes: List["DummyNode"]
 
     def __init__(self, params):
@@ -438,17 +464,21 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):
 
     @property
     def seed_nodes_addresses(self):
+        """Return the IP addresses of all cluster nodes."""
         return [node.ip_address for node in self.nodes]
 
     def init_nodes(self):
+        """Run config_setup on every node with the cluster's Scylla args."""
         for node in self.nodes:
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
-        pass
+        """Stub: accept the call and return immediately; tests add the nodes to self.nodes directly."""
 
 
 class DummyNode(BaseNode):
+    """BaseNode with fixed IPs, two network interfaces and an in-memory scylla.yaml, with remote work stubbed out."""
+
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -469,6 +499,7 @@ class DummyNode(BaseNode):
         )
 
     def init(self):
+        """Run the base node init and, on AWS, build the node's Scylla network configuration."""
         super().init()
         if self.parent_cluster.params.environment["cluster_backend"] == "aws":
             self.scylla_network_configuration = ScyllaNetworkConfiguration(
@@ -477,10 +508,11 @@ class DummyNode(BaseNode):
             )
 
     def do_default_installations(self):
-        pass  # we don't need to install anything for this unittests
+        """No-op: unit tests install nothing on the node."""
 
     @property
     def network_interfaces(self):
+        """Return eth0 with public and private IPv4s and eth1 with a private IPv4 only; both carry a public IPv6."""
         return [
             NetworkInterface(
                 ipv4_public_address=self._public_ip_address[0],
@@ -513,6 +545,7 @@ class DummyNode(BaseNode):
 
     @contextlib.contextmanager
     def remote_scylla_yaml(self):
+        """Yield the node's in-memory ScyllaYaml for editing."""
         yield self._scylla_yaml
 
     def _get_private_ip_address(self):
@@ -522,36 +555,37 @@ class DummyNode(BaseNode):
         return self._public_ip_address[0]
 
     def process_scylla_args(self, append_scylla_args=""):
-        pass
+        """Stub: accept the Scylla args and return immediately."""
 
     def fix_scylla_server_systemd_config(self):
-        pass
+        """Stub: accept the call and return immediately."""
 
     def _get_ipv6_ip_address(self):
         return self._ipv6_ip_address[0]
 
     def start_task_threads(self):
-        # disable all background threads
-        pass
+        """No-op: background task threads stay off."""
 
     def wait_for_cloud_init(self):
-        pass
+        """No-op: the node has no cloud-init to wait for."""
 
     def set_hostname(self):
-        pass
+        """No-op: the hostname stays as is."""
 
     def configure_remote_logging(self):
-        pass
+        """No-op: remote logging stays unconfigured."""
 
     def set_keep_alive(self):
-        pass
+        """No-op: SSH keep-alive stays unset."""
 
     @property
     def system_log(self):
+        """Return the stored system log path."""
         return self._system_log
 
     @property
     def is_nonroot_install(self):
+        """Report a root install."""
         return False
 
     @system_log.setter
@@ -559,9 +593,10 @@ class DummyNode(BaseNode):
         self._system_log = log
 
     def wait_ssh_up(self, verbose=True, timeout=500):
-        pass
+        """No-op: the node counts as reachable at once."""
 
     def validate_scylla_yaml(self, expected_node_config, seed_node_ips):
+        """Assert the node's scylla.yaml equals the expected JSON config with its addresses and seeds filled in."""
         with self.remote_scylla_yaml() as node_yaml:
             expected_node_yaml = expected_node_config.replace("__NODE_PRIVATE_ADDRESS_2__", self._private_ip_address[1])
             expected_node_yaml = expected_node_yaml.replace("__NODE_PRIVATE_ADDRESS__", self.private_ip_address)
@@ -581,6 +616,7 @@ def run_scylla_yaml_config_case(
     expected_node_config: str,
     region_names: str,
 ):
+    """Set up 3 dummy AWS nodes from an SCT config file and check each node's scylla.yaml against the expected one."""
     scylla_ami_version_output = ObjectDict(
         Architecture="x86_64",
         CreationDate="2022-10-13T13:17:17.000Z",
@@ -677,6 +713,7 @@ def run_scylla_yaml_config_case(
 def test_scylla_yaml_generated_from_config_fixture(
     monkeypatch, tmp_path, test_data_dir, scylla_yaml_test_context, config_name
 ):
+    """The scylla.yaml generated for each sample test config matches its stored .result.json."""
     base_folder = test_data_dir / "test_scylla_yaml_builders"
     result_path = base_folder / config_name.replace(".yaml", ".result.json")
     expected_node_config = result_path.read_text(encoding="utf-8")
@@ -694,6 +731,7 @@ def test_scylla_yaml_generated_from_config_fixture(
 def test_scylla_yaml_generated_from_multi_interface_config_fixture(
     monkeypatch, tmp_path, test_data_dir, scylla_yaml_test_context, config_name
 ):
+    """The scylla.yaml generated for multi-network-interface test configs matches its stored .result.json."""
     base_folder = test_data_dir / "test_scylla_yaml_builders" / "multi_network_interfaces"
     result_path = base_folder / config_name.replace(".yaml", ".result.json")
     expected_node_config = result_path.read_text(encoding="utf-8")

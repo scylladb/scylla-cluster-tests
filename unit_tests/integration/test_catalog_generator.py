@@ -84,6 +84,7 @@ def _check_oci_credentials():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_returns_instances():
+    """The live AWS catalog for i8g in us-east-1 lists at least one instance type."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert len(result) > 0, "Expected at least one i8g instance"
 
@@ -91,6 +92,7 @@ def test_generate_aws_i8g_returns_instances():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_cloud_field():
+    """Every AWS i8g catalog entry is tagged with cloud "aws"."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.cloud == "aws" for r in result)
 
@@ -98,6 +100,7 @@ def test_generate_aws_i8g_cloud_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_family_field():
+    """Every AWS i8g catalog entry carries the requested family "i8g"."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.family == "i8g" for r in result)
 
@@ -105,6 +108,7 @@ def test_generate_aws_i8g_family_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_vcpus_positive():
+    """Every AWS i8g catalog entry reports a positive vCPU count."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.vcpus > 0 for r in result)
 
@@ -112,6 +116,7 @@ def test_generate_aws_i8g_vcpus_positive():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_arch_arm64():
+    """Every AWS i8g catalog entry is arm64 (Graviton)."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.arch == "arm64" for r in result)
 
@@ -119,6 +124,7 @@ def test_generate_aws_i8g_arch_arm64():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_memory_positive():
+    """Every AWS i8g catalog entry reports positive memory."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.memory_gb > 0 for r in result)
 
@@ -126,6 +132,7 @@ def test_generate_aws_i8g_memory_positive():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_local_disk_present():
+    """Every AWS i8g catalog entry reports local NVMe disk capacity."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.local_disk_gb > 0 for r in result), "i8g instances should have local NVMe"
 
@@ -133,6 +140,7 @@ def test_generate_aws_i8g_local_disk_present():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_multiple_families():
+    """Requesting i8g and i7i together returns entries from both families."""
     result = generate_aws_catalog(["i8g", "i7i"], region="us-east-1")
     families = {r.family for r in result}
     assert "i8g" in families
@@ -142,6 +150,7 @@ def test_generate_aws_multiple_families():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_returns_instance_type_info_objects():
+    """The AWS catalog generator returns InstanceTypeInfo objects."""
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(isinstance(r, InstanceTypeInfo) for r in result)
 
@@ -149,6 +158,7 @@ def test_generate_aws_returns_instance_type_info_objects():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_empty_family_returns_empty():
+    """An unknown AWS family yields an empty catalog."""
     result = generate_aws_catalog(["nonexistent99z"], region="us-east-1")
     assert result == []
 
@@ -159,6 +169,7 @@ def test_generate_aws_empty_family_returns_empty():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_n2_returns_instances():
+    """The live GCE catalog for n2 in us-east1-b lists at least one machine type."""
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert len(result) > 0, "Expected at least one n2 machine type"
 
@@ -166,6 +177,7 @@ def test_generate_gce_n2_returns_instances():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_cloud_field():
+    """Every GCE n2 catalog entry is tagged with cloud "gce"."""
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert all(r.cloud == "gce" for r in result)
 
@@ -173,6 +185,7 @@ def test_generate_gce_cloud_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_family_field():
+    """Every GCE n2 catalog entry carries the requested family "n2"."""
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert all(r.family == "n2" for r in result)
 
@@ -180,6 +193,7 @@ def test_generate_gce_family_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_vcpus_positive():
+    """Every GCE n2 catalog entry reports a positive vCPU count."""
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert all(r.vcpus > 0 for r in result)
 
@@ -187,6 +201,7 @@ def test_generate_gce_vcpus_positive():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_returns_instance_type_info_objects():
+    """The GCE catalog generator returns InstanceTypeInfo objects."""
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert all(isinstance(r, InstanceTypeInfo) for r in result)
 
@@ -197,6 +212,7 @@ def test_generate_gce_returns_instance_type_info_objects():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_azure_credentials")
 def test_generate_azure_standard_l_returns_instances():
+    """The live Azure catalog for Standard_L in eastus lists at least one VM size."""
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert len(result) > 0, "Expected at least one Standard_L VM size"
 
@@ -204,6 +220,7 @@ def test_generate_azure_standard_l_returns_instances():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_azure_credentials")
 def test_generate_azure_cloud_field():
+    """Every Azure Standard_L catalog entry is tagged with cloud "azure"."""
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert all(r.cloud == "azure" for r in result)
 
@@ -211,6 +228,7 @@ def test_generate_azure_cloud_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_azure_credentials")
 def test_generate_azure_family_field():
+    """Every Azure Standard_L catalog entry carries the requested family "Standard_L"."""
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert all(r.family == "Standard_L" for r in result)
 
@@ -218,6 +236,7 @@ def test_generate_azure_family_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_azure_credentials")
 def test_generate_azure_price_present():
+    """At least one Azure Standard_L catalog entry has an hourly price."""
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert any(r.price_per_hour is not None for r in result)
 
@@ -225,6 +244,7 @@ def test_generate_azure_price_present():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_azure_credentials")
 def test_generate_azure_returns_instance_type_info_objects():
+    """The Azure catalog generator returns InstanceTypeInfo objects."""
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert all(isinstance(r, InstanceTypeInfo) for r in result)
 
@@ -235,6 +255,7 @@ def test_generate_azure_returns_instance_type_info_objects():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_oci_credentials")
 def test_generate_oci_dense_io_returns_instances():
+    """The live OCI catalog for BM/VM DenseIO shapes lists at least one shape."""
     result = generate_oci_catalog(["BM.DenseIO", "VM.DenseIO"])
     assert len(result) > 0
 
@@ -242,6 +263,7 @@ def test_generate_oci_dense_io_returns_instances():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_oci_credentials")
 def test_generate_oci_cloud_field():
+    """Every OCI BM.DenseIO catalog entry is tagged with cloud "oci"."""
     result = generate_oci_catalog(["BM.DenseIO"])
     assert all(r.cloud == "oci" for r in result)
 
@@ -249,5 +271,6 @@ def test_generate_oci_cloud_field():
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_oci_credentials")
 def test_generate_oci_returns_instance_type_info_objects():
+    """The OCI catalog generator returns InstanceTypeInfo objects."""
     result = generate_oci_catalog(["VM.DenseIO"])
     assert all(isinstance(r, InstanceTypeInfo) for r in result)

@@ -87,14 +87,17 @@ DEFAULTS = {"limit": 5, "stress_options": {"concurrency": 32}, "rate": 0, "expec
 
 
 def test_expected_p99_read_ms_query_overrides_defaults():
+    """A query's own expected_p99_read_ms wins over the dataset defaults."""
     assert _expected_p99_read_ms({"set": "s", "expected_p99_read_ms": 50}, {"expected_p99_read_ms": 10}) == 50.0
 
 
 def test_expected_p99_read_ms_falls_back_to_defaults():
+    """Without its own value, a query takes expected_p99_read_ms from the dataset defaults."""
     assert _expected_p99_read_ms({"set": "s"}, {"expected_p99_read_ms": 10}) == 10.0
 
 
 def test_expected_p99_read_ms_missing_raises():
+    """A query with no expected_p99_read_ms anywhere raises ValueError naming its query set."""
     with pytest.raises(ValueError, match="term_common"):
         _expected_p99_read_ms({"set": "term_common"}, {})
 
@@ -122,6 +125,7 @@ def _plan(query, defaults=None):
 
 
 def test_validate_plan_queries_accepts_a_good_plan():
+    """validate_plan_queries accepts a query entry with valid set, limit, stress options, rate and duration."""
     validate_plan_queries(
         _plan({"set": "term_common", "limit": 100, "stress_options": {"concurrency": 1}, "rate": 50, "duration": "5m"})
     )
@@ -152,11 +156,13 @@ def test_validate_plan_queries_rejects_a_bad_entry(query, message):
 
 
 def test_validate_plan_queries_names_the_offending_step():
+    """The validation error names the dataset and step number of the bad query entry."""
     with pytest.raises(ValueError, match=r"dataset 'ds', step #1"):
         validate_plan_queries(_plan({"set": "t"}, defaults={}))
 
 
 def test_validate_plan_queries_ignores_steps_without_queries():
+    """Steps with no queries pass query validation."""
     validate_plan_queries([{"name": "ds", "steps": [{"shards": []}, {"documents_file": "documents.tsv"}]}])
 
 
@@ -170,6 +176,7 @@ def _steps(*steps, name="ds"):
 
 
 def test_a_plan_without_tracks_is_valid():
+    """A plan with untracked queries passes track validation."""
     validate_plan_tracks([_steps({"shards": [0], "queries": [{"set": "t"}, {"set": "t"}]})])
 
 
@@ -214,11 +221,13 @@ def test_an_unthrottled_track_may_mix_p99_limits():
 
 
 def test_a_tracked_entry_names_its_track_and_row():
+    """A tracked query or build step yields its (track, label) pair."""
     assert search_perf_test._query_track({"set": "t", "track": "latency", "label": "small"}) == ("latency", "small")
     assert search_perf_test._build_track({"build_track": "builds", "build_label": "small"}) == ("builds", "small")
 
 
 def test_an_untracked_entry_has_no_track():
+    """An untracked query or build step yields (None, None)."""
     assert search_perf_test._query_track({"set": "t"}) == (None, None)
     assert search_perf_test._build_track({"shards": [0]}) == (None, None)
 
@@ -258,11 +267,13 @@ def test_an_untracked_entry_has_no_track():
     ),
 )
 def test_a_bad_track_is_rejected_before_the_run(step, message):
+    """validate_plan_tracks raises ValueError for duplicate rows, mixed P99 limits or rates, and bad track fields."""
     with pytest.raises(ValueError, match=re.escape(message)):
         validate_plan_tracks([_steps(step)])
 
 
 def test_a_repeated_build_label_is_rejected_across_datasets():
+    """A build label repeated in one track across datasets is rejected, naming the second dataset and step."""
     with pytest.raises(ValueError, match=r"Track 'builds' already has a row 'same'.*\(in dataset 'b', step #1\)"):
         validate_plan_tracks(
             [
@@ -300,6 +311,7 @@ def test_booleans_are_not_accepted_as_numbers():
 
 
 def test_an_entrys_stress_options_merge_over_the_defaults_by_name():
+    """Entry stress options override the defaults per option name and render as latte flags."""
     defaults = {"stress_options": {"concurrency": 32, "warmup": 200}}
     assert (
         _stress_options({"set": "t", "stress_options": {"concurrency": 1}}, defaults) == "--concurrency 1 --warmup 200"
@@ -307,6 +319,7 @@ def test_an_entrys_stress_options_merge_over_the_defaults_by_name():
 
 
 def test_a_false_stress_option_drops_the_defaults_and_a_true_one_is_a_bare_flag():
+    """A False stress option removes its default, and a True one renders as a flag without a value."""
     defaults = {"stress_options": {"concurrency": 32, "warmup": 200}}
     assert _stress_options({"set": "t", "stress_options": {"warmup": False, "generate-report": True}}, defaults) == (
         "--concurrency 32 --generate-report"
@@ -325,20 +338,24 @@ def test_concurrency_outside_the_stress_options_is_rejected():
 
 
 def test_first_query_example_returns_the_text_column(tmp_path):
+    """_first_query_example returns the query text column of the first line of the queries file."""
     (tmp_path / "queries_term_common.tsv").write_text("q1\tfirst query text\nq2\tsecond\n", encoding="utf-8")
     assert _first_query_example(str(tmp_path), "queries_term_common.tsv") == "first query text"
 
 
 def test_first_query_example_skips_leading_blank_lines(tmp_path):
+    """_first_query_example skips blank lines before the first query."""
     (tmp_path / "queries_natural.tsv").write_text("\n\nq1\tactual first\n", encoding="utf-8")
     assert _first_query_example(str(tmp_path), "queries_natural.tsv") == "actual first"
 
 
 def test_first_query_example_missing_file_returns_empty_string(tmp_path):
+    """_first_query_example returns an empty string when the queries file is missing."""
     assert _first_query_example(str(tmp_path), "queries_missing.tsv") == ""
 
 
 def test_first_query_example_without_a_tab_returns_whole_line(tmp_path):
+    """_first_query_example returns the whole line when it has no tab separator."""
     (tmp_path / "queries_odd.tsv").write_text("just one column\n", encoding="utf-8")
     assert _first_query_example(str(tmp_path), "queries_odd.tsv") == "just one column"
 
@@ -354,6 +371,7 @@ def test_first_query_example_truncates_a_long_query(tmp_path):
 
 
 def test_first_query_example_keeps_a_query_at_the_cap_intact(tmp_path):
+    """_first_query_example returns a query exactly QUERY_EXAMPLE_MAX_CHARS long unchanged."""
     (tmp_path / "queries_exact.tsv").write_text(f"q1\t{'a' * QUERY_EXAMPLE_MAX_CHARS}\n", encoding="utf-8")
 
     example = _first_query_example(str(tmp_path), "queries_exact.tsv")
@@ -390,12 +408,14 @@ class _FakeTester:
 
 
 def test_wait_for_vector_store_serving_requires_serving_only():
+    """_wait_for_vector_store_serving waits for the SERVING status alone."""
     tester = _FakeTester(ready=True)
     search_perf_test.SearchPerformanceTest._wait_for_vector_store_serving(tester, timeout=10)
     assert tester.asked["required_statuses"] == ("SERVING",)
 
 
 def test_wait_for_vector_store_serving_raises_when_it_never_serves():
+    """_wait_for_vector_store_serving raises RuntimeError when the node does not reach SERVING in time."""
     tester = _FakeTester(ready=False)
     with pytest.raises(RuntimeError, match="did not reach SERVING"):
         search_perf_test.SearchPerformanceTest._wait_for_vector_store_serving(tester, timeout=10)
@@ -420,12 +440,14 @@ def test_a_relative_path_resolves_from_the_sct_root():
 
 
 def test_absolute_path_is_used_as_is(tmp_path):
+    """An absolute plan path is returned unchanged."""
     plan = tmp_path / "my_plan.yaml"
     plan.write_text("datasets: []\n", encoding="utf-8")
     assert resolve_test_config_path(WORKLOAD, str(plan)) == str(plan)
 
 
 def test_s3_url_is_downloaded_into_the_workload_data_dir(monkeypatch, tmp_path):
+    """An s3:// plan is downloaded under the workload's downloaded dir by bucket and key, and that path is returned."""
     downloads = []
 
     def fake_download(bucket, key, local_path):
@@ -478,6 +500,7 @@ def test_an_s3_plan_is_downloaded_again_over_an_earlier_copy(monkeypatch, tmp_pa
 
 
 def test_malformed_s3_url_raises():
+    """An S3 URL without a bucket raises ValueError."""
     with pytest.raises(ValueError, match="Invalid S3 URL"):
         resolve_test_config_path(WORKLOAD, "s3:///no-bucket/key.yaml")
 
@@ -563,11 +586,13 @@ def test_a_base_url_prefix_has_no_slashes_at_its_ends(url, prefix):
 
 
 def test_a_base_url_must_be_an_s3_url():
+    """A dataset base_url other than s3:// raises ValueError."""
     with pytest.raises(ValueError, match="Invalid S3 URL"):
         search_perf_test._parse_s3_url("https://b/fts/10M")
 
 
 def test_a_bucket_level_base_url_keys_files_at_the_bucket_root():
+    """With a bucket-only base_url, a file's S3 key is its relative path."""
     assert search_perf_test._s3_key("", "shards/documents_000.tsv") == "shards/documents_000.tsv"
 
 
@@ -624,6 +649,7 @@ def test_a_base_url_dataset_downloads_into_a_folder_of_its_own(monkeypatch, tmp_
     ),
 )
 def test_shard_spec_normalizes_ints_and_ranges(spec, expected):
+    """_parse_shard_spec expands "a..b" ranges and keeps plain ints, in plan order."""
     assert _parse_shard_spec(spec) == expected
 
 
@@ -659,6 +685,7 @@ def test_shard_spec_rejects_duplicates(spec):
 
 @pytest.mark.parametrize("name", ("10M_20tok", "local_tiny", "term_common", "natural"))
 def test_plain_names_are_accepted(name):
+    """Names of letters, digits and underscores pass the name check unchanged."""
     assert _checked_name(name, "dataset name") == name
 
 
@@ -675,12 +702,14 @@ def test_plain_names_are_accepted(name):
     ),
 )
 def test_unsafe_names_are_rejected(name):
+    """Names with quotes, spaces, dashes, dots or path parts, and empty or None names, raise ValueError."""
     with pytest.raises(ValueError, match="Invalid dataset name"):
         _checked_name(name, "dataset name")
 
 
 @pytest.mark.parametrize("name", ("documents.tsv", "shards/documents_000.tsv", "a-b_c.1.tsv"))
 def test_plain_data_file_names_are_accepted(name):
+    """Relative data file paths of safe characters pass the data file check unchanged."""
     assert _checked_data_file(name, "records file") == name
 
 
@@ -696,6 +725,7 @@ def test_plain_data_file_names_are_accepted(name):
     ),
 )
 def test_unsafe_data_file_names_are_rejected(name):
+    """Absolute paths, paths climbing out with "..", shell syntax, spaces and empty names raise ValueError."""
     with pytest.raises(ValueError, match="Invalid records file"):
         _checked_data_file(name, "records file")
 
@@ -713,6 +743,7 @@ def test_unsafe_data_file_names_are_rejected(name):
     ((0, 1), (1, 1), (60, 1), (61, 2), (600, 10), (1800, 30), (3600, 60)),
 )
 def test_timeout_minutes_rounds_up_and_never_returns_zero(seconds, expected):
+    """_timeout_minutes rounds seconds up to whole minutes, with a minimum of 1."""
     assert _timeout_minutes(seconds) == expected
 
 
@@ -739,12 +770,14 @@ class _RecordingTester:
 
 
 def test_every_phase_runs_on_one_loader():
+    """_run_latte runs its command round-robin on a single loader."""
     tester = _RecordingTester()
     search_perf_test.SearchPerformanceTest._run_latte(tester, "latte schema bench.rn", duration=1)
     assert tester.asked["round_robin"] is True
 
 
 def test_a_load_runs_on_the_loader_its_shard_was_sent_to():
+    """_run_latte runs a load on the loader it is given."""
     tester = _RecordingTester()
     search_perf_test.SearchPerformanceTest._run_latte(tester, "latte run -f load bench.rn", loader="loader-2")
     assert tester.asked["loader"] == "loader-2"
@@ -809,6 +842,7 @@ class _PhaseTester:
 
 
 def test_setup_phases_record_no_hdr(monkeypatch):
+    """The shard load and index build phases run latte with HDR recording off."""
     monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
     monkeypatch.setattr(search_perf_test, "wait_for_index_build_seconds", lambda *_: 1.0)
     tester = _PhaseTester()
@@ -832,6 +866,7 @@ def _load(tester, local_ds_dir, *shard_ids):
 
 
 def test_each_shard_is_staged_for_the_load_that_reads_it(tmp_path):
+    """Each shard load stages only that shard's file, at its container path."""
     tester = _PhaseTester()
 
     assert _load(tester, tmp_path, 0, 1) == 2
@@ -843,6 +878,7 @@ def test_each_shard_is_staged_for_the_load_that_reads_it(tmp_path):
 
 
 def test_a_query_set_stages_its_queries_and_qrels(monkeypatch):
+    """A search stages its queries file and its qrels file on the loader."""
     monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
     tester = _PhaseTester()
     tester.get_hdrhistogram = lambda **_: {}
@@ -885,6 +921,7 @@ def _search_command():
 
 
 def test_a_search_passes_its_stress_options_to_latte():
+    """A search passes its stress options to the latte command line."""
     assert " --concurrency 1 --warmup 20 " in _search_command()
 
 
@@ -921,10 +958,12 @@ def _filtered_log_lines(monkeypatch, ignore_parse_errors):
 
 
 def test_a_query_parse_error_fails_the_test_by_default(monkeypatch):
+    """By default a search filters no database log lines, so a query parse error fails the test."""
     assert _filtered_log_lines(monkeypatch, ignore_parse_errors=False) == []
 
 
 def test_a_query_parse_error_can_be_tolerated(monkeypatch):
+    """With ignore_parse_errors a search filters the "failed to parse query" log lines."""
     assert _filtered_log_lines(monkeypatch, ignore_parse_errors=True) == [r"failed to parse query"]
 
 
@@ -966,6 +1005,7 @@ def _watch_sends(tester, file_name):
 
 
 def test_the_next_shard_is_sent_while_the_current_one_loads(tmp_path):
+    """The next shard is sent to the loader while the current shard's load is running."""
     tester = _PhaseTester()
     next_sent = _watch_sends(tester, "records_001.tsv")
     sent_during_load = []
@@ -982,6 +1022,7 @@ def test_the_next_shard_is_sent_while_the_current_one_loads(tmp_path):
 
 
 def test_a_failed_load_also_removes_the_shard_sent_after_it(tmp_path):
+    """A failed load removes both its shard and the next one already sent, and stops loading."""
     tester = _PhaseTester(fail_latte=True)
     next_sent = _watch_sends(tester, "records_001.tsv")
     run_latte = tester._run_latte
@@ -1009,6 +1050,7 @@ def test_a_step_without_shards_loads_nothing(tmp_path):
 
 
 def test_an_empty_shard_is_neither_sent_nor_loaded(tmp_path):
+    """An empty shard file is skipped: it is neither sent to a loader nor loaded, and adds no records."""
     tester = _PhaseTester()
     (tmp_path / "shards").mkdir()
     (tmp_path / "shards" / "records_001.tsv").write_text("\n", encoding="utf-8")
@@ -1025,6 +1067,7 @@ def test_an_empty_shard_is_neither_sent_nor_loaded(tmp_path):
 
 
 def test_a_downloaded_shard_leaves_the_runner_once_loaded(monkeypatch, tmp_path):
+    """Shards of an S3 dataset are downloaded by key, loaded, and then removed from the runner."""
     tester = _PhaseTester()
     downloaded = []
 
@@ -1083,6 +1126,7 @@ def test_a_bad_base_url_fails_the_plan_before_any_dataset_runs(tmp_path):
 
 
 def test_a_plan_runs_its_datasets_in_order(tmp_path):
+    """run_search_benchmark runs the plan's datasets in plan order."""
     tester = _run_plan(tmp_path, "datasets:\n  - name: first\n  - name: second\n")
     assert tester.ran == ["first", "second"]
 
@@ -1109,11 +1153,13 @@ def test_has_invalid_queries_must_be_a_boolean(tmp_path):
 
 
 def test_a_plan_without_queries_runs_without_hdr_histograms(tmp_path):
+    """A plan with no queries runs with use_hdrhistogram off."""
     tester = _run_plan(tmp_path, "datasets:\n  - name: first\n", use_hdrhistogram=False)
     assert tester.ran == ["first"]
 
 
 def test_a_bad_track_is_rejected_before_any_dataset_runs(tmp_path):
+    """A build_track without build_label fails the plan check before any dataset runs."""
     plan = "datasets:\n  - name: first\n    steps:\n      - build_track: builds\n"
     # '_PlanTester' runs no dataset, so the error can only come from the plan check before them.
     with pytest.raises(ValueError, match="'build_track' without 'build_label'"):
@@ -1147,6 +1193,7 @@ def test_a_plan_that_would_run_nothing_is_rejected(tmp_path, plan, expected):
 
 
 def test_an_unset_plan_is_rejected(tmp_path):
+    """run_search_benchmark raises ValueError when the plan param is empty."""
     tester = _PlanTester(tmp_path / "plan.yaml")
     tester.params = {search_perf_test.TEST_CONFIG_PARAM: ""}
     with pytest.raises(ValueError, match="is not set"):
@@ -1154,6 +1201,7 @@ def test_an_unset_plan_is_rejected(tmp_path):
 
 
 def test_a_missing_plan_file_is_rejected(tmp_path):
+    """run_search_benchmark raises FileNotFoundError when the plan file is missing."""
     tester = _PlanTester(tmp_path / "absent.yaml")
     with pytest.raises(FileNotFoundError, match="not found at"):
         search_perf_test.SearchPerformanceTest.run_search_benchmark(tester)
@@ -1207,6 +1255,7 @@ def _results(logdir):
 
 
 def test_index_builds_are_appended_one_json_object_per_line(tmp_path):
+    """Each index build is appended to the results file as one JSON line, with its derived indexing throughput."""
     tester = _ResultsTester(tmp_path)
     record_index_build = search_perf_test.SearchPerformanceTest._record_index_build
 
@@ -1240,6 +1289,7 @@ def test_index_builds_are_appended_one_json_object_per_line(tmp_path):
 
 
 def test_every_record_goes_to_argus_as_written(tmp_path):
+    """Each record written to the results file is also reported to Argus unchanged."""
     tester = _ResultsTester(tmp_path)
 
     search_perf_test.SearchPerformanceTest._record_index_build(tester, "local_tiny", 1, "idx", 1000, 2.5)
@@ -1315,6 +1365,7 @@ def fixture_positioned(monkeypatch):
 
 
 def test_the_position_comes_from_both_builds(positioned):
+    """_sut_timestamp passes the ScyllaDB date and commit and the vector-store build time and id."""
     tester = _SutTester(scylla_versions={"scylla-server": {"date": "20261007", "commit_id": "96e73c66cc74"}})
 
     assert search_perf_test.SearchPerformanceTest._sut_timestamp(tester) == (
@@ -1326,6 +1377,7 @@ def test_the_position_comes_from_both_builds(positioned):
 
 
 def test_an_offline_scylla_is_dated_by_its_version_string(positioned):
+    """Without installed versions, the ScyllaDB date and commit come from the parsed server package version."""
     package = types.SimpleNamespace(date="20261007", revision_id="96e73c66cc74")
 
     assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester(scylla_package=package))[:2] == (
@@ -1335,6 +1387,7 @@ def test_an_offline_scylla_is_dated_by_its_version_string(positioned):
 
 
 def test_an_undated_scylla_still_dates_the_run_by_vector_store(positioned):
+    """With no ScyllaDB date, _sut_timestamp still passes the vector-store build time."""
     assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester())[:3] == (None, "", 1760000000)
 
 
@@ -1360,10 +1413,12 @@ def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):
 
 @pytest.mark.parametrize("record_count, build_seconds", ((1000, None), (1000, 0.0), (0, 2.5)))
 def test_no_throughput_is_derived_without_a_build_time_or_records(record_count, build_seconds):
+    """indexing_throughput returns None without a build time, with a zero build time, or with no records."""
     assert indexing_throughput(record_count, build_seconds) is None
 
 
 def test_a_search_is_recorded_with_its_configuration_and_latency(tmp_path):
+    """A search record carries its configuration, the latency percentiles in ms, throughput and the P99 verdict."""
     tester = _ResultsTester(tmp_path)
     search_perf_test.SearchPerformanceTest._record_search(
         tester,
@@ -1486,6 +1541,7 @@ class _DatasetTester:
 
 @pytest.mark.parametrize("has_invalid_queries", [False, True])
 def test_a_dataset_says_how_its_queries_handle_parse_errors(tmp_path, monkeypatch, has_invalid_queries):
+    """A dataset's has_invalid_queries is passed to every step's queries as ignore_parse_errors."""
     monkeypatch.setattr(search_perf_test, "_local_path", lambda *_: str(tmp_path))
     tester = _DatasetTester()
 
@@ -1498,6 +1554,7 @@ def test_a_dataset_says_how_its_queries_handle_parse_errors(tmp_path, monkeypatc
 
 @pytest.mark.parametrize("ignore_parse_errors", [False, True])
 def test_every_query_of_a_step_gets_the_same_parse_error_handling(tmp_path, ignore_parse_errors):
+    """Every query of a step is run with the step's ignore_parse_errors setting."""
     (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
     tester = _StepTester(tmp_path)
     step = {"queries": [{"set": "term_common"}, {"set": "term_common"}]}
@@ -1518,6 +1575,7 @@ def test_every_query_of_a_step_gets_the_same_parse_error_handling(tmp_path, igno
 
 
 def test_a_tracked_query_carries_its_track_into_the_record(tmp_path):
+    """A tracked query's record carries its track and label; an untracked query's record has neither key."""
     (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
     tester = _StepTester(tmp_path)
     step = {"queries": [{"set": "term_common", "track": "latency", "label": "small"}, {"set": "term_common"}]}
@@ -1533,6 +1591,7 @@ def test_a_tracked_query_carries_its_track_into_the_record(tmp_path):
 
 
 def test_a_tracked_index_build_carries_its_track_into_the_record(tmp_path):
+    """An index build record carries the given track and label."""
     search_perf_test.SearchPerformanceTest._record_index_build(
         _ResultsTester(tmp_path), "local_tiny", 1, "bench_idx_local_tiny_0", 1000, 2.5, "builds", "local_tiny"
     )

@@ -5,6 +5,7 @@ from sdcm.utils.jenkins_builder_labels import GROOVY_LABELS_FILE, builder_labels
 
 
 def test_builder_labels_from_repo_groovy():
+    """builder_labels() expands the groovy labels per cloud, region and GCE project, leaving no ${...} markers."""
     groovy_text = GROOVY_LABELS_FILE.read_text()
     labels = builder_labels(groovy_text)
 
@@ -17,6 +18,7 @@ def test_builder_labels_from_repo_groovy():
 
 
 def test_unserved_labels_needs_a_node_or_a_cloud():
+    """unserved_labels() returns the labels that have neither a Jenkins node nor a cloud serving them."""
     answers = {
         "has-cloud": {"nodes": [], "clouds": [{}]},
         "has-node": {"nodes": [{"nodeName": "n1"}], "clouds": []},

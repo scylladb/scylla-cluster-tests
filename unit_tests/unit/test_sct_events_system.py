@@ -32,6 +32,7 @@ from sdcm.sct_events.system import (
 
 
 def test_startup_test_event():
+    """StartupTestEvent renders as a NORMAL event and survives pickling."""
     event = StartupTestEvent()
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -41,6 +42,7 @@ def test_startup_test_event():
 
 
 def test_test_framework_event():
+    """TestFrameworkEvent renders as ERROR with source method, arguments, message and exception."""
     event = TestFrameworkEvent(
         source="s1",
         source_method="m1",
@@ -66,6 +68,7 @@ def test_test_framework_event():
 
 
 def test_spot_termination_event():
+    """SpotTerminationEvent renders as CRITICAL with node and message, and survives pickling."""
     event = SpotTerminationEvent(node="node1", message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -76,6 +79,7 @@ def test_spot_termination_event():
 
 
 def test_node_unreachable_event():
+    """NodeUnreachableEvent renders as CRITICAL with node and message, and survives pickling."""
     event = NodeUnreachableEvent(node="loader-1", message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -86,6 +90,7 @@ def test_node_unreachable_event():
 
 
 def test_scylla_repo_event():
+    """ScyllaRepoEvent renders as WARNING with URL and error, and survives pickling."""
     event = ScyllaRepoEvent(url="u1", error="e1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -96,6 +101,7 @@ def test_scylla_repo_event():
 
 
 def test_info_event():
+    """InfoEvent renders as NORMAL with its message, and survives pickling."""
     event = InfoEvent(message="m1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -105,6 +111,7 @@ def test_info_event():
 
 
 def test_thread_failed_event():
+    """ThreadFailedEvent renders as ERROR with message and traceback, and survives pickling."""
     event = ThreadFailedEvent(message="m1", traceback="t1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -115,6 +122,7 @@ def test_thread_failed_event():
 
 
 def test_coredump_event():
+    """CoreDumpEvent renders as ERROR with node, core URL, backtrace and download instructions."""
     event = CoreDumpEvent(node="node1", corefile_url="url1", backtrace="b1", download_instructions="d1")
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == (
@@ -127,6 +135,7 @@ def test_coredump_event():
 
 
 def test_test_result_event_fail():
+    """A failed TestResultEvent renders the last events of each group under the results banner."""
     event = TestResultEvent(
         test_status="FAILED",
         events={
@@ -157,6 +166,7 @@ def test_test_result_event_fail():
 
 
 def test_test_result_event_ok():
+    """A successful TestResultEvent renders the SUCCESS banner without the event groups."""
     event = TestResultEvent(
         test_status="SUCCESS",
         events={
@@ -181,12 +191,14 @@ def test_test_result_event_ok():
 
 
 def test_known_system_status_events():
+    """InstanceStatusEvent exposes STARTUP, REBOOT and POWER_OFF subtypes."""
     assert issubclass(InstanceStatusEvent.STARTUP, InstanceStatusEvent)
     assert issubclass(InstanceStatusEvent.REBOOT, InstanceStatusEvent)
     assert issubclass(InstanceStatusEvent.POWER_OFF, InstanceStatusEvent)
 
 
 def test_instance_startup_event():
+    """A STARTUP event is WARNING and add_info records node, line and line number."""
     event1 = InstanceStatusEvent.STARTUP()
     assert event1.severity == Severity.WARNING
 
@@ -198,6 +210,7 @@ def test_instance_startup_event():
 
 
 def test_instance_reboot_event():
+    """A REBOOT event is WARNING and add_info records node, line and line number."""
     event1 = InstanceStatusEvent.REBOOT()
     assert event1.severity == Severity.WARNING
 
@@ -209,6 +222,7 @@ def test_instance_reboot_event():
 
 
 def test_instance_poweroff_event():
+    """A POWER_OFF event is WARNING and add_info records node, line and line number."""
     event1 = InstanceStatusEvent.POWER_OFF()
     assert event1.severity == Severity.WARNING
     assert event1 is event1.add_info(node="n1", line="Powering Off", line_number=0)
@@ -219,6 +233,7 @@ def test_instance_poweroff_event():
 
 
 def test_instance_status_events_patterns(test_data_dir):
+    """The instance status patterns find the startup, reboot and power-off lines of a system log as WARNING."""
     cloned_events = []
     with open(str(test_data_dir / "system_status_events.log"), encoding="utf-8") as sct_log:
         for index, line in enumerate(sct_log.readlines()):

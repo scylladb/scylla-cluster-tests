@@ -29,6 +29,8 @@ def reset_node_allocator_singleton():
 
 
 class MockNode(BaseNode):
+    """BaseNode stand-in carrying only the name, node type, seed flag, DC index and rack the allocator filters on."""
+
     def __init__(self, name, node_type="data_nodes", is_seed=False, dc_idx=0, rack=0):
         self.name = name
         self.node_type = node_type
@@ -42,17 +44,22 @@ class MockNode(BaseNode):
 
 
 class MockTester:
+    """Tester stand-in exposing a mutable list of DB nodes through all_db_nodes."""
+
     def __init__(self, nodes):
         self._nodes = list(nodes)
 
     @property
     def all_db_nodes(self):
+        """Return the current list of DB nodes."""
         return self._nodes
 
     def add_node(self, node):
+        """Append a node to the DB node list."""
         self._nodes.append(node)
 
     def remove_node(self, node):
+        """Remove a node from the DB node list if present."""
         if node in self._nodes:
             self._nodes.remove(node)
 
@@ -72,6 +79,7 @@ def allocator_with_nodes():
 
 
 def test_nodes_list(allocator_with_nodes):
+    """The all_nodes pool reflects nodes added to and removed from the tester at query time."""
     allocator, tester, nodes = allocator_with_nodes
     assert len(allocator._get_pool_type_nodes(NEMESIS_TARGET_POOLS.all_nodes)) == 4
 
@@ -83,6 +91,7 @@ def test_nodes_list(allocator_with_nodes):
 
 
 def test_select_and_release_target_node(allocator_with_nodes):
+    """Selecting marks the node busy under the nemesis name, a second pick gets another node, and unset releases it."""
     allocator, _, _ = allocator_with_nodes
 
     # select a node
@@ -106,6 +115,7 @@ def test_select_and_release_target_node(allocator_with_nodes):
 
 
 def test_no_available_nodes(allocator_with_nodes):
+    """Selecting from a pool whose nodes all run a nemesis raises AllNodesRunNemesisError."""
     allocator, _, nodes = allocator_with_nodes
 
     data_nodes = [n for n in nodes if n.node_type == "data_nodes"]
@@ -119,6 +129,7 @@ def test_no_available_nodes(allocator_with_nodes):
 
 
 def test_nodes_filtering(allocator_with_nodes):
+    """select_target_node honours the is_seed, rack and pool-type filters."""
     allocator, _, _ = allocator_with_nodes
 
     # filter seed node
@@ -137,6 +148,7 @@ def test_nodes_filtering(allocator_with_nodes):
 
 
 def test_switch_target_node(allocator_with_nodes):
+    """switch_target_node moves the nemesis reservation from the old node to the new one."""
     allocator, _, nodes = allocator_with_nodes
 
     allocator.set_running_nemesis(nodes[1], "SwitchNemesis")
@@ -150,6 +162,7 @@ def test_switch_target_node(allocator_with_nodes):
 
 
 def test_switch_to_reserved_node_fails(allocator_with_nodes):
+    """Switching onto a node busy with another nemesis raises and keeps both reservations as they were."""
     allocator, _, nodes = allocator_with_nodes
 
     allocator.set_running_nemesis(nodes[1], "NemesisA")
@@ -193,6 +206,7 @@ def test_thread_safety():
 
 
 def test_context_manager_sets_and_releases_single_node(allocator_with_nodes):
+    """nodes_running_nemesis marks a single node busy inside the block and releases it on exit."""
     allocator, _, nodes = allocator_with_nodes
     node_to_mark = nodes[0]
 
@@ -203,6 +217,7 @@ def test_context_manager_sets_and_releases_single_node(allocator_with_nodes):
 
 
 def test_context_manager_sets_and_releases_multiple_nodes(allocator_with_nodes):
+    """nodes_running_nemesis marks a list of nodes busy inside the block and releases all of them on exit."""
     allocator, _, nodes = allocator_with_nodes
     nodes_to_mark = [nodes[0], nodes[1]]
 

@@ -18,4 +18,5 @@ from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 
 @pytest.mark.integration
 def test_release_by_tag_integration():
+    """Dry-run release of dedicated hosts by an unmatched tag completes across two AWS regions."""
     SCTDedicatedHosts.release_by_tags({"TestId": "no-existing"}, regions=["us-east-1", "eu-west-1"], dry_run=True)

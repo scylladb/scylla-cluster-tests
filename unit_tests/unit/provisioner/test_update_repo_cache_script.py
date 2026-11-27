@@ -32,6 +32,7 @@ backoff() { echo 0; }
 
 
 def run_update_repo_cache(tmp_path, fake_apt_get: str = "", extra_stubs: str = "") -> subprocess.CompletedProcess:
+    """Run the update_repo_cache script with host tools stubbed and a fake apt-get running the given update body."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     apt_get = bin_dir / "apt-get"
@@ -51,6 +52,7 @@ def run_update_repo_cache(tmp_path, fake_apt_get: str = "", extra_stubs: str = "
 
 
 def test_hanging_apt_get_update_gives_up_after_the_time_budget(tmp_path, monkeypatch):
+    """A hanging apt-get update is killed at the time budget and the script still exits 0, logging the give-up."""
     monkeypatch.setattr(utils, "APT_UPDATE_TIME_BUDGET", 2)
 
     started = time.monotonic()
@@ -77,6 +79,7 @@ def test_held_apt_lock_bounds_the_cleanup_and_the_update_together(tmp_path, monk
 
 
 def test_failing_apt_get_update_is_retried_until_it_succeeds(tmp_path):
+    """A failing apt-get update is retried until it succeeds, with no give-up message."""
     result = run_update_repo_cache(tmp_path, fake_apt_get='echo x >> calls; [ "$(wc -l < calls)" -ge 3 ] || exit 100')
 
     assert result.returncode == 0, result.stderr

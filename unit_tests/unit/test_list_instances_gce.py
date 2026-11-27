@@ -14,6 +14,7 @@ from sdcm.utils.gce_utils import gce_public_addresses
     [(False, ["running-vm", "preempted-vm"]), (True, ["running-vm"])],
 )
 def test_list_instances_gce_filters_by_status_only_when_running(running, expected):
+    """list_instances_gce returns VMs of every status, and only RUNNING ones when running=True."""
     instances = [MagicMock(status="RUNNING"), MagicMock(status="TERMINATED")]
     instances[0].name, instances[1].name = "running-vm", "preempted-vm"
     client = MagicMock()

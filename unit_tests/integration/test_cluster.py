@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 @pytest.fixture
 def prepared_keyspaces(docker_scylla, params):
+    """Create keyspace `testks` with a collection-typed table and a counter table; return (cluster, ks, table, counter)."""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
@@ -64,6 +65,7 @@ def prepared_keyspaces(docker_scylla, params):
 
 @pytest.mark.integration
 def test_get_any_ks_cf_list(docker_scylla, params, events):
+    """Keyspace/table listing quotes numeric-leading names and honors the system, MV and empty-table filters."""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
@@ -230,6 +232,7 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):
 )
 @pytest.mark.integration
 def test_general_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    """get_column_names filters a regular table by primary-key flag and by excluded column types."""
     cluster, ks, base_cf, _ = prepared_keyspaces
     with cluster.cql_connection_patient(cluster.nodes[0]) as session:
         result = set(get_column_names(session, ks, base_cf, **kwargs))
@@ -251,6 +254,7 @@ def test_general_table_column_filtering(prepared_keyspaces, kwargs, expected):
 )
 @pytest.mark.integration
 def test_counter_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    """get_column_names filters a counter table by primary-key flag and by excluded column types."""
     cluster, ks, _, counter_cf = prepared_keyspaces
     with cluster.cql_connection_patient(cluster.nodes[0]) as session:
         result = set(get_column_names(session, ks, counter_cf, **kwargs))
@@ -259,6 +263,7 @@ def test_counter_table_column_filtering(prepared_keyspaces, kwargs, expected):
 
 @pytest.mark.integration
 def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
+    """Filtering with is_ks_rf_one drops every table of an RF=1 keyspace from the non-system table list."""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 

@@ -52,6 +52,7 @@ KMS_APPEND_SCYLLA_YAML = {
 
 @pytest.fixture
 def kms_dummy_node(tmp_path):
+    """Provide an initialized DummyNode whose cluster params carry the KMS append_scylla_yaml config."""
     node = DummyNode(
         name="test_node",
         parent_cluster=None,

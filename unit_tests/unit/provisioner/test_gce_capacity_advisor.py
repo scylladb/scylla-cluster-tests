@@ -54,6 +54,7 @@ def mock_advice_fixture():
 
 
 def test_zones_sorted_best_first(mock_advice):
+    """get_zone_advice returns the zones ordered by obtainability, best first."""
     mock_advice.side_effect = [_recommendation(0.4), _recommendation(0.9), _recommendation(0.7)]
 
     advice = get_zone_advice(["n2-highmem-16"], 3, "us-east1", ["us-east1-b", "us-east1-c", "us-east1-d"])
@@ -68,6 +69,7 @@ def test_zone_letter_is_derived_from_the_zone_name():
 
 
 def test_estimated_uptime_is_parsed_from_the_duration_string(mock_advice):
+    """The estimatedUptime duration string is parsed into seconds."""
     mock_advice.return_value = _recommendation(0.5, uptime="600s")
 
     advice = get_zone_advice(["n2-highmem-16"], 3, "us-east1", ["us-east1-b"])
@@ -109,6 +111,7 @@ def test_request_pins_a_single_zone_per_call(mock_advice):
 
 
 def test_request_asks_for_spot_and_passes_every_machine_type(mock_advice):  # noqa: ARG001
+    """The request body asks for SPOT capacity of the given size and lists every machine type."""
     body = capacity_advisor._build_request_body(["n2-highmem-16", "n2-highmem-32"], 6, "us-east1-b", "SPOT")
 
     assert body["size"] == 6
@@ -138,6 +141,7 @@ def test_failed_query_is_not_cached(mock_advice):
 
 
 def test_successful_advice_is_cached(mock_advice):
+    """A successful advice query is served from the cache on repeat."""
     mock_advice.return_value = _recommendation(0.8)
 
     get_zone_advice(["n2-highmem-16"], 3, "us-east1", ["us-east1-b"])
@@ -147,6 +151,7 @@ def test_successful_advice_is_cached(mock_advice):
 
 
 def test_cache_key_ignores_argument_order(mock_advice):
+    """The cache key is independent of the order of machine types and zones."""
     mock_advice.return_value = _recommendation(0.8)
 
     get_zone_advice(["b-type", "a-type"], 3, "us-east1", ["us-east1-c", "us-east1-b"])
@@ -160,11 +165,13 @@ def test_cache_key_ignores_argument_order(mock_advice):
     [([], 3, ["us-east1-b"]), (["n2-highmem-16"], 3, []), (["n2-highmem-16"], 0, ["us-east1-b"])],
 )
 def test_degenerate_inputs_never_call_the_api(mock_advice, types, size, zones):
+    """No machine types, no zones or a zero size return an empty result without querying the API."""
     assert get_zone_advice(types, size, "us-east1", zones) == []
     mock_advice.assert_not_called()
 
 
 def test_a_zone_without_a_score_is_skipped_not_guessed(mock_advice):
+    """A zone whose response has no recommendation is left out of the advice."""
     mock_advice.side_effect = [{"recommendations": []}, _recommendation(0.6)]
 
     advice = get_zone_advice(["n2-highmem-16"], 3, "us-east1", ["us-east1-b", "us-east1-c"])
@@ -173,6 +180,8 @@ def test_a_zone_without_a_score_is_skipped_not_guessed(mock_advice):
 
 
 class TestRankRegions:
+    """rank_regions orders regions by Capacity Advisor scores."""
+
     def test_regions_ordered_by_their_best_zone(self, mock_advice):
         """A region is worth as much as the best zone we could actually land in, so max - not mean - decides."""
         mock_advice.side_effect = [
@@ -192,6 +201,7 @@ class TestRankRegions:
         assert ranked == ["us-east1", "us-west1"]
 
     def test_regions_without_advice_go_last(self, mock_advice):
+        """Regions whose advice query fails are ranked after regions with advice."""
         mock_advice.side_effect = [PermissionError("403"), _recommendation(0.4)]
 
         ranked = rank_regions(
@@ -204,11 +214,13 @@ class TestRankRegions:
         assert ranked == ["us-west1", "us-east1"]
 
     def test_no_advice_at_all_returns_none(self, mock_advice):
+        """rank_regions returns None when no region gets any advice."""
         mock_advice.side_effect = PermissionError("403")
 
         assert rank_regions(["n2-highmem-16"], 3, ["us-east1"], {"us-east1": ["us-east1-b"]}) is None
 
     def test_region_without_known_zones_is_left_alone(self, mock_advice):
+        """A region with no known zones is left unscored and ranked after the scored regions."""
         mock_advice.return_value = _recommendation(0.4)
 
         ranked = rank_regions(["n2-highmem-16"], 3, ["us-east1", "us-west1"], {"us-east1": ["us-east1-b"]})
@@ -223,6 +235,7 @@ class TestPartialZoneFailures:
     """
 
     def test_one_unsupported_zone_does_not_cost_the_others(self, mock_advice):
+        """A zone that rejects the machine type is dropped while the other zones keep their scores."""
         unsupported = RuntimeError("Machine specification is not supported in locations: [us-west1-c].")
         mock_advice.side_effect = [_recommendation(0.9), unsupported, _recommendation(0.4)]
 
@@ -269,6 +282,7 @@ class TestRoleAwareRanking:
         return [ZoneCapacityAdvice(zone=f"us-east1-{letter}", obtainability=value) for letter, value in mapping.items()]
 
     def test_the_scarcest_role_decides_the_zone(self):
+        """Zones are ranked by their lowest score across roles, so the scarcest role picks the zone."""
         roles = [("db", ["z3-highmem-8-highlssd"], 6), ("loaders", ["n4a-standard-4"], 2)]
         with patch(
             "sdcm.provision.gce.capacity_advisor.get_zone_advice",
@@ -282,6 +296,7 @@ class TestRoleAwareRanking:
         assert ranked == ["d", "b", "c"], "d is the only zone that can take the whole cluster"
 
     def test_a_role_without_advice_abandons_the_ranking(self):
+        """When any role gets no advice, rank_zone_letters_for_roles returns None."""
         roles = [("db", ["z3-highmem-8-highlssd"], 6), ("loaders", ["n4a-standard-4"], 2)]
         with patch(
             "sdcm.provision.gce.capacity_advisor.get_zone_advice",
@@ -290,6 +305,7 @@ class TestRoleAwareRanking:
             assert rank_zone_letters_for_roles(roles, region="us-east1", zone_letters=["b", "d"]) is None
 
     def test_roles_are_asked_separately_never_merged(self):
+        """Each role is queried on its own, with its own machine types and node count."""
         roles = [("db", ["z3-highmem-8-highlssd"], 6), ("monitor", ["e2-standard-2"], 1)]
         with patch(
             "sdcm.provision.gce.capacity_advisor.get_zone_advice",

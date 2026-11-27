@@ -52,6 +52,7 @@ from sdcm.utils.cloud_catalog.instance_matcher import (
     ],
 )
 def test_parse_constraints_vcpu_only(raw, expected):
+    """vcpu/vcpus as int, numeric string or 'a-b' range parse to an eq or range vcpus constraint."""
     assert parse_constraints(raw) == expected
 
 
@@ -80,6 +81,7 @@ def test_parse_constraints_vcpu_only(raw, expected):
     ],
 )
 def test_parse_constraints_memory(memory_raw, expected_constraint):
+    """Memory values accept gb suffixes and comparison/range forms; a bare number means at least that much."""
     result = parse_constraints({"vcpu": 4, "memory": memory_raw})
     memory_constraints = [c for c in result if c.field == "memory_gb"]
     assert len(memory_constraints) == 1
@@ -106,6 +108,7 @@ def test_parse_constraints_memory(memory_raw, expected_constraint):
     ],
 )
 def test_parse_constraints_disk(disk_raw, expected_constraint):
+    """Disk values accept gb/tb suffixes and comparison/range forms; local_disk_gb works as an alias for disk."""
     if disk_raw == "local_disk_gb":
         result = parse_constraints({"vcpu": 4, "local_disk_gb": 500})
         disk_constraints = [c for c in result if c.field == "local_disk_gb"]
@@ -136,6 +139,7 @@ def test_parse_constraints_disk(disk_raw, expected_constraint):
     ],
 )
 def test_parse_constraints_arch(arch_raw, expected_value):
+    """Arch aliases (arm, x86, amd64, any case) normalise to arm64 or x86_64."""
     result = parse_constraints({"vcpu": 4, "arch": arch_raw})
     arch_constraints = [c for c in result if c.field == "arch"]
     assert len(arch_constraints) == 1
@@ -148,6 +152,7 @@ def test_parse_constraints_arch(arch_raw, expected_value):
 
 
 def test_parse_constraints_all_fields():
+    """vcpu, memory, disk and arch together each yield their own constraint."""
     raw = {"vcpu": 8, "memory": 32, "disk": ">=500gb", "arch": "arm64"}
     result = parse_constraints(raw)
     fields = {c.field: c for c in result}
@@ -158,6 +163,7 @@ def test_parse_constraints_all_fields():
 
 
 def test_parse_constraints_all_canonical_names():
+    """The canonical field names vcpus, memory_gb and local_disk_gb are accepted as keys."""
     raw = {"vcpus": 8, "memory_gb": 32, "local_disk_gb": 100}
     result = parse_constraints(raw)
     fields = {c.field: c for c in result}
@@ -167,6 +173,7 @@ def test_parse_constraints_all_canonical_names():
 
 
 def test_parse_constraints_string_values_from_env():
+    """All-string values, as they come from env vars, parse like their numeric equivalents."""
     raw = {"vcpu": "8", "memory": "32", "disk": "500"}
     result = parse_constraints(raw)
     fields = {c.field: c for c in result}
@@ -176,6 +183,7 @@ def test_parse_constraints_string_values_from_env():
 
 
 def test_parse_constraints_vcpu_range_with_memory():
+    """A vcpu range combines with a spaced '>= 32gb' memory constraint."""
     raw = {"vcpu": "8-16", "memory": ">= 32gb"}
     result = parse_constraints(raw)
     fields = {c.field: c for c in result}
@@ -189,21 +197,25 @@ def test_parse_constraints_vcpu_range_with_memory():
 
 
 def test_parse_constraints_missing_vcpu_raises():
+    """Constraints without vcpu raise a 'vcpu is mandatory' ValueError."""
     with pytest.raises(ValueError, match="vcpu is mandatory"):
         parse_constraints({"memory": 32})
 
 
 def test_parse_constraints_missing_vcpu_only_disk_raises():
+    """Disk and arch without vcpu still raise 'vcpu is mandatory'."""
     with pytest.raises(ValueError, match="vcpu is mandatory"):
         parse_constraints({"disk": 500, "arch": "arm64"})
 
 
 def test_parse_constraints_empty_dict_raises():
+    """An empty constraints dict raises 'vcpu is mandatory'."""
     with pytest.raises(ValueError, match="vcpu is mandatory"):
         parse_constraints({})
 
 
 def test_parse_constraints_unknown_arch_raises():
+    """An unsupported arch value raises 'Unknown architecture'."""
     with pytest.raises(ValueError, match="Unknown architecture"):
         parse_constraints({"vcpu": 4, "arch": "powerpc"})
 
@@ -214,6 +226,7 @@ def test_parse_constraints_unknown_arch_raises():
 
 
 def test_parse_constraints_unknown_key_logs_warning(caplog):
+    """Unknown keys are logged as warnings and dropped from the parsed constraints."""
     with caplog.at_level(logging.WARNING, logger="sdcm.utils.cloud_catalog.instance_matcher"):
         result = parse_constraints({"vcpu": 8, "gpu": 2, "network": "10gbe"})
     assert any("gpu" in msg for msg in caplog.messages)
@@ -230,6 +243,7 @@ def test_parse_constraints_unknown_key_logs_warning(caplog):
 
 
 def test_parse_constraints_whitespace_in_string_values():
+    """Whitespace around string values is stripped before parsing."""
     raw = {"vcpu": " 8 ", "memory": " > 32gb ", "arch": " arm64 "}
     result = parse_constraints(raw)
     fields = {c.field: c for c in result}
@@ -269,6 +283,7 @@ def test_parse_constraints_whitespace_in_string_values():
     ],
 )
 def test_is_literal_instance_type(value, expected):
+    """AWS, Azure, GCE and OCI type names count as literal types; dicts, plain words and non-strings do not."""
     assert is_literal_instance_type(value) == expected
 
 
@@ -278,6 +293,7 @@ def test_is_literal_instance_type(value, expected):
 
 
 def test_no_matching_instance_error_message():
+    """NoMatchingInstanceError's message lists each constraint and the number of candidates checked."""
     constraints = [Constraint("vcpus", "eq", 8), Constraint("memory_gb", "gte", 32.0)]
     err = NoMatchingInstanceError(constraints, candidates_checked=42)
     assert "vcpus eq 8" in str(err)
@@ -288,6 +304,7 @@ def test_no_matching_instance_error_message():
 
 
 def test_no_matching_instance_error_zero_candidates():
+    """NoMatchingInstanceError defaults to zero candidates checked and formats range constraints."""
     constraints = [Constraint("vcpus", "range", (8, 16))]
     err = NoMatchingInstanceError(constraints)
     assert "vcpus range (8, 16)" in str(err)
@@ -301,6 +318,7 @@ def test_no_matching_instance_error_zero_candidates():
 
 @pytest.fixture
 def test_catalog():
+    """Provide an in-memory catalog with AWS, GCE and OCI Flex instances, arch defaults and preferred families."""
     cat = InstanceCatalog()
     cat.cloud_defaults = {"aws": {"arch": "arm64"}, "gce": {"arch": "x86_64"}, "oci": {"arch": "x86_64"}}
     cat.preferred_families = {
@@ -358,57 +376,68 @@ def test_catalog():
 
 
 def test_select_exact_vcpu(test_catalog):
+    """An exact vcpu constraint picks the matching size of the first preferred db family."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
     assert result.instance_type == "i8g.2xlarge"
 
 
 def test_select_vcpu_range(test_catalog):
+    """A vcpu range picks the smallest matching size of the preferred family."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": "4-8"})
     assert result.instance_type == "i8g.xlarge"
 
 
 def test_select_with_arch_override(test_catalog):
+    """An arch constraint overrides the cloud default arch and selects an x86 family."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8, "arch": "x86"})
     assert result.instance_type == "i7i.2xlarge"
 
 
 def test_select_with_arch_param(test_catalog):
+    """The arch argument overrides the cloud default arch like an arch constraint does."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8}, arch="x86_64")
     assert result.instance_type == "i7i.2xlarge"
 
 
 def test_select_with_memory_constraint(test_catalog):
+    """A memory constraint filters candidates by memory_gb."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8, "memory": ">60"})
     assert result.instance_type == "i8g.2xlarge"
 
 
 def test_select_memory_range(test_catalog):
+    """Combined vcpu and memory ranges pick the smallest instance inside both."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": "4-16", "memory": "30-70"})
     assert result.instance_type == "i8g.xlarge"
 
 
 def test_select_db_implies_local_disk(test_catalog):
+    """A loader picks its preferred diskless compute family."""
     result = select_instance(test_catalog, "loader", "aws", {"vcpu": 4}, arch="x86_64")
     assert result.instance_type == "c6i.xlarge"
 
 
 def test_select_db_requires_local_disk(test_catalog):
+    """A db pick has at least one local disk."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 4})
     assert result.instance_type == "i8g.xlarge"
     assert result.local_disk_count > 0
 
 
 def test_select_monitor(test_catalog):
+    """A monitor picks from its preferred family by vcpu."""
     result = select_instance(test_catalog, "monitor", "aws", {"vcpu": 2}, arch="x86_64")
     assert result.instance_type == "t3.large"
 
 
 def test_select_gce(test_catalog):
+    """On GCE the db role picks from the GCE preferred family."""
     result = select_instance(test_catalog, "db", "gce", {"vcpu": 8})
     assert result.instance_type == "z3-highmem-8"
 
 
 def test_select_explicit_arch_constraint_overrides_fixed_role_arch(test_catalog):
+    """A role with a fixed arch uses it, and an explicit arch constraint overrides it."""
     test_catalog.instances.append(
         InstanceTypeInfo("c7g.xlarge", "aws", "c7g", 4, 8.0, 0, 0, "arm64", 0.15),
     )
@@ -440,11 +469,13 @@ def test_select_explicit_arch_constraint_overrides_fixed_role_arch(test_catalog)
 
 
 def test_select_no_match_raises(test_catalog):
+    """Unsatisfiable constraints raise NoMatchingInstanceError."""
     with pytest.raises(NoMatchingInstanceError):
         select_instance(test_catalog, "db", "aws", {"vcpu": 1024})
 
 
 def test_select_prefers_cheaper(test_catalog):
+    """Between equal family rank and vcpus, the cheaper instance is picked."""
     test_catalog.instances.append(
         InstanceTypeInfo("i8g.2xlarge-cheap", "aws", "i8g", 8, 64.0, 1875.0, 1, "arm64", 1.50),
     )
@@ -454,6 +485,7 @@ def test_select_prefers_cheaper(test_catalog):
 
 
 def test_select_prefers_family_order(test_catalog):
+    """Each arch picks the first of the role's preferred families that has that arch."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8, "arch": "x86_64"})
     assert result.family == "i7i"
 
@@ -462,12 +494,14 @@ def test_select_prefers_family_order(test_catalog):
 
 
 def test_select_deterministic(test_catalog):
+    """The same request picks the same instance on repeated calls."""
     r1 = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
     r2 = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
     assert r1.instance_type == r2.instance_type
 
 
 def test_select_smallest_vcpu(test_catalog):
+    """Within a vcpu range the smallest vcpu count of the preferred family is picked."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": "4-16"})
     assert result.vcpus == 4
     assert result.family == "i8g"
@@ -479,42 +513,49 @@ def test_select_smallest_vcpu(test_catalog):
 
 
 def test_flex_no_memory_constraint_uses_default(test_catalog):
+    """An OCI Flex shape without memory constraint gets mem_per_vcpu * vcpus, encoded in its type name."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4})
     assert result.instance_type == "VM.Standard.E4.Flex:2:16"
     assert result.memory_gb == 16.0
 
 
 def test_flex_with_exact_memory(test_catalog):
+    """A bare Flex memory value (a minimum) sets that memory and encodes it in the shape name."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4, "memory": "16"})
     assert result.instance_type == "VM.Standard.E4.Flex:2:16"
     assert result.memory_gb == 16.0
 
 
 def test_flex_with_gte_memory(test_catalog):
+    """A '>=' memory constraint on a Flex shape sets memory to that minimum."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4, "memory": ">=64"})
     assert result.instance_type == "VM.Standard.E4.Flex:2:64"
     assert result.memory_gb == 64.0
 
 
 def test_flex_memory_gte_near_max(test_catalog):
+    """A '>=' value just under the shape's max memory is set as the Flex memory."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 8, "memory": ">=250"})
     assert result.instance_type == "VM.Standard.E4.Flex:4:250"
     assert result.memory_gb == 250.0
 
 
 def test_flex_lte_memory_uses_default(test_catalog):
+    """A '<=' memory constraint on a Flex shape keeps the default memory."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4, "memory": "<=128"})
     assert result.instance_type == "VM.Standard.E4.Flex:2:16"
     assert result.memory_gb == 16.0
 
 
 def test_flex_memory_range(test_catalog):
+    """A memory range on a Flex shape sets the memory to the range's lower bound."""
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4, "memory": "16-64"})
     assert result.instance_type == "VM.Standard.E4.Flex:2:16"
     assert result.memory_gb == 16.0
 
 
 def test_non_flex_instance_unchanged(test_catalog):
+    """A fixed-shape instance keeps its catalog name and memory."""
     result = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
     assert result.instance_type == "i8g.2xlarge"
     assert result.memory_gb == 64.0

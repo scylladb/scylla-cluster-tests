@@ -62,6 +62,7 @@ def sstable_utils_with_mock_status(sstable_utils, monkeypatch):
 
 
 def result(ok=True, stdout="", stderr="", exit_status=0):
+    """Build a mock command result with the given status, output and exit code."""
     res = MagicMock()
     res.ok = ok
     res.stdout = stdout

@@ -1455,6 +1455,7 @@ def test_parse_error_entry_splits_status_field_and_phase_tag():
 
 
 def test_parse_error_entry_reads_spec_offsets():
+    """An error log entry's fields are read from their NVMe spec byte offsets."""
     entry = parse_error_log_entry(
         _make_error_entry(
             error_count=2,
@@ -1524,6 +1525,7 @@ def test_parse_error_log_page_drops_unused_slots():
 
 
 def test_parse_self_test_page_reads_results():
+    """A self-test log page yields each result with its code, segment, power-on hours, failing LBA and status."""
     page = _make_self_test_page(
         results=[
             {"result_code": 0, "self_test_code": 1, "power_on_hours": 8760, "nsid": 1},
@@ -1558,6 +1560,7 @@ def test_parse_self_test_page_skips_unused_entries():
 
 
 def test_parse_self_test_page_reports_test_in_progress():
+    """A self-test log page reports the running test's operation and completion percentage."""
     page = _make_self_test_page(current_operation=2, current_completion=45)
     log = parse_self_test_log_page("/dev/nvme1n1", page)
 
@@ -1572,6 +1575,7 @@ def test_parse_self_test_page_reports_test_in_progress():
 
 
 def test_get_smart_log_reads_raw_log_page():
+    """get_smart_log reads the raw SMART/Health log page via base64 and parses temperature and media errors."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _b64_result(_make_smart_page(temperature_kelvin=315, media_errors=2))
 
@@ -1596,6 +1600,7 @@ def test_get_smart_log_rejects_short_read():
 
 
 def test_get_smart_log_rejects_undecodable_output():
+    """get_smart_log returns None and warns when the output is not valid base64."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result(stdout="not base64 !!!")
 
@@ -1627,10 +1632,12 @@ def test_get_error_log_sizes_the_page_from_elpe():
 
 
 def test_error_log_entry_count_is_zero_based():
+    """The Identify ELPE field is 0's based, so 63 means 64 error log entries."""
     assert parse_identify_controller(_make_id_ctrl(elpe_zero_based=63)).error_log_entries == 64
 
 
 def test_supports_self_test_reads_oacs_bit_4():
+    """Device self-test support is read from the OACS device self-test bit."""
     info = parse_identify_controller(_make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST | 0x8))
 
     assert info.supports_self_test is True
@@ -1655,6 +1662,7 @@ def test_get_controller_info_reads_both_fields_in_one_identify():
 
 
 def test_get_controller_info_none_when_identify_unreadable():
+    """get_controller_info returns None when the Identify command fails."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
 
@@ -1662,6 +1670,7 @@ def test_get_controller_info_none_when_identify_unreadable():
 
 
 def test_get_self_test_log_reads_raw_log_page():
+    """get_self_test_log reads the raw self-test log page of its fixed length and parses its results."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _b64_result(
         _make_self_test_page(results=[{"result_code": 0, "self_test_code": 1}])

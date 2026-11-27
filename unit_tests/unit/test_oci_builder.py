@@ -16,6 +16,7 @@ INSTANCE_CONFIG = {
 
 @pytest.fixture(name="builder")
 def fixture_builder():
+    """Provide an OciBuilder for us-phoenix-1 with mocked key store, runner, Jenkins info and OCI helpers."""
     region = MagicMock(region_name="us-phoenix-1", availability_domains=["a"])
     with patch("sdcm.utils.oci_builder.KeyStore"), patch("sdcm.utils.oci_builder.OciSctRunner"):
         builder = OciBuilder(region)
@@ -46,6 +47,7 @@ def test_connection_error_is_raised_as_is(builder):
 
 
 def test_script_console_success(builder):
+    """A successful script console call registers the versioned builder cloud template with maxTotalUses."""
     response = MagicMock(
         status_code=200, text="OCI cloud configured programmatically: oci-us-phoenix-1-qa-builder-v4-1"
     )
@@ -57,6 +59,7 @@ def test_script_console_success(builder):
 
 
 def test_configure_in_all_region_fails_after_trying_every_region():
+    """configure_in_all_region tries every region, then raises naming the regions that failed."""
     configured = []
 
     def fake_configure(self):

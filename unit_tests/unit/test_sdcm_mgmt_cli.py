@@ -17,6 +17,7 @@ from sdcm.mgmt.common import ScyllaManagerError
 
 
 def test_01_get_task_info_dict():
+    """get_task_info_dict parses `sctool info` output into header fields, properties and the run history table."""
     manager_node_mock = mock.MagicMock()
     # This test stubs remoter.sudo, i.e. the host sctool runner; say so explicitly, or
     # create_sctool() sees a truthy MagicMock from is_docker() and picks SCToolDocker.
@@ -110,6 +111,7 @@ def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, is_kubern
 
 
 def test_docker_sctool_without_a_container_name_fails_loudly():
+    """create_sctool raises ScyllaManagerError naming manager_container_name for a Docker node without a container."""
     node = _manager_node_mock(is_docker=True, container_name=None)
 
     with pytest.raises(ScyllaManagerError, match="manager_container_name"):
@@ -139,6 +141,7 @@ def backup_task_with_progress_statuses(statuses):
     ],
 )
 def test_wait_for_started_upload_stage_returns_once_the_upload_started(statuses, expected_calls):
+    """wait_for_started_upload_stage returns True at the first status past the pre-upload stages."""
     task = backup_task_with_progress_statuses(statuses)
     with mock.patch("sdcm.utils.decorators.time.sleep"):
         assert task.wait_for_started_upload_stage(timeout=60) is True
@@ -157,6 +160,7 @@ def test_wait_for_started_upload_stage_returns_once_the_upload_started(statuses,
     ],
 )
 def test_wait_for_stage_fails_fast_once_the_task_is_not_running(final_status):
+    """Waiting for a backup stage raises "can't be reached" as soon as the task leaves the RUNNING state."""
     task = backup_task_with_progress_statuses(["RUNNING (taking snapshot)", final_status])
     with mock.patch("sdcm.utils.decorators.time.sleep"), pytest.raises(ScyllaManagerError, match="can't be reached"):
         task.wait_for_uploading_stage(timeout=60)
@@ -165,6 +169,7 @@ def test_wait_for_stage_fails_fast_once_the_task_is_not_running(final_status):
 
 @pytest.mark.parametrize("status", ["NEW", "STARTING"])
 def test_wait_for_stage_keeps_waiting_while_the_task_has_not_started(status):
+    """Waiting for a backup stage keeps polling through NEW and STARTING until the task runs the stage."""
     task = backup_task_with_progress_statuses([status, status, "RUNNING (uploading data)"])
     with mock.patch("sdcm.utils.decorators.time.sleep"):
         assert task.wait_for_uploading_stage(timeout=60) is True
@@ -173,6 +178,7 @@ def test_wait_for_stage_keeps_waiting_while_the_task_has_not_started(status):
 
 @pytest.mark.parametrize("stage", ["taking snapshot", "indexing files", "uploading manifests", "uploading schema"])
 def test_wait_for_started_upload_stage_keeps_waiting_before_the_upload(stage):
+    """wait_for_started_upload_stage raises BackupStageNotReachedError on timeout while still in a pre-upload stage."""
     task = backup_task_with_progress_statuses([f"RUNNING ({stage})"] * 3)
     with (
         mock.patch("sdcm.utils.decorators.time.sleep"),

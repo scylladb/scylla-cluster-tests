@@ -13,6 +13,7 @@ from sdcm.utils.database_query_utils import PartitionsValidationAttributes
 
 
 def build_attrs(max_partitions=None, partition_range=None):
+    """Build PartitionsValidationAttributes for scylla_bench.test with the given max partitions and range."""
     return PartitionsValidationAttributes(
         tester=MagicMock(),
         table_name="scylla_bench.test",
@@ -23,6 +24,7 @@ def build_attrs(max_partitions=None, partition_range=None):
 
 
 def test_partition_range_attributes_default_without_validated_range():
+    """Without a validated range, the range is 0-0 and every partition in the table is non-validated."""
     attrs = build_attrs(max_partitions="1000")
 
     assert attrs.partition_start_range == 0
@@ -32,6 +34,7 @@ def test_partition_range_attributes_default_without_validated_range():
 
 
 def test_partition_range_attributes_default_without_any_data_validation():
+    """Without max partitions or a validated range, all range and count attributes are zero."""
     attrs = build_attrs()
 
     assert attrs.max_partitions_in_test_table is None
@@ -41,6 +44,7 @@ def test_partition_range_attributes_default_without_any_data_validation():
 
 
 def test_partition_range_attributes_with_validated_range():
+    """A validated range "0-800" of 1000 partitions leaves 200 non-validated partitions."""
     attrs = build_attrs(max_partitions="1000", partition_range="0-800")
 
     assert attrs.partition_start_range == 0
@@ -49,6 +53,7 @@ def test_partition_range_attributes_with_validated_range():
 
 
 def test_non_validated_partitions_stays_zero_when_max_partitions_unset():
+    """With a validated range but no max partitions, the non-validated count is zero."""
     attrs = build_attrs(partition_range="0-800")
 
     assert attrs.partition_end_range == 800

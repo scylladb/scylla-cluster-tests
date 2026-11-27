@@ -25,6 +25,7 @@ class FakeProvisioner(Provisioner):
     _provisioners = {}
 
     def __new__(cls, test_id: str, region: str, availability_zone: str, **_) -> Provisioner:
+        """Return the cached provisioner for this test id and region+AZ, creating it on first use."""
         region_az = region + availability_zone
         if provisioner := cls._provisioners.get(test_id, {}).get(region_az):
             return provisioner
@@ -39,6 +40,7 @@ class FakeProvisioner(Provisioner):
     def get_or_create_instance(
         self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT
     ) -> VmInstance:
+        """Return the in-memory VM named in the definition, creating it with fixed fake IPs on first use."""
         if v_m := self._instances.get(definition.name):
             return v_m
         v_m = VmInstance(
@@ -61,22 +63,27 @@ class FakeProvisioner(Provisioner):
     def get_or_create_instances(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT
     ) -> List[VmInstance]:
+        """Return or create an in-memory VM for each definition."""
         return [self.get_or_create_instance(definition, pricing_model) for definition in definitions]
 
     def list_instances(self) -> List[VmInstance]:
+        """Return all in-memory VMs of this provisioner."""
         return list(self._instances.values())
 
     def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+        """Merge the given tags into the named VM tags."""
         self._instances[name].tags.update(tags)
 
     def terminate_instance(self, name: str, wait: bool = False) -> None:
+        """Remove the named VM from memory."""
         del self._instances[name]
 
     def cleanup(self, wait: bool = False) -> None:
+        """Drop all in-memory VMs."""
         self._instances = {}
 
     def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
-        pass
+        """No-op: in-memory VMs have nothing to reboot."""
 
     def run_command(self, name: str, command: str) -> Result:
         """Runs command on instance."""
@@ -84,4 +91,5 @@ class FakeProvisioner(Provisioner):
 
     @classmethod
     def discover_regions(cls, test_id: str, **kwargs) -> List[Provisioner]:
+        """Return every provisioner created for the test id."""
         return list(cls._provisioners.get(test_id, {}).values())

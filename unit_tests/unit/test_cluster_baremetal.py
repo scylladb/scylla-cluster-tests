@@ -342,6 +342,7 @@ def _sudo_cmds(node) -> list[str]:
 
 
 def test_reset_on_a_clean_host_only_wipes_the_setup_disks():
+    """On a host without an earlier setup the reset only wipes the setup disks and removes the io config files."""
     node = _node_with_disk_state()
 
     node._reset_scylla_disk_setup(["/dev/nvme1n1"])
@@ -368,6 +369,7 @@ def test_reset_undoes_an_earlier_single_disk_setup():
 
 
 def test_reset_unmounts_what_the_unit_did_not_mount():
+    """A /var/lib/scylla mount the unit did not make is unmounted after stopping the unit and before the wipe."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1", mounted_by_unit=False)
 
     node._reset_scylla_disk_setup(["/dev/nvme1n1"])
@@ -378,6 +380,7 @@ def test_reset_unmounts_what_the_unit_did_not_mount():
 
 
 def test_reset_accepts_a_bind_mount_of_a_setup_disk():
+    """A bind mount of a subdirectory of a setup disk is unmounted and the disk wiped."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1[/scylla]", mounted_by_unit=False)
 
     node._reset_scylla_disk_setup(["/dev/nvme1n1"])
@@ -387,6 +390,7 @@ def test_reset_accepts_a_bind_mount_of_a_setup_disk():
 
 
 def test_reset_stops_the_raid_built_from_the_setup_disks():
+    """The RAID array built from the setup disks is stopped after the mount unit and before the disks are wiped."""
     node = _node_with_disk_state(
         mount_source="/dev/md0",
         mdstat="Personalities : [raid0]\nmd0 : active raid0 nvme2n1[1] nvme1n1[0]\n      3749396480 blocks\n",
@@ -452,6 +456,7 @@ def test_reset_stops_the_raid_built_from_the_setup_disks():
     ],
 )
 def test_reset_refuses_to_touch_other_devices(state, disks, reason):
+    """A setup disk shared with another device or mount fails the reset with NodeSetupFailed, before any change."""
     node = _node_with_disk_state(**state)
 
     with pytest.raises(sdcm_cluster.NodeSetupFailed) as failure:
@@ -465,6 +470,7 @@ def test_reset_refuses_to_touch_other_devices(state, disks, reason):
 
 @pytest.mark.parametrize("probe", ["findmnt -rn", "lsblk", "if [ -e /proc/mdstat ]"])
 def test_reset_changes_nothing_when_a_mount_probe_fails(probe):
+    """A failing mount probe raises before any unmount, array stop or wipe."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1", failing_probe=probe)
 
     with pytest.raises(RuntimeError, match="exited with 1"):
@@ -474,6 +480,7 @@ def test_reset_changes_nothing_when_a_mount_probe_fails(probe):
 
 
 def test_reset_wipes_nothing_when_the_mount_probe_fails_after_stopping_the_unit():
+    """A probe failing after the mount unit is stopped raises with only the unit stop done and no disk wiped."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1", failing_probe="findmnt -rn", fails_after_stop=True)
 
     with pytest.raises(RuntimeError, match="exited with 1"):
@@ -483,6 +490,7 @@ def test_reset_wipes_nothing_when_the_mount_probe_fails_after_stopping_the_unit(
 
 
 def test_scylla_setup_resets_first_and_no_longer_swallows_failures(monkeypatch):
+    """scylla_setup resets the disks first and lets the failure of the base scylla_setup propagate."""
     node = _node_with_disk_state()
     calls = []
     monkeypatch.setattr(node, "_reset_scylla_disk_setup", lambda disks: calls.append(("reset", disks)))
@@ -514,6 +522,7 @@ def test_scylla_setup_without_disks_resets_nothing(monkeypatch):
 
 
 def test_scylla_setup_without_disks_refuses_a_scylla_dir_left_on_a_disk(monkeypatch):
+    """Without setup disks, a /var/lib/scylla left mounted from a disk fails setup and names hydra clean-resources."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1")
     setup = MagicMock()
     monkeypatch.setattr(sdcm_cluster.BaseNode, "scylla_setup", setup)
@@ -548,6 +557,7 @@ def _node_with_leftovers(existing: list[str], mounts: str = ""):
 
 
 def test_a_clean_host_has_no_leftovers_to_remove():
+    """A host without Scylla leftovers gets no sudo command."""
     node = _node_with_leftovers(existing=[])
 
     node.remove_scylla_leftovers()
@@ -599,6 +609,7 @@ def test_the_coredump_bind_is_unmounted_before_the_scylla_dir_is_removed():
 
 
 def test_a_scylla_dir_on_a_setup_disk_is_left_to_the_disk_reset():
+    """A /var/lib/scylla mounted from a setup disk is kept for the disk reset; only the other leftovers are removed."""
     node = _node_with_leftovers(existing=["/etc/scylla", "/var/lib/scylla"], mounts="/dev/nvme1n1 /var/lib/scylla\n")
 
     node.remove_scylla_leftovers()
@@ -607,6 +618,7 @@ def test_a_scylla_dir_on_a_setup_disk_is_left_to_the_disk_reset():
 
 
 def test_clean_scylla_removes_the_leftovers_after_the_packages(monkeypatch):
+    """clean_scylla uninstalls the packages first, then removes the leftovers."""
     node = _node_with_leftovers(existing=[])
     calls = []
     monkeypatch.setattr(sdcm_cluster.BaseNode, "clean_scylla", lambda self: calls.append("uninstall"))
@@ -625,6 +637,7 @@ def _host_with_disk_state(**state) -> PhysicalHost:
 
 
 def test_cleanup_resets_a_single_disk_host():
+    """Host cleanup stops scylla-server before wiping the single setup disk."""
     host = _host_with_disk_state(mount_source="/dev/nvme1n1")
 
     host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
@@ -634,6 +647,7 @@ def test_cleanup_resets_a_single_disk_host():
 
 
 def test_cleanup_resets_the_raid_scylla_setup_built():
+    """Host cleanup stops the RAID array scylla_setup built and wipes all its member disks."""
     host = _host_with_disk_state(
         mount_source="/dev/md0",
         mdstat="Personalities : [raid0]\nmd0 : active raid0 nvme2n1[1] nvme1n1[0]\n      3749396480 blocks\n",
@@ -656,6 +670,7 @@ def test_cleanup_resets_the_raid_scylla_setup_built():
     ],
 )
 def test_cleanup_leaves_disks_scylla_setup_did_not_set_up_alone(state):
+    """Host cleanup only stops scylla-server when the disks show no setup by scylla_setup."""
     host = _host_with_disk_state(**state)
 
     host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
@@ -673,6 +688,7 @@ def test_cleanup_skips_the_disk_reset_when_not_asked():
 
 
 def test_a_failed_disk_reset_is_only_logged():
+    """A failed disk reset during cleanup is logged as a warning and leaves the disk unwiped."""
     host = _host_with_disk_state(mount_source="/dev/nvme1n1", failing_probe="lsblk -nrp -o NAME")
 
     host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
@@ -683,6 +699,7 @@ def test_a_failed_disk_reset_is_only_logged():
 
 @pytest.mark.parametrize("tunnel_ports", [True, False])
 def test_cleanup_frees_tunnel_ports_only_when_asked(tunnel_ports):
+    """Host cleanup frees the stale tunnel ports only when tunnel_ports is set."""
     host = _host_with_disk_state()
     host._release_stale_tunnel_ports = MagicMock()
 
@@ -692,6 +709,7 @@ def test_cleanup_frees_tunnel_ports_only_when_asked(tunnel_ports):
 
 
 def test_a_failed_tunnel_cleanup_does_not_skip_the_disk_reset():
+    """A failing tunnel-port cleanup is logged and the disk reset still wipes the disk."""
     host = _host_with_disk_state(mount_source="/dev/nvme1n1")
     host._release_stale_tunnel_ports = MagicMock(side_effect=RuntimeError("ss: exited with 1"))
 
@@ -744,6 +762,7 @@ def test_stale_tunnel_sessions_are_killed():
 
 
 def test_nothing_is_killed_without_stale_tunnels():
+    """With no stale tunnel sessions listening, nothing is killed."""
     node = _node_with_listeners(
         'LISTEN 0 4096 0.0.0.0:9042 0.0.0.0:* users:(("scylla",pid=2200,fd=40))\n'
         'LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=900,fd=3))\n'
@@ -756,6 +775,7 @@ def test_nothing_is_killed_without_stale_tunnels():
 
 @pytest.mark.parametrize("ip_ssh_connections, released", [("public", True), ("private", False)])
 def test_stale_tunnels_released_only_when_tunnels_are_used(ip_ssh_connections, released, monkeypatch):
+    """Stale tunnel ports are released only for nodes reached over public IPs, which use reverse tunnels."""
     node = _node_with_listeners("")
     node.test_config.IP_SSH_CONNECTIONS = ip_ssh_connections
     node._public_ip = "10.0.0.60"
@@ -783,6 +803,7 @@ def test_cluster_setting_overrides_the_run_ip_ssh_connections(run_setting, clust
 
 
 def test_private_node_on_a_public_run_opens_no_tunnels(monkeypatch):
+    """A cluster set to private SSH connections on a public run opens no reverse tunnels and releases no ports."""
     node = _node_with_listeners("")
     node.test_config.IP_SSH_CONNECTIONS = "public"
     node.parent_cluster.ip_ssh_connections = "private"
@@ -848,6 +869,7 @@ def test_reset_unmounts_a_coredump_bind_its_unit_did_not():
 
 
 def test_reset_leaves_the_coredump_dir_alone_once_its_unit_unmounted_it():
+    """Once its unit unmounted the coredump bind, the reset runs no umount of /var/lib/systemd/coredump."""
     node = _node_with_disk_state(mount_source="/dev/nvme1n1", coredump_bind=True)
 
     node._reset_scylla_disk_setup(["/dev/nvme1n1"])
@@ -894,6 +916,7 @@ def test_vector_logs_are_looked_up_under_the_full_hostname(tmp_path):
 
 
 def test_other_transports_keep_the_short_hostname(tmp_path):
+    """With a non-Vector log transport, the short hostname from hostname -s is kept."""
     node = _node_answering_hostname(tmp_path, syslogng_address=("10.0.0.1", 514))
 
     assert node.short_hostname == "ip-10-4-13-234"
@@ -927,6 +950,7 @@ def test_the_journal_is_read_from_the_start_of_the_run():
 
 @pytest.mark.parametrize("date_output", ["", "date: command not found\n", "2026-10-07 14:05:30\n"])
 def test_the_whole_journal_is_read_when_the_host_time_is_unknown(date_output):
+    """An empty or non-epoch date output leaves journal_since unset and logs a warning."""
     node = _node_answering_date(date_output)
 
     node.mark_run_start_in_journal()
@@ -936,6 +960,7 @@ def test_the_whole_journal_is_read_when_the_host_time_is_unknown(date_output):
 
 
 def test_the_start_of_the_run_is_marked_once():
+    """The run start is marked once; later calls keep the first timestamp without running a command."""
     node = _node_answering_date("1791382530\n")
     node.mark_run_start_in_journal()
     node.remoter.run.return_value = MagicMock(stdout="1791386000\n")
@@ -947,6 +972,7 @@ def test_the_start_of_the_run_is_marked_once():
 
 
 def test_the_run_is_marked_before_the_log_followers_start(monkeypatch):
+    """start_task_threads marks the run start before the base task threads, which start the log followers."""
     node = _node_answering_date("1791382530\n")
     seen_by_task_threads = []
     monkeypatch.setattr(
@@ -1040,6 +1066,7 @@ def _host_with_packages(
 
 
 def test_the_baseline_is_recorded_aside_then_moved_in_place():
+    """The service and package baselines are written to .new files and then moved in place."""
     host, _ = _host_with_packages(installed={"bash.x86_64"}, baseline=None)
 
     host.record_host_baseline()
@@ -1085,6 +1112,7 @@ def test_a_baseline_left_alone_is_kept_and_the_other_recorded(package_baseline, 
 
 
 def test_no_baseline_leaves_the_packages_alone():
+    """Without a package baseline, restore_packages runs nothing and leaves the packages installed."""
     host, state = _host_with_packages(installed={"bash.x86_64", "scylla.x86_64"}, baseline=None)
 
     host.restore_packages()
@@ -1110,6 +1138,7 @@ def test_the_packages_of_the_baseline_are_restored():
 
 
 def test_the_baseline_is_kept_while_the_packages_differ():
+    """A package that fails to reinstall keeps the baseline file and is logged as a warning."""
     host, state = _host_with_packages(
         installed={"bash.x86_64"}, baseline={"bash.x86_64", "abrt.x86_64"}, stuck={"abrt.x86_64"}
     )
@@ -1121,6 +1150,7 @@ def test_the_baseline_is_kept_while_the_packages_differ():
 
 
 def test_debian_packages_are_purged_non_interactively():
+    """Debian packages not in the baseline are purged through apt with DEBIAN_FRONTEND=noninteractive and a timeout."""
     host, state = _host_with_packages(
         installed={"bash:amd64", "scylla-server:amd64"}, baseline={"bash:amd64"}, debian=True
     )
@@ -1134,6 +1164,7 @@ def test_debian_packages_are_purged_non_interactively():
 
 
 def test_debian_packages_are_reinstalled_without_their_recommends():
+    """Debian baseline packages are reinstalled with --no-install-recommends."""
     host, state = _host_with_packages(installed={"bash:amd64"}, baseline={"bash:amd64", "apport:amd64"}, debian=True)
 
     host.restore_packages()
@@ -1185,6 +1216,7 @@ def test_a_package_an_upgraded_one_needs_is_kept(debian, openssh, openssl_libs, 
 
 
 def test_a_package_a_kept_one_needs_is_kept_too():
+    """A package needed by a package kept for another one is kept too, transitively."""
     host, state = _host_with_packages(
         installed={"openssh-server.x86_64", "openssl-libs.x86_64", "crypto-policies.x86_64", "scylla.x86_64"},
         baseline={"openssh-server.x86_64"},
@@ -1198,6 +1230,7 @@ def test_a_package_a_kept_one_needs_is_kept_too():
 
 
 def test_a_dry_run_that_fails_otherwise_removes_nothing_and_keeps_the_baseline():
+    """A dry run failing for another reason than dependencies raises before removing anything; the baseline stays."""
     host, state = _host_with_packages(
         installed={"bash.x86_64", "scylla.x86_64"},
         baseline={"bash.x86_64"},
@@ -1225,6 +1258,7 @@ def test_a_stale_baseline_is_dropped_instead_of_restored():
 
 
 def test_a_stale_baseline_is_recorded_again():
+    """A stale package baseline is removed and recorded again, leaving the service baseline as it is."""
     host, _ = _host_with_packages(installed={"bash.x86_64"}, baseline={"bash.x86_64"}, stale={PACKAGE_BASELINE})
 
     host.record_host_baseline()
@@ -1236,6 +1270,7 @@ def test_a_stale_baseline_is_recorded_again():
 
 
 def test_a_package_the_removal_left_keeps_the_baseline():
+    """A package the removal could not remove keeps the baseline and is logged as a warning."""
     host, _ = _host_with_packages(
         installed={"bash.x86_64", "scylla.x86_64"}, baseline={"bash.x86_64"}, stuck={"scylla.x86_64"}
     )
@@ -1288,6 +1323,7 @@ def test_a_service_a_package_replaced_is_started_again():
 
 
 def test_a_service_that_does_not_start_keeps_the_baseline():
+    """A baseline service that fails to start keeps the service baseline and is logged as a warning."""
     host, _ = _host_with_services(running=set(), baseline={"tuned.service"}, failing={"tuned.service"})
 
     host.restore_services()
@@ -1297,6 +1333,7 @@ def test_a_service_that_does_not_start_keeps_the_baseline():
 
 
 def test_no_service_baseline_leaves_the_services_alone():
+    """Without a service baseline, restore_services runs nothing."""
     host, _ = _host_with_services(running={"sshd.service"}, baseline=None)
 
     host.restore_services()
@@ -1305,6 +1342,7 @@ def test_no_service_baseline_leaves_the_services_alone():
 
 
 def test_the_db_host_cleanup_stops_scylla_restores_packages_then_removes_leftovers(monkeypatch):
+    """DB host cleanup stops log followers and scylla-server, restores packages and services, then removes leftovers."""
     host = _host_with_disk_state()
     calls = []
     monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: calls.append("log followers"))
@@ -1360,6 +1398,7 @@ def test_the_baremetal_monitor_restart_stops_only_its_own_stack():
 
 
 def test_a_failed_package_restore_does_not_skip_the_leftovers(monkeypatch):
+    """A failed package restore is logged and cleanup still restores services and removes the leftovers."""
     host = _host_with_disk_state()
     calls = []
     monkeypatch.setattr(host, "restore_packages", MagicMock(side_effect=RuntimeError("yum: exited with 1")))
@@ -1398,6 +1437,7 @@ def test_the_node_records_the_baseline_before_installing_anything(monkeypatch):
 
 
 def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
+    """A failure to record the baseline is logged as a warning and the node setup goes on."""
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
     node.node_type = "db"
     node.log = MagicMock()
@@ -1411,6 +1451,7 @@ def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
 
 @pytest.mark.parametrize("node_type", ["loader", "monitor"])
 def test_a_shared_host_records_no_baseline(node_type):
+    """Loader and monitor hosts, shared with other jobs, record no baseline."""
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
     node.node_type = node_type
     node.record_host_baseline = MagicMock()
@@ -1461,6 +1502,7 @@ def test_the_logging_script_leaves_the_apt_timers_of_a_shared_host_on(node_class
 
 
 def test_each_run_gets_its_own_monitoring_directory():
+    """The monitoring stack is installed under a home directory named after the run's TestId."""
     node = MagicMock(tags={"TestId": "1234-abcd"})
     node.remoter.run.return_value = MagicMock(stdout="/home/fedora\n")
 
@@ -1550,6 +1592,7 @@ def test_manager_on_a_lab_access_monitor_is_refused_up_front(monkeypatch, use_mg
 
 
 def test_host_without_access_name_is_reached_at_its_address(monkeypatch):
+    """A host without an access name is reached over SSH at its external address."""
     node = _node_with_listeners("")
     node._access_name = None
     monkeypatch.setattr(PhysicalMachineNode, "external_address", "10.0.0.60")

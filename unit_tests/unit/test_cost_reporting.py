@@ -64,12 +64,14 @@ def _estimate(**overrides) -> RunCostEstimate:
 
 
 def test_the_estimate_is_sent_against_the_run_rounded_to_cents():
+    """A complete estimate is sent to Argus against the run ID, rounded to cents."""
     client = _FakeArgus()
     assert report_estimated_cost(client, _estimate()) is True
     assert client.estimates == [(_FakeArgus.run_id, 12.23)]
 
 
 def test_the_lifecycle_figure_is_sent_not_the_on_demand_ceiling():
+    """Argus receives the lifecycle (spot) total, while the on-demand ceiling stays local."""
     client = _FakeArgus()
     report_estimated_cost(client, _estimate(on_demand_total=20.99, fallback_to_on_demand=True))
     assert client.estimates[0][1] == 12.23
@@ -90,6 +92,7 @@ def test_an_unknown_or_partial_estimate_sends_nothing(estimate):
 
 
 def test_an_argus_failure_is_logged_never_raised():
+    """An Argus error while sending the estimate is caught and reported as False."""
     client = _FakeArgus(error=ConnectionError("argus is down"))
     assert report_estimated_cost(client, _estimate()) is False
 
@@ -102,6 +105,7 @@ def _rate(price, is_spot=False) -> InstanceRate:
 
 
 def test_price_tags_round_trip():
+    """price_tags() encodes the rate in millionths plus its tier, and rate_from_tags() decodes it back."""
     tags = price_tags(_rate(0.4397333, is_spot=True))
     assert tags == {PRICE_TAG: "439733", PRICING_TIER_TAG: "spot"}
     assert rate_from_tags(tags) == (0.439733, "spot")
@@ -120,6 +124,7 @@ def test_an_unknown_rate_writes_no_tags():
 
 @pytest.mark.parametrize("tags", [None, {}, {PRICE_TAG: "0"}, {PRICE_TAG: "abc"}, {"Name": "db-1"}])
 def test_missing_or_unusable_price_tags_read_as_unknown(tags):
+    """Absent, zero or non-numeric price tags read back as None."""
     assert rate_from_tags(tags) is None
 
 
@@ -129,6 +134,7 @@ START = datetime(2026, 10, 4, 8, 0, tzinfo=UTC)
 
 
 def test_cost_is_price_times_hours_run():
+    """An instance's cost is its hourly price times the hours it ran, filed under its node category."""
     item = instance_cost_item("db-1", "scylla-db", 1.5, "on-demand", START, ended_at=START + timedelta(hours=2))
     assert (item.name, item.category, item.cost, item.pricing_tier, item.leaked) == (
         "db-1",
@@ -151,19 +157,23 @@ def test_cost_is_price_times_hours_run():
     ],
 )
 def test_categories(node_type, category):
+    """Each node type maps to its Argus cost category, and a None node type to 'unknown'."""
     assert instance_cost_item("n", node_type, 1.0, None, START, ended_at=START).category == category
 
 
 def test_a_start_after_the_end_sends_nothing():
+    """A start time after the end time yields no cost item."""
     assert instance_cost_item("db-1", "db", 1.0, None, START, ended_at=START - timedelta(minutes=1)) is None
 
 
 def test_a_naive_start_is_read_as_utc():
+    """A timezone-naive start time is treated as UTC."""
     item = instance_cost_item("db-1", "db", 1.0, None, START.replace(tzinfo=None), ended_at=START + timedelta(hours=1))
     assert item.cost == 1.0
 
 
 def test_cleanup_prices_a_leaked_instance_from_its_tags():
+    """A leaked instance is priced from its price tags over its runtime and flagged as leaked."""
     tags = {"NodeType": "loader", **price_tags(_rate(0.5, is_spot=True))}
     item = cost_item_from_tags("loader-1", tags, datetime.now(tz=UTC) - timedelta(hours=4), leaked=True)
     assert item.leaked is True
@@ -174,11 +184,13 @@ def test_cleanup_prices_a_leaked_instance_from_its_tags():
 
 @pytest.mark.parametrize("key", ["ZeroTokenNode", "zerotokennode"], ids=["aws-tag", "gce-label"])
 def test_cleanup_prices_a_zero_token_node_in_its_own_category(key):
+    """A zero-token node, tagged on AWS or labelled on GCE, is priced as zero_db_node."""
     tags = {"NodeType": "scylla-db", key: "True", **price_tags(_rate(1.0))}
     assert cost_item_from_tags("db-1", tags, START, leaked=False).category == "zero_db_node"
 
 
 def test_cleanup_reads_the_node_type_from_lowercased_gce_labels():
+    """The node type is read from GCE's lowercased labels."""
     labels = tags_to_gce_labels({"NodeType": "scylla-db", **price_tags(_rate(1.0))})
     assert cost_item_from_tags("db-1", labels, START, leaked=True).category == "db_node"
 
@@ -189,10 +201,12 @@ def test_cleanup_reads_the_node_type_from_lowercased_gce_labels():
     ids=["created-before-price-tags", "no-launch-time"],
 )
 def test_cleanup_sends_nothing_it_cannot_price(tags, started_at):
+    """An instance without price tags or without a launch time yields no cost item."""
     assert cost_item_from_tags("n", tags, started_at, leaked=True) is None
 
 
 def test_cleanup_accepts_gce_string_launch_times():
+    """GCE's ISO-8601 string launch times are parsed into a positive cost."""
     item = cost_item_from_tags("db-1", price_tags(_rate(1.0)), "2026-10-04T01:00:00.000-07:00", leaked=False)
     assert item.cost > 0
 
@@ -214,6 +228,7 @@ def test_cleanup_reports_each_priced_instance_with_the_callers_leaked_flag(leake
 
 
 def test_the_scheduled_sweep_reports_cost_as_leaked(monkeypatch):
+    """update_argus_resource_status() in the scheduled sweep reports the terminated instance's cost as leaked."""
     client = _FakeArgus()
     client.terminate_resource = lambda name, reason: None
     monkeypatch.setattr(cloud_cleanup, "argus_client_factory", lambda: lambda test_id: client)
@@ -223,6 +238,7 @@ def test_the_scheduled_sweep_reports_cost_as_leaked(monkeypatch):
 
 
 def test_report_cost_items_drops_unpriced_items_and_sends_the_rest():
+    """Unpriced (None) items are dropped; True is returned only when something was sent."""
     client = _FakeArgus()
     priced = instance_cost_item("db-1", "db", 1.0, None, START, ended_at=START)
     assert report_cost_items(client, [None, priced]) is True
@@ -231,6 +247,7 @@ def test_report_cost_items_drops_unpriced_items_and_sends_the_rest():
 
 
 def test_report_cost_items_never_raises():
+    """An Argus error in report_cost_items() is caught and reported as False."""
     client = _FakeArgus(error=ConnectionError("argus is down"))
     assert report_cost_items(client, [instance_cost_item("n", "db", 1.0, None, START, ended_at=START)]) is False
 
@@ -257,6 +274,7 @@ def _node(backend="aws", instance_type="i4i.4xlarge", is_spot=True, add_tags=Non
 
 @pytest.fixture(name="priced_at")
 def fixture_priced_at(monkeypatch):
+    """Patch the cluster's get_hourly_rate() to return $0.5/h; yield the list of lookups made."""
     calls = []
 
     def fake_rate(cloud, region, instance_type, is_spot=False, catalog_only=False):
@@ -268,6 +286,7 @@ def fixture_priced_at(monkeypatch):
 
 
 def test_a_node_is_priced_at_the_lifecycle_it_got_and_tagged(priced_at):
+    """A node looks up its rate for its own lifecycle and tags itself with the price and tier."""
     node = _node(is_spot=False)
     BaseNode._record_hourly_rate(node)
     assert priced_at == [("aws", "eu-west-1", "i4i.4xlarge", False)]
@@ -276,6 +295,7 @@ def test_a_node_is_priced_at_the_lifecycle_it_got_and_tagged(priced_at):
 
 @pytest.mark.parametrize("backend, instance_type", [("docker", "i4i.4xlarge"), ("aws", "N/A")])
 def test_a_node_with_nothing_to_price_is_left_alone(priced_at, backend, instance_type):
+    """A node on an unpriced backend or with no instance type skips the lookup and stays unpriced."""
     node = _node(backend=backend, instance_type=instance_type)
     BaseNode._record_hourly_rate(node)
     assert priced_at == []
@@ -283,6 +303,8 @@ def test_a_node_with_nothing_to_price_is_left_alone(priced_at, backend, instance
 
 
 def test_a_node_that_cannot_be_tagged_still_keeps_its_rate(priced_at):
+    """A node keeps its hourly rate when tagging the instance fails."""
+
     def refuse(_tags):
         raise RuntimeError("tag namespace not defined")
 
@@ -292,6 +314,7 @@ def test_a_node_that_cannot_be_tagged_still_keeps_its_rate(priced_at):
 
 
 def test_teardown_reports_the_node_cost(priced_at):
+    """At teardown a priced node reports its cost item to Argus."""
     node = _node()
     BaseNode._record_hourly_rate(node)
     client = _FakeArgus()
@@ -302,12 +325,14 @@ def test_teardown_reports_the_node_cost(priced_at):
 
 
 def test_teardown_of_an_unpriced_node_sends_nothing():
+    """At teardown a node with no recorded rate sends nothing to Argus."""
     client = _FakeArgus()
     BaseNode._report_cost_in_argus(_node(), client)
     assert client.items == []
 
 
 def test_teardown_reports_a_zero_token_node_in_its_own_category(priced_at):
+    """At teardown a zero-token node reports its cost under zero_db_node."""
     node = _node()
     node._is_zero_token_node = True
     BaseNode._record_hourly_rate(node)
@@ -344,6 +369,7 @@ def test_an_oci_flex_node_is_typed_with_its_ocpu_count_so_it_can_be_priced():
 
 
 def test_a_fixed_oci_shape_keeps_its_name():
+    """A fixed OCI shape keeps its bare name as the instance type."""
     provider = SimpleNamespace(
         get_ip_address=lambda *_a, **_k: "10.0.0.1", get_private_dns_name=lambda _id: "", _region="us-ashburn-1"
     )

@@ -52,6 +52,7 @@ def _read_since(logger, reads: int = 2) -> list[str | None]:
 
 @pytest.mark.parametrize("logger_class", [SSHScyllaSystemdLogger, SSHGeneralSystemdLogger])
 def test_a_reused_host_is_read_from_the_start_of_the_run(logger_class, tmp_path):
+    """On a reused host the journal is read from the run start, with a marker line in system.log explaining it."""
     logger = _logger(logger_class, tmp_path, journal_since=RUN_START)
 
     assert _read_since(logger)[0] == RUN_START
@@ -63,6 +64,7 @@ def test_a_reused_host_is_read_from_the_start_of_the_run(logger_class, tmp_path)
 
 @pytest.mark.parametrize("logger_class", [SSHScyllaSystemdLogger, SSHGeneralSystemdLogger])
 def test_a_new_node_is_read_from_the_beginning(logger_class, tmp_path):
+    """On a new node the journal is read from its beginning and no marker line is written."""
     logger = _logger(logger_class, tmp_path, journal_since=None)
 
     assert _read_since(logger)[0] is None

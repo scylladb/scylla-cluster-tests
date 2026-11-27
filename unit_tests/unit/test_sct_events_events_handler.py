@@ -22,15 +22,20 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class TestEventsHandler(EventsUtilsMixin):
+    """The events handler process and its dispatch of events to registered handlers."""
+
     @classmethod
     def setup_class(cls) -> None:
+        """Start the main events device in a dedicated events processes registry."""
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
     def teardown_class(cls) -> None:
+        """Stop the events processes started in setup_class."""
         cls.teardown_events_processes()
 
     def test_events_handler(self):
+        """A published SchemaDisagreement stress event is dispatched once to SchemaDisagreementHandler.handle."""
         with unittest.mock.patch(
             "sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True
         ) as mock:

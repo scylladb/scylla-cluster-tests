@@ -64,6 +64,7 @@ def _no_upstream_env(monkeypatch):
     ],
 )
 def test_escape_groovy_string(raw, expected):
+    """Backslashes are doubled before quotes are escaped, and line breaks become \\n/\\r escapes."""
     assert _escape_groovy_string(raw) == expected
 
 
@@ -209,6 +210,7 @@ def test_escape_groovy_string(raw, expected):
     ],
 )
 def test_trigger_script_content(monkeypatch, job, params, env, kwargs, included, excluded):
+    """The trigger script escapes names and values, picks the build cause and URL mode, and prints parseable results."""
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     script = _build_trigger_groovy(job, params, **kwargs)

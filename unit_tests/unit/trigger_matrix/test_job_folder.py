@@ -40,42 +40,51 @@ from sdcm.utils.trigger_matrix.versions import determine_job_folder
     ],
 )
 def test_version_to_folder(version, expected):
+    """Master versions map to scylla-master; release, full-tag and rc versions map to scylla-<major.minor>."""
     assert determine_job_folder(version) == expected
 
 
 def test_explicit_override():
+    """An explicit job_folder is returned as given, overriding the version-derived folder."""
     assert determine_job_folder("master:latest", job_folder="my-folder") == "my-folder"
 
 
 def test_branch_qualifier():
+    """A branch-qualified version maps to the scylla-branch-<version> folder."""
     assert determine_job_folder("branch-2019.1:all") == "scylla-branch-2019.1"
 
 
 def test_invalid_version_raises():
+    """A version that matches no known form raises TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder("not-a-version")
 
 
 @pytest.mark.parametrize("version", ["2026.4.0-rc", "2026.4-rc1", "2026.4.0-rc1-extra"])
 def test_malformed_short_rc_version_raises(version):
+    """Malformed short rc versions (missing rc number, patch, or with a suffix) raise TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder(version)
 
 
 def test_empty_version_raises():
+    """An empty version raises TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Cannot determine job folder"):
         determine_job_folder("")
 
 
 def test_relative_path():
+    """A relative job name is placed under the version's job folder."""
     assert resolve_job_path("tier1/longevity-test", "scylla-master") == "scylla-master/tier1/longevity-test"
 
 
 def test_absolute_path():
+    """An absolute job name keeps its own path and ignores the version's job folder."""
     assert resolve_job_path("/scylla-enterprise/perf/test", "scylla-master") == "scylla-enterprise/perf/test"
 
 
 def test_absolute_path_strips_leading_slash():
+    """An absolute job name is returned without its leading slash."""
     result = resolve_job_path("/enterprise/perf/test", "branch-2025.4")
     assert not result.startswith("/")
     assert result == "enterprise/perf/test"

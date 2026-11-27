@@ -43,6 +43,7 @@ class RemoterRecorder(RemoteCmdRunner):
         watchers: Optional[List[StreamWatcher]] = None,
         change_context: bool = False,
     ) -> Result:
+        """Run cmd over SSH and record its Result or raised exception under cmd."""
         try:
             output = super().run(
                 cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers, change_context
@@ -61,7 +62,9 @@ class RemoterRecorder(RemoteCmdRunner):
         return output
 
     def get_responses(self):
+        """Return the recorded responses encoded by Pickler.from_data and dumped as a JSON string."""
         return json.dumps(Pickler.from_data(self.responses))
 
     def save_responses_to_file(self, filepath):
+        """Write the recorded responses to a JSON file that MockRemoter can replay."""
         Pickler.save_to_file(filepath, self.responses)

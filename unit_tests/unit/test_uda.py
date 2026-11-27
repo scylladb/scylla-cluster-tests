@@ -46,6 +46,7 @@ TEST_UDFS = {
 
 
 def test_create_uda_instance():
+    """Builds a UDA from accumulator, reduce and final UDFs and an initial condition."""
     new_uda = UDA(
         name="my_uda",
         args="int",
@@ -60,6 +61,7 @@ def test_create_uda_instance():
 
 
 def test_get_create_query_string():
+    """Renders the CREATE AGGREGATE statement with SFUNC, STYPE, REDUCEFUNC, FINALFUNC and INITCOND."""
     expected_create_query_string = (
         "CREATE AGGREGATE testing.my_uda(int) "
         "SFUNC my_acc "
@@ -84,6 +86,7 @@ def test_get_create_query_string():
 
 
 def test_load_uda_from_yaml(tmp_path):
+    """Loads a UDA from YAML, resolving the UDF names to the UDF objects."""
     expected_create_string = (
         "CREATE AGGREGATE testing.my_uda(int) "
         "SFUNC wasm_plus "
@@ -123,6 +126,7 @@ def test_load_uda_from_yaml(tmp_path):
 
 
 def test_load_all_udas():
+    """Loads every bundled UDA with its name, args, return type and UDFs set."""
     assert len(UDFS.keys()) > 1, "UDF count was not greater than 1."
     for uda in UDAS.values():
         assert uda.name

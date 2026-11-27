@@ -42,11 +42,13 @@ def raft_node():
 
 @pytest.fixture
 def non_voter_group0():
+    """Provide group0 members where host-2 is a non-voter."""
     return [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=False)]
 
 
 @pytest.fixture
 def non_voter_token_ring():
+    """Provide a token ring holding both host-1 and host-2."""
     return [
         TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
         TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
@@ -54,6 +56,8 @@ def non_voter_token_ring():
 
 
 class Node:
+    """Fake cluster node that serves the module-level gossip and peers info."""
+
     GOSSIP_STATUSES_FILTER_OUT = [
         "FILTERED",
     ]
@@ -66,28 +70,34 @@ class Node:
 
     @staticmethod
     def print_node_running_nemesis(_):
+        """Return an empty nemesis marker for the node."""
         return ""
 
     @staticmethod
     def run_cqlsh(cmd, split, verbose):
-        pass
+        """Accept any cqlsh command."""
 
     @staticmethod
     def get_gossip_info():
+        """Return the module-level gossip info."""
         return GOSSIP_INFO
 
     @staticmethod
     def get_peers_info():
+        """Return the module-level peers info."""
         return PEERS_INFO
 
 
 class ProblematicNode(Node):
+    """Fake node that reports a schema disagreement in gossip for its first num_of_failed_attempts calls."""
+
     def __init__(self, ip_address, name, num_of_failed_attempts=0):
         super().__init__(ip_address=ip_address, name=name)
         self.get_gossip_info_call_counter = 0
         self.num_of_failed_attempts = num_of_failed_attempts
 
     def get_gossip_info(self):
+        """Return gossip info with a mismatched schema until the failed attempts are used up, then the agreeing one."""
         self.get_gossip_info_call_counter += 1
         if self.get_gossip_info_call_counter > self.num_of_failed_attempts:
             return super().get_gossip_info()
@@ -146,7 +156,10 @@ GOSSIP_INFO = {
 
 
 class TestHealthChecker:
+    """Cluster health checks over gossip, system.peers and nodetool status data."""
+
     def test_check_nodes_status_no_removed(self):
+        """A node not in UN status yields a CRITICAL NodeStatus event."""
         event = next(check_nodes_status(NODES_STATUS, node1), None)
         assert event is not None
         assert event.type == "NodeStatus"
@@ -156,6 +169,7 @@ class TestHealthChecker:
         assert event.error != ""
 
     def test_check_nodes_status_removed(self):
+        """A node not in UN status yields a CRITICAL NodeStatus event while other nodes are listed as removed."""
         event = next(
             check_nodes_status(
                 NODES_STATUS,
@@ -174,10 +188,12 @@ class TestHealthChecker:
         assert event.error != ""
 
     def test_check_nulls_in_peers_no_nulls(self):
+        """Peers without 'null' values yield no event."""
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         assert event is None
 
     def test_check_nulls_in_peers(self):
+        """A 'null' value in system.peers of a gossip-known node yields an ERROR NodePeersNulls event."""
         # Due to commit
         # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
         # node object is used as key instead of string. "deepcopy" change the object and we can't use it
@@ -193,6 +209,7 @@ class TestHealthChecker:
         PEERS_INFO[node2]["data_center"] = data_center
 
     def test_check_nulls_in_peers_filtered_status(self):
+        """A 'null' peers value of a node whose gossip status is filtered out yields no event."""
         # Due to commit
         # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
         # node object is used as key instead of string. "deepcopy" change the object and we can't use it
@@ -209,6 +226,7 @@ class TestHealthChecker:
         GOSSIP_INFO[node2]["status"] = gossip_status
 
     def test_check_nulls_in_peers_not_in_gossip(self):
+        """A 'null' peers value of a node absent from gossip yields no event."""
         PEERS_INFO[node4] = {
             "data_center": "null",
         }
@@ -217,14 +235,17 @@ class TestHealthChecker:
         PEERS_INFO.pop(node4)
 
     def test_check_node_status_in_gossip_and_nodetool_status_all_ok(self):
+        """Matching gossip and nodetool status data yields no event."""
         event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, node1), None)
         assert event is None
 
     def test_check_schema_version_all_ok(self):
+        """Agreeing schema versions across gossip, peers and nodetool status yield no event."""
         event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
         assert event is None
 
     def test_check_schema_agreement_in_gossip_and_peers(self):
+        """Schema agreement on the first attempt returns an empty error with no retries."""
         attempts = 3
 
         with unittest.mock.patch("time.sleep") as mocked_sleep:
@@ -235,6 +256,7 @@ class TestHealthChecker:
         assert not err
 
     def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt(self):
+        """A schema disagreement on the first attempt is retried once and then returns an empty error."""
         problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=1)
         attempts = 3
 
@@ -246,6 +268,7 @@ class TestHealthChecker:
         assert not err
 
     def test_check_schema_agreement_in_gossip_and_peers_constant_error(self):
+        """A persistent schema disagreement uses every attempt and returns a non-empty error."""
         attempts = 3
         problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=attempts)
 
@@ -257,6 +280,7 @@ class TestHealthChecker:
         assert err
 
     def test_check_schema_agreement_default_budget_backs_off(self):
+        """The default retry budget backs off exponentially from 1s, capped at 15s."""
         problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=100)
 
         with unittest.mock.patch("time.sleep") as mocked_sleep:
@@ -345,6 +369,7 @@ def _normal_gossip(*schema_versions: str) -> dict:
 
 
 def test_check_schema_version_peers_lag_demoted_to_warning_when_gossip_agrees():
+    """A system.peers row lagging behind an agreeing gossip yields only WARNING events."""
     gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
     peers_info = {
         node2: _peers_entry(AGREED_SCHEMA_VERSION),
@@ -360,6 +385,7 @@ def test_check_schema_version_peers_lag_demoted_to_warning_when_gossip_agrees():
 
 
 def test_check_schema_version_peers_mismatch_stays_error_when_gossip_disagrees():
+    """A peers schema mismatch while gossip itself disagrees yields an ERROR 'Wrong Schema version' event."""
     gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, OTHER_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
     peers_info = {
         node2: _peers_entry(AGREED_SCHEMA_VERSION),
@@ -373,6 +399,8 @@ def test_check_schema_version_peers_mismatch_stays_error_when_gossip_disagrees()
 
 
 def test_check_schema_agreement_in_gossip_and_peers_tolerates_peers_lag():
+    """A system.peers lag under gossip agreement counts as schema agreement, with no retries."""
+
     class PeersLagNode(Node):
         @staticmethod
         def get_peers_info():

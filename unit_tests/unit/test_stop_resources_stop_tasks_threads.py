@@ -27,6 +27,7 @@ CLUSTER_NAME = "db-cluster"
 
 @pytest.fixture
 def framework_event():
+    """Patch TestFrameworkEvent in sdcm.tester and yield the mock to check the reported failures."""
     with patch("sdcm.tester.TestFrameworkEvent") as event:
         yield event
 
@@ -48,6 +49,7 @@ def _stop_resources_stop_tasks_threads(nodes):
 
 
 def test_stops_all_nodes_before_waiting_for_any(framework_event):
+    """Signals every node to stop its task threads first, then waits for all of them."""
     nodes = _make_nodes(5)
     lock = threading.Lock()
     calls = []
@@ -71,6 +73,7 @@ def test_stops_all_nodes_before_waiting_for_any(framework_event):
 
 
 def test_waits_for_the_nodes_at_the_same_time(framework_event):
+    """Waits for all nodes concurrently; the barrier only releases when all five waits overlap."""
     nodes = _make_nodes(5)
     barrier = threading.Barrier(len(nodes))
     for node in nodes:
@@ -84,6 +87,7 @@ def test_waits_for_the_nodes_at_the_same_time(framework_event):
 
 
 def test_silences_the_failure_of_a_node_and_waits_for_the_others(framework_event):
+    """Reports a failing node wait as a framework event naming the cluster and still waits for the other nodes."""
     nodes = _make_nodes(5)
     error = RuntimeError("node-1 threads are stuck")
     nodes[1].wait_till_tasks_threads_are_stopped.side_effect = error

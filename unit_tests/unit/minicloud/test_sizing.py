@@ -23,6 +23,7 @@ PARAMS = {"n_db_nodes": 6, "n_loaders": 1, "n_monitor_nodes": 1}
 
 @pytest.fixture
 def minicloud_config(tmp_path):
+    """Provide a lightweight MinicloudConfig in a temp state dir with 2GiB loader and monitor guests."""
     return MinicloudConfig(
         state_dir=str(tmp_path), lightweight=True, lightweight_memory_loader="2GiB", lightweight_memory_monitor="2GiB"
     )
@@ -33,21 +34,25 @@ def _budget(gib):
 
 
 def test_derive_db_memory_steps_down_and_keeps_the_margin(minicloud_config):
+    """DB guest memory steps down to the largest size that fits the budget with the safety margin kept."""
     assert derive_db_memory(minicloud_config, PARAMS, 8, _budget(45.0), db_vcpus=2) == "4GiB"
 
 
 def test_derive_db_memory_grows_up_to_a_raised_ceiling(minicloud_config):
+    """DB guest memory grows past the default up to minicloud_auto_memory_max when the budget allows."""
     # 6 x 9 + 2 + 2 + 10 headroom + 2 margin = 70GiB; 10GiB would need 76
     params = {**PARAMS, "minicloud_auto_memory_max": "16GiB"}
     assert derive_db_memory(minicloud_config, params, 8, _budget(70.0), db_vcpus=2) == "9GiB"
 
 
 def test_derive_db_memory_fails_with_the_numbers_below_the_floor(minicloud_config):
+    """A budget below the minimum DB size raises MinicloudError with the needed, available and missing GiB."""
     with pytest.raises(MinicloudError, match=r"4GiB db guests.*40\.0GiB needed.*39\.0GiB.*1\.0GiB short"):
         derive_db_memory(minicloud_config, PARAMS, 8, _budget(39.0), db_vcpus=2)
 
 
 def test_derive_db_vcpus_grows_up_to_a_raised_ceiling_while_the_host_has_threads(minicloud_config):
+    """DB vCPUs grow up to minicloud_auto_vcpus_max only while the host has enough threads for all guests."""
     params = {**PARAMS, "minicloud_auto_vcpus_max": 4, "minicloud_auto_memory_max": "16GiB"}
     # 6 db x 4 + monitor 4 + loader 2 = 30 threads; at 3 vCPUs 23 would still not fit 16
     assert derive_db_vcpus(minicloud_config, params, list(AUTO_SIZE_PARAMS), 8, _budget(100.0), host_threads=32) == 4
@@ -55,6 +60,7 @@ def test_derive_db_vcpus_grows_up_to_a_raised_ceiling_while_the_host_has_threads
 
 
 def test_derive_db_vcpus_counts_an_explicit_loader_size(minicloud_config):
+    """An explicit loader vCPU count is included when deriving DB vCPUs from the host threads."""
     params = {**PARAMS, "minicloud_auto_vcpus_max": 4, "minicloud_auto_memory_max": "16GiB"}
     params["minicloud_lightweight_vcpus_loader"] = 8
     derived = ["minicloud_lightweight_memory", "minicloud_lightweight_vcpus"]
@@ -63,11 +69,13 @@ def test_derive_db_vcpus_counts_an_explicit_loader_size(minicloud_config):
 
 
 def test_derive_loader_memory_counts_a_db_size_that_is_not_whole_gib(minicloud_config):
+    """Loader memory derivation accounts for a fractional-GiB DB guest size."""
     # 6 x 4.5 + loader 3 + monitor 2 + 10 headroom + 2 margin = 44GiB; a 4GiB loader would need 45
     assert derive_loader_memory(minicloud_config, PARAMS, 8, _budget(44.0), "4.5GiB") == "3GiB"
 
 
 def test_derive_loader_vcpus_never_goes_below_two():
+    """Loader vCPUs are at least two even when the host threads are all taken."""
     assert derive_loader_vcpus(host_threads=12, db_guests=6, db_vcpus=2, loaders=1, monitors=1, monitor_vcpus=1) == 2
 
 
@@ -85,6 +93,8 @@ AUTO_PARAMS = {
 
 @pytest.fixture
 def resolve(tmp_path):
+    """Provide a callable that runs resolve_auto_sizing on auto params plus overrides and returns params and record."""
+
     def _resolve(running_cmd=None, **overrides):
         params = {**AUTO_PARAMS, "minicloud_state_dir": str(tmp_path), **overrides}
         record = resolve_auto_sizing(params, MinicloudConfig.from_env(params=params), running_cmd)
@@ -98,6 +108,7 @@ def _sizes(params):
 
 
 def test_resolve_adopts_the_sizes_of_a_running_minicloud(resolve, tmp_path):
+    """With a minicloud already running, its command-line sizes are adopted without measuring the host or recording."""
     cmd = [
         "--lightweight",
         "--lightweight-memory",
@@ -114,6 +125,7 @@ def test_resolve_adopts_the_sizes_of_a_running_minicloud(resolve, tmp_path):
 
 
 def test_resolve_derives_and_records_when_none_is_running(resolve, tmp_path):
+    """With no minicloud running, sizes are derived from host memory and CPUs and written to sizing.json."""
     with (
         _meminfo_path_patch(int(42.1 * 1024 * 1024)),
         patch("sdcm.utils.minicloud.sizing.os.cpu_count", return_value=32),
@@ -128,6 +140,7 @@ def test_resolve_derives_and_records_when_none_is_running(resolve, tmp_path):
 
 
 def test_resolve_counts_only_the_container_cpus(resolve):
+    """minicloud_container_cpus caps the CPU threads counted for sizing, rounded down."""
     with (
         _meminfo_path_patch(int(42.1 * 1024 * 1024)),
         patch("sdcm.utils.minicloud.sizing.os.cpu_count", return_value=32),
@@ -138,6 +151,7 @@ def test_resolve_counts_only_the_container_cpus(resolve):
 
 
 def test_resolve_sizes_the_loader_memory_first_then_its_vcpus(resolve):
+    """Loader memory is derived first and its vCPUs from what that memory carries."""
     # minipc5: 6 x 4GiB + loader 4GiB + monitor 2GiB + 10GiB headroom + 2GiB margin = 42GiB of 42.8GiB
     with (
         _meminfo_path_patch(int(42.8 * 1024 * 1024)),
@@ -148,6 +162,7 @@ def test_resolve_sizes_the_loader_memory_first_then_its_vcpus(resolve):
 
 
 def test_resolve_takes_the_smallest_sizes_when_the_memory_check_is_skipped(resolve):
+    """With the memory check skipped, the smallest sizes are taken and the budget source says so."""
     with (
         _meminfo_path_patch(20 * 1024 * 1024),
         patch("sdcm.utils.minicloud.sizing.os.cpu_count", return_value=16),
@@ -158,6 +173,7 @@ def test_resolve_takes_the_smallest_sizes_when_the_memory_check_is_skipped(resol
 
 
 def test_resolve_writes_numbers_into_a_real_sct_config(params):
+    """Resolved sizes are written into a real SCT config as numbers, as stored to Argus."""
     for knob in AUTO_SIZE_PARAMS:
         params[knob] = "auto"
     cmd = ["--lightweight", "--lightweight-memory", "6GiB", "--lightweight-vcpus", "2"]
@@ -176,6 +192,7 @@ RECORD = {
 
 
 def test_load_sizing_record_ignores_a_record_of_other_sizes(tmp_path):
+    """load_sizing_record returns the saved record only when its sizes match the config."""
     (tmp_path / "sizing.json").write_text(json.dumps(RECORD))
     same = MinicloudConfig(
         state_dir=str(tmp_path), lightweight_memory="4GiB", lightweight_vcpus=2, lightweight_vcpus_loader=3

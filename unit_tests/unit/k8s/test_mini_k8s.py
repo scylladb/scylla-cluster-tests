@@ -20,6 +20,7 @@ from sdcm.cluster_k8s.mini_k8s import (
     ],
 )
 def test_local_kubectl_version(ok, stdout, expected):
+    """local_kubectl_version parses kubectl's client version and falls back to the default when kubectl fails."""
     result = mock.Mock(ok=ok, stdout=stdout)
     with mock.patch("sdcm.cluster_k8s.mini_k8s.LOCALRUNNER") as runner:
         runner.run.return_value = result
@@ -35,6 +36,7 @@ def test_local_kubectl_version(ok, stdout, expected):
     ],
 )
 def test_scylla_worker_reserved_cpus(workers, host_cpus, expected):
+    """Each Scylla worker gets a growing reserved-CPU range when the host has enough CPUs, and None otherwise."""
     assert [scylla_worker_reserved_cpus(index, workers, host_cpus) for index in range(workers)] == expected
 
 
@@ -50,6 +52,7 @@ def _kind_cluster_spec(host_cpus: str) -> dict:
 
 
 def test_kind_spec_reserves_different_cpus_per_scylla_worker():
+    """The kind spec enables the static CPU manager and reserves distinct CPUs only on the Scylla pool workers."""
     spec = _kind_cluster_spec(host_cpus="16")
     assert "cpuManagerPolicy: static" in spec["kubeadmConfigPatches"][0]
     reserved = {}
@@ -69,11 +72,13 @@ def test_kind_spec_reserves_different_cpus_per_scylla_worker():
 
 
 def test_kind_spec_without_enough_cpus_has_no_reserved_cpus():
+    """With too few host CPUs the kind spec adds no kubelet CPU reservation patches to the workers."""
     spec = _kind_cluster_spec(host_cpus="3")
     assert not any("kubeadmConfigPatches" in node for node in spec["nodes"] if node["role"] == "worker")
 
 
 def test_kind_load_image_falls_back_to_single_platform_archive():
+    """kind_load_image retries with a single-platform (linux/amd64) docker save archive when a direct load fails."""
     kind = mock.Mock(spec=LocalKindCluster)
     LocalKindCluster.kind_load_image(kind, "docker.io/scylladb/scylla:2026.1")
     cmd = kind.host_node.remoter.run.call_args.args[0]

@@ -19,6 +19,7 @@ class Params(dict):
 
 @pytest.mark.parametrize("oci_region_name", [["us-ashburn-1", "us-phoenix-1"], "us-ashburn-1 us-phoenix-1"])
 def test_backup_bucket_region_on_oci_uses_oci_region_name(oci_region_name):
+    """On OCI the backup bucket region is the first OCI region, given as a list or a space-separated string."""
     params = Params(cluster_backend="oci", oci_region_name=oci_region_name)
 
     assert backup_bucket_region(params) == "us-ashburn-1"
@@ -26,6 +27,7 @@ def test_backup_bucket_region_on_oci_uses_oci_region_name(oci_region_name):
 
 @pytest.mark.parametrize("cluster_backend", ["aws", "gce", "azure"])
 def test_backup_bucket_region_outside_oci_uses_region_names(cluster_backend):
+    """On AWS, GCE and Azure the backup bucket region is the first AWS region name."""
     assert backup_bucket_region(Params(cluster_backend=cluster_backend)) == "eu-west-1"
 
 
@@ -45,6 +47,7 @@ def test_backup_bucket_region_outside_oci_uses_region_names(cluster_backend):
     ],
 )
 def test_object_storage_endpoints_fill_region(cluster_backend, endpoint, expected):
+    """Endpoint templates get the backend's region filled in, leaving the source params intact."""
     params = Params(
         cluster_backend=cluster_backend,
         oci_region_name=["us-ashburn-1"],
@@ -57,6 +60,7 @@ def test_object_storage_endpoints_fill_region(cluster_backend, endpoint, expecte
 
 @pytest.mark.parametrize("append_scylla_yaml", [None, {}, {"auto_snapshot": False}])
 def test_missing_object_storage_endpoints(append_scylla_yaml):
+    """Missing or empty append_scylla_yaml endpoints produce an empty endpoint list."""
     params = Params(cluster_backend="oci", append_scylla_yaml=append_scylla_yaml)
 
     assert object_storage_endpoints(params) == []

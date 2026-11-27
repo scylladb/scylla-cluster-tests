@@ -48,8 +48,11 @@ BROKEN_URL = "https://www.google.com"
 
 
 class TestVersionUtils:
+    """Branch version lookup from Scylla repository files, enterprise detection and version assumption."""
+
     @staticmethod
     def check_multiple_urls(urls):
+        """Assert that the parallel branch-version lookup returns the expected version for each repository URL."""
         expected_versions, repo_urls = [], []
         for url, expected_version in urls:
             repo_urls.append(url)
@@ -60,15 +63,19 @@ class TestVersionUtils:
             assert branch_version == expected_version
 
     def test_01_get_branch_version_from_list(self):
+        """The branch version is read from a Debian .list repository file."""
         assert get_branch_version(DEB_URL) == "2019.1.1"
 
     def test_02_get_branch_version_from_repo(self):
+        """The branch version is read from an RPM .repo repository file."""
         self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1")])
 
     def test_03_get_branch_version(self):
+        """A parallel lookup of RPM and Debian repositories returns each one's branch version."""
         self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1"), (DEB_URL, "2019.1.1")])
 
     def test_04_get_branch_version_failed(self):
+        """A URL that is no Scylla repository raises ValueError with VERSION_NOT_FOUND_ERROR on every call."""
         msg_error = VERSION_NOT_FOUND_ERROR
         with pytest.raises(ValueError, match=msg_error):
             get_branch_version(BROKEN_URL)
@@ -78,6 +85,7 @@ class TestVersionUtils:
             get_branch_version(BROKEN_URL)
 
     def test_05_is_enterprise(self):
+        """Year-based versions count as enterprise, while x.y OSS versions, dev versions and None do not."""
         assert is_enterprise(None) is False
         assert is_enterprise("2019.1.1") is True
         assert is_enterprise("2018") is True
@@ -86,6 +94,7 @@ class TestVersionUtils:
         assert is_enterprise("666.development") is False
 
     def test_06_get_scylla_urls_from_repository_rpm_one_arch(self):
+        """A yum repo with $basearch yields repomd.xml URLs for x86_64 and the noarch repository."""
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
             urls = get_scylla_urls_from_repository(
                 RepositoryDetails(
@@ -110,6 +119,7 @@ class TestVersionUtils:
         }
 
     def test_06_get_scylla_urls_from_repository_deb_one_arch(self):
+        """A single-arch deb line yields the Packages URL for that architecture."""
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
             urls = get_scylla_urls_from_repository(
                 RepositoryDetails(
@@ -126,6 +136,7 @@ class TestVersionUtils:
         }
 
     def test_06_get_scylla_urls_from_repository_deb_two_archs(self):
+        """A deb line with two archs yields a Packages URL for each architecture."""
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
             urls = get_scylla_urls_from_repository(
                 RepositoryDetails(
@@ -144,6 +155,7 @@ class TestVersionUtils:
         }
 
     def test_06_get_scylla_urls_from_repository_no_urls(self):
+        """An empty repository line yields no URLs."""
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
             urls = get_scylla_urls_from_repository(
                 RepositoryDetails(
@@ -154,9 +166,11 @@ class TestVersionUtils:
         assert urls == set()
 
     def test_07_get_all_versions(self):
+        """All versions are listed from a released Scylla repo file."""
         assert "4.5.3" in get_all_versions("https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.5.repo")
 
     def test_09_assume_versions(self):
+        """A nightly version is assumed from the branch env, the scylla_version param or the scylla_repo URL."""
         with unittest.mock.patch.object(os.environ, "get", return_value="branch-2022.1", clear=True):
             params = {}
             version = assume_version(params)
@@ -191,6 +205,7 @@ class TestVersionUtils:
     ],
 )
 def test_06_get_git_tag_from_helm_chart_version(chart_version, git_tag):
+    """A Helm chart version maps to its base git tag, without the commit count, hash and build suffixes."""
     assert get_git_tag_from_helm_chart_version(chart_version) == git_tag
 
 
@@ -206,6 +221,7 @@ def test_06_get_git_tag_from_helm_chart_version(chart_version, git_tag):
     ],
 )
 def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
+    """A chart version lacking the 'v' prefix raises ValueError."""
     try:
         git_tag = get_git_tag_from_helm_chart_version(chart_version)
     except ValueError:
@@ -214,6 +230,8 @@ def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
 
 
 class ClassWithVersiondMethods:
+    """Owner of methods selected by the scylla_versions decorator, with the node version derived from the param."""
+
     def __init__(self, scylla_version, nemesis_like_class):
         params = {"scylla_version": scylla_version}
         if scylla_version.startswith("enterprise:"):
@@ -243,50 +261,62 @@ class ClassWithVersiondMethods:
 
     @scylla_versions((None, "4.3"))
     def oss_method(self):
+        """Return the implementation marker for OSS 4.3 and lower."""
         return "any 4.3.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
     def oss_method(self):  # noqa: F811
+        """Return the implementation marker for OSS 4.4 and 4.5, except 4.4.rc2 and 4.4.rc3."""
         return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
 
     @scylla_versions(("4.6.rc1", None))
     def oss_method(self):  # noqa: F811
+        """Return the implementation marker for OSS 4.6.rc1 and higher."""
         return "4.6.rc1 and higher"
 
     @scylla_versions((None, "2019.1"))
     def es_method(self):
+        """Return the implementation marker for enterprise 2019.1 and lower."""
         return "any 2019.1.x and lower"
 
     @scylla_versions(("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
     def es_method(self):  # noqa: F811
+        """Return the implementation marker for enterprise 2020.1 and 2021.1, except 2020.1.rc2 and 2020.1.rc3."""
         return "all 2020.1 and 2021.1 except 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("2022.1.rc1", None))
     def es_method(self):  # noqa: F811
+        """Return the implementation marker for enterprise 2022.1.rc1 and higher."""
         return "2022.1.rc1 and higher"
 
     @scylla_versions((None, "4.3"), (None, "2019.1"))
     def mixed_method(self):
+        """Return the implementation marker for OSS 4.3 and lower, and enterprise 2019.1 and lower."""
         return "any 4.3.x and lower, any 2019.1.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"), ("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
     def mixed_method(self):  # noqa: F811
+        """Return the implementation marker for OSS 4.4-4.5 and enterprise 2020.1-2021.1, except their rc2 and rc3."""
         return "all 4.4, 4.5, 2020.1 and 2021.1 except 4.4.rc2, 4.4.rc3, 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
     def mixed_method(self):  # noqa: F811
+        """Return the implementation marker for OSS 4.6.rc1 and enterprise 2022.1.rc1 and higher."""
         return "4.6.rc1 and higher, 2022.1.rc1 and higher"
 
     @scylla_versions(("4.6.rc1", None))
     def new_oss_method(self):
+        """Return the implementation marker for OSS 4.6.rc1 and higher."""
         return "4.6.rc1 and higher"
 
     @scylla_versions(("2022.1.rc1", None))
     def new_es_method(self):
+        """Return the implementation marker for enterprise 2022.1.rc1 and higher."""
         return "4.6.rc1 and higher"
 
     @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
     def new_mixed_method(self):
+        """Return the implementation marker for OSS 4.6.rc1 and enterprise 2022.1.rc1 and higher."""
         return "4.6.rc1 and higher"
 
 
@@ -368,6 +398,7 @@ class ClassWithVersiondMethods:
     ],
 )
 def test_scylla_versions_decorator_positive(scylla_version, method):
+    """Each Scylla version runs the method implementation whose version range covers it."""
     for nemesis_like_class in (True, False):
         cls_instance = ClassWithVersiondMethods(scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
         assert getattr(cls_instance, method)()
@@ -395,6 +426,7 @@ def test_scylla_versions_decorator_positive(scylla_version, method):
     ),
 )
 def test_scylla_versions_decorator_negative(scylla_version, method):
+    """A version outside every implementation's range raises MethodVersionNotFound naming the method and version."""
     for nemesis_like_class in (True, False):
         try:
             cls_instance = ClassWithVersiondMethods(
@@ -411,6 +443,7 @@ def test_scylla_versions_decorator_negative(scylla_version, method):
 
 
 def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
+    """With no nodes to read the version from, a 'latest' version raises MethodVersionNotFound with version 'n/a'."""
     scylla_version = "master:latest"
     for nemesis_like_class in (True, False):
         try:
@@ -432,6 +465,7 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
 
 
 def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
+    """A node without a scylla_version attribute makes a 'latest' version raise MethodVersionNotFound with 'n/a'."""
     scylla_version = "master:latest"
     for nemesis_like_class in (True, False):
         try:
@@ -469,6 +503,7 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
     ),
 )
 def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
+    """SCYLLA_VERSION_GROUPED_RE splits a full Scylla version string into version, date and commit id."""
     parsed_version = SCYLLA_VERSION_GROUPED_RE.match(full_version)
     assert parsed_version.group("version") == version
     assert parsed_version.group("date") == date
@@ -492,6 +527,7 @@ def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
     ),
 )
 def test_scylla_version_for_argus_regexp(full_version, short, date, commit_id):
+    """ARGUS_VERSION_RE splits a full Scylla version string into short version, date and commit."""
     parsed_version = ARGUS_VERSION_RE.match(full_version)
     assert parsed_version.group("short") == short
     assert parsed_version.group("date") == date
@@ -525,6 +561,7 @@ def test_scylla_version_for_argus_regexp(full_version, short, date, commit_id):
     ),
 )
 def test_comparable_scylla_version_init_positive(version_string, expected):
+    """ComparableScyllaVersion parses release, rc, dev and build-tagged strings into semver parts."""
     comparable_scylla_version = ComparableScyllaVersion(version_string)
     assert comparable_scylla_version.v_major == expected[0]
     assert comparable_scylla_version.v_minor == expected[1]
@@ -535,6 +572,7 @@ def test_comparable_scylla_version_init_positive(version_string, expected):
 
 @pytest.mark.parametrize("version_string", (None, "", "5", "2023", "2023.dev"))
 def test_comparable_scylla_versions_init_negative(version_string):
+    """ComparableScyllaVersion raises ValueError for None, empty, or major-only version strings."""
     try:
         ComparableScyllaVersion(version_string)
     except ValueError:
@@ -595,6 +633,7 @@ def _compare_versions(version_string_left, version_string_right, is_left_greater
 def test_comparable_scylla_versions_compare(
     version_string_left, version_string_right, is_left_greater, is_equal, comparable_class
 ):
+    """ComparableScyllaVersion orders versions by semver, ranking releases above their rc and dev builds."""
     _compare_versions(version_string_left, version_string_right, is_left_greater, is_equal, comparable_class)
 
 
@@ -609,6 +648,7 @@ def test_comparable_scylla_versions_compare(
     ),
 )
 def test_comparable_scylla_versions_to_str(version_string_input, version_string_output):
+    """ComparableScyllaVersion renders as a semver string, turning '~' into '-' and the commit into build metadata."""
     assert str(ComparableScyllaVersion(version_string_input)) == version_string_output
 
 
@@ -627,6 +667,7 @@ def test_comparable_scylla_versions_to_str(version_string_input, version_string_
     ),
 )
 def test_comparable_scylla_operator_version_init_positive(version_string, expected):
+    """ComparableScyllaOperatorVersion parses operator tags, dropping prefixes and the '-nightly' suffix."""
     comparable_scylla_operator_version = ComparableScyllaOperatorVersion(version_string)
     assert comparable_scylla_operator_version.v_major == expected[0]
     assert comparable_scylla_operator_version.v_minor == expected[1]
@@ -637,6 +678,7 @@ def test_comparable_scylla_operator_version_init_positive(version_string, expect
 
 @pytest.mark.parametrize("version_string", (None, "", "1", "1.alpha"))
 def test_comparable_scylla_operator_versions_init_negative(version_string):
+    """ComparableScyllaOperatorVersion raises ValueError for None, empty, or incomplete version strings."""
     try:
         ComparableScyllaOperatorVersion(version_string)
     except ValueError:
@@ -683,6 +725,7 @@ def test_comparable_scylla_operator_versions_init_negative(version_string):
 def test_comparable_scylla_operator_versions_compare(
     version_string_left, version_string_right, is_left_greater, is_equal, comparable_class
 ):
+    """ComparableScyllaOperatorVersion orders versions by semver, ignoring 'v', product prefixes and '-nightly'."""
     _compare_versions(version_string_left, version_string_right, is_left_greater, is_equal, comparable_class)
 
 
@@ -705,6 +748,7 @@ def test_comparable_scylla_operator_versions_compare(
     ),
 )
 def test_comparable_scylla_operator_versions_to_str(version_string_input, version_string_output):
+    """ComparableScyllaOperatorVersion renders the bare semver, without product prefixes, 'v' or '-nightly'."""
     assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
 
 
@@ -728,6 +772,7 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
     ),
 )
 def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
+    """A Scylla version maps to its docker repo: OSS, enterprise before 2025.1, or nightly for dev builds."""
     assert get_scylla_docker_repo_from_version(version) == expected_repo
 
 
@@ -1013,6 +1058,7 @@ class TestLatestUnifiedPackage:
 
     @patch("sdcm.utils.version_utils.boto3")
     def test_returns_url_for_matching_package(self, mock_boto3):
+        """The download URL of the matching x86_64 scylla-unified tarball is returned, skipping other objects."""
         mock_s3 = MagicMock()
         mock_boto3.client.return_value = mock_s3
         mock_s3.get_paginator.return_value.paginate.return_value = [
@@ -1035,6 +1081,7 @@ class TestLatestUnifiedPackage:
 
     @patch("sdcm.utils.version_utils.boto3")
     def test_returns_url_for_aarch64(self, mock_boto3):
+        """With arch='aarch64', the aarch64 scylla-unified tarball URL is returned."""
         mock_s3 = MagicMock()
         mock_boto3.client.return_value = mock_s3
         mock_s3.get_paginator.return_value.paginate.return_value = [
@@ -1074,6 +1121,7 @@ class TestLatestUnifiedPackage:
 
     @patch("sdcm.utils.version_utils.boto3")
     def test_raises_when_no_matching_package(self, mock_boto3):
+        """A listing with no scylla-unified tarball raises FileNotFoundError."""
         mock_s3 = MagicMock()
         mock_boto3.client.return_value = mock_s3
         mock_s3.get_paginator.return_value.paginate.return_value = [
@@ -1089,6 +1137,7 @@ class TestLatestUnifiedPackage:
 
     @patch("sdcm.utils.version_utils.boto3")
     def test_raises_when_empty_bucket(self, mock_boto3):
+        """An empty bucket listing raises FileNotFoundError."""
         mock_s3 = MagicMock()
         mock_boto3.client.return_value = mock_s3
         mock_s3.get_paginator.return_value.paginate.return_value = [{}]
@@ -1098,6 +1147,7 @@ class TestLatestUnifiedPackage:
 
     @patch("sdcm.utils.version_utils.boto3")
     def test_custom_product_and_branch(self, mock_boto3):
+        """Product and branch arguments set the S3 prefix of the relocatable package listing."""
         mock_s3 = MagicMock()
         mock_boto3.client.return_value = mock_s3
         mock_s3.get_paginator.return_value.paginate.return_value = [
@@ -1136,12 +1186,14 @@ class TestLatestUnifiedPackage:
     ),
 )
 def test_get_gemini_version(output, expected):
+    """The gemini version is read from its JSON version output, yielding None for missing or unparsable data."""
     assert get_gemini_version(output) == expected
 
 
 @patch("sdcm.utils.version_utils.create_retry_session")
 @patch("sdcm.utils.version_utils.boto3")
 def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_discovery(mock_boto3, mock_create_session):
+    """The nightly repo reads its tag from the master branch build metadata, skipping S3 branch discovery."""
     mock_response = MagicMock()
     mock_response.content = b"docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61\n"
     mock_session = MagicMock()
@@ -1158,5 +1210,6 @@ def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_dis
 
 
 def test_get_specific_tag_of_docker_image_unsupported_repo_raises():
+    """An unsupported docker repository raises ValueError."""
     with pytest.raises(ValueError, match="doesn't support"):
         get_specific_tag_of_docker_image("scylladb/some-unsupported-repo")

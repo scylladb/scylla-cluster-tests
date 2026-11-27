@@ -16,16 +16,23 @@ from sdcm.remote.libssh2_client import Result
 
 
 class FakeRemoter:
+    """Remoter stand-in that echoes the command back as stdout."""
+
     def run(self, cmd: str, timeout: int, retry: int) -> Result:
+        """Return a successful Result whose stdout is the command itself."""
         return Result(stdout=cmd, stderr="", exited=0)
 
 
 class FakeNode:
+    """Node stand-in whose remoter echoes commands, so tests can assert the built curl command."""
+
     @property
     def remoter(self):
+        """Return a FakeRemoter."""
         return FakeRemoter()
 
 
 @pytest.fixture
 def fake_node():
+    """Provide a FakeNode for the REST client tests."""
     return FakeNode()

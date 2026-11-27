@@ -54,6 +54,7 @@ def test_scylla_setup_without_disks_skips_the_raid_setup():
 
 
 def test_scylla_setup_with_disks_sets_them_up_and_checks_the_mount():
+    """Given disks, scylla_setup sets up NIC and disks and passes once /var/lib/scylla is a mount point."""
     node = _node(mounts="/dev/md0 /var/lib/scylla xfs rw 0 0\n")
 
     node.scylla_setup(["/dev/nvme1n1", "/dev/nvme2n1"], "eth0")
@@ -65,6 +66,7 @@ def test_scylla_setup_with_disks_sets_them_up_and_checks_the_mount():
 
 
 def test_scylla_setup_with_disks_still_fails_when_scylla_dir_is_not_mounted():
+    """Given disks, scylla_setup raises "RAID setup failed" when /var/lib/scylla ends up unmounted."""
     node = _node(mounts="/dev/nvme0n1p4 / xfs rw 0 0\n")
 
     with pytest.raises(AssertionError, match="RAID setup failed"):
@@ -79,6 +81,7 @@ def test_scylla_setup_with_disks_still_fails_when_scylla_dir_is_not_mounted():
     ],
 )
 def test_node_setup_passes_the_disks_to_scylla_setup(no_raid, expected_disks):
+    """scylla_setup_no_raid skips disk detection and passes no disks; the default passes the detected disks."""
     node = MagicMock()
     node.parent_cluster.params.get.side_effect = {"scylla_setup_no_raid": no_raid}.get
     node.detect_disks.return_value = ["/dev/nvme1n1"]

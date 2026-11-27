@@ -38,6 +38,7 @@ COMPLEX_VERIFY_READ_CMD = (
 
 @pytest.mark.integration
 def test_01_latte_schema(request, docker_scylla, params):
+    """The latte schema command against a docker Scylla node completes and yields results."""
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -57,6 +58,7 @@ def test_01_latte_schema(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_02_latte_load(request, docker_scylla, params):
+    """The latte load command against a docker Scylla node completes and yields results."""
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -76,6 +78,7 @@ def test_02_latte_load(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_03_latte_run(request, docker_scylla, prom_address, params):
+    """A latte run publishes positive Prometheus samples while running and reports positive latency and op rate."""
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -129,6 +132,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 @pytest.mark.integration
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
+    """A latte run with client encryption against an SSL-enabled node reports positive latencies."""
     params["client_encrypt"] = True
     params["enable_argus"] = False
 

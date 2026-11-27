@@ -26,6 +26,7 @@ def test_removes_target_and_adds_replacement(runner, make_data_node):
 
 
 def test_precheck_passes_on_self_managed_scylla(runner):
+    """For self-managed Scylla the precheck returns no skip reason."""
     runner.cluster.params = {"db_type": "scylla"}
 
     assert TerminateAndRemoveNodeMonkey(runner).precheck(runner.target_node) is None

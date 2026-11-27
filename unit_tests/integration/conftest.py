@@ -101,6 +101,7 @@ def mock_remote_scylla_yaml(scylla_node):
 
 @contextmanager
 def create_ssl_dir(test_id: str, base_dir: Path | None = None):
+    """Yield a per-test copy of the data_dir ssl_conf files, creating the shared CA if missing; remove it on exit."""
     parent = base_dir if base_dir is not None else (_REPO_ROOT / "data_dir")
     ssl_dir = (parent / f"ssl_conf_{test_id}").absolute()
     ssl_dir.mkdir(parents=True, exist_ok=True)
@@ -116,6 +117,7 @@ def create_ssl_dir(test_id: str, base_dir: Path | None = None):
 
 
 def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None = None):  # noqa: PLR0914
+    """Start a Scylla docker node from the `docker_scylla_args` options, wait for CQL and Alternator, and return it."""
     ssl = docker_scylla_args.get("ssl")
     docker_network = docker_scylla_args.get("docker_network")
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
@@ -217,6 +219,7 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
 
 @pytest.fixture(name="docker_scylla", scope="function")
 def fixture_docker_scylla(request: pytest.FixtureRequest, params, tmp_path):  # noqa: PLR0914
+    """Yield a Scylla docker node configured by the `docker_scylla_args` marker; kill it after the test."""
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
@@ -233,6 +236,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params, tmp_path):  # 
 
 @pytest.fixture(name="docker_scylla_2", scope="function")
 def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params, tmp_path):  # noqa: PLR0914
+    """Yield a second Scylla docker node seeded from `docker_scylla`; kill it after the test."""
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
@@ -250,6 +254,7 @@ def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, param
 
 @pytest.fixture(name="docker_vector_store", scope="function")
 def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, params):
+    """Yield a one-node Vector Store docker cluster attached to `docker_scylla`, or None without `vs_docker_image`."""
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs

@@ -21,6 +21,7 @@ def build_fixed_order_monkey(order, separator=", "):
 
 @pytest.fixture()
 def tester(tmp_path):
+    """Provide a ClusterTesterForTests with a fake 2-node cluster and a nemesis node allocator."""
     cluster_tester = ClusterTesterForTests()
     cluster_tester._init_logging(tmp_path)
     cluster_tester._init_params()
@@ -31,28 +32,33 @@ def tester(tmp_path):
 
 
 def test_resolved_order_matches_configured_order_not_registry_order():
+    """Disruptions follow the order given in nemesis_selector, independent of registry discovery order."""
     nemesis = build_fixed_order_monkey(["CustomNemesisC", "CustomNemesisA", "CustomNemesisB"])
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisC, CustomNemesisA, CustomNemesisB]
 
 
 def test_repeated_name_yields_one_entry_per_occurrence_reusing_one_instance():
+    """A name listed twice appears twice in the sequence, both entries pointing to the same disruption instance."""
     nemesis = build_fixed_order_monkey(["CustomNemesisA", "CustomNemesisB", "CustomNemesisA"])
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisA, CustomNemesisB, CustomNemesisA]
     assert nemesis.disruptions_list[0] is nemesis.disruptions_list[2]
 
 
 def test_unknown_name_raises_at_construction_and_names_it():
+    """An unknown nemesis name raises ValueError at construction, with the name in the message."""
     with pytest.raises(ValueError, match="DoesNotExist"):
         build_fixed_order_monkey(["DoesNotExist"])
 
 
 def test_sequence_repeats_from_first_entry_via_infinite_cycle():
+    """infinite_cycle restarts from the first entry after the last one, preserving the configured order."""
     nemesis = build_fixed_order_monkey(["CustomNemesisA", "CustomNemesisB"])
     order = [next(nemesis.infinite_cycle).__class__ for _ in range(5)]
     assert order == [CustomNemesisA, CustomNemesisB, CustomNemesisA, CustomNemesisB, CustomNemesisA]
 
 
 def test_precheck_prunes_entry_while_remaining_order_is_unchanged(events_function_scope):
+    """precheck_nemesis removes an infeasible disruption and keeps the rest in their configured order."""
     nemesis = build_fixed_order_monkey(["CustomNemesisA", "CustomNemesisB", "CustomNemesisC"])
     nemesis.disruptions_list[0].precheck = lambda node: "not feasible"
 
@@ -71,27 +77,32 @@ def test_precheck_prunes_entry_while_remaining_order_is_unchanged(events_functio
     ],
 )
 def test_selector_whitespace_and_empty_entries_are_ignored(selector):
+    """Selector parsing strips whitespace around names and skips empty comma-separated entries."""
     nemesis = FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, nemesis_selector=selector)
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisA, CustomNemesisB]
 
 
 def test_single_name_selector_yields_single_entry():
+    """A selector with a single name produces a one-entry disruption sequence."""
     nemesis = build_fixed_order_monkey(["CustomNemesisB"])
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisB]
 
 
 @pytest.mark.parametrize("selector", ["", " , ", None])
 def test_empty_selector_raises_value_error(selector):
+    """An empty, blank, or missing nemesis_selector raises ValueError at construction."""
     with pytest.raises(ValueError, match="requires 'nemesis_selector'"):
         FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, nemesis_selector=selector)
 
 
 def test_flag_expression_selector_is_rejected_as_unknown_name():
+    """A flag expression is treated as a literal nemesis name and raises ValueError as unknown."""
     with pytest.raises(ValueError, match="not disruptive"):
         build_fixed_order_monkey(["not disruptive"])
 
 
 def test_per_thread_selectors_map_one_to_one_to_fixed_order_threads(tester):
+    """get_nemesis_class assigns each FixedOrderMonkey thread its own selector from the per-thread list."""
     tester.params["nemesis_class_name"] = ["FixedOrderMonkey", "FixedOrderMonkey"]
     tester.params["nemesis_selector"] = ["CustomNemesisA, CustomNemesisB", "CustomNemesisC"]
 
@@ -102,6 +113,7 @@ def test_per_thread_selectors_map_one_to_one_to_fixed_order_threads(tester):
 
 
 def test_single_selector_broadcasts_to_all_fixed_order_threads(tester):
+    """get_nemesis_class gives a single configured selector to every FixedOrderMonkey thread."""
     tester.params["nemesis_class_name"] = ["FixedOrderMonkey", "FixedOrderMonkey"]
     tester.params["nemesis_selector"] = ["CustomNemesisA, CustomNemesisB"]
 

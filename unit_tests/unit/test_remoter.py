@@ -43,28 +43,31 @@ from sdcm.sct_events.system import TestFrameworkEvent
 
 
 class FakeKluster(KubernetesCluster):
+    """KubernetesCluster stand-in that only carries a server URL; its lifecycle hooks are no-ops."""
+
     k8s_server_url = None
 
     def __init__(self, k8s_server_url):
         self.k8s_server_url = k8s_server_url
 
     def deploy(self):
-        pass
+        """No-op stub: return without deploying."""
 
     def create_kubectl_config(self):
-        pass
+        """No-op stub: return without writing a kubectl config."""
 
     def create_token_update_thread(self):
-        pass
+        """No-op stub: return without starting a token update thread."""
 
     def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
-        pass
+        """No-op stub: accept the node pool and return."""
 
     def upgrade_kubernetes_platform(self, pod_objects, use_additional_scylla_nodepool):
-        pass
+        """No-op stub: accept the upgrade arguments and return."""
 
 
 def generate_all_commands_with_all_options():
+    """Build every combination of remoter type, host IP, command and run() options for the manual tests."""
     all_commands_with_all_options = []
     for ip in ["::1", "127.0.0.1"]:
         for cmd in [
@@ -241,6 +244,7 @@ class TestRemoteCmdRunners:
         retry: int,
         timeout: Union[float, None],
     ):
+        """Main-thread runs, before and after a reconnect, match LocalCmdRunner's result for the same options."""
         kwargs = {
             "verbose": verbose,
             "ignore_status": ignore_status,
@@ -290,6 +294,7 @@ class TestRemoteCmdRunners:
         retry: int,
         timeout: Union[float, None],
     ):
+        """Remoters created and run inside each of three threads match LocalCmdRunner's result."""
         kwargs = {
             "verbose": verbose,
             "ignore_status": ignore_status,
@@ -327,6 +332,7 @@ class TestRemoteCmdRunners:
         retry: int,
         timeout: Union[float, None],
     ):
+        """One remoter created in the main thread and run from other threads matches LocalCmdRunner's result."""
         kwargs = {
             "verbose": verbose,
             "ignore_status": ignore_status,
@@ -388,6 +394,7 @@ class TestRemoteCmdRunners:
     # ])
     @pytest.mark.skip(reason="To be ran manually")
     def test_load_1000_threads(self, remoter_type, stmt: str):
+        """A thousand threads each creating and running a remoter all match LocalCmdRunner's result."""
         kwargs = {"verbose": True, "ignore_status": False, "new_session": True, "retry": 2}
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
@@ -426,6 +433,7 @@ class TestRemoteCmdRunners:
     # ])
     @pytest.mark.skip(reason="To be ran manually")
     def test_context_changing(self, remoter_type, stmt: str, change_context: bool):
+        """A second run in one thread reports a new SSH connection with change_context and the same one without it."""
         kwargs = {"verbose": True, "ignore_status": True, "timeout": 10, "change_context": change_context}
         self.log.info(repr({stmt: stmt, **kwargs}))
         paramiko_thread_results = []
@@ -437,8 +445,12 @@ class TestRemoteCmdRunners:
 
 
 class TestSudoAndRunShellScript:
+    """Cover how sudo() prefixes commands and how shell_script_cmd wraps a script."""
+
     @classmethod
     def setup_class(cls) -> None:
+        """Define a CommandRunner that records the command it was asked to run instead of running it."""
+
         class _Runner(CommandRunner):
             def run(self, cmd, *_, **__):
                 self.command_to_run = cmd
@@ -452,16 +464,19 @@ class TestSudoAndRunShellScript:
         cls.remoter_cls = _Runner
 
     def test_sudo_root(self):
+        """For the root user the command runs without a sudo prefix."""
         remoter = self.remoter_cls("localhost", user="root")
         remoter.run("true")
         assert remoter.command_to_run == "true"
 
     def test_sudo_non_root(self):
+        """For a non-root user sudo() prefixes the command with "sudo"."""
         remoter = self.remoter_cls("localhost", user="joe")
         remoter.sudo("true")
         assert remoter.command_to_run == "sudo true"
 
     def test_shell_script_cmd(self):
+        """shell_script_cmd wraps the script in `bash -cxe "..."`."""
         assert shell_script_cmd("true") == 'bash -cxe "true"'
 
 
@@ -539,9 +554,12 @@ def test_remote_file_probe_failure_raises():
 
 
 class TestRemoteFile:
+    """Cover the remote_file context manager's download, upload and ownership/permission handling."""
+
     remoter_cls = _FakeRemoteFileRunner
 
     def test_remote_file(self):
+        """remote_file downloads to a local temp file, uploads the edits and copies them over the remote file."""
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(
@@ -558,6 +576,7 @@ class TestRemoteFile:
         assert remoter.command_to_run == f"bash -cxe \"cat 'temporary' > '{some_file}'\nrm 'temporary'\n\""
 
     def test_remote_file_preserve_ownership(self):
+        """With preserve_ownership the file's owner is read before editing and restored with chown after."""
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(
@@ -568,6 +587,7 @@ class TestRemoteFile:
         assert f"chown bentsi:bentsi {some_file}" == remoter.command_to_run
 
     def test_remote_file_preserve_permissions(self):
+        """With preserve_permissions the file's mode is read before editing and restored with chmod after."""
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(
@@ -578,6 +598,7 @@ class TestRemoteFile:
         assert f"chmod 644 {some_file}" == remoter.command_to_run
 
     def test_remote_file_preserve_readonly(self):
+        """Writing back unchanged content leaves the remote file as it was, with nothing uploaded."""
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(
@@ -692,11 +713,13 @@ def test_minicloud_channel_timeout_alert_counts_every_guest_together(_clean_mini
 
 
 def test_minicloud_channel_timeout_alert_silent_outside_minicloud(_clean_minicloud_timeout_counters):
+    """Outside minicloud, twice the alert threshold of channel timeouts publishes zero alert events."""
     event = _record_minicloud_timeouts(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD * 2, minicloud=False)
     assert event.call_count == 0
 
 
 def test_minicloud_channel_timeout_alert_fires_once_with_a_real_event(_clean_minicloud_timeout_counters):
+    """On minicloud, repeated channel timeouts publish one WARNING event naming the host and the memory knob."""
     runner = SimpleNamespace(hostname="10.0.0.9")
     with (
         patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True),
@@ -809,6 +832,7 @@ def test_libssh2_is_up_keeps_and_logs_why_ssh_is_down(caplog):
 
 
 def test_libssh2_is_up_clears_the_last_error_once_ssh_is_up():
+    """is_up clears the last recorded SSH error once the connection is alive."""
     connection = SimpleNamespace(check_if_alive=lambda timeout: True)
     runner = _libssh2_runner(connection)
     runner.last_is_up_error = PermissionError("old")

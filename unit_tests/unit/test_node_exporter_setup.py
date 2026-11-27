@@ -35,6 +35,7 @@ def _remoter(machine, probe="free 9100\n"):
     [("x86_64", "amd64"), ("amd64", "amd64"), ("aarch64", "arm64"), ("arm64", "arm64")],
 )
 def test_install_downloads_the_release_for_the_loader_machine(machine, expected):
+    """Installs the node_exporter release matching the host's `uname -m` architecture."""
     remoter = _remoter(machine)
 
     NodeExporterSetup.install(remoter=remoter)
@@ -49,6 +50,7 @@ def test_install_downloads_the_release_for_the_loader_machine(machine, expected)
 
 
 def test_install_rejects_a_machine_with_no_node_exporter_release():
+    """Installing raises ValueError naming an architecture with no node_exporter release, before running any script."""
     remoter = _remoter("riscv64")
 
     with pytest.raises(ValueError, match="riscv64"):
@@ -58,6 +60,7 @@ def test_install_rejects_a_machine_with_no_node_exporter_release():
 
 
 def test_install_requires_a_node_or_a_remoter():
+    """Installing asserts that it was given either a node or a remoter."""
     with pytest.raises(AssertionError):
         NodeExporterSetup.install()
 
@@ -73,12 +76,14 @@ def test_running_node_exporter_is_reused():
 
 
 def test_install_listens_on_the_free_port_the_probe_found():
+    """Installing returns the free port its probe found, for the exporter to listen on."""
     remoter = _remoter("x86_64", probe="free 9101\n")
 
     assert NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7") == 9101
 
 
 def test_install_fails_when_every_port_is_taken():
+    """Installing raises "No free port" when the probe finds every candidate port taken."""
     remoter = _remoter("x86_64", probe="free \n")
 
     with pytest.raises(RuntimeError, match="No free port"):
@@ -156,6 +161,7 @@ def _monitor_set(monkeypatch, loaders=(), params=None):
 
 
 def test_monitor_target_uses_the_port_its_exporter_serves_on(monkeypatch):
+    """The monitor's own exporter target uses the port its node_exporter serves on."""
     monitor_set, exporter_targets = _monitor_set(monkeypatch)
 
     BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
@@ -177,6 +183,7 @@ def test_loader_target_follows_the_port_the_loader_picked(monkeypatch):
 
 
 def test_cloud_prometheus_keeps_only_the_loader_targets(monkeypatch):
+    """With a cloud Prometheus token, the exporter targets hold only the loaders."""
     loader = MagicMock(ip_address="10.0.0.8", region="eu-west-1", node_exporter_port=9101)
     monitor_set, exporter_targets = _monitor_set(
         monkeypatch, loaders=[loader], params={"cloud_prom_bearer_token": "token"}

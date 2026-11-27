@@ -6,6 +6,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_no_existing_issue(events, params):
+    """An unparsable issue reference is treated as no skip and publishes a WARNING event."""
     params.artifact_scylla_version = "2023.1.3"
     assert not SkipPerIssues(["ABC"], params)
 
@@ -16,6 +17,7 @@ def test_no_existing_issue(events, params):
 
 
 def test_open_issues(params):
+    """An open GitHub issue, given as URL or short ref, triggers a skip."""
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(
         [
@@ -27,21 +29,25 @@ def test_open_issues(params):
 
 
 def test_closed_issues(params):
+    """A closed GitHub issue without a version skip label leaves the test running."""
     params.artifact_scylla_version = "2023.1.3"
     assert not SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1614", "scylladb/qa-tasks#1614"], params)
 
 
 def test_closed_issues_with_skip_tag(params):
+    """A closed issue labeled sct-<branch>-skip for the running version triggers a skip."""
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1615", "scylladb/qa-tasks#1615"], params)
 
 
 def test_no_version(params):
+    """An open issue triggers a skip when the Scylla version is unknown."""
     params.artifact_scylla_version = None
     assert SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1613", "scylladb/qa-tasks#1613"], params)
 
 
 def test_opened_issue_with_closed_issue(params):
+    """An open issue triggers a skip regardless of its order next to a closed one."""
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(["scylladb/qa-tasks#1613", "scylladb/qa-tasks#1614"], params)
 
@@ -49,6 +55,7 @@ def test_opened_issue_with_closed_issue(params):
 
 
 def test_closed_issue_with_tag_not_matching_version(params):
+    """An open issue triggers a skip next to a closed issue whose skip label is for another version."""
     params.artifact_scylla_version = "2019.1.3"
     assert SkipPerIssues(["scylladb/qa-tasks#1613", "scylladb/qa-tasks#1615"], params)
 
@@ -56,12 +63,14 @@ def test_closed_issue_with_tag_not_matching_version(params):
 
 
 def test_opened_issue_tag_not_matching_version_tag(params):
+    """A closed issue whose skip label is for another version leaves the test running."""
     params.artifact_scylla_version = "2019.1.3"
 
     assert not SkipPerIssues(["scylladb/qa-tasks#1615"], params)
 
 
 def test_closed_pull_request(params):
+    """A closed pull request reference leaves the test running."""
     params.artifact_scylla_version = "2019.1.3"
 
     assert not SkipPerIssues(["scylladb/scylla-cluster-tests#7832"], params)
@@ -144,6 +153,7 @@ def test_jira_issues(params, issue, opened):
     ],
 )
 def test_parse_issue_success(raw, expected_type, expected_norm, exp):
+    """parse_issue turns GitHub and Jira refs and URLs into typed issues with normalized names."""
     ref = parse_issue(raw)
 
     assert isinstance(ref, expected_type)
@@ -169,5 +179,6 @@ INVALID_CASES = [
 
 @pytest.mark.parametrize("args, expected_pattern", INVALID_CASES)
 def test_parse_issue_invalid_raises(args, expected_pattern):
+    """parse_issue raises ValueError for empty or malformed references."""
     with pytest.raises(ValueError, match=expected_pattern):
         parse_issue(*args)

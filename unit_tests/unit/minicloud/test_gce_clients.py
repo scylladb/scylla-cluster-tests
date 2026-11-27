@@ -36,6 +36,7 @@ def _make_gce_region():
 
 
 def test_gce_client_options_returns_client_options_when_endpoint_set(monkeypatch):
+    """With GCE_ENDPOINT_URL set, the GCE client options point the API endpoint at it."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:9099")
     result = _gce_client_options()
 
@@ -45,12 +46,14 @@ def test_gce_client_options_returns_client_options_when_endpoint_set(monkeypatch
 
 
 def test_gce_client_options_returns_empty_dict_when_no_endpoint():
+    """Without GCE_ENDPOINT_URL, the GCE client options are an empty dict."""
     result = _gce_client_options()
 
     assert result == {}
 
 
 def test_gce_region_is_minicloud_true_when_endpoint_set(monkeypatch):
+    """A GceRegion reports minicloud mode when GCE_ENDPOINT_URL is set."""
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:9099")
 
     region = _make_gce_region()
@@ -58,5 +61,6 @@ def test_gce_region_is_minicloud_true_when_endpoint_set(monkeypatch):
 
 
 def test_gce_region_is_minicloud_false_when_no_endpoint():
+    """A GceRegion reports non-minicloud mode when GCE_ENDPOINT_URL is unset."""
     region = _make_gce_region()
     assert region._is_minicloud is False

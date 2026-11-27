@@ -94,6 +94,7 @@ class FakeHostNetwork:
         self.commands = []
 
     def run(self, cmd, **_):
+        """Record the command and return the canned result for ip, docker, sudo and firewall-cmd calls."""
         self.commands.append(list(cmd))
         if cmd[:3] == ["ip", "addr", "show"]:
             if self.tun_up:
@@ -133,6 +134,7 @@ class FakeHostNetwork:
         raise AssertionError(f"unexpected firewall-cmd invocation: {cmd}")
 
     def sudo_commands(self):
+        """Return the recorded sudo commands other than firewall-cmd calls."""
         return [cmd for cmd in self.commands if cmd[0] == "sudo" and "firewall-cmd" not in cmd]
 
 

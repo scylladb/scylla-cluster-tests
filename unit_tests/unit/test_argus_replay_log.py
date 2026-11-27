@@ -43,7 +43,10 @@ def log_dir(tmp_path):
 
 
 class TestReplayLog:
+    """ReplayLog file naming, JSONL record format, synchronous and thread-safe writes, and shutdown."""
+
     def test_creates_file_with_correct_name(self, log_dir):
+        """The log file is an argus_replay_log_<run_id>.jsonl file inside log_dir."""
         replay_log = ReplayLog(
             log_dir=log_dir, run_id="550e8400-e29b-41d4-a716-446655440000", test_type="scylla-cluster-tests"
         )
@@ -56,6 +59,7 @@ class TestReplayLog:
             replay_log.close()
 
     def test_sanitizes_run_id(self, log_dir):
+        """Path separators and dots in the run id are replaced so the file stays inside log_dir."""
         replay_log = ReplayLog(log_dir=log_dir, run_id="../../evil/path", test_type="scylla-cluster-tests")
         try:
             # Slashes and dots should be replaced with underscores
@@ -65,6 +69,7 @@ class TestReplayLog:
             replay_log.close()
 
     def test_writes_jsonl_format(self, log_dir):
+        """write() appends one JSON line with the request fields and success flag, and no error key on success."""
         replay_log = ReplayLog(log_dir=log_dir, run_id="test-run-1", test_type="scylla-cluster-tests")
         try:
             replay_log.write("POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {"data": "event1"}, success=True)
@@ -159,11 +164,13 @@ class TestReplayLog:
             assert record["method"] == "POST"
 
     def test_close_is_idempotent(self, log_dir):
+        """close() can be called twice without error."""
         replay_log = ReplayLog(log_dir=log_dir, run_id="close-test", test_type="scylla-cluster-tests")
         replay_log.close()
         replay_log.close()  # Should not raise
 
     def test_context_manager(self, log_dir):
+        """Used as a context manager, ReplayLog writes the record and closes on exit."""
         with ReplayLog(log_dir=log_dir, run_id="ctx-test", test_type="scylla-cluster-tests") as replay_log:
             replay_log.write(
                 "POST",
@@ -203,7 +210,10 @@ class TestReplayLog:
 
 
 class TestArgusClientReplayOnly:
+    """ArgusSCTClient in replay-log-only mode: stub responses, JSONL records and no HTTP session."""
+
     def test_replay_only_post_returns_stub_response(self, log_dir):
+        """In replay-log-only mode, POST returns a 200 ReplayLogOnlyResponse with an ok payload."""
         client = ArgusSCTClient(
             run_id="test-uuid-1234",
             auth_token="",
@@ -243,6 +253,7 @@ class TestArgusClientReplayOnly:
             client.close()
 
     def test_replay_only_writes_jsonl(self, log_dir):
+        """A high-level call in replay-log-only mode logs one POST record marked unsent (success=False)."""
         client = ArgusSCTClient(
             run_id="test-uuid-5678",
             auth_token="",
@@ -280,6 +291,7 @@ class TestArgusClientReplayOnly:
         assert "error" not in outcome
 
     def test_replay_only_no_session_created(self, log_dir):
+        """Replay-log-only mode creates no HTTP session."""
         client = ArgusSCTClient(
             run_id="test-uuid-nosess",
             auth_token="",
@@ -293,6 +305,7 @@ class TestArgusClientReplayOnly:
             client.close()
 
     def test_replay_only_attribute(self, log_dir):
+        """ReplayOnlyArgusSCTClient is a replay-only client without an HTTP session."""
         client = ReplayOnlyArgusSCTClient(run_id="test-uuid-attr", log_dir=log_dir)
         try:
             assert isinstance(client, ReplayOnlyArgusSCTClient)
@@ -301,6 +314,7 @@ class TestArgusClientReplayOnly:
             client.close()
 
     def test_normal_mode_replay_only_is_false(self, log_dir):
+        """In normal mode the client is a plain ArgusSCTClient with an HTTP session."""
         client = ArgusSCTClient(
             run_id="test-uuid-normal",
             auth_token="fake-token",
@@ -466,6 +480,7 @@ class TestLogCollectorRegistration:
     """Verify that argus_replay_log_*.jsonl is registered for collection."""
 
     def test_replay_log_in_log_entities(self):
+        """BaseSCTLogCollector collects argus_replay_log_*.jsonl files."""
         # Import the FileLog class directly to avoid circular import issues
         # with sdcm.monitorstack. We verify the log_entities list by importing
         # the module with the monitorstack dependency mocked out.

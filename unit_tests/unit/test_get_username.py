@@ -19,12 +19,14 @@ from sdcm.utils.get_username import get_username
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
+    """Clear the Jenkins build-user env vars and make getpass report the 'jenkins' user."""
     for var in ("BUILD_USER_REQUESTED_BY", "BUILD_USER_EMAIL", "BUILD_USER_ID", "GIT_USER_EMAIL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(get_username_module.getpass, "getuser", lambda: "jenkins")
 
 
 def test_requested_by_wins_over_promoter(monkeypatch):
+    """BUILD_USER_REQUESTED_BY takes precedence over the promoter's email and user ID."""
     monkeypatch.setenv("BUILD_USER_REQUESTED_BY", "cezar.moise")
     monkeypatch.setenv("BUILD_USER_EMAIL", "github-promoter@scylladb.com")
     monkeypatch.setenv("BUILD_USER_ID", "scylladb-promoter")
@@ -40,12 +42,14 @@ def test_requested_by_wins_over_promoter(monkeypatch):
     ],
 )
 def test_service_users_are_never_reported(monkeypatch, env):
+    """Promoter service identities are skipped and the local OS user is reported instead."""
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     assert get_username() == "jenkins"
 
 
 def test_regular_jenkins_user(monkeypatch):
+    """A regular Jenkins user is reported by the local part of their build email."""
     monkeypatch.setenv("BUILD_USER_EMAIL", "cezar.moise@scylladb.com")
     monkeypatch.setenv("BUILD_USER_ID", "cezar.moise@scylladb.com")
     assert get_username() == "cezar.moise"

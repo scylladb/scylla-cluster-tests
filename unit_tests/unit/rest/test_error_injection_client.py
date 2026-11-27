@@ -17,10 +17,12 @@ from sdcm.rest.error_injection import ErrorInjection
 
 @pytest.fixture
 def error_injection_client(fake_node):
+    """Provide an ErrorInjection client bound to the fake node."""
     return ErrorInjection(fake_node)
 
 
 def test_list_injected_errors(error_injection_client):
+    """list_injected_errors() sends a GET to the error injection endpoint."""
     result = error_injection_client.list_injected_errors()
 
     assert result.stdout == (
@@ -30,6 +32,7 @@ def test_list_injected_errors(error_injection_client):
 
 
 def test_inject_error(error_injection_client):
+    """inject_error() POSTs to the named injection with one_shot=false by default."""
     result = error_injection_client.inject_error(error_name="test_error")
 
     assert result.stdout == (
@@ -39,6 +42,7 @@ def test_inject_error(error_injection_client):
 
 
 def test_inject_error_with_data_one_shot(error_injection_client):
+    """inject_error() with data sends it as a JSON body and sets one_shot=true."""
     result = error_injection_client.inject_error(error_name="test_error", one_shot=True, data={"key": "value"})
 
     assert result.stdout == (
@@ -49,6 +53,7 @@ def test_inject_error_with_data_one_shot(error_injection_client):
 
 
 def test_remove_errors(error_injection_client):
+    """remove_errors() sends a DELETE to the error injection endpoint."""
     result = error_injection_client.remove_errors()
 
     assert result.stdout == (
@@ -58,6 +63,7 @@ def test_remove_errors(error_injection_client):
 
 
 def test_send_message_to_error(error_injection_client):
+    """send_message_to_error() POSTs to the named injection's message endpoint."""
     result = error_injection_client.send_message_to_error(error_name="test_error")
 
     assert result.stdout == (

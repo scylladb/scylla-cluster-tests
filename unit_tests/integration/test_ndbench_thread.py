@@ -12,6 +12,7 @@ pytestmark = [
 
 
 def test_01_cql_api(request, docker_scylla, params):
+    """An ndbench CQL read/write run against a docker Scylla node completes and yields results."""
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=1000 ; "
@@ -79,6 +80,7 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
 
 
 def test_04_verify_data(request, docker_scylla, events, params):
+    """Validating checksums on rows written without them publishes a read-failure ERROR event."""
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=30 ; "

@@ -11,22 +11,30 @@ from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 
 
 class DummyNode:
+    """Minimal node exposing only a name, enough to build a DockerCmdRunner."""
+
     name = "dummy-node"
 
 
 class TestWatcher(StreamWatcher):
+    """Stream watcher that records every output chunk submitted to it."""
+
     __test__ = False
 
     def __init__(self):
         self.submissions = []
 
     def submit(self, output):
+        """Record the output chunk."""
         self.submissions.append(output)
 
 
 class TestDockerCmdRunner:
+    """DockerCmdRunner container lookup, command execution and file transfer against a mocked container."""
+
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Build a DockerCmdRunner for a dummy node with a mocked container and logger."""
         self.node = DummyNode()
         self.runner = DockerCmdRunner(self.node)
         self.runner._container = MagicMock()
@@ -34,6 +42,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_get_container_no_cache(self, mock_cm):
+        """With no cached container, the runner looks up the node container via ContainerManager and caches it."""
         mock_container = MagicMock()
         mock_cm.get_container.return_value = mock_container
 
@@ -46,6 +55,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_get_container_cached_running(self, mock_cm):
+        """A cached running container is reloaded and reused without a ContainerManager lookup."""
         mock_container = MagicMock(status="running")
 
         runner = DockerCmdRunner(self.node)
@@ -58,6 +68,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_get_container_cached_not_running(self, mock_cm):
+        """A cached container that stopped running is replaced by a fresh ContainerManager lookup."""
         old_container = MagicMock(status="exited")
         new_container = MagicMock()
         mock_cm.get_container.return_value = new_container
@@ -73,6 +84,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_get_container_not_found(self, mock_cm):
+        """RuntimeError is raised when ContainerManager finds no container for the node."""
         mock_cm.get_container.return_value = None
 
         runner = DockerCmdRunner(self.node)
@@ -84,6 +96,7 @@ class TestDockerCmdRunner:
         mock_cm.get_container.assert_called_once_with(self.node, "node")
 
     def test_connection(self):
+        """The connection property resolves to the node's container."""
         with patch.object(self.runner, "_get_container") as mock_get:
             mock_container = MagicMock()
             mock_get.return_value = mock_container
@@ -95,6 +108,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_container_is_up(self, mock_cm):
+        """is_up() reflects whether ContainerManager reports the node container as running."""
         mock_cm.is_running.return_value = True
         assert self.runner.is_up()
         mock_cm.is_running.assert_called_once_with(self.node, "node")
@@ -119,6 +133,7 @@ class TestDockerCmdRunner:
         )
 
     def test_execute_command_with_stderr(self):
+        """A non-zero exit code from exec_run raises UnexpectedExit."""
         mock_container = MagicMock(status="running")
         mock_container.exec_run.return_value = MagicMock(exit_code=1, output=(b"", b"error message"))
 
@@ -128,6 +143,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.retrying")
     def test_run(self, mock_retrying):
+        """run() sets up watchers, executes the command and prints its result, returning that result."""
         mock_retrying.return_value = lambda f: f  # No-op decorator
 
         with (
@@ -147,6 +163,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.retrying")
     def test_send_files(self, mock_retrying):
+        """send_files() puts a tar of the source into the container at the destination's parent directory."""
         mock_retrying.return_value = lambda f: f
 
         mock_container = MagicMock()
@@ -175,6 +192,7 @@ class TestDockerCmdRunner:
 
     @patch("sdcm.remote.docker_cmd_runner.retrying")
     def test_receive_files(self, mock_retrying):
+        """receive_files() extracts the file from the container's tar archive into the local destination."""
         mock_retrying.return_value = lambda f: f
 
         tar_stream = BytesIO()
@@ -201,6 +219,7 @@ class TestDockerCmdRunner:
             assert temp_file.read() == "hello world"
 
     def test_sudo_with_non_root_user(self):
+        """sudo() with a non-root user runs the command unchanged as that user."""
         with patch.object(self.runner, "run", return_value=MagicMock()) as mock_run:
             cmd = "ls -la"
             result = self.runner.sudo(cmd, user="testuser")

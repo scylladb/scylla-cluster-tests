@@ -27,6 +27,7 @@ def _inst(name, family, vcpus, price, cloud="aws"):
 
 @pytest.fixture
 def catalog(monkeypatch):
+    """Provide an AWS/GCE arm64 catalog of i8g/i8ge types, with BUCKETS as the AWS spot interruption data."""
     monkeypatch.setattr(interruption, "aws_spot_buckets", lambda: BUCKETS)
     cat = InstanceCatalog()
     cat.cloud_defaults = {"aws": {"arch": "arm64"}, "gce": {"arch": "arm64"}}
@@ -42,14 +43,17 @@ def catalog(monkeypatch):
 
 
 def test_on_demand_order_is_unchanged(catalog):
+    """Without a spot region the pick follows the preferred family order."""
     assert select_instance(catalog, "db", "aws", {"vcpu": 4}).instance_type == "i8g.xlarge"
 
 
 def test_spot_prefers_the_less_interrupted_type_of_the_same_size(catalog):
+    """With a spot region the pick takes the same-size type with the lower interruption bucket."""
     assert select_instance(catalog, "db", "aws", {"vcpu": 4}, spot_region="us-east-1").instance_type == "i8ge.xlarge"
 
 
 def test_spot_ranking_is_per_region(catalog):
+    """Spot ranking uses the interruption buckets of the given region."""
     assert select_instance(catalog, "db", "aws", {"vcpu": 4}, spot_region="eu-west-1").instance_type == "i8g.xlarge"
 
 
@@ -70,10 +74,12 @@ def test_spot_keeps_the_size_of_the_normal_pick(catalog, monkeypatch):
 
 
 def test_equal_buckets_keep_the_family_order(catalog):
+    """Types of the same size with equal interruption buckets keep the preferred family order."""
     assert select_instance(catalog, "db", "aws", {"vcpu": 8}, spot_region="us-east-1").instance_type == "i8g.2xlarge"
 
 
 def test_region_without_data_keeps_the_family_order(catalog):
+    """A spot region missing from the interruption data keeps the preferred family order."""
     assert select_instance(catalog, "db", "aws", {"vcpu": 4}, spot_region="ap-south-1").instance_type == "i8g.xlarge"
 
 
@@ -87,6 +93,7 @@ def test_no_data_does_not_trade_the_family_order_for_size(catalog):
 
 
 def test_other_clouds_never_use_the_aws_buckets(catalog):
+    """A non-AWS cloud keeps the preferred family order, ignoring the AWS interruption buckets."""
     catalog.instances = [_inst("i8g.xlarge", "i8g", 4, 0.34, "gce"), _inst("i8ge.xlarge", "i8ge", 4, 0.47, "gce")]
 
     assert select_instance(catalog, "db", "gce", {"vcpu": 4}, spot_region="us-east-1").instance_type == "i8g.xlarge"
@@ -104,6 +111,7 @@ def advisor(monkeypatch):
 
 
 def test_aws_spot_buckets_reads_linux_buckets_once(advisor):
+    """aws_spot_buckets maps each region's Linux types to their interruption bucket and caches the advisor fetch."""
     advisor.return_value.json.return_value = {
         "spot_advisor": {"us-east-1": {"Linux": {"i8g.xlarge": {"s": 66, "r": 4}}, "Windows": {"i8g.xlarge": {"r": 0}}}}
     }
@@ -115,6 +123,7 @@ def test_aws_spot_buckets_reads_linux_buckets_once(advisor):
 
 
 def test_aws_spot_buckets_is_empty_when_the_advisor_is_unreachable(advisor):
+    """aws_spot_buckets returns an empty dict when the spot advisor is unreachable."""
     advisor.side_effect = requests.ConnectionError("no route")
 
     assert interruption.aws_spot_buckets() == {}

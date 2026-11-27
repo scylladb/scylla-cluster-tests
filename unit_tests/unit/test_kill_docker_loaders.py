@@ -34,6 +34,7 @@ def fixture_loader_set():
 
 
 def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
+    """kill_docker_loaders removes only the test's stress containers on each loader, over a new SSH session."""
     loader_set.kill_docker_loaders()
 
     # NOTE: 'shell_marker' is set on the stress containers only, so the db, monitoring and
@@ -51,6 +52,7 @@ def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
 
 
 def test_kill_docker_loaders_aborts_commands_on_unreachable_loader(loader_set):
+    """A loader failing with ConnectionError gets its running remote commands aborted; reachable loaders keep theirs."""
     alive_loader, preempted_loader = loader_set.nodes
     preempted_loader.remoter.run.side_effect = ConnectionError("host is not reachable")
 

@@ -65,6 +65,7 @@ def _definition(instance_type: str = "n2-standard-2", name: str = "node-1") -> I
     ],
 )
 def test_spot_pricing_sets_the_spot_provisioning_model(instance_type):
+    """Spot pricing yields the SPOT provisioning model with TERMINATE on maintenance and STOP on termination."""
     scheduling = build_scheduling(instance_type, PricingModel.SPOT)
 
     assert scheduling.provisioning_model == "SPOT"
@@ -92,6 +93,7 @@ def test_bundled_local_ssd_family_is_never_requested_as_spot(instance_type, pric
 
 
 def test_e2_keeps_migrate_when_not_spot():
+    """On-demand e2 VMs keep the MIGRATE maintenance policy without a provisioning model."""
     scheduling = build_scheduling("e2-standard-8", PricingModel.ON_DEMAND)
 
     assert scheduling.on_host_maintenance == "MIGRATE"
@@ -99,6 +101,7 @@ def test_e2_keeps_migrate_when_not_spot():
 
 
 def test_ordinary_family_on_demand_does_not_migrate():
+    """On-demand VMs of ordinary families terminate on host maintenance without automatic restart."""
     scheduling = build_scheduling("n2-standard-2", PricingModel.ON_DEMAND)
 
     assert scheduling.on_host_maintenance == "TERMINATE"
@@ -174,6 +177,7 @@ def test_failed_on_demand_fallback_does_not_chain_the_preemption():
 
 
 def test_preemption_is_raised_when_fallback_is_disabled():
+    """With on-demand fallback off, a spot preemption propagates as OperationPreemptedError."""
     provisioner = _provisioner(
         create_side_effect=OperationPreemptedError("Instance failed to start due to preemption.")
     )

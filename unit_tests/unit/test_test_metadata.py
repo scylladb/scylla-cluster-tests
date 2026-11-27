@@ -4,6 +4,7 @@ from sdcm.test_metadata import TestMetadata, _get_valid_backends
 
 
 def test_valid_minimal():
+    """An empty TestMetadata defaults to the ondemand tier with empty tools and features."""
     m = TestMetadata()
     assert m.description is None
     assert m.test_type is None
@@ -13,6 +14,7 @@ def test_valid_minimal():
 
 
 def test_valid_full():
+    """Accepts a TestMetadata with every field but team_ownership set to a valid value."""
     m = TestMetadata(
         description="A 4-hour longevity test with SisyphusMonkey on a 6-node cluster.",
         test_type="longevity",
@@ -29,6 +31,7 @@ def test_valid_full():
 
 
 def test_invalid_test_type():
+    """Rejects an unknown test_type."""
     with pytest.raises(Exception):
         TestMetadata(test_type="unknown-type")
 
@@ -42,31 +45,37 @@ def test_invalid_test_type():
     ],
 )
 def test_invalid_enum_value(field, value, match):
+    """Rejects an unknown tier, duration_class or workload with a message naming the field."""
     with pytest.raises(Exception, match=match):
         TestMetadata(**{field: value})
 
 
 def test_invalid_backend():
+    """Rejects supported_backends containing an unknown backend."""
     with pytest.raises(ValueError, match="Invalid backend"):
         TestMetadata(supported_backends=["aws", "not-a-backend"])
 
 
 def test_supported_backends_none_means_all():
+    """Keeps supported_backends as None, which means all backends."""
     m = TestMetadata(supported_backends=None)
     assert m.supported_backends is None
 
 
 def test_all_valid_backends_accepted():
+    """Accepts the full list of valid backends."""
     m = TestMetadata(supported_backends=list(_get_valid_backends()))
     assert set(m.supported_backends) == _get_valid_backends()
 
 
 def test_empty_supported_backends_list():
+    """Keeps an empty supported_backends list as is."""
     m = TestMetadata(supported_backends=[])
     assert m.supported_backends == []
 
 
 def test_model_dump_roundtrip():
+    """Restores an equal TestMetadata from its model_dump() output."""
     original = TestMetadata(
         description="Test roundtrip.",
         test_type="artifacts",
@@ -90,6 +99,7 @@ def test_model_dump_roundtrip():
 
 @pytest.mark.parametrize("tier", ["sanity", "tier1", "tier2", "artifacts", "release", "ondemand"])
 def test_all_valid_tiers(tier):
+    """Accepts each valid tier."""
     m = TestMetadata(tier=tier)
     assert m.tier == tier
 
@@ -113,6 +123,7 @@ def test_all_valid_tiers(tier):
     ],
 )
 def test_all_valid_test_types(test_type):
+    """Accepts each listed test_type."""
     m = TestMetadata(test_type=test_type)
     assert m.test_type == test_type
 
@@ -133,11 +144,13 @@ def test_all_valid_test_types(test_type):
     ],
 )
 def test_all_valid_workloads(workload):
+    """Accepts each valid workload."""
     m = TestMetadata(workload=workload)
     assert m.workload == workload
 
 
 def test_invalid_team_ownership():
+    """Rejects a team_ownership outside the known GitHub teams."""
     with pytest.raises(ValueError, match="Invalid team_ownership"):
         TestMetadata(team_ownership="not-a-team")
 
@@ -154,16 +167,19 @@ def test_invalid_team_ownership():
     ],
 )
 def test_all_valid_team_ownership(team):
+    """Accepts each known GitHub team as team_ownership."""
     m = TestMetadata(team_ownership=team)
     assert m.team_ownership == team
 
 
 def test_team_ownership_none_by_default():
+    """Defaults team_ownership to None."""
     m = TestMetadata()
     assert m.team_ownership is None
 
 
 def test_from_dict():
+    """Builds a TestMetadata from a dict of every field but team_ownership and keeps their values."""
     data = {
         "description": "Upgrade test with TLS.",
         "test_type": "upgrade",

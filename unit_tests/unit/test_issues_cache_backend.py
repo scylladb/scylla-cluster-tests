@@ -35,6 +35,7 @@ def fixture_sm_backend_env(monkeypatch):
 
 @pytest.mark.parametrize("cache_class", [CachedJiraIssues, CachedGitHubIssues], ids=["jira", "github"])
 def test_issue_cache_is_pinned_to_s3(cache_class, sm_backend_env):  # noqa: ARG001
+    """With the default secretsmanager keystore backend, both issue caches read from S3."""
     assert cache_class().storage._backend == "s3"
 
 

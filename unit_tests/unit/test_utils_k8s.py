@@ -23,32 +23,38 @@ BASE_HELM_VALUES = {
 
 
 def test_helm_values_init_with_dict_arg():
+    """HelmValues built from a dict exposes the same data via as_dict()."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     assert helm_values.as_dict() == BASE_HELM_VALUES
 
 
 def test_helm_values_init_with_kwargs():
+    """HelmValues built from keyword arguments exposes the same data via as_dict()."""
     helm_values = HelmValues(**BASE_HELM_VALUES)
     assert helm_values.as_dict() == BASE_HELM_VALUES
 
 
 def test_helm_values_get():
+    """get() returns the value of a top-level key."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     assert helm_values.get("no_nesting_key") == "no_nesting_value"
 
 
 def test_helm_values_get_nonexistent():
+    """get() returns None for a missing key."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     assert helm_values.get("fake_key") is None
 
 
 def test_helm_values_set_new():
+    """set() adds a new top-level key."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     helm_values.set("new_key", "new_value")
     assert helm_values.get("new_key") == "new_value"
 
 
 def test_helm_values_set_nested_new():
+    """set() with a dotted path adds a nested key while keeping its sibling keys."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     helm_values.set("nested_dict.third_nested_dict_key", "third_nested_dict_value")
     data = helm_values.as_dict()
@@ -64,12 +70,14 @@ def test_helm_values_set_nested_new():
 
 
 def test_helm_values_set_override():
+    """set() replaces the value of an existing top-level key."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     helm_values.set("no_nesting_key", "custom_value")
     assert helm_values.get("no_nesting_key") == "custom_value"
 
 
 def test_helm_values_set_nested_override():
+    """set() with a dotted path replaces the value of an existing nested key."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     helm_values.set("nested_dict.first_nested_dict_key", "new_value")
     data = helm_values.as_dict()
@@ -79,16 +87,19 @@ def test_helm_values_set_nested_override():
 
 
 def test_helm_values_get_list():
+    """get() returns a list value as is."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     assert helm_values.get("nested_list") == [1, 2, 3]
 
 
 def test_helm_values_get_by_list_index():
+    """get() resolves a '.[N]' path segment to the list item at index N."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     assert helm_values.get("nested_list.[0]") == 1
 
 
 def test_helm_delete_from_list():
+    """delete() with a '.[N]' path removes that list item."""
     helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
     match = deepcopy(BASE_HELM_VALUES)
     del match["nested_list"][0]
@@ -97,6 +108,7 @@ def test_helm_delete_from_list():
 
 
 def test_helm_delete_from_dict():
+    """delete() with a dotted path removes that nested dict key."""
     helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
     match = deepcopy(BASE_HELM_VALUES)
     del match["nested_dict"]["first_nested_dict_key"]
@@ -105,6 +117,7 @@ def test_helm_delete_from_dict():
 
 
 def test_helm_values_try_set_by_list_index():
+    """set() with a list index lacking the '.' separator raises ValueError."""
     helm_values = HelmValues(BASE_HELM_VALUES)
     try:
         helm_values.set("nested_list[0]", 4)
@@ -114,12 +127,15 @@ def test_helm_values_try_set_by_list_index():
 
 
 class FakeK8SKluster:
+    """K8S cluster stand-in with a mocked API client getter and a fixed region."""
+
     def __init__(self):
         self.get_api_client = mock.MagicMock()
         self.region_name = "fake-region-1"
 
 
 def get_k8s_endpoint_update(namespace, pod_name, ip, required_labels_in_place=True, as_str=True):
+    """Build a K8S Endpoints watch event for a pod IP, as a dict or as its single-line string form."""
     labels = {}
     if required_labels_in_place:
         labels = {k: "fake_value" for k in (ScyllaPodsIPChangeTrackerThread.SCYLLA_PODS_EXPECTED_LABEL_KEYS)}
@@ -174,6 +190,11 @@ ns2_eachpod_callbacks_as_list = [
 
 
 def test_scylla_pods_ip_change_tracker_01_positive_scenario():
+    """Callbacks register per pod, per namespace and for each pod.
+
+    IP updates are recorded with their old IPs, and only an IP change of a pod calls its callbacks,
+    with the pod name as kwarg when requested.
+    """
     # Init objects
     core_v1_api_mock, k8s_kluster, ip_mapper = mock.Mock(), FakeK8SKluster(), {}
     namespace1, pod_names1 = "scylla", ("pod-name-1", "pod-name-2", "pod-name-3")
@@ -294,6 +315,7 @@ def test_scylla_pods_ip_change_tracker_01_positive_scenario():
 
 
 def test_scylla_pods_ip_change_tracker_02_negative():
+    """Unparsable lines, empty callbacks and events without a namespace leave the IP mapper empty."""
     core_v1_api_mock, k8s_kluster, ip_mapper = mock.Mock(), FakeK8SKluster(), {}
 
     with mock.patch.object(KubernetesOps, "core_v1_api", side_effect=core_v1_api_mock):
@@ -320,6 +342,7 @@ def test_scylla_pods_ip_change_tracker_02_negative():
 
 
 def test_manifest_loader_keeps_bare_equals_sign_as_string():
+    """The manifest YAML loader reads bare '=' and '=~' enum values as strings."""
     # NOTE: prometheus-operator CRDs have '=' in enums, which plain SafeLoader can't construct
     manifest = "enum: [=, '!=', =~]"
     assert yaml.load(manifest, Loader=_ManifestLoader) == {"enum": ["=", "!=", "=~"]}  # noqa: S506
@@ -349,6 +372,7 @@ def _tar_missing_error():
     ],
 )
 def test_copy_file_without_tar_in_container_streams_through_cat(src, dst, expected_cmd):
+    """When the container has no tar, copy_file falls back to streaming the file through `cat`."""
     with mock.patch.object(KubernetesOps, "kubectl", side_effect=[_tar_missing_error(), None]) as kubectl:
         KubernetesOps.copy_file(kluster=None, src=src, dst=dst, container="scylla")
     assert kubectl.call_args.args == (None, expected_cmd)
@@ -356,6 +380,7 @@ def test_copy_file_without_tar_in_container_streams_through_cat(src, dst, expect
 
 
 def test_copy_file_reraises_other_errors():
+    """copy_file re-raises kubectl failures unrelated to a missing tar."""
     error = invoke.exceptions.UnexpectedExit(mock.Mock(stderr="pod not found", return_code=1))
     with (
         mock.patch.object(KubernetesOps, "kubectl", side_effect=error),

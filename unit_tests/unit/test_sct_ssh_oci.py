@@ -23,6 +23,7 @@ IPS = {"node": ("1.1.1.1", "10.0.0.5"), "runner": ("2.2.2.2", "10.0.0.2")}
 
 
 def oci_instance(name: str, **sct_tags) -> Instance:
+    """Build an OCI Instance named `name` whose `sct` defined tags carry TestId t1 plus `sct_tags`."""
     return Instance(id=name, display_name=name, defined_tags={"sct": {"TestId": "t1", **sct_tags}})
 
 
@@ -31,12 +32,14 @@ RUNNER = oci_instance("runner", UserName="ubuntu", bastion="true")
 
 
 def fake_ips(instance):
+    """Return the (public, private) IP pair registered in IPS for the instance."""
     return IPS[instance.id]
 
 
 @patch.object(sct_ssh, "get_oci_instance_ips", side_effect=fake_ips)
 @patch.object(sct_ssh, "list_instances_oci", return_value=[RUNNER])
 def test_oci_proxy_command_goes_through_the_runner(list_instances, _):
+    """An OCI node is reached via ProxyCommand through the runner found by its bastion tag, on the node's private IP."""
     proxy_command, target_ip, target_username, target_key = sct_ssh.get_proxy_command(NODE, force_use_public_ip=False)
 
     assert (target_ip, target_username, target_key) == ("10.0.0.5", "scyllaadm", "~/.ssh/scylla_test_id_ed25519")
@@ -46,6 +49,7 @@ def test_oci_proxy_command_goes_through_the_runner(list_instances, _):
 
 @patch.object(sct_ssh, "get_oci_instance_ips", side_effect=fake_ips)
 def test_oci_force_public_ip_connects_directly(_):
+    """force_use_public_ip connects straight to the public IP with an empty proxy command."""
     assert sct_ssh.get_proxy_command(RUNNER, force_use_public_ip=True) == (
         "",
         "2.2.2.2",
@@ -56,11 +60,13 @@ def test_oci_force_public_ip_connects_directly(_):
 
 @patch.object(sct_ssh, "get_oci_instance_ips", return_value=(None, "10.0.0.5"))
 def test_oci_force_public_ip_without_public_ip_raises(_):
+    """force_use_public_ip raises ValueError for a node that has no public IP."""
     with pytest.raises(ValueError, match="node has no public IP"):
         sct_ssh.get_proxy_command(NODE, force_use_public_ip=True)
 
 
 def test_get_oci_instance_ips_uses_primary_vnic_and_full_region_name():
+    """IPs come from the primary VNIC, and the short region key is expanded to the full region name for the client."""
     attachments = [
         VnicAttachment(vnic_id="secondary", lifecycle_state="ATTACHED"),
         VnicAttachment(vnic_id="primary", lifecycle_state="ATTACHED"),

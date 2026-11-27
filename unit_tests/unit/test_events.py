@@ -35,7 +35,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TestSctEvents(RealEventsTest):
+    """SCT event formatting, filtering, severity changing and counting, run through the real events processes."""
+
     def test_disruption_skipped_event(self):
+        """A skipped disruption ends as a NORMAL event that carries the skip reason in its text."""
         with (
             pytest.raises(UnsupportedNemesis),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -55,6 +58,7 @@ class TestSctEvents(RealEventsTest):
         )
 
     def test_disruption_raised_critical_event(self):
+        """A disruption marked CRITICAL while raising keeps that severity, its error and its duration."""
         with (
             pytest.raises(ZeroDivisionError),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -79,6 +83,7 @@ class TestSctEvents(RealEventsTest):
         assert nemesis_event.duration_formatted == "15s"
 
     def test_disruption_raised_error_event(self):
+        """A disruption that raises after recording an error becomes an ERROR event with the error and duration."""
         with (
             pytest.raises(ZeroDivisionError),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -102,6 +107,7 @@ class TestSctEvents(RealEventsTest):
         assert nemesis_event.duration_formatted == "15s"
 
     def test_disruption_error_event(self):
+        """A disruption given an error and ERROR severity without raising ends as an ERROR event listing that error."""
         with DisruptionEvent(
             nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False
         ) as nemesis_event:
@@ -125,6 +131,7 @@ class TestSctEvents(RealEventsTest):
         ) in str(nemesis_event)
 
     def test_disruption_normal_event(self):
+        """A disruption without errors renders as NORMAL begin and end events, the end one with its duration."""
         with DisruptionEvent(
             nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False
         ) as nemesis_event:
@@ -141,6 +148,7 @@ class TestSctEvents(RealEventsTest):
         )
 
     def test_filter(self):
+        """Database log events matched by active DbEventsFilters leave events.log unchanged."""
         enospc_line_1 = (
             "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment "
             "reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
@@ -170,6 +178,7 @@ class TestSctEvents(RealEventsTest):
         assert log_content_before == self.get_event_log_file("events.log")
 
     def test_general_filter(self):
+        """EventsFilter on an event class drops CoreDumpEvents from events.log and keeps other events."""
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
             with EventsFilter(event_class=CoreDumpEvent):
                 CoreDumpEvent(
@@ -187,6 +196,7 @@ class TestSctEvents(RealEventsTest):
         assert "test_general_filter" not in log_content
 
     def test_general_filter_regex(self):
+        """EventsFilter with a regex drops events whose text matches it and keeps the rest."""
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
             with EventsFilter(regex=".*1234567890.*"):
                 CoreDumpEvent(
@@ -206,6 +216,7 @@ class TestSctEvents(RealEventsTest):
         assert "1234567890" not in log_content
 
     def test_severity_changer(self):
+        """EventsSeverityChangerFilter lowers matching events to WARNING until it expires; later ones keep CRITICAL."""
         extra_time_to_expiration = 10
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with EventsSeverityChangerFilter(
@@ -301,6 +312,7 @@ class TestSctEvents(RealEventsTest):
         ycsb_event.end_event()
 
     def test_ycsb_filter(self):
+        """A YCSB error event matching an EventsFilter regex is dropped while the stress begin/end events are kept."""
         with self.wait_for_n_events(self.get_events_logger(), count=6, timeout=5):
             with EventsFilter(
                 event_class=YcsbStressEvent, regex=".*Internal server error: exceptions::unavailable_exception.*"
@@ -325,6 +337,7 @@ class TestSctEvents(RealEventsTest):
         assert "YcsbStressEvent Severity.ERROR" in log_content
 
     def test_filter_repair(self):
+        """DbEventsFilters on known repair errors drop matching lines and keep other database events."""
         failed_repaired_line = (
             "2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - "
             "Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)"
@@ -349,6 +362,7 @@ class TestSctEvents(RealEventsTest):
         assert "repair id 1" not in log_content
 
     def test_filter_upgrade(self):
+        """A DbEventsFilter on the 'Failed to load schema' upgrade error drops it and keeps other events."""
         known_failure_line = (
             "!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with "
             "10.142.0.56: std::runtime_error (Failed to load schema version "
@@ -367,6 +381,7 @@ class TestSctEvents(RealEventsTest):
         assert "Exception when communicating" not in log_content
 
     def test_filter_by_node(self):
+        """A DbEventsFilter scoped to a node drops that node's events and keeps other nodes' events."""
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
             with DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node="A"):
                 DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line="this is filtered").publish()
@@ -378,6 +393,7 @@ class TestSctEvents(RealEventsTest):
         assert "this is filtered" not in log_content
 
     def test_filter_expiration(self):
+        """A DbEventsFilter covers lines logged while active and lets through lines logged after it expires."""
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=10):
             line_prefix = f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%S+00:00}"
 
@@ -397,6 +413,7 @@ class TestSctEvents(RealEventsTest):
         assert "this is filtered" not in log_content
 
     def test_failed_stall_during_filter(self):
+        """A reactor stall published while unrelated DbEventsFilters are active is logged at DEBUG severity."""
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with (
                 DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR),
@@ -421,6 +438,7 @@ class TestSctEvents(RealEventsTest):
         ],
     )
     def test_duration_format(self, duration_input, duration_formatted):
+        """Event durations render as compact d/h/m/s strings, with None rendering as empty."""
         event = NodetoolEvent(
             nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
             node="1.0.0.121",
@@ -433,18 +451,21 @@ class TestSctEvents(RealEventsTest):
 
     @mock.patch("sdcm.sct_events.base.SctEvent.publish")
     def test_publish_called(self, publish):
+        """begin_event() publishes an event created with publish_event=True."""
         event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=True)
         event.begin_event()
         assert publish.called, "Publish function was not called unexpectedly"
 
     @mock.patch("sdcm.sct_events.base.SctEvent.publish")
     def test_publish_not_called(self, publish):
+        """begin_event() skips publishing for an event created with publish_event=False."""
         event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=False)
         event.begin_event()
         assert not publish.called, "Publish function was called unexpectedly"
 
     @staticmethod
     def test_soft_timeout():
+        """A SoftTimeoutEvent carries a trace and reports the operation, its duration and the soft timeout."""
         event = SoftTimeoutEvent(soft_timeout=0.1, operation="long-one", duration=0.2)
         event.publish_or_dump()
         event_data = str(event)
@@ -453,6 +474,7 @@ class TestSctEvents(RealEventsTest):
         assert "operation 'long-one' is finished and took 0.2s (soft timeout was set to 0.1s)" in event_data
 
     def test_count_reactor_stall(self):
+        """EventCounterContextManager counts reactor stalls, buckets their durations and writes one file per node."""
         count_condition_name = "test_method"
         statistics = {}
         with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
@@ -482,6 +504,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_count_reactor_stall_with_obj_instance(self):
+        """An EventCounterContextManager started and stopped explicitly counts and buckets stalls like the context form."""
         count_condition_name = "test_method_obj"
         counter = EventCounterContextManager(
             DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=self.events_processes_registry
@@ -513,6 +536,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_count_reactor_stall_not_matched_by_regexp(self):
+        """Stall lines without a parsable 'N ms' duration are counted in the 0 ms bucket."""
         count_condition_name = "test_method1"
         statistics = {}
         with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
@@ -531,6 +555,7 @@ class TestSctEvents(RealEventsTest):
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {0: 4}
 
     def test_count_several_events(self):
+        """A counter watching two event types keeps separate statistics for each of them."""
         count_condition_name = "test_method2"
         statistics = {}
         with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
@@ -566,6 +591,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_skip_not_required_count_required_events(self):
+        """A counter counts only the event types it watches, ignoring other database events."""
         count_condition_name = "test_method3"
         statistics = {}
         with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
@@ -610,6 +636,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_count_with_several_count_managers(self):
+        """Two concurrent counters each count their own event types from the same stream."""
         count_condition_name1 = "test_method4"
         count_condition_name2 = "test_method5"
         statistics1 = {}
@@ -681,6 +708,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_count_with_several_nested_count_managers(self):
+        """A nested counter counts only events from its own window; the outer one counts the whole window."""
         time.sleep(5)
         count_condition_name1 = "test_method6"
         count_condition_name2 = "test_method7"
@@ -761,6 +789,7 @@ class TestSctEvents(RealEventsTest):
                 assert len(lines) == 1, f"Wrong number of lines {lines}"
 
     def test_kill_nemesis_during_con_event(self):
+        """KillNemesis raised inside a disruption leaves the event NORMAL, with no errors and its duration set."""
         with (
             pytest.raises(KillNemesis),
             DisruptionEvent(nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event,

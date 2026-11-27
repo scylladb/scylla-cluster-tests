@@ -30,6 +30,7 @@ def _sudo_calls(node):
 
 
 def test_update_repo_cache_debian_waits_for_apt_lock_and_retries():
+    """Runs apt-get clean and update with a dpkg lock timeout, a wait on all apt locks and 3 retries."""
     node = _fake_node()
 
     BaseNode.update_repo_cache(node)
@@ -51,6 +52,7 @@ def test_update_repo_cache_debian_waits_for_apt_lock_and_retries():
 
 
 def test_update_repo_cache_rhel_like_waits_for_rpm_lock_and_retries():
+    """Runs yum clean all after a wait on the rpm lock, with 3 retries."""
     node = _fake_node(is_rhel_like=True)
 
     BaseNode.update_repo_cache(node)
@@ -64,6 +66,7 @@ def test_update_repo_cache_rhel_like_waits_for_rpm_lock_and_retries():
 
 
 def test_update_repo_cache_sles_retries_cache_cleanup():
+    """Runs zypper clean all and zypper refresh with 3 retries each."""
     node = _fake_node(is_sles=True)
 
     BaseNode.update_repo_cache(node)
@@ -78,6 +81,7 @@ def test_update_repo_cache_sles_retries_cache_cleanup():
 
 @pytest.mark.parametrize("distro", ["debian", "rhel_like", "sles"])
 def test_update_repo_cache_failure_is_fatal(distro):
+    """Raises NodeSetupFailed on every distro when the repo cache command fails."""
     node = _fake_node(is_rhel_like=distro == "rhel_like", is_sles=distro == "sles")
     node.remoter.sudo.side_effect = Exception("Could not get lock /var/cache/apt/archives/lock")
 

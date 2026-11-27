@@ -43,10 +43,12 @@ from utils.issues_cache.refs import extract_python, extract_yaml, normalize
     ],
 )
 def test_normalize(value, expected):
+    """normalize() turns GitHub URLs, owner/repo#N and Jira refs into canonical keys, and None for anything else."""
     assert normalize(value) == expected
 
 
 def test_extract_python_finds_full_forms_in_any_literal():
+    """extract_python() collects full-form issue refs from any string literal and ignores bare numbers."""
     source = """
 SKIP = ["https://github.com/scylladb/scylla-manager/issues/3829"]
 
@@ -64,6 +66,7 @@ def f(params):
 
 
 def test_extract_python_reports_refs_built_at_runtime(caplog):
+    """Refs built with f-strings, % or format() are reported by line number and logged; other strings pass."""
     source = """
 SkipPerIssues(f"scylladb/scylladb#{n}", params)
 SkipPerIssues("https://github.com/scylladb/scylladb/issues/" + str(n), params)
@@ -79,11 +82,13 @@ log(f"node {name}: done", "%s nodes" % n, "{} up".format(n), "%5d%% done" % n)
 
 
 def test_extract_python_warns_and_skips_syntax_errors(caplog):
+    """A file that fails to parse is logged as skipped and yields no refs."""
     assert extract_python("def (:", "master:sdcm/broken.py") == (set(), [])
     assert "skipping master:sdcm/broken.py" in caplog.text
 
 
 def test_extract_yaml():
+    """extract_yaml() collects issue refs from YAML values, quoted or not."""
     source = """
 reactor_stall:
   - keyword: "foo"
@@ -99,6 +104,7 @@ def _git(repo: Path, *args: str) -> None:
 
 
 def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
+    """The scan command writes a manifest of first-party refs from matching branches, excluding tests and .github."""
     repo = tmp_path / "repo"
     (repo / "sdcm").mkdir(parents=True)
     (repo / "unit_tests").mkdir()
@@ -128,6 +134,7 @@ def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
 
 
 def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
+    """CSVs written by write_csvs() round-trip through CachedGitHubIssues, including commas and quotes."""
     states = {
         "scylladb/contract-repo#5": {"state": "open", "labels": ["sct-2026.1-skip", "P1"], "title": "a, b"},
         "scylladb/contract-repo#3": {"state": "merged", "labels": [], "title": 'say "hi"'},
@@ -153,6 +160,7 @@ def test_csvs_are_readable_by_sct_reader(tmp_path, monkeypatch):
     [(100, 0, 0, True), (60, 100, 0, True), (40, 100, 0, False), (100, 100, 21, False), (100, 100, 20, True)],
 )
 def test_guards(union, previous, failed, ok):
+    """check_guards() exits when the ref set shrinks below half or more than 20% of the fetches failed."""
     if ok:
         check_guards(union, previous, failed)
     else:
@@ -161,6 +169,7 @@ def test_guards(union, previous, failed, ok):
 
 
 def test_accept_shrink_skips_only_the_shrink_guard():
+    """accept_shrink lifts the shrink guard while the failed-fetch guard still applies."""
     check_guards(40, 100, 0, accept_shrink=True)
     with pytest.raises(SystemExit):
         check_guards(40, 100, 20, accept_shrink=True)
@@ -177,6 +186,7 @@ def test_accept_shrink_skips_only_the_shrink_guard():
     ],
 )
 def test_gh_api_reads_status_and_flattens_pages(monkeypatch, returncode, stdout, stderr, paginate, expected):
+    """gh_api() maps gh output to (status, json), flattens paginated pages and passes the body on stdin."""
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -200,6 +210,7 @@ class FakeGitHub:
         self.writes: list[tuple] = []
 
     def __call__(self, method, path, body=None, paginate=False):
+        """Answer permission, user and comment reads; record every other request as a write."""
         if method == "GET" and path.startswith("/repos/") and path.count("/") == 3:
             return 200, {"permissions": {"triage": self.can_label}}
         if method == "GET" and path == "/user":
@@ -218,6 +229,7 @@ LABEL_META = {
 
 
 def test_reconcile_labels_add_and_remove_only_managed_labels():
+    """With label permission, managed labels are added or removed to match usage; foreign labels stay."""
     gh = FakeGitHub(can_label=True)
     rec = Reconciler(gh, "on", LABEL_META, {})
 
@@ -231,6 +243,7 @@ def test_reconcile_labels_add_and_remove_only_managed_labels():
 
 
 def test_reconcile_dry_run_writes_nothing():
+    """Dry-run mode records the planned action and leaves GitHub and the state untouched."""
     gh = FakeGitHub(can_label=False)
     rec = Reconciler(gh, "dry-run", LABEL_META, {})
 
@@ -242,6 +255,7 @@ def test_reconcile_dry_run_writes_nothing():
 
 
 def test_reconcile_one_comment_edited_in_place():
+    """Without label permission one marker comment is posted, then edited on change and when usage ends."""
     gh = FakeGitHub(can_label=False)
     state = {}
     rec = Reconciler(gh, "on", LABEL_META, state)
@@ -262,6 +276,7 @@ def test_reconcile_one_comment_edited_in_place():
 
 
 def test_reconcile_reuses_existing_marker_comment_when_state_is_lost():
+    """With no state, the bot's existing marker comment, past the first page, is found and edited."""
     comments = [{"id": i, "body": "chatter", "user": {"login": "someone"}} for i in range(150)]
     comments.append({"id": 999, "body": f"{MARKER}\nold", "user": {"login": "bot"}})
     gh = FakeGitHub(can_label=False, comments=comments)
@@ -272,6 +287,7 @@ def test_reconcile_reuses_existing_marker_comment_when_state_is_lost():
 
 
 def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
+    """A managed label whose manifest is gone is removed from the issue."""
     gh = FakeGitHub(can_label=True)
     meta = {"used-by-sct": LABEL_META["used-by-sct"]}  # dtest's manifest is gone
     rec = Reconciler(gh, "on", meta, {}, managed={"used-by-dtest"})
@@ -282,6 +298,8 @@ def test_reconcile_removes_labels_of_a_manifest_that_disappeared():
 
 
 def test_fetch_states_records_the_canonical_repo():
+    """fetch_states() records the repo GitHub reports, resolving a renamed repo alias."""
+
     def fake_gh(method, path, body=None, paginate=False):
         return 200, {
             "state": "open",
@@ -297,6 +315,7 @@ def test_fetch_states_records_the_canonical_repo():
 
 
 def test_reconcile_failed_comment_is_retried_next_run():
+    """A failed comment write leaves the state empty, so the next run posts the comment again."""
     state = {}
     Reconciler(FakeGitHub(can_label=False, write_status=403), "on", LABEL_META, state).reconcile(
         "scylladb/siren#1", {"used-by-sct": ["master"]}, []
@@ -355,6 +374,7 @@ DROPPED_DELETE = ("DELETE", "/repos/scylladb/scylladb/issues/2/labels/used-by-sc
 
 @pytest.mark.parametrize("first_run", ["fetch fails", "removal fails", "dry-run"])
 def test_refresh_keeps_a_dropped_ref_until_its_marker_is_removed(tmp_path, monkeypatch, first_run):
+    """A dropped ref stays in the retry set until a later run removes its label."""
     gh, run = _refresh_runner(tmp_path, monkeypatch, ["scylladb/scylladb#1", "scylladb/scylladb#2"])
     if first_run == "fetch fails":
         gh.down = {"2"}
@@ -460,6 +480,7 @@ def test_refresh_skips_a_repo_whose_permissions_cant_be_read(tmp_path, monkeypat
 
 
 def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
+    """The compare command logs state diffs, missing referenced items, runtime refs and new rows, and exits on problems."""
     new, old = tmp_path / "new", tmp_path / "old"
     write_csvs(
         new,
@@ -490,6 +511,7 @@ def test_compare_reports_diffs_and_new_coverage(tmp_path, caplog):
 
 
 def test_compare_passes_on_new_coverage_only(tmp_path):
+    """The compare command succeeds when the new cache only adds rows absent from the old one."""
     new, old = tmp_path / "new", tmp_path / "old"
     write_csvs(new, {"scylladb/r#1": {"state": "open", "labels": [], "title": "t"}})
     old.mkdir()

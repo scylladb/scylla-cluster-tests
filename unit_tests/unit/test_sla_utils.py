@@ -17,12 +17,17 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Row(NamedTuple):
+    """Role-to-service-level row as returned by a LIST ATTACHED SERVICE LEVEL query."""
+
     name: str
     service_level: str
 
 
 class FakeUserRoleBase(UserRoleBase):
+    """UserRoleBase that reports its attached service level from memory instead of querying the cluster."""
+
     def list_user_role_attached_service_levels(self):
+        """Return a Row for the attached service level, or an empty list when none is attached."""
         if self.attached_service_level:
             return [Row(name=self.name, service_level=self.attached_service_level.name)]
         else:
@@ -30,7 +35,10 @@ class FakeUserRoleBase(UserRoleBase):
 
 
 class FakeRole(FakeUserRoleBase, Role):
+    """In-memory Role whose creation and service level attachment run without a cluster."""
+
     def create(self, if_not_exists=True) -> Role:
+        """Return the role itself, as if it were created."""
         return self
 
     def attach_service_level(self, service_level: ServiceLevel):
@@ -42,17 +50,24 @@ class FakeRole(FakeUserRoleBase, Role):
 
 
 class FakeServiceLevel(ServiceLevel):
+    """In-memory ServiceLevel whose creation and listing run without a cluster."""
+
     def create(self, if_not_exists=True) -> ServiceLevel:
+        """Mark the service level as created and return it."""
         self.created = True
         return self
 
     def list_service_level(self) -> ServiceLevel | None:
+        """Return the service level itself, as if found on the cluster."""
         return self
 
 
 class FakePrometheus:
+    """Prometheus stub returning fixed IO queue operation rates and reactor utilization."""
+
     @staticmethod
     def get_scylla_io_queue_total_operations(start_time, end_time, node_ip, irate_sample_sec="60s"):
+        """Return IO queue operation rates where the 200-shares level gets fewer ops than the 50-shares one."""
         return {
             "127.0.0.1": {
                 "sl:default": [410.5785714285715, 400.36428571428576],
@@ -62,15 +77,21 @@ class FakePrometheus:
         }
 
     def get_scylla_reactor_utilization(self, start_time, end_time, instance):
+        """Return a fixed 100% reactor utilization."""
         return 100
 
 
 class FakeSession:
+    """Session stub exposing only the default timeout."""
+
     default_timeout = 0
 
 
 class TestSlaUtilsTest(SlaUtils):
+    """SlaUtils IO queue validation against faked roles, service levels and Prometheus data."""
+
     def test_less_operations_than_expected_error(self):
+        """validate_io_queue_operations raises when the higher-shares service level got fewer IO operations."""
         node = DummyNode(
             name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
         )
@@ -104,6 +125,7 @@ class TestSlaUtilsTest(SlaUtils):
 
     @staticmethod
     def create_sla_auth(session, shares: int, index: str) -> Role:
+        """Create a fake role with a service level of the given shares attached."""
         role = FakeRole(
             session=session,
             name=STRESS_ROLE_NAME_TEMPLATE % (shares or "", index),

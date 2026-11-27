@@ -66,6 +66,7 @@ def _other_failure(seconds_before_the_reclaim):
     ],
 )
 def test_decide(policy, attempt, events, expected):
+    """decide() walks the retry policy per attempt, retrying only when a reclaim caused the run's failures."""
     assert spot_retry.decide(policy, attempt, events) == expected
 
 
@@ -83,6 +84,7 @@ def test_decide_never_exceeds_max_attempts_even_with_a_longer_policy():
 
 @pytest.mark.parametrize("policy", [[], ["on_demand"], ["spot", "on_demand"], ["on_demand", "on_demand"]])
 def test_validate_policy_accepts(policy):
+    """validate_policy accepts an empty policy or a chain of at most 2 retries ending with on_demand."""
     spot_retry.validate_policy(policy)
 
 
@@ -96,11 +98,13 @@ def test_validate_policy_accepts(policy):
     ],
 )
 def test_validate_policy_rejects(policy, error):
+    """validate_policy raises ValueError for a policy not ending with on_demand, too long, or with an unknown step."""
     with pytest.raises(ValueError, match=error):
         spot_retry.validate_policy(policy)
 
 
 def test_fetch_run_events_reads_critical_events():
+    """fetch_run_events reads the run's CRITICAL events from Argus and checks the response."""
     client = MagicMock()
     client.run_id = "09240165-4b31-4379-8058-29e0f46fe068"
     client.get.return_value.json.return_value = {"response": [SPOT_EVENT]}
@@ -149,6 +153,7 @@ def test_setup_preemption_publishes_spot_termination_event(wrapped):
 
 
 def test_other_setup_failures_publish_no_spot_termination_event():
+    """A setUp failure other than a preemption publishes no SpotTerminationEvent."""
     tester = MagicMock(argus_heartbeat_stop_signal=MagicMock())
     with (
         patch("sdcm.tester.TestFrameworkEvent"),
@@ -189,12 +194,14 @@ def test_cli_prints_retry_after_a_reclaim_and_marks_the_run_error(monkeypatch):
 
 
 def test_cli_prints_stop_when_not_opted_in(monkeypatch):
+    """With an empty retry policy the CLI prints stop and leaves the Argus run status untouched."""
     decision, argus_client = _run_cli(monkeypatch, [], [SPOT_EVENT])
     assert decision == "SPOT_RETRY_DECISION=stop"
     argus_client.set_sct_run_status.assert_not_called()
 
 
 def test_cli_keeps_the_status_of_a_run_that_is_not_retried(monkeypatch):
+    """With no reclaim event the CLI prints stop and leaves the Argus run status untouched."""
     decision, argus_client = _run_cli(monkeypatch, ["spot", "on_demand"], [])
     assert decision == "SPOT_RETRY_DECISION=stop"
     argus_client.set_sct_run_status.assert_not_called()

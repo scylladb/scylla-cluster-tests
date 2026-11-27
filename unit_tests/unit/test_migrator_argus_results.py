@@ -35,11 +35,13 @@ EXPECTED_BENCHMARK_COLUMNS = {
 
 @pytest.fixture
 def argus_client():
+    """Provide a mock Argus client."""
     return MagicMock()
 
 
 @pytest.fixture
 def sample_metrics():
+    """Provide a complete set of migrator benchmark metrics keyed by column name."""
     return {
         "P99 write max": 12.5,
         "P99 write avg": 8.3,
@@ -53,6 +55,7 @@ def sample_metrics():
 
 
 def test_migrator_benchmark_result_schema():
+    """The migrator benchmark table has the expected name, a description, and the expected columns."""
     table = MigratorBenchmarkResult()
     assert {col.name for col in table.columns} == EXPECTED_BENCHMARK_COLUMNS
     assert table.name == "spark-migrator - benchmark"
@@ -60,6 +63,7 @@ def test_migrator_benchmark_result_schema():
 
 
 def test_send_migrator_results_submits_benchmark_table(argus_client, sample_metrics):
+    """Sending metrics submits one benchmark table with a single "#1" row holding every metric value."""
     send_migrator_results_to_argus(argus_client, sample_metrics)
 
     argus_client.submit_results.assert_called_once()
@@ -79,12 +83,14 @@ def test_send_migrator_results_submits_benchmark_table(argus_client, sample_metr
 
 
 def test_send_migrator_results_skips_when_empty(argus_client):
+    """Empty metrics submit nothing to Argus."""
     send_migrator_results_to_argus(argus_client, {})
 
     argus_client.submit_results.assert_not_called()
 
 
 def test_send_migrator_results_without_client_returns_quietly(sample_metrics, caplog):
+    """Without an Argus client, sending logs a "no client initialized" warning and returns."""
     with caplog.at_level(logging.WARNING, logger="sdcm.argus_results"):
         send_migrator_results_to_argus(None, sample_metrics)
     assert any("no client initialized" in rec.message for rec in caplog.records)

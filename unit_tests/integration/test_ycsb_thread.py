@@ -35,6 +35,7 @@ pytestmark = [
 
 @pytest.fixture(scope="function", name="alternator_api")
 def fixture_alternator_api(params):
+    """Return an Alternator API client with enforced auth whose endpoint URL works inside or outside docker."""
     params.update(
         dict(
             dynamodb_primarykey_type="HASH_AND_RANGE",
@@ -65,6 +66,7 @@ def fixture_alternator_api(params):
 
 @pytest.fixture(scope="function", name="cql_driver")
 def fixture_cql_driver(docker_scylla):
+    """Return a CQL driver Cluster for docker_scylla, authenticating as cassandra."""
     if running_in_docker():
         address = f"{docker_scylla.internal_ip_address}:9042"
     else:
@@ -78,6 +80,7 @@ def fixture_cql_driver(docker_scylla):
 
 @pytest.fixture(scope="function")
 def create_table(docker_scylla, cql_driver, alternator_api, params):
+    """Create the Alternator superuser role over CQL and the default Alternator test table."""
     with cql_driver.connect() as session:
         session.execute(
             "CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
@@ -90,6 +93,7 @@ def create_table(docker_scylla, cql_driver, alternator_api, params):
 
 @pytest.fixture(scope="function")
 def create_cql_ks_and_table(cql_driver):
+    """Create the ycsb keyspace and its ten-field usertable over CQL."""
     session = cql_driver.connect()
     session.execute(
         """create keyspace ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"""
@@ -113,6 +117,7 @@ def create_cql_ks_and_table(cql_driver):
 @pytest.mark.usefixtures("create_table")
 @pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
+    """YCSB over the DynamoDB API publishes read/update gauges and reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -153,6 +158,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 @pytest.mark.usefixtures("create_table")
 @pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events, params):
+    """YCSB data-integrity reads of rows written without it publish UNEXPECTED_STATE and ERROR events."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     # 2. do write without dataintegrity=true
@@ -214,6 +220,7 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 @pytest.mark.usefixtures("create_cql_ks_and_table")
 @pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_03_cql(request, docker_scylla, prom_address, params):
+    """YCSB over CQL publishes insert gauges and reports positive latencies and op rate."""
     params["docker_network"] = "ycsb_net"
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -256,6 +263,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
 
 @pytest.mark.usefixtures("create_table")
 def test_04_insert_new_data(docker_scylla, alternator_api):
+    """Items batch-written through Alternator come back unchanged from a table scan."""
     schema = alternator.schemas.HASH_AND_STR_RANGE_SCHEMA
     schema_keys = [key_details["AttributeName"] for key_details in schema["KeySchema"]]
     new_items = [

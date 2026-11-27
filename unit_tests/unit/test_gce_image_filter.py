@@ -34,6 +34,7 @@ from sdcm.utils.vm_arch import VmArch
     ],
 )
 def test_gce_image_version_label(version, expected):
+    """Scylla versions map to GCE label-safe strings; versions that can't be split map to an empty label."""
     assert gce_image_version_label(version) == expected
 
 

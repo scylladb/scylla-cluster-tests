@@ -9,6 +9,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def no_atexit(monkeypatch):
+    """Replace atexit registration in the minicloud manager with a no-op so no real teardown runs at exit."""
     # start() registers an atexit teardown; in tests that would run a real
     # `docker rm -f` at interpreter exit, escaping the unit-test sandbox.
     monkeypatch.setattr("sdcm.utils.minicloud.manager.atexit.register", lambda *a, **k: None)
@@ -16,6 +17,7 @@ def no_atexit(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def container_mode(monkeypatch):
+    """Pin minicloud to container mode so every host OS exercises the same code path."""
     # The native-process default follows the host OS. Pin it, so a run on a macOS laptop
     # tests the same container path as the Linux CI. Native-mode tests pass native=True.
     monkeypatch.setattr("sdcm.utils.minicloud.config.MINICLOUD_NATIVE_DEFAULT", False)
@@ -23,6 +25,7 @@ def container_mode(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
+    """Clear minicloud endpoint and region env vars, then restore the full environment after the test."""
     # MinicloudManager.set_env_overrides() writes straight into os.environ (that is its
     # job - it configures the SCT process). monkeypatch cannot undo what it never saw, so
     # snapshot and restore the whole environment: a leaked AWS_ENDPOINT_URL makes

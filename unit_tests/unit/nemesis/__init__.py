@@ -118,39 +118,53 @@ class TestBaseClass(ABC):
 
 
 class CustomNemesisA(TestBaseClass):
+    """Test nemesis flagged a and common, with flag_true cleared."""
+
     flag_a = True
     flag_common = True
     flag_true = False
 
     def disrupt(self):
+        """Print the common string with suffix "a"."""
         print(self.runner.COMMON_STRING + "a")
 
 
 class CustomNemesisB(TestBaseClass):
+    """Test nemesis flagged b and common."""
+
     flag_b = True
     flag_common = True
 
     def disrupt(self):
+        """Print the common string with suffix "b"."""
         print(self.runner.COMMON_STRING + "b")
 
 
 class IntermediateNemesis(TestBaseClass, ABC):
+    """Abstract intermediate test nemesis flagged a; the registry skips it as abstract."""
+
     flag_a = True
 
 
 class CustomNemesisC(CustomNemesisA):
+    """Test nemesis inheriting CustomNemesisA's flags and adding flag c."""
+
     flag_c = True
 
     def disrupt(self):
+        """Print the common string with suffix "c"."""
         print(self.runner.COMMON_STRING + "c")
 
 
 class CustomNemesisAD(IntermediateNemesis):
+    """Test nemesis under the abstract intermediate class, flagged a, d and common."""
+
     flag_d = True
     flag_a = True
     flag_common = True
 
     def disrupt(self):
+        """Print the common string with suffix "d"."""
         print(self.runner.COMMON_STRING + "d")
 
 

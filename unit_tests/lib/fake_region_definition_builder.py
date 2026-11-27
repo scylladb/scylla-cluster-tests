@@ -41,6 +41,8 @@ mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map, "loader": lo
 
 
 class FakeDefinitionBuilder(DefinitionBuilder):
+    """Region definition builder for the fake backend, reading fake_* params into instance definitions."""
+
     BACKEND = "fake"
     SCT_PARAM_MAPPER = mapper
     REGION_MAP = "fake_region_name"

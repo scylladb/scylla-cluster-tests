@@ -15,6 +15,8 @@ from sdcm.remote import LocalCmdRunner
 
 
 class HydraTestCaseTmpDir:
+    """Context manager that creates a temporary HOME, optionally with AWS credentials, and removes it on exit."""
+
     def __init__(self, home_dir: str, aws_creds: bool):
         self.home_dir = home_dir
         self.aws_creds = aws_creds
@@ -28,13 +30,16 @@ class HydraTestCaseTmpDir:
 
     @cached_property
     def aws_token_dir_path(self):
+        """Path of the .aws directory under the temporary HOME."""
         return os.path.join(self.home_dir, ".aws")
 
     @cached_property
     def aws_token_path(self):
+        """Path of the AWS credentials file under the temporary HOME."""
         return os.path.join(self.aws_token_dir_path, "credentials")
 
     def setup(self):
+        """Create the HOME directory and, when requested, a placeholder AWS credentials file."""
         if not os.path.exists(self.home_dir):
             os.makedirs(self.home_dir)
         if self.aws_creds:
@@ -43,6 +48,7 @@ class HydraTestCaseTmpDir:
             self._touch_file(self.aws_token_path)
 
     def teardown(self):
+        """Remove the temporary HOME directory, ignoring errors."""
         with contextlib.suppress(Exception):
             shutil.rmtree(self.home_dir)
 
@@ -56,6 +62,8 @@ class HydraTestCaseTmpDir:
 
 @dataclasses.dataclass
 class HydraTestCaseParams:
+    """One hydra.sh invocation: command, expected/unexpected output patterns, return code and env."""
+
     name: str
     cmd: str
     expected: List[Union[str, re.Pattern]]
@@ -70,6 +78,7 @@ class HydraTestCaseParams:
 
     @property
     def as_tuple(self):
+        """Return (cmd, expected, not_expected, return_code, env) for unpacking in the test."""
         return self.cmd, self.expected, self.not_expected, self.return_code, self.env
 
     def __enter__(self):
@@ -91,20 +100,24 @@ class LongevityPipelineTest:
         self.home_dir_postfix = ""
 
     def set_test_home_dir_postfix(self, postfix: str):
+        """Set the sub-directory of the temporary HOME used by the next test case."""
         self.home_dir_postfix = postfix
 
     @staticmethod
     def docker_run_prefix(runner: bool):
+        """Return the regex prefix of the `docker run` line, remote over SSH when a runner is used."""
         if runner:
             return "docker -H ssh://ubuntu@1.1.1.1 run --rm --privileged -h ip-1.1.1.1.*"
         return "docker run --rm --privileged .*"
 
     def sct_path(self, runner: bool):
+        """Return the SCT checkout path: on the runner when one is used, else the local one."""
         if runner:
             return "/home/ubuntu/scylla-cluster-tests"
         return self.sct_base_path
 
     def expected(self, runner):
+        """Return patterns hydra.sh must print: volume/group mounts, plus key reset and rsyncs with a runner."""
         docker_run_prefix = self.docker_run_prefix(runner)
         sct_dir = self.sct_path(runner)
         expected = (
@@ -122,6 +135,7 @@ class LongevityPipelineTest:
         return expected
 
     def not_expected(self, runner: bool):
+        """Return patterns hydra.sh must not print: hydra-only args, and runner sync steps without a runner."""
         # Hydra arguments should not leak
         not_expected = ("--dry-run-hydra", "--execute-on-runner")
         if not runner:
@@ -135,28 +149,34 @@ class LongevityPipelineTest:
 
     @cached_property
     def pattern_remove_known_key(self):
+        """The ssh-keygen command that drops the runner's stale host key."""
         return 'ssh-keygen -R "1.1.1.1" || true'
 
     @cached_property
     def pattern_rsync_aws_token(self):
+        """The rsync command that copies ~/.aws to the runner."""
         return "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.aws ubuntu@1.1.1.1:/home/ubuntu/"
 
     @cached_property
     def pattern_rsync_sct_dir(self):
+        """The rsync command that copies the SCT checkout to the runner."""
         return (
             f"rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete {self.sct_base_path} ubuntu@1.1.1.1:/home/ubuntu/"
         )
 
     @cached_property
     def step_name_prefix(self):
+        """Test case name prefix built from backend, runner and aws_creds."""
         return f"{self.backend}_{self.runner}_{self.aws_creds}"
 
     @cached_property
     def show_conf_cmd(self):
+        """Hydra command for the output-conf pipeline step."""
         return f"output-conf -b {self.backend}"
 
     @cached_property
     def create_runner_cmd(self):
+        """Hydra command for the create-runner-instance pipeline step."""
         return (
             f"create-runner-instance --cloud-provider {self.backend} --region eu-north-1 --availability-zone a "
             f"--test-id {self.test_id} --duration 465"
@@ -164,6 +184,7 @@ class LongevityPipelineTest:
 
     @cached_property
     def run_test_cmd(self):
+        """Hydra command for the run-test step, with --execute-on-runner when a runner is used."""
         # Command line of the hydra it self
         if self.runner:
             return f"{self.runner_arg}{self.run_test_cmd_docker}"
@@ -171,11 +192,13 @@ class LongevityPipelineTest:
 
     @cached_property
     def run_test_cmd_docker(self):
+        """The run-test command as it must appear inside the docker container."""
         # Command line that should be run in the docker
         return f"run-test longevity_test.LongevityTest.test_custom_time --backend {self.backend}"
 
     @cached_property
     def collect_logs_cmd(self):
+        """Hydra command for the collect-logs step, with --execute-on-runner when a runner is used."""
         # Command line of the hydra it self
         if self.runner:
             return f"{self.runner_arg}{self.collect_logs_cmd_docker}"
@@ -183,11 +206,13 @@ class LongevityPipelineTest:
 
     @cached_property
     def collect_logs_cmd_docker(self):
+        """The collect-logs command as it must appear inside the docker container."""
         # Command line that should be run in the docker
         return "collect-logs"
 
     @cached_property
     def clean_resources_cmd(self):
+        """Hydra command for the clean-resources step, with --execute-on-runner when a runner is used."""
         # Command line of the hydra it self
         if self.runner:
             return f"{self.runner_arg}{self.clean_resources_cmd_docker}"
@@ -195,21 +220,25 @@ class LongevityPipelineTest:
 
     @cached_property
     def clean_resources_cmd_docker(self):
+        """The clean-resources command as it must appear inside the docker container."""
         # Command line that should be run in the docker
         return f"clean-resources --post-behavior --test-id {self.test_id}"
 
     @cached_property
     def clean_runner_instances_cmd(self):
+        """Hydra command for clean-runner-instances, with --execute-on-runner when a runner is used."""
         if self.runner:
             return f"{self.runner_arg}{self.clean_runner_instances_cmd_docker}"
         return self.clean_runner_instances_cmd_docker
 
     @cached_property
     def clean_runner_instances_cmd_docker(self):
+        """The clean-runner-instances command as it must appear inside the docker container."""
         return f"clean-runner-instances --test-id {self.test_id} --backend {self.backend}"
 
     @cached_property
     def send_email_cmd(self):
+        """Hydra command for the send-email step, with --execute-on-runner when a runner is used."""
         # Command line of the hydra it self
         if self.runner:
             return f"{self.runner_arg}{self.send_email_cmd_docker}"
@@ -217,19 +246,23 @@ class LongevityPipelineTest:
 
     @cached_property
     def send_email_cmd_docker(self):
+        """The send-email command as it must appear inside the docker container."""
         # Command line that should be run in the docker
         return "send-email --test-status SUCCESS --start-time 1627268929 --email-recipients qa@scylladb.com"
 
     @property
     def test_home_dir(self) -> str:
+        """HOME directory of the current test case: the temp dir plus its postfix."""
         return os.path.join(self.home_dir, self.home_dir_postfix)
 
     @cached_property
     def is_gce_or_gke(self) -> bool:
+        """True when the backend is a GCE or GKE one."""
         return "gce" in self.backend or "gke" in self.backend
 
     @property
     def get_longevity_env(self) -> Dict[str, str]:
+        """Env vars a Jenkins longevity job passes to hydra.sh."""
         longevity_end = {
             "SCT_TEST_ID": self.test_id,
             "HOME": self.test_home_dir,
@@ -243,40 +276,48 @@ class LongevityPipelineTest:
 
     @property
     def before_runner_not_expected(self):
+        """Unexpected patterns for steps that run before the runner exists (local execution)."""
         # All steps before runner is created should not have runner related steps
         return self.not_expected(runner=False)
 
     @property
     def before_runner_expected(self):
+        """Expected patterns for steps that run before the runner exists (local execution)."""
         # All steps before runner is created should not have runner related steps
         return self.expected(runner=False)
 
     @property
     def before_runner_docker_run_prefix(self):
+        """The local `docker run` prefix used by steps before the runner exists."""
         # All steps before runner is created do not have runner parameter
         return self.docker_run_prefix(runner=False)
 
     @property
     def after_runner_not_expected(self):
+        """Unexpected patterns for steps that run after the runner is created."""
         # All steps before runner is created should not have runner related steps
         return self.not_expected(runner=self.runner)
 
     @property
     def after_runner_expected(self):
+        """Expected patterns for steps that run after the runner is created."""
         # All steps before runner is created should not have runner related steps
         return self.expected(runner=self.runner)
 
     @property
     def after_runner_docker_run_prefix(self):
+        """The `docker run` prefix, local or remote, used by steps after the runner is created."""
         # All steps before runner is created do not have runner parameter
         return self.docker_run_prefix(runner=self.runner)
 
     @property
     def test_tmp_dir(self) -> HydraTestCaseTmpDir:
+        """Temporary HOME context for the current test case."""
         return HydraTestCaseTmpDir(home_dir=self.test_home_dir, aws_creds=self.aws_creds)
 
     @property
     def test_case_show_conf(self):
+        """Case for output-conf: runs locally in docker without runner steps."""
         self.set_test_home_dir_postfix("show_conf")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_show_conf",
@@ -292,6 +333,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_create_runner(self):
+        """Case for create-runner-instance: runs locally in docker without runner steps."""
         self.set_test_home_dir_postfix("create_runner")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_create_runner",
@@ -307,6 +349,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_run_test(self):
+        """Case for run-test: runs in docker on the runner when one is used."""
         self.set_test_home_dir_postfix("run_test")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_run_test",
@@ -322,6 +365,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_collect_logs(self):
+        """Case for collect-logs: runs in docker on the runner when one is used."""
         self.set_test_home_dir_postfix("collect_logs")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_collect_logs",
@@ -337,6 +381,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_clean_resources(self):
+        """Case for clean-resources: runs in docker on the runner when one is used."""
         self.set_test_home_dir_postfix("clean_resources")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_clean_resources",
@@ -352,6 +397,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_clean_runner_instances(self):
+        """Case for clean-runner-instances: runs in docker on the runner when one is used."""
         self.set_test_home_dir_postfix("clean_runner_instances")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_clean_runner_instances",
@@ -369,6 +415,7 @@ class LongevityPipelineTest:
 
     @property
     def test_case_send_email(self):
+        """Case for send-email: runs in docker on the runner when one is used."""
         self.set_test_home_dir_postfix("send_email")
         return HydraTestCaseParams(
             name=f"{self.step_name_prefix}_send_email",
@@ -406,10 +453,13 @@ esac
 
 
 class TestHydraSh:
+    """Dry-runs docker/env/hydra.sh for each longevity pipeline step and checks the commands it prints."""
+
     cmd_runner = LocalCmdRunner()
 
     @pytest.fixture(scope="class")
     def stub_docker_bin_dir(self, tmp_path_factory):
+        """Provide a PATH dir with a stub `docker` that answers images/pull instantly."""
         # hydra.sh calls `docker images`/`docker pull` for real even with --dry-run-hydra (only the
         # final `docker run` is echoed instead of executed), which hits the network and dominates the
         # runtime of this file. Stub `docker` on PATH so those two calls return instantly.
@@ -421,6 +471,7 @@ class TestHydraSh:
 
     @pytest.fixture(autouse=True)
     def fixture_env(self, monkeypatch, stub_docker_bin_dir):
+        """Drop SCT_/AWS_/GOOGLE_ env vars and put the docker stub first on PATH."""
         self.monkeypatch = monkeypatch
 
         for name in os.environ:
@@ -430,6 +481,7 @@ class TestHydraSh:
         self.monkeypatch.setenv("PATH", stub_docker_bin_dir + os.pathsep + os.environ["PATH"])
 
     def prepare_environment(self, env):
+        """Set the given env vars for the current test."""
         for name, value in env.items():
             self.monkeypatch.setenv(name, value)
 
@@ -440,6 +492,7 @@ class TestHydraSh:
         expected: Sequence[Union[str, re.Pattern]],
         not_expected: Sequence[Union[str, re.Pattern]],
     ):
+        """Return error messages for a wrong return code, missing expected or present unexpected patterns."""
         errors = []
         if expected_status is not None:
             if result.return_code != expected_status:
@@ -471,6 +524,7 @@ class TestHydraSh:
         + LongevityPipelineTest(backend="gce-siren", runner=True, aws_creds=True).hydra_test_cases
     )
     def test_run_test(self, test_case_params: HydraTestCaseParams, tmp_dir: HydraTestCaseTmpDir):
+        """Each pipeline step's hydra.sh dry run prints the expected docker/rsync commands and exits as expected."""
         with tmp_dir:
             cmd, expected, not_expected, expected_status, env = test_case_params.as_tuple
             self.prepare_environment(env)

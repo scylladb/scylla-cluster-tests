@@ -63,16 +63,19 @@ class MockParams:
         self._data.update(kwargs)
 
     def get(self, key, default=None):
+        """Return the stored value for key, or default when absent."""
         return self._data.get(key, default)
 
 
 @pytest.fixture()
 def emr_params():
+    """Provide MockParams with default EMR settings."""
     return MockParams()
 
 
 @pytest.fixture()
 def provisioner(iam_roles, emr_params):
+    """Provide an EmrClusterProvisioner in the test region with mocked IAM roles in place."""
     return EmrClusterProvisioner(region_name=AWS_REGION, params=emr_params)
 
 

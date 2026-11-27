@@ -193,6 +193,7 @@ def test_access_policies_include_tenant_id(mock_logger, kms_provider, azure_serv
 
 
 def test_get_vault_uri_asks_arm_on_minicloud_only(kms_provider, azure_service_mock):
+    """On minicloud the vault URI comes from ARM; otherwise it is built from the vault name."""
     azure_service_mock.minicloud_endpoint = "https://localhost:5443"
     azure_service_mock.keyvault.vaults.get.return_value.properties.vault_uri = (
         "https://localhost:5443/keyvault/test-vault-eastus/"

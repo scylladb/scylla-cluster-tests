@@ -39,12 +39,15 @@ BASE_URL = "http://grafana.example:3000"
 
 
 class FakeResponse:
+    """Minimal HTTP response stand-in carrying a status code."""
+
     def __init__(self, status_code: int):
         self.status_code = status_code
         self.text = ""
 
     @property
     def ok(self):
+        """True for statuses below 400, like requests.Response.ok."""
         return self.status_code < http.HTTPStatus.BAD_REQUEST
 
 
@@ -57,15 +60,18 @@ class FakeSession:
         self.calls: list[tuple[str, str, dict]] = []
 
     def put(self, url, **kwargs):
+        """Record the PUT request and answer with the configured PUT status."""
         self.calls.append(("PUT", url, kwargs))
         return FakeResponse(self.put_status)
 
     def post(self, url, **kwargs):
+        """Record the POST request and answer with the configured POST status."""
         self.calls.append(("POST", url, kwargs))
         return FakeResponse(self.post_status)
 
 
 def test_payload_is_wrapped_into_metadata_and_spec():
+    """The new-API payload puts the uid in metadata.name and the dashboard, with the same uid, in spec."""
     converted = convert_dashboard_payload_to_new_api({"dashboard": {"title": "some dash", "uid": "dash-uid"}})
 
     assert converted["metadata"]["name"] == "dash-uid"
@@ -75,6 +81,7 @@ def test_payload_is_wrapped_into_metadata_and_spec():
 
 
 def test_payload_without_dashboard_wrapper_is_accepted():
+    """A bare dashboard dict, without the 'dashboard' wrapper, converts the same way."""
     converted = convert_dashboard_payload_to_new_api({"title": "bare dash", "uid": "bare-uid"})
 
     assert converted["metadata"]["name"] == "bare-uid"
@@ -82,6 +89,7 @@ def test_payload_without_dashboard_wrapper_is_accepted():
 
 
 def test_folder_uid_is_carried_over_as_an_annotation():
+    """The folderUid becomes the grafana.app/folder metadata annotation."""
     converted = convert_dashboard_payload_to_new_api({"dashboard": {"uid": "u"}, "folderUid": "folder-1"})
 
     assert converted["metadata"]["annotations"]["grafana.app/folder"] == "folder-1"
@@ -96,6 +104,7 @@ def test_name_is_always_set_so_uploads_can_be_replayed():
 
 
 def test_uid_is_derived_from_the_title_and_is_stable():
+    """Without a uid, the uid is derived from the title: same title, same uid; other title, other uid."""
     payload = {"dashboard": {"title": "Scylla Per Server Metrics"}}
 
     assert dashboard_uid_from_payload(payload) == dashboard_uid_from_payload(payload)
@@ -103,6 +112,7 @@ def test_uid_is_derived_from_the_title_and_is_stable():
 
 
 def test_uid_from_payload_prefers_an_explicit_uid():
+    """An explicit dashboard uid is used as is."""
     assert dashboard_uid_from_payload({"dashboard": {"title": "t", "uid": "explicit"}}) == "explicit"
 
 
@@ -131,6 +141,7 @@ def test_overlong_uid_is_truncated_but_stays_unique():
 
 
 def test_derived_uid_fits_grafana_limits_for_the_real_dashboard():
+    """The uid derived for the shipped per-server dashboard is within Grafana's length and charset limits."""
     from sdcm.utils.common import get_data_dir_path  # noqa: PLC0415 - data path only needed here
 
     with open(get_data_dir_path("scylla-dash-per-server-nemesis.master.json"), encoding="utf-8") as dashboard_file:
@@ -142,6 +153,7 @@ def test_derived_uid_fits_grafana_limits_for_the_real_dashboard():
 
 
 def test_upsert_url_targets_the_named_resource():
+    """The upsert URL is the new dashboard API path followed by the uid."""
     assert dashboard_upsert_url(BASE_URL, "some-uid") == f"{BASE_URL}{GRAFANA_DASHBOARD_API_PATH}/some-uid"
 
 
@@ -166,6 +178,7 @@ def test_upload_uses_put_on_the_new_api():
     ],
 )
 def test_upload_falls_back_to_the_legacy_endpoint_when_apis_cannot_serve_it(put_status, reason):
+    """On 404/503 from /apis the upload retries as an overwriting POST to the legacy dashboard API."""
     session = FakeSession(put_status=put_status)
 
     response = upload_dashboard(BASE_URL, {"dashboard": {"uid": "dash-1"}}, session=session)
@@ -188,6 +201,7 @@ def test_upload_does_not_fall_back_on_other_errors():
 
 
 def test_upload_uses_a_retry_session_by_default(monkeypatch):
+    """Without an explicit session, upload_dashboard sends its requests through a retry session."""
     created = []
 
     def fake_create_retry_session(*args, **kwargs):
