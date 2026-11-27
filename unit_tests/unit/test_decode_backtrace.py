@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import queue
+import time
 from multiprocessing import Queue
 from unittest.mock import MagicMock, patch
 
@@ -75,12 +76,7 @@ def monitor_node_fixture(tmp_path):
         base_logdir=tmp_path,
     )
     monitor_node.remoter = DummyRemote()
-    yield monitor_node
-
-    # Cleanup
-    monitor_node.termination_event.set()
-    monitor_node.stop_task_threads()
-    monitor_node.wait_till_tasks_threads_are_stopped()
+    return monitor_node
 
 
 def _make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable_regex=None):
@@ -99,20 +95,17 @@ def _make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable
 
 
 def _run_decode_thread_over_log(monitor_node, db_log_reader):
+    """Read the log with the decode thread running, then stop the thread the way teardown does."""
     monitor_node.start_decode_on_monitor_node_thread()
-    db_log_reader._read_and_publish_events()
-    monitor_node.termination_event.set()
-    monitor_node.stop_task_threads()
-    monitor_node.wait_till_tasks_threads_are_stopped()
+    try:
+        db_log_reader._read_and_publish_events()
+    finally:
+        monitor_node.stop_task_threads()
+        monitor_node.wait_till_tasks_threads_are_stopped()
 
 
-def test_reactor_stall_not_decoded_when_no_decoding_queue(
-    dummy_node, monitor_node, events_function_scope, test_data_dir
-):
+def test_reactor_stall_not_decoded_when_no_decoding_queue(dummy_node, events_function_scope, test_data_dir):
     """Backtraces are not decoded when decoding_queue is None."""
-    config = TestConfig()
-    config.set_decoding_queue()
-
     dummy_node.system_log = str(test_data_dir / "system.log")
 
     db_log_reader = DbLogReader(
@@ -126,7 +119,6 @@ def test_reactor_stall_not_decoded_when_no_decoding_queue(
         backtrace_decoding_disable_regex=None,
     )
 
-    monitor_node.start_decode_on_monitor_node_thread()
     db_log_reader._read_and_publish_events()
 
     events = events_function_scope.published_events
@@ -268,7 +260,7 @@ def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
     event.event_id = "test-event-id"
 
     config.DECODING_QUEUE.put({"event": event, "node": "test_node", "build_id": build_id})
-    config.DECODING_QUEUE.put(None)
+    monitor_node.termination_event.set()
 
     monitor_node.test_config = config
 
@@ -364,3 +356,29 @@ def test_no_build_id_publishes_raw_backtrace(monitor_node):
     monitor_node.remoter.run.assert_not_called()
     assert event.backtrace is None
     assert event.build_id is None
+
+
+def test_stopping_one_decoder_leaves_other_decoder_running(test_config, dummy_node, monitor_node, tmp_path):
+    """A decoder keeps decoding the shared queue after another monitor's decoder is stopped."""
+    other_monitor = DummyNode(name="other_monitor_node", parent_cluster=None, base_logdir=tmp_path)
+    other_monitor.remoter = DummyRemote()
+    test_config.DECODING_QUEUE = queue.Queue()
+    monitor_node.start_decode_on_monitor_node_thread()
+    other_monitor.start_decode_on_monitor_node_thread()
+
+    event = MagicMock()
+    event.raw_backtrace = "0x1234"
+    event.backtrace = None
+    try:
+        monitor_node.stop_task_threads()
+        monitor_node.wait_till_tasks_threads_are_stopped()
+        with patch("sdcm.cluster.requests.post", return_value=_service_response()):
+            test_config.DECODING_QUEUE.put({"event": event, "node": "test_node", "build_id": BUILD_ID})
+            deadline = time.monotonic() + 5
+            while not event.publish.called and time.monotonic() < deadline:
+                time.sleep(0.05)
+    finally:
+        other_monitor.stop_task_threads()
+        other_monitor.wait_till_tasks_threads_are_stopped()
+
+    assert event.backtrace == DECODED_BY_SERVICE
