@@ -22,7 +22,9 @@
 """
 
 import json
+import logging
 import os
+import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -47,6 +49,59 @@ def drain_spot_provision_outcomes():
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
     yield
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+
+@pytest.fixture
+def restore_test_config():
+    """Restore the class and singleton-instance attributes of TestConfig, and ``_SCT_TEST_LOGDIR``, after the test.
+
+    For tests that set up a ClusterTester or set TestConfig values directly: the test id, name, tester object,
+    decoding queue, syslog-ng address and the like otherwise stay on the process-wide TestConfig.
+    """
+    saved_class_attrs = dict(vars(TestConfig))
+    instance = TestConfig()
+    saved_instance_attrs = dict(vars(instance))
+    saved_logdir_env = os.environ.get("_SCT_TEST_LOGDIR")
+    yield
+    for name in set(vars(TestConfig)) - set(saved_class_attrs):
+        delattr(TestConfig, name)
+    for name, value in saved_class_attrs.items():
+        if vars(TestConfig).get(name) is not value:
+            setattr(TestConfig, name, value)
+    vars(instance).clear()
+    vars(instance).update(saved_instance_attrs)
+    if saved_logdir_env is None:
+        os.environ.pop("_SCT_TEST_LOGDIR", None)
+    else:
+        os.environ["_SCT_TEST_LOGDIR"] = saved_logdir_env
+
+
+@pytest.fixture
+def restore_logging_config():
+    """Restore the handlers, levels and flags of all loggers, and sys.excepthook, after the test.
+
+    For tests that run ClusterTester's session-wide logging setup: a root console handler on a stream that
+    may be closed once the test ends, file handlers in the test logdir, and a new sys.excepthook.
+    """
+
+    def all_loggers():
+        return [logging.getLogger()] + [
+            logger for logger in logging.Logger.manager.loggerDict.values() if isinstance(logger, logging.Logger)
+        ]
+
+    saved = {logger: (logger.handlers[:], logger.level, logger.propagate, logger.disabled) for logger in all_loggers()}
+    excepthook = sys.excepthook
+    yield
+    sys.excepthook = excepthook
+    for logger in all_loggers():
+        handlers, level, propagate, disabled = saved.get(logger, ([], logging.NOTSET, True, False))
+        for handler in logger.handlers:
+            if handler not in handlers:
+                handler.close()
+        logger.handlers[:] = handlers
+        logger.setLevel(level)
+        logger.propagate = propagate
+        logger.disabled = disabled
 
 
 @pytest.fixture(autouse=True)

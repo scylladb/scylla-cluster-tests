@@ -7,6 +7,8 @@ import pytest
 from longevity_test import LongevityTest
 from sdcm.cluster import NoMonitorSet
 from sdcm.sct_events.base import SctEvent
+from sdcm.test_config import TestConfig
+from sdcm.utils.log import configure_logging, handle_exception
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 from unit_tests.lib.fake_events import make_fake_events
 
@@ -34,6 +36,11 @@ class DummyLongevityTest(LongevityTest):
         self.timeout_thread = None
         self.k8s_clusters = []
         self.kafka_cluster = None
+
+    @pytest.fixture(name="configure_logging_fixture")
+    def fixture_configure_logging(self, restore_logging_config, restore_test_config):
+        """Configure logging like ClusterTester, per test: the logging and TestConfig state is restored after each."""
+        configure_logging(exception_handler=handle_exception, variables={"log_dir": TestConfig().logdir()})
 
     @pytest.fixture(autouse=True, name="event_system")
     def fixture_event_system(self, setup_logging):

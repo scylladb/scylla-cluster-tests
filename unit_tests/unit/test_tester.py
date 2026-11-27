@@ -115,6 +115,7 @@ class SubtestsSuccessTest(ClusterTesterForTests):
             pass
 
 
+@pytest.mark.usefixtures("restore_logging_config", "restore_test_config")
 @pytest.mark.parametrize(
     "test_class, results, outcomes",
     [
