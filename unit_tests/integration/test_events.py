@@ -27,7 +27,7 @@ class TestSctEventsIntegration(RealEventsTest):
     def test_default_filters(self, monkeypatch):
         monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
 
-        with environment(SCT_CLUSTER_BACKEND="docker"):
+        with environment(SCT_CLUSTER_BACKEND="docker"), self.wait_for_published_events(self.get_events_logger()):
             enable_default_filters(SCTConfiguration())
 
         with self.wait_for_n_events(self.get_events_logger(), count=7):
@@ -101,7 +101,7 @@ class TestSctEventsIntegration(RealEventsTest):
         """The GCE-specific first-boot bind-race filter must not apply on other backends."""
         monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
 
-        with environment(SCT_CLUSTER_BACKEND="docker"):
+        with environment(SCT_CLUSTER_BACKEND="docker"), self.wait_for_published_events(self.get_events_logger()):
             enable_default_filters(SCTConfiguration())
 
         with self.wait_for_n_events(self.get_events_logger(), count=1):
@@ -135,7 +135,7 @@ class TestSctEventsGceBindRaceFilter(RealEventsTest):
         """
         monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
 
-        with environment(SCT_CLUSTER_BACKEND="gce"):
+        with environment(SCT_CLUSTER_BACKEND="gce"), self.wait_for_published_events(self.get_events_logger()):
             enable_default_filters(SCTConfiguration())
 
         with self.wait_for_n_events(self.get_events_logger(), count=2):

@@ -153,7 +153,6 @@ class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
                             ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL)
                         )
                     # Outlast the window, so the next duplicate is counted against a fresh one.
-                    # `wait_for_n_events` already waited out `last_event_processing_delay` on top.
                     time.sleep(self.time_window * 5)
 
                 wait_for(lambda: mock.call_count == 2, timeout=10, step=0.1, throw_exc=False)

@@ -74,8 +74,8 @@ class EventsUtilsMixin:
         self.events_main_device.wait_for_subscribers(expected)
 
     @contextmanager
-    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1, last_event_processing_delay: float = 0.5):
-        """Wait for `subscriber` to receive `count` more events, tolerating a stalled publisher.
+    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1):
+        """Wait for `subscriber` to process `count` more events, tolerating a stalled publisher.
 
         `timeout` is the patience for a *single* event rather than for the whole batch:
         `EventsDevice` sends one event at a time and waits for a delivery confirmation on its own
@@ -87,15 +87,34 @@ class EventsUtilsMixin:
         that delivers nothing failing fast, while no longer failing one that is merely slow.
         """
         events_before = subscriber.events_counter
-        last_event_n = events_before + count
-        per_event_timeout = max(timeout, 2 * SUB_POLLING_TIMEOUT / 1000)
 
         yield
 
+        self.wait_for_events_processed(subscriber, events_before=events_before, count=count, timeout=timeout)
+
+    @contextmanager
+    def wait_for_published_events(self, subscriber, timeout: float = 1):
+        """Wait, after the block, until `subscriber` has processed every event the block published.
+
+        For blocks that publish an unknown number of events, such as `enable_default_filters()`.
+        """
+        events_before = subscriber.events_counter
+        published_before = self.events_main_device.events_counter
+
+        yield
+
+        published = self.events_main_device.events_counter - published_before
+        self.wait_for_events_processed(subscriber, events_before=events_before, count=published, timeout=timeout)
+
+    @staticmethod
+    def wait_for_events_processed(subscriber, events_before: int, count: int, timeout: float) -> None:
+        """Wait until `subscriber` has processed `count` events after `events_before`, see `wait_for_n_events`."""
+        last_event_n = events_before + count
+        per_event_timeout = max(timeout, 2 * SUB_POLLING_TIMEOUT / 1000)
         end_time = time.perf_counter() + per_event_timeout
         events_seen = subscriber.events_counter
         while events_seen < last_event_n and time.perf_counter() < end_time:
-            time.sleep(0.1)
+            time.sleep(0.01)
             if (events_now := subscriber.events_counter) > events_seen:
                 events_seen = events_now
                 end_time = time.perf_counter() + per_event_timeout
@@ -104,9 +123,6 @@ class EventsUtilsMixin:
             f"Subscriber {subscriber} received {subscriber.events_counter - events_before} of {count} events "
             f"and then stalled for {per_event_timeout} seconds"
         )
-
-        # Give a chance to the subscriber to handle last event received.
-        time.sleep(last_event_processing_delay)
 
     @classmethod
     def get_events_logger(cls):

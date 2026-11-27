@@ -221,51 +221,56 @@ class EventsDevice(multiprocessing.Process):
         filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
         with suppress_interrupt():
-            for events_counter.value, obj in enumerate(self.inbound_events(stop_event=stop_event), start=1):
-                if filters_gc_next_hit < time.perf_counter():
-                    # Run filter GC once in FILTERS_GC_PERIOD seconds
-                    for filter_key, filter_obj in list(filters.items()):
-                        if filter_obj.is_deceased():
-                            del filters[filter_key]
-                    filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
+            for obj in self.inbound_events(stop_event=stop_event):
+                try:
+                    if filters_gc_next_hit < time.perf_counter():
+                        # Run filter GC once in FILTERS_GC_PERIOD seconds
+                        for filter_key, filter_obj in list(filters.items()):
+                            if filter_obj.is_deceased():
+                                del filters[filter_key]
+                        filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
-                if isinstance(obj, BaseFilter):
-                    if obj.clear_filter and not obj.expire_time:
-                        LOGGER.debug("%s: delete filter with uuid=%s", self, obj.uuid)
-                        filters.pop(obj.uuid, None)
-                    elif obj.clear_filter and obj.expire_time and obj.uuid in filters:
-                        LOGGER.debug(
-                            "%s: set expire_time to %s for filter with uuid=%s", self, obj.expire_time, obj.uuid
+                    if isinstance(obj, BaseFilter):
+                        if obj.clear_filter and not obj.expire_time:
+                            LOGGER.debug("%s: delete filter with uuid=%s", self, obj.uuid)
+                            filters.pop(obj.uuid, None)
+                        elif obj.clear_filter and obj.expire_time and obj.uuid in filters:
+                            LOGGER.debug(
+                                "%s: set expire_time to %s for filter with uuid=%s", self, obj.expire_time, obj.uuid
+                            )
+                            filters[obj.uuid].expire_time = obj.expire_time
+                        else:
+                            LOGGER.debug("%s: add filter %s with uuid=%s", self, obj, obj.uuid)
+                            filters[obj.uuid] = obj
+
+                    if isinstance(obj, SystemEvent):
+                        continue
+
+                    obj_filtered = any(f.eval_filter(obj) for f in filters.values())
+
+                    if obj_filtered:
+                        continue
+
+                    if (obj_max_severity := max_severity(obj)).value < obj.severity.value:
+                        LOGGER.warning("Limit %s severity to %s as configured", obj, obj_max_severity)
+                        obj.severity = obj_max_severity
+
+                    # Log to actions.log (only non-filtered Error/Critical events)
+                    if obj.severity.value > Severity.WARNING.value:
+                        event_type = obj.base
+                        if getattr(obj, "type", None):
+                            event_type += f".{obj.type}"
+                        if getattr(obj, "subtype", None):
+                            event_type += f".{obj.subtype}"
+                        ACTION_LOGGER.error(
+                            f"{event_type} {obj.severity.name} Event (id={obj.event_id}) on node: {getattr(obj, 'node', None)}"
                         )
-                        filters[obj.uuid].expire_time = obj.expire_time
-                    else:
-                        LOGGER.debug("%s: add filter %s with uuid=%s", self, obj, obj.uuid)
-                        filters[obj.uuid] = obj
 
-                if isinstance(obj, SystemEvent):
-                    continue
-
-                obj_filtered = any(f.eval_filter(obj) for f in filters.values())
-
-                if obj_filtered:
-                    continue
-
-                if (obj_max_severity := max_severity(obj)).value < obj.severity.value:
-                    LOGGER.warning("Limit %s severity to %s as configured", obj, obj_max_severity)
-                    obj.severity = obj_max_severity
-
-                # Log to actions.log (only non-filtered Error/Critical events)
-                if obj.severity.value > Severity.WARNING.value:
-                    event_type = obj.base
-                    if getattr(obj, "type", None):
-                        event_type += f".{obj.type}"
-                    if getattr(obj, "subtype", None):
-                        event_type += f".{obj.subtype}"
-                    ACTION_LOGGER.error(
-                        f"{event_type} {obj.severity.name} Event (id={obj.event_id}) on node: {getattr(obj, 'node', None)}"
-                    )
-
-                yield obj.base, obj
+                    yield obj.base, obj
+                finally:
+                    # the generator resumes when the subscriber asks for the next event, so the count covers only
+                    # the events the subscriber has processed
+                    events_counter.value += 1
 
     def is_alive(self) -> bool:
         if not self._running.is_set():
