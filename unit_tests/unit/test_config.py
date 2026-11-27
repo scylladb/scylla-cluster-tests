@@ -1105,9 +1105,14 @@ def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
 
 @pytest.fixture(name="placement_logdir")
 def fixture_placement_logdir(monkeypatch, tmp_path):
-    """Point base_logdir at a tmp dir to not touch ~/sct-results."""
-    monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
-    return tmp_path
+    """Point base_logdir at a tmp dir to not touch ~/sct-results, and restore the env the placement overlay exports.
+
+    Applying the overlay exports the resolved region and availability zone (``SCT_AVAILABILITY_ZONE`` among them)
+    into os.environ.
+    """
+    with patch.dict(os.environ):
+        monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
+        yield tmp_path
 
 
 def test_write_then_read_resolved_placement_round_trips(placement_logdir):  # noqa: ARG001
