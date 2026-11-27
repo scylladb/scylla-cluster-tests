@@ -1,10 +1,13 @@
 import concurrent.futures
 import logging
 import random
+import threading
 import time
 
 import pytest
 
+from sdcm.exceptions import KillNemesis
+from sdcm.utils.common import raise_exception_in_thread
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
@@ -148,3 +151,57 @@ def test_successfull_parallel_run_func_accepted_list_as_parameter():
     returned_results = [r.result for r in results]
     expected_results = [r[0][1] for r in LIST_AS_ARG]
     assert returned_results == expected_results
+
+
+def test_wait_without_timeout_gets_kill_nemesis(monkeypatch):
+    """stop_nemesis() raises KillNemesis in the nemesis thread, so a wait without timeout must not hold it until the objects end."""
+    monkeypatch.setattr("sdcm.utils.parallel_object.WAIT_STEP", 0.1)
+    started, release = threading.Event(), threading.Event()
+    killed_before_release = []
+
+    def wait_for_object(_):
+        started.set()
+        release.wait(30)
+
+    def run_objects():
+        try:
+            ParallelObject([1], timeout=None).run(wait_for_object)
+        except KillNemesis:
+            killed_before_release.append(not release.is_set())
+
+    waiter = threading.Thread(target=run_objects)
+    waiter.start()
+    started.wait(5)
+    raise_exception_in_thread(waiter, KillNemesis)
+    waiter.join(2)
+    still_waiting = waiter.is_alive()
+    release.set()
+    waiter.join()
+
+    assert not still_waiting
+    assert killed_before_release == [True]
+
+
+def test_wait_in_steps_keeps_the_timeout(monkeypatch):
+    """Waiting in steps shorter than the timeout still waits for the whole timeout before failing the object."""
+    monkeypatch.setattr("sdcm.utils.parallel_object.WAIT_STEP", 0.05)
+    start = time.monotonic()
+
+    results = ParallelObject([1], timeout=0.3).run(time.sleep, ignore_exceptions=True)
+
+    assert isinstance(results[0].exc, concurrent.futures.TimeoutError)
+    assert time.monotonic() - start >= 0.3
+
+
+def raise_timeout_error(_):
+    raise TimeoutError("ssh")
+
+
+def test_timeout_error_raised_by_the_object_is_its_result():
+    """A TimeoutError raised by the object is its error, not a wait that ran out, so it fails the run at once."""
+    start = time.monotonic()
+
+    with pytest.raises(ParallelObjectException, match="ssh"):
+        ParallelObject([1], timeout=0.3).run(raise_timeout_error)
+
+    assert time.monotonic() - start < 0.3

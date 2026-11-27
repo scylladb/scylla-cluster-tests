@@ -43,6 +43,14 @@ from unit_tests.lib.fake_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)
 
+SCYLLA_METRICS_CMD = r"curl -s --connect-timeout 10 http://localhost:9180/metrics"
+# node-aggregated per-table metrics: 20 + 10 GiB in a vnode keyspace, 60 GiB in a tablet keyspace
+TABLE_METRICS = """
+scylla_column_family_live_disk_space{__per_table="node",cf="t1",ks="ks_vnodes"} 21474836480
+scylla_column_family_live_disk_space{__per_table="node",cf="t2",ks="ks_vnodes"} 10737418240
+scylla_column_family_live_disk_space{__per_table="node",cf="t1",ks="ks_tablets"} 64424509440
+"""
+
 
 class FakeNode:
     def __init__(self, name: str, remoter):
@@ -295,6 +303,85 @@ def test_tablet_migration_timeout_fallback_uses_caller_timeout(
             operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
         ) as timeout:
             assert timeout == 3600  # fallback returns caller timeout (or 6 hours if not provided)
+
+
+@pytest.mark.parametrize(
+    ("vnode_keyspaces", "expected_soft", "expected_hard"),
+    [
+        # soft = int(2700 s + 30720 MB / 3 shards / 50 MB/s); hard = soft * 2
+        pytest.param('["ks_vnodes"]', 2904, 5808, id="30-GiB-in-vnode-keyspace"),
+        # Scylla exports no per-node metrics for its vnode system keyspaces
+        pytest.param('["system_distributed", "system_traces"]', 300, 600, id="tablet-and-system-keyspaces-only"),
+    ],
+)
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+def test_cleanup_timeout_is_calculated_from_vnode_data_per_shard(
+    soft_timeout_mock, fake_remoter, fake_node, adaptive_timeout_store, vnode_keyspaces, expected_soft, expected_hard
+):
+    """Cleanup skips the tablet keyspaces, so only the vnode data per shard sizes its soft and hard timeouts."""
+    fake_remoter.result_map = {
+        **fake_remoter.result_map,
+        SCYLLA_METRICS_CMD: Result(stdout=fake_remoter.result_map[SCYLLA_METRICS_CMD].stdout + TABLE_METRICS, exited=0),
+        r"curl .*storage_service/keyspaces": Result(stdout=vnode_keyspaces, exited=0),
+    }
+
+    with adaptive_timeout(
+        operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        assert timeout == expected_hard
+
+    soft_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.CLEANUP.name)
+    assert metrics[0]["timeout"] == expected_soft
+    assert metrics[0]["hard_timeout"] == expected_hard
+
+
+def test_cleanup_timeout_without_table_metrics_uses_node_data_size(fake_node, adaptive_timeout_store):
+    """Without per-table metrics, the whole node data sizes the cleanup timeouts, which only makes them longer."""
+    with adaptive_timeout(
+        operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        # soft = int(2700 s + 102400 MB / 3 shards / 50 MB/s) = 3382; hard = soft * 2
+        assert timeout == 6764
+
+
+def test_cleanup_timeout_failed_keyspace_lookup_uses_node_data_size(fake_remoter, fake_node, adaptive_timeout_store):
+    """A failed vnode keyspaces lookup sizes the cleanup on the whole node data, not on the fixed caller fallback."""
+    fake_remoter.result_map = {
+        **fake_remoter.result_map,
+        SCYLLA_METRICS_CMD: Result(stdout=fake_remoter.result_map[SCYLLA_METRICS_CMD].stdout + TABLE_METRICS, exited=0),
+        r"curl .*storage_service/keyspaces": Result(stdout="", stderr="curl: (22) error: 500", exited=22),
+    }
+
+    with adaptive_timeout(
+        operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        # soft = int(2700 s + 102400 MB / 3 shards / 50 MB/s) = 3382; hard = soft * 2
+        assert timeout == 6764
+
+
+def test_cleanup_timeout_fallback_doubles_caller_timeout(fake_node, adaptive_timeout_store):
+    """Without the node data size, cleanup still gets a hard timeout: twice the caller timeout."""
+    with mock.patch.object(
+        NodeLoadInfoService, "node_data_size_mb", new_callable=mock.PropertyMock, side_effect=ValueError("no load")
+    ):
+        with adaptive_timeout(
+            operation=Operations.CLEANUP, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+        ) as timeout:
+            assert timeout == 7200
+
+
+@pytest.mark.parametrize("tablets_enabled", [pytest.param(True, id="tablets"), pytest.param(False, id="vnodes")])
+@pytest.mark.parametrize("operation", [Operations.CLEANUP, Operations.SOFT_TIMEOUT], ids=lambda op: op.name)
+def test_adaptive_timeout_stores_whether_tablets_are_enabled(
+    fake_node, adaptive_timeout_store, mock_tablets_feature, operation, tablets_enabled
+):
+    """Each stored timeout tells whether tablets are enabled, so a calibration can split vnodes runs from tablets runs."""
+    mock_tablets_feature.return_value = tablets_enabled
+    with adaptive_timeout(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600):
+        pass
+
+    assert adaptive_timeout_store.get(operation=operation.name)[0]["tablets_enabled"] is tablets_enabled
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
@@ -699,3 +786,23 @@ def test_argus_store_reports_no_hard_timeout_when_not_set(mock_submit):
     table = mock_submit.call_args[0][1]
     hard_timeout_cells = [cell for cell in table.results if cell.column == "hard_timeout"]
     assert not hard_timeout_cells  # no cell reported when there's no hard timeout
+
+
+@mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
+def test_argus_store_reports_whether_tablets_are_enabled(mock_submit):
+    """The row shows whether tablets are enabled, which explains a short cleanup timeout on a node with much data."""
+    with (
+        mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
+        mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),
+    ):
+        ArgusAdaptiveTimeoutStore().store(
+            metrics={"tablets_enabled": True},
+            operation="CLEANUP",
+            duration=10,
+            timeout=300,
+            timeout_occurred=False,
+            hard_timeout=600,
+        )
+
+    table = mock_submit.call_args[0][1]
+    assert [cell.value for cell in table.results if cell.column == "is_tablets"] == ["True"]
