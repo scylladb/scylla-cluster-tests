@@ -9,6 +9,7 @@ from sdcm.mgmt.cli import (
     BackupTask,
     ManagerCluster,
     ManagerTask,
+    RestoreTask,
     SCTool,
     SCToolDocker,
     create_sctool,
@@ -180,3 +181,120 @@ def test_wait_for_started_upload_stage_keeps_waiting_before_the_upload(stage):
         pytest.raises(BackupStageNotReachedError),
     ):
         task.wait_for_started_upload_stage(timeout=10)
+
+
+def _restore_task_with_progress(progress_stdout: str) -> RestoreTask:
+    manager_node_mock = _manager_node_mock(is_docker=False)
+    remoter_result = mock.MagicMock()
+    type(remoter_result).stdout = mock.PropertyMock(return_value=progress_stdout)
+    type(remoter_result).stderr = mock.PropertyMock(return_value=None)
+    type(remoter_result).exited = mock.PropertyMock(return_value=0)
+    manager_node_mock.remoter.sudo.return_value = remoter_result
+    return RestoreTask(
+        task_id="e10ec718-a7bf-11ed-b05a-0892040e83bb",
+        cluster_id="8c20f334-cf37-4528-9219-862d75b84c99",
+        manager_node=manager_node_mock,
+    )
+
+
+_RESTORE_PROGRESS_HEADER = """\
+Restore progress
+Run:            e10ec718-a7bf-11ed-b05a-0892040e83bb
+Status:         DONE
+Start time:     23 Feb 24 02:12:00 CET
+End time:       23 Feb 24 02:12:05 CET
+Duration:       5s
+Progress:       100% | 100%
+Snapshot Tag:   sm_20240223011159UTC
+"""
+
+_RESTORE_PROGRESS_KEYSPACES = """
+╭──────────┬─────────────┬──────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace │    Progress │ Size │ Success │ Downloaded │ Failed │ Method │
+├──────────┼─────────────┼──────┼─────────┼────────────┼────────┼────────┤
+│ ks       │ 100% | 100% │ 180B │    180B │       180B │     0B │ rclone │
+╰──────────┴─────────────┴──────┴─────────┴────────────┴────────┴────────╯
+
+Restored views
+View: ks.mv, Status:
+"""
+
+
+@pytest.mark.parametrize(
+    "bandwidth_section,expected",
+    [
+        pytest.param(
+            "Bandwidth:\n  - Download:    22.313MiB/s/shard\n  - Load&stream: 3.556MiB/s/shard\n",
+            (22.313, 3.556),
+            id="header-without-method-note",
+        ),
+        pytest.param(
+            "Bandwidth (rclone restore only):\n  - Download:    22.313MiB/s/shard\n  - Load&stream: 3.556MiB/s/shard\n",
+            (22.313, 3.556),
+            id="header-with-method-note",
+        ),
+        pytest.param("", (None, None), id="no-bandwidth-section"),
+    ],
+)
+def test_restore_task_bandwidth_is_parsed_from_both_header_variants(bandwidth_section, expected):
+    """Manager renamed the header to 'Bandwidth (rclone restore only):' and skips the section for
+    native and tablet restores; both header variants must parse and a missing section must yield None."""
+    task = _restore_task_with_progress(_RESTORE_PROGRESS_HEADER + bandwidth_section + _RESTORE_PROGRESS_KEYSPACES)
+
+    assert (task.download_bw, task.load_and_stream_bw) == expected
+
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE_WITHOUT_METHOD = """
+╭───────────────┬───────────┬────────┬─────────┬────────────┬────────╮
+│ Keyspace      │  Progress │   Size │ Success │ Downloaded │ Failed │
+├───────────────┼───────────┼────────┼─────────┼────────────┼────────┤
+│ ks            │ 77% | 88% │   180B │    140B │       160B │     0B │
+│ system_traces │      100% │ 1.5KiB │  1.5KiB │     1.5KiB │     0B │
+╰───────────────┴───────────┴────────┴─────────┴────────────┴────────╯
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE = """
+╭───────────────┬───────────┬────────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace      │  Progress │   Size │ Success │ Downloaded │ Failed │ Method │
+├───────────────┼───────────┼────────┼─────────┼────────────┼────────┼────────┤
+│ ks            │ 77% | 88% │   180B │    140B │       160B │     0B │ rclone │
+│ system_traces │      100% │ 1.5KiB │  1.5KiB │     1.5KiB │     0B │ rclone │
+╰───────────────┴───────────┴────────┴─────────┴────────────┴────────┴────────╯
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE_ASCII_BORDERS = """
++---------------+-----------+--------+---------+------------+--------+--------+
+| Keyspace      |  Progress |   Size | Success | Downloaded | Failed | Method |
++---------------+-----------+--------+---------+------------+--------+--------+
+| ks            | 77% | 88% |   180B |    140B |       160B |     0B | rclone |
+| system_traces |      100% | 1.5KiB |  1.5KiB |     1.5KiB |     0B | rclone |
++---------------+-----------+--------+---------+------------+--------+--------+
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_NATIVE = """
+╭───────────────┬──────────┬────────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace      │ Progress │   Size │ Success │ Downloaded │ Failed │ Method │
+├───────────────┼──────────┼────────┼─────────┼────────────┼────────┼────────┤
+│ ks            │      77% │   180B │    140B │         0B │     0B │ native │
+│ system_traces │     100% │ 1.5KiB │  1.5KiB │         0B │     0B │ native │
+╰───────────────┴──────────┴────────┴─────────┴────────────┴────────┴────────╯
+"""
+
+
+@pytest.mark.parametrize(
+    "keyspaces_table",
+    [
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE_WITHOUT_METHOD, id="rclone-without-method-column"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE, id="rclone-with-method-column"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE_ASCII_BORDERS, id="rclone-with-method-column-ascii-borders"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_NATIVE, id="native-with-method-column"),
+    ],
+)
+def test_restore_task_keyspace_sizes_come_from_the_size_column(keyspaces_table):
+    """Newer Manager versions append the 'Method' column to the keyspace table, the rclone "X% | Y%" progress
+    cell contains the ASCII border character and the borders are ASCII under a non UTF-8 locale. Sizes must
+    be read from the 'Size' column (not 'Success') with a single sctool call."""
+    task = _restore_task_with_progress(_RESTORE_PROGRESS_HEADER + keyspaces_table)
+
+    assert task.restored_keyspace_sizes() == {"ks": 180, "system_traces": 1536}
+    assert task.manager_node.remoter.sudo.call_count == 1
