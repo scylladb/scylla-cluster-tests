@@ -354,9 +354,11 @@ class TestCredentialGetters:
         assert "https://www.googleapis.com/auth/cloud-platform" in result[0]["scopes"]
         assert "https://www.googleapis.com/auth/compute" in result[0]["scopes"]
 
-    def test_gcp_service_accounts_no_duplicate_scope(self, ks, mocked_s3):
+    def test_gcp_service_accounts_no_duplicate_scope(self, ks, mocked_s3, monkeypatch):
+        # the bucket is module-scoped: write to a project of its own so the shared service accounts stay intact
+        monkeypatch.setenv("SCT_GCE_PROJECT", "gcp-sct-project-dedup")
         sa_data = [{"email": "x", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}]
-        mocked_s3.Object(KEYSTORE_S3_BUCKET, "gcp-sct-project-1_service_accounts.json").put(
+        mocked_s3.Object(KEYSTORE_S3_BUCKET, "gcp-sct-project-dedup_service_accounts.json").put(
             Body=json.dumps(sa_data).encode()
         )
         result = ks.get_gcp_service_accounts()
