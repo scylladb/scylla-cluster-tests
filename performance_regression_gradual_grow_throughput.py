@@ -641,7 +641,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )
             run_step = (
                 latency_calculator_decorator(
-                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+                    legend=f"Gradual test step {current_throttle_step} op/s",
+                    cycle_name=current_throttle_step,
+                    hdr_warmup_sec=self.params.get("perf_steps_hdr_warmup_sec") or 0,
                 )
             )(self.run_step)
             results, _ = run_step(

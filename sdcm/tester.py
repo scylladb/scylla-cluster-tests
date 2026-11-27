@@ -5179,15 +5179,21 @@ class ClusterTester(unittest.TestCase):
         return count_loaders == 1 and self.db_cluster.racks_count > 1
 
     def get_hdrhistogram(
-        self, hdr_tags: list[str], stress_operation: str, start_time: float, end_time: float
+        self,
+        hdr_tags: list[str],
+        stress_operation: str,
+        start_time: float,
+        end_time: float,
+        warmup_sec: int | float = 0,
     ) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
             return {}
         self.log.info(
-            "Build HDR histogram (tags: %s) with start time: %s, end time: %s; for operation: %s",
+            "Build HDR histogram (tags: %s) with start time: %s, end time: %s, warm-up skipped: %ss; for operation: %s",
             hdr_tags,
             start_time,
             end_time,
+            warmup_sec,
             stress_operation,
         )
         histogram_data = make_hdrhistogram_summary(
@@ -5196,6 +5202,7 @@ class ClusterTester(unittest.TestCase):
             start_time=start_time,
             end_time=end_time,
             base_path=self.loaders.logdir,
+            warmup_sec=warmup_sec,
         )
         self.log.info("HDR histogram summary result: %s", histogram_data)
         return histogram_data[0] if histogram_data else {}

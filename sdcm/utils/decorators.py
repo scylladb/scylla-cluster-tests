@@ -197,9 +197,14 @@ def latency_calculator_decorator(  # noqa: PLR0915
     cycle_name: Optional[str] = None,
     workload_type: Optional[str] = None,
     row_name: Optional[str] = None,
+    hdr_warmup_sec: int | float = 0,
 ):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
+
+    hdr_warmup_sec: the first seconds of every loader HDR file, counted from its first interval in
+    the run, are left out of the HDR summary ('hdr_summary', 'cycle_hdr_throughput' and the Argus
+    results built from them). The per-interval 'hdr' view keeps them, to show the ramp-up.
 
     For proper usage, it requires workload name (write, read, mixed) to be included in the test name
     or setting 'workload_name' test parameter.
@@ -310,8 +315,13 @@ def latency_calculator_decorator(  # noqa: PLR0915
                 LOGGER.debug("hdr: %s", result["hdr"])
 
                 result["hdr_summary"] = tester.get_hdrhistogram(
-                    hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
+                    hdr_tags=hdr_tags,
+                    stress_operation=workload,
+                    start_time=start,
+                    end_time=end,
+                    warmup_sec=hdr_warmup_sec,
                 )
+                result["hdr_warmup_sec"] = hdr_warmup_sec
                 LOGGER.debug("HDR summary added to results: %s", result["hdr_summary"])
                 hdr_throughput = 0
                 for summary, values in result["hdr_summary"].items():

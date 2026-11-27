@@ -89,7 +89,15 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  
     return res
 
 
-NON_METRIC_FIELDS = ["screenshots", "hdr", "hdr_summary", "duration", "duration_in_sec", "reactor_stalls_stats"]
+NON_METRIC_FIELDS = [
+    "screenshots",
+    "hdr",
+    "hdr_summary",
+    "duration",
+    "duration_in_sec",
+    "hdr_warmup_sec",
+    "reactor_stalls_stats",
+]
 
 
 def calculate_latency(latency_results):

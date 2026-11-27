@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**19 options.**
+**20 options.**
 
 
 <a id="max_deviation"></a>
@@ -204,6 +204,17 @@ Enable hdr histogram logging for cs
 **default:** False
 
 **type:** bool
+
+
+<a id="perf_steps_hdr_warmup_sec"></a>
+
+## **perf_steps_hdr_warmup_sec** / SCT_PERF_STEPS_HDR_WARMUP_SEC
+
+Perf steps tests (performance_regression_gradual_grow_throughput): the first seconds of every step, counted per loader HDR file from its first interval, left out of the step's HDR summary and the Argus results built from it. The stress tools start each step without a warm-up and the first seconds undershoot the rate and then catch up. The HDR files keep the whole step. A step with no more than twice this much data is kept whole. 0 disables the trimming.
+
+**default:** 30
+
+**type:** int
 
 
 <a id="workload_name"></a>
