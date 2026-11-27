@@ -1,20 +1,19 @@
 """Constants, data classes, and presets for the staging trigger module."""
 
+import os
 from dataclasses import dataclass, field
 
-from sdcm.keystore import KeyStore
 from sdcm.utils.get_username import get_username
 
 CUSTOM_VALUE_SENTINEL = "__custom_value__"
 
 ARGUS_URL = "https://argus.scylladb.com/tests/scylla-cluster-tests"
 SCT_REPO = "git@github.com:scylladb/scylla-cluster-tests.git"
+DEFAULT_JENKINS_URL = "https://jenkins.scylladb.com"
 
 
 def _get_jenkins_url() -> str:
-    """Get Jenkins URL from credentials."""
-    creds = KeyStore().get_json("jenkins.json")
-    return creds["url"].rstrip("/")
+    return os.environ.get("JENKINS_URL", DEFAULT_JENKINS_URL).rstrip("/")
 
 
 def _default_folder() -> str:
