@@ -49,6 +49,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
+| Hermes Support | `blocked` | [hermes-support.md](stress-tools/hermes-support.md) |
 
 ### CI/CD — Jenkins pipelines, Groovy libs
 
@@ -111,6 +112,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Health Check Node Sampling | Health Check Optimization | Sampling is gated on the optimization plan's measured baseline; its go/no-go depends on how much time is left to win |
 | Pipeline Labeling and Documentation | Jenkins Pipeline Config Linter | Labeling complements structural config linting; may reuse Jenkinsfile parser |
 | SCT Config Nested Sections | SCT Config Validation and Lazy Images | Sections own their validation; image resolution stays on the root until lazy images lands |
+| Hermes Support | Cassandra Cluster Support | A Cassandra origin for Hermes on backends other than AWS needs the Cassandra cluster type |
 | Typed Config Access Migration | SCT Config Nested Sections | Converted groups must migrate to nested paths (`params.<section>.<field>`), not flat attributes |
 
 ## Domain Coverage Gaps
