@@ -8,7 +8,9 @@ description: >-
   latency-650gb-with-nemesis, rolling-upgrade, and microbenchmark tests using
   argus run list and argus run results commands. Also refreshes the Perf Weekly
   Trends dashboard (a Claude Artifact graphing these tests per release branch over
-  months); use when asked to update or preview the perf trends dashboard.
+  months); use when asked to update or preview the perf trends dashboard. Also covers
+  the unattended weekly watcher (cron) that alerts on CapacityReservationError runs
+  and drafts the reports.
 ---
 
 # Performance Weekly Status Report
@@ -366,6 +368,15 @@ other agents skip it. See [workflows/update-trends-dashboard.md](workflows/updat
 - Producing a Gmail-friendly report of test pass/fail status with detailed metrics
 - When asked for "perf weekly report", "perf status", or "weekly performance summary"
 
+## Unattended Weekly Watcher
+
+**To run this report every week without being asked, install the watcher from
+[workflows/install-watcher.md](workflows/install-watcher.md).**
+
+It runs this skill from cron through an interactive Claude session in tmux, because `claude -p`
+from cron gets no Slack, Gmail or Artifact tools. The prompt in `watcher/prompt.md` replaces every
+"ask the user" step with a fixed decision, so change behaviour there, not in this file.
+
 ## When NOT to Use
 
 - Comparing two specific versions (use `perf-comparison-report` skill instead)
@@ -393,6 +404,10 @@ These are the enterprise performance tests tracked in the weekly report:
 | cql-raw-weekly-microbenchmark_arm64-write | 68b9d59b-bf4e-4aa1-abea-032e0fd7fa8d | Microbenchmarks |
 | cql-raw-weekly-microbenchmark_x86_64 | e62a078f-924b-4662-a77b-bd9daa6e2241 | Microbenchmarks |
 | cql-raw-weekly-microbenchmark_x86_64-write | 006ddbcc-b344-4bb5-ac1b-374588305aa4 | Microbenchmarks |
+| alternator-weekly-microbenchmark_arm64 | 8e5555c2-031a-4d97-8470-3ccb45ec7d6d | Microbenchmarks |
+| alternator-weekly-microbenchmark_arm64-write | 4381b28e-d072-4a95-a109-c641eb5b069f | Microbenchmarks |
+| alternator-weekly-microbenchmark_x86_64 | 156ce642-ae0d-4ab1-ad3f-22cbb5037e7d | Microbenchmarks |
+| alternator-weekly-microbenchmark_x86_64-write | 6d7aa7ad-a9c7-46c5-8da8-061e21c121ed | Microbenchmarks |
 
 Test names in this table are the Jenkins job names with the `scylla-enterprise-perf-` prefix
 stripped; the jobs live under `scylla-enterprise/perf-regression/` and their pipeline definitions
@@ -403,6 +418,10 @@ under `jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regr
 > Beware the `scylla-staging/yulia/...` copies of the cql-raw jobs: they default `test_name` to
 > `PerfSimpleQueryTest`, so a staging run can silently be a different test. Confirm via the run's
 > `test_method` field before treating a cql-raw run as a cql-raw result.
+>
+> **`alternator-weekly-microbenchmark` is not the alternator perf job.** It runs perf-alternator
+> (master only, since 2026-11-22) and belongs in the report like the other microbenchmarks. The
+> throughput job `scylla-release-perf-regression-alternator` stays out of the registry.
 
 **Most of this registry is usually empty for a given week, and that is expected.** These tests are not all scheduled weekly, and several run predominantly on release branches -- their runs get filtered out by the master-only rule. It is normal for a whole category (such as i8g Vnodes) to contribute zero rows because they only ran release builds such as `2026.2.2` / `2026.1.9`.
 
@@ -538,6 +557,7 @@ Argus link in every row carries the rest.
 | [references/html-template.md](references/html-template.md) | Gmail-compatible HTML template patterns |
 | [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- four release versions, one Overview table each |
 | [references/perf-weekly-status-report-master-example.html](references/perf-weekly-status-report-master-example.html) | Reference rendering of a **master** report -- three `~dev` builds, one Overview table each, and a row carrying the `Investigation in progress` marker |
+| [workflows/install-watcher.md](workflows/install-watcher.md) | Install the unattended watcher: Sunday/Monday/Tuesday checks with Slack alerts on CapacityReservationError, Wednesday reports and drafts ([watcher/](watcher/) holds the prompt, scripts, config and crontab examples) |
 
 ## Success Criteria
 

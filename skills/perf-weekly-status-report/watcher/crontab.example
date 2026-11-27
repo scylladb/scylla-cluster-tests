@@ -1,0 +1,17 @@
+# Perf weekly watcher schedule. Times are the machine's local time.
+# Install: replace SCT_DIR below with your checkout path, then `crontab -e` and paste
+# (or `crontab crontab.example` if you have no other cron jobs).
+# PATH must include the directories of `claude`, `argus` and `tmux` (cron does not expand $HOME).
+PATH=/home/USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Needed so tmux and Claude Code find your desktop session (uid 1000 shown; use `id -u`).
+XDG_RUNTIME_DIR=/run/user/1000
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+TERM=xterm-256color
+
+# Sunday 09:07: inventory of master/release runs since Wednesday 08:00, Slack DM on capacity errors
+7 9 * * 0 SCT_DIR/skills/perf-weekly-status-report/watcher/run.sh SUNDAY
+# Sunday 17:07, Monday and Tuesday 09:07 and 17:07: new triggers and status changes
+7 17 * * 0 SCT_DIR/skills/perf-weekly-status-report/watcher/run.sh MONITOR
+7 9,17 * * 1,2 SCT_DIR/skills/perf-weekly-status-report/watcher/run.sh MONITOR
+# Wednesday 08:07: reports, and draft emails when every run is complete
+7 8 * * 3 SCT_DIR/skills/perf-weekly-status-report/watcher/run.sh WEDNESDAY
