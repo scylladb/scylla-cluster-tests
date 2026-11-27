@@ -28,14 +28,14 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-526 options across 29 groups.
+527 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 75 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 43 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 73 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
@@ -156,6 +156,7 @@ concerns first, then one page per backend, then one per test type.
 | [`compaction_strategy`](configuration_options/longevity-tests.md#compaction_strategy) | `SCT_COMPACTION_STRATEGY` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`config_files`](configuration_options/general-and-provisioning.md#config_files) | `SCT_CONFIG_FILES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`cs_debug`](configuration_options/stress-commands-and-load-generation.md#cs_debug) | `SCT_CS_DEBUG` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
+| [`cs_docker_memory_limit_percent`](configuration_options/stress-commands-and-load-generation.md#cs_docker_memory_limit_percent) | `SCT_CS_DOCKER_MEMORY_LIMIT_PERCENT` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_duration`](configuration_options/stress-commands-and-load-generation.md#cs_duration) | `SCT_CS_DURATION` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_extra_jvm_opts`](configuration_options/stress-commands-and-load-generation.md#cs_extra_jvm_opts) | `SCT_CS_EXTRA_JVM_OPTS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`cs_populating_distribution`](configuration_options/stress-commands-and-load-generation.md#cs_populating_distribution) | `SCT_CS_POPULATING_DISTRIBUTION` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
