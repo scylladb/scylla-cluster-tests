@@ -4,7 +4,7 @@
 
 Options specific to long-running longevity test scenarios.
 
-**13 options.**
+**14 options.**
 
 
 <a id="cluster_target_size"></a>
@@ -27,6 +27,17 @@ Used with [`cluster_target_size`](#cluster_target_size) in longevity_test.test_c
 **default:** False
 
 **type:** bool
+
+
+<a id="minimum_nemesis_to_execute"></a>
+
+## **minimum_nemesis_to_execute** / SCT_MINIMUM_NEMESIS_TO_EXECUTE
+
+Used in longevity_test.test_custom_time. When [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) ends and fewer nemeses than this number<br>were executed, [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) is run again, one full round after another, until the number is reached.<br>A nemesis counts once it ran to its end, whether it succeeded or failed. A skipped nemesis does<br>not count. The count is checked only between the rounds. With [`grow_cluster_during_stress`](#grow_cluster_during_stress), it is<br>checked from the end of the round that runs on the full-size cluster.<br>The rounds stop before the number is reached when a round failed. They also stop, with a warning<br>event, when no nemesis thread is running or when one more round could outlast [`test_duration`](general-and-provisioning.md#test_duration): a<br>round is expected to take as long as the last one did, and up to 5 minutes more.<br>An integer, 0 or more. 0 means no minimum: [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) is not run again for the nemesis.<br>Example: [`minimum_nemesis_to_execute`](#minimum_nemesis_to_execute): 5
+
+**default:** 0
+
+**type:** int
 
 
 <a id="compaction_strategy"></a>

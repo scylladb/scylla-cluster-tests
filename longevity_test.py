@@ -22,6 +22,7 @@ import re
 import string
 import tempfile
 import threading
+import time
 from functools import cached_property
 from typing import Dict, List
 
@@ -50,6 +51,8 @@ from sdcm.utils.parallel_object import ParallelObject
 GROWTH_NAME = "GrowCluster"
 # How long a stopped test waits for the nodes of a growth batch that are being created, in seconds.
 GROWTH_BATCH_CREATION_TIMEOUT = 30 * 60
+# One more stress_cmd round is expected to take as long as the last one did, and up to this many seconds more.
+STRESS_ROUND_MARGIN = 5 * 60
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -219,6 +222,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         stress_cmd = self.params.get("stress_cmd")
         stress_round_start = len(stress_queue)
+        stress_round_started = time.time()
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
         stress_round = stress_queue[stress_round_start:]
 
@@ -257,6 +261,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             params = {"keyspace_num": keyspace_num, "stress_cmd": stress_read_cmd}
             self._run_all_stress_cmds(stress_queue, params)
 
+        # The growth already ran stress_cmd again for the nemesis, after the round on the full-size cluster.
+        if not grow_during_stress and self.params.get("minimum_nemesis_to_execute"):
+            self._rerun_stress_cmd(stress_queue, stress_round, keyspace_num, round_started=stress_round_started)
+
         for stress in stress_queue:
             self.verify_stress_thread(stress)
 
@@ -275,8 +283,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         `stress_round` holds the stress_cmd threads that are already running. Each new round is appended to
         `stress_queue` too, so every round is verified with the rest of the load.
 
-        The last round is the one that started after the cluster reached its target size, so the full-size
-        cluster gets a full round of the load and the nemesis.
+        The round that started after the cluster reached its target size gives the full-size cluster a full
+        round of the load and the nemesis. It is the last round, unless `minimum_nemesis_to_execute` asks for
+        more, see `_rerun_stress_cmd`.
 
         A round that failed is not run again: it would fail again every few seconds for as long as the growth
         lasts. The cluster then keeps growing without the stress_cmd load.
@@ -299,35 +308,114 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         # A daemon thread, like the nemesis threads, so that a stopped test never waits for it.
         threading.Thread(target=grow, name=GROWTH_NAME, daemon=True).start()
         try:
-            started_after_growth = False  # the first round started before the growth
-            # An empty round (no stress_cmd, or main_load skipped) has nothing to re-run: just wait for the growth.
-            while stress_round:
-                concurrent.futures.wait([future for thread in stress_round for future in thread.results_futures])
-                grown = growth.done()
-                if started_after_growth or (grown and growth.exception()):
-                    break
-                if not all([self.verify_stress_thread(thread) for thread in stress_round]):
-                    TestFrameworkEvent(
-                        source=self.__class__.__name__,
-                        source_method="_grow_cluster_under_stress",
-                        message="stress_cmd failed, so it is not run again"
-                        + ("" if grown else ". The cluster keeps growing without this load"),
-                        severity=Severity.ERROR,
-                    ).publish()
-                    break
-                InfoEvent(
-                    message="The cluster reached its target size, running stress_cmd once more on the full-size cluster"
-                    if grown
-                    else "stress_cmd finished before the cluster reached its target size, running it again"
-                ).publish()
-                started_after_growth = grown
-                stress_round_start = len(stress_queue)
-                self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get("stress_cmd"), keyspace_num)
-                stress_round = stress_queue[stress_round_start:]
+            self._rerun_stress_cmd(stress_queue, stress_round, keyspace_num, growth)
             growth.result()
         finally:
             stop_growth.set()  # changes nothing once the growth ended
             self._wait_for_batch_creation(creating_batch)
+
+    def _rerun_stress_cmd(
+        self,
+        stress_queue: list,
+        stress_round: list,
+        keyspace_num: int,
+        growth: concurrent.futures.Future | None = None,
+        round_started: float | None = None,
+    ) -> None:
+        """Wait for `stress_round`, and run stress_cmd again for as long as there is a reason to.
+
+        `stress_round` holds the stress_cmd threads that are already running. Each new round is appended to
+        `stress_queue` too, so every round is verified with the rest of the load.
+
+        While `growth` runs, the reason is the growth: the cluster is to grow under the load. The round that
+        starts after it is the first one on the full-size cluster. Without `growth`, the cluster has its full
+        size from the first round on.
+
+        After a full round on the full-size cluster, the only reason is `minimum_nemesis_to_execute`, see
+        `_reason_to_rerun_stress_cmd_for_nemesis`. That check needs the time that the round took:
+        `round_started` is when `stress_round` was started, and it defaults to now. With `growth`, the
+        default is enough: the first round is never checked for the nemesis.
+
+        A round that failed is not run again, whatever the reason.
+        """
+        on_full_size_cluster = growth is None  # whether the round that is running started on the full-size cluster
+        round_started = round_started or time.time()
+        # An empty round (no stress_cmd, or main_load skipped) has nothing to re-run.
+        while stress_round:
+            self._wait_for_stress_round(stress_round)
+            round_duration = time.time() - round_started
+            grown = growth is None or growth.done()
+            if growth and grown and growth.exception():
+                break
+            if not on_full_size_cluster:
+                reason = (
+                    "The cluster reached its target size, running stress_cmd once more on the full-size cluster"
+                    if grown
+                    else "stress_cmd finished before the cluster reached its target size, running it again"
+                )
+            elif not (reason := self._reason_to_rerun_stress_cmd_for_nemesis(round_duration)):
+                break
+            if not all([self.verify_stress_thread(thread) for thread in stress_round]):
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method="_rerun_stress_cmd",
+                    message="stress_cmd failed, so it is not run again"
+                    + ("" if grown else ". The cluster keeps growing without this load"),
+                    severity=Severity.ERROR,
+                ).publish()
+                break
+            InfoEvent(message=reason).publish()
+            on_full_size_cluster = grown
+            stress_round_start = len(stress_queue)
+            round_started = time.time()
+            self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get("stress_cmd"), keyspace_num)
+            stress_round = stress_queue[stress_round_start:]
+
+    @staticmethod
+    def _wait_for_stress_round(stress_round: list) -> None:
+        """Wait for every stress thread of the round to end, without reading its results."""
+        for thread in stress_round:
+            if isinstance(thread, threading.Thread):  # a python_thread command is a plain thread, with no futures
+                thread.join()
+            else:
+                concurrent.futures.wait(thread.results_futures)
+
+    def _reason_to_rerun_stress_cmd_for_nemesis(self, round_duration: float) -> str | None:
+        """Tell why stress_cmd is to run again for `minimum_nemesis_to_execute`, or None when it is not.
+
+        A nemesis counts once it ran to its end, succeeded or failed, in any nemesis thread of the test. A
+        skipped nemesis does not count, and neither does the one that is running now.
+
+        Below the minimum, stress_cmd is still not run again, and a warning event tells why, when:
+        - no nemesis thread is running, so the minimum cannot be reached.
+        - one more round could outlast `test_duration`. `round_duration` is the time in seconds that the last
+          round took: the next one is expected to take as long, and up to `STRESS_ROUND_MARGIN` more.
+        """
+        if not (minimum := self.params.get("minimum_nemesis_to_execute")):
+            return None
+        executed = sum(nemesis.executed_count for nemesis in self.db_cluster.nemesis)
+        if executed >= minimum:
+            InfoEvent(message=f"{executed} nemeses were executed, the minimum of {minimum} is reached").publish()
+            return None
+
+        time_left = int(self.start_time + int(self.test_duration) * 60 - time.time())
+        if not any(thread.is_alive() for thread in self.db_cluster.nemesis_threads):
+            obstacle = "no nemesis thread is running"
+        elif time_left < round_duration + STRESS_ROUND_MARGIN:
+            obstacle = (
+                f"the last round took {int(round_duration)} seconds, one more can take {STRESS_ROUND_MARGIN} seconds"
+                f" longer, and the test times out in {time_left} seconds"
+            )
+        else:
+            return f"{executed} of the minimum of {minimum} nemeses were executed, running stress_cmd again"
+        TestFrameworkEvent(
+            source=self.__class__.__name__,
+            source_method="_reason_to_rerun_stress_cmd_for_nemesis",
+            message=f"Only {executed} of the minimum of {minimum} nemeses were executed,"
+            f" and stress_cmd is not run again: {obstacle}",
+            severity=Severity.WARNING,
+        ).publish()
+        return None
 
     def _wait_for_batch_creation(self, creating_batch: threading.Lock) -> None:
         """Wait for the batch of nodes that the growth is creating, if any, before the teardown of a stopped test.

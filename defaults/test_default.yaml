@@ -44,6 +44,7 @@ cluster_health_check_parallel_workers: 5
 
 add_node_cnt: 1
 grow_cluster_during_stress: false
+minimum_nemesis_to_execute: 0
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true

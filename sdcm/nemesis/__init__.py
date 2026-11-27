@@ -326,6 +326,11 @@ class NemesisRunner:
         """
         return random.Random(self.nemesis_seed)
 
+    @property
+    def executed_count(self) -> int:
+        """Number of disruptions of this runner that ran to their end, succeeded or failed. Skipped ones don't count."""
+        return sum(operation["subtype"] != NemesisStatus.SKIPPED.value for operation in self.operation_log)
+
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
             data = {}

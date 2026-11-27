@@ -218,3 +218,18 @@ def test_add_and_init_new_cluster_nodes_raises_nodesetupfailed_when_add_nodes_re
     nemesis_runner.cluster.add_nodes = MagicMock(return_value=None)
     with pytest.raises(NodeSetupFailed):
         nemesis_runner._add_and_init_new_cluster_nodes(count=1, rack=0)
+
+
+def test_executed_count_has_the_nemeses_that_ran_and_not_the_skipped_ones(
+    nemesis, failing_nemesis, skipping_nemesis, nemesis_runner
+):
+    assert nemesis_runner.executed_count == 0
+
+    nemesis_runner.execute_nemesis(nemesis)
+    nemesis_runner.execute_nemesis(failing_nemesis)
+    with pytest.raises(UnsupportedNemesis):
+        nemesis_runner.execute_nemesis(skipping_nemesis)
+
+    # the nemesis that failed did run; the skipped one did not
+    assert len(nemesis_runner.operation_log) == 3
+    assert nemesis_runner.executed_count == 2

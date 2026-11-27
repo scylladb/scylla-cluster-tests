@@ -44,6 +44,21 @@ class LongevityConfigMixin(BaseModel):
             When false, the cluster is grown before stress_cmd and the nemesis start.
         """,
     )
+    minimum_nemesis_to_execute: int = SctField(
+        ge=0,
+        description="""
+            Used in longevity_test.test_custom_time. When stress_cmd ends and fewer nemeses than this number
+            were executed, stress_cmd is run again, one full round after another, until the number is reached.
+            A nemesis counts once it ran to its end, whether it succeeded or failed. A skipped nemesis does
+            not count. The count is checked only between the rounds. With grow_cluster_during_stress, it is
+            checked from the end of the round that runs on the full-size cluster.
+            The rounds stop before the number is reached when a round failed. They also stop, with a warning
+            event, when no nemesis thread is running or when one more round could outlast test_duration: a
+            round is expected to take as long as the last one did, and up to 5 minutes more.
+            An integer, 0 or more. 0 means no minimum: stress_cmd is not run again for the nemesis.
+            Example: minimum_nemesis_to_execute: 5
+        """,
+    )
     compaction_strategy: String = SctField(
         description="Compaction strategy to use for pre-created schema",
     )
