@@ -300,7 +300,7 @@ DecommissionStreamingErrMonkey:
   networking: false
   schema_changes: false
   sla: false
-  supports_high_disk_utilization: true
+  supports_high_disk_utilization: false
   topology_changes: true
   xcloud: false
   zero_node_changes: false
