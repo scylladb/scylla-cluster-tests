@@ -242,6 +242,8 @@ def test_minicloud_config_sizing_params_are_honoured():
             "minicloud_lightweight_vcpus": 4,
             "minicloud_container_memory": "48GiB",
             "minicloud_container_cpus": "12",
+            "minicloud_max_vms": 6,
+            "minicloud_max_vm_memory": "48GiB",
             "minicloud_container_name": "minicloud-ci",
             "minicloud_state_dir": "/mnt/nvme/minicloud",
         }
@@ -249,6 +251,7 @@ def test_minicloud_config_sizing_params_are_honoured():
     assert config.lightweight_vcpus == 4
     assert config.container_memory == "48GiB"
     assert config.container_cpus == "12"
+    assert (config.max_vms, config.max_vm_memory) == ("6", "48GiB")
     assert config.container_name == "minicloud-ci"
     assert config.state_dir == "/mnt/nvme/minicloud"
 
@@ -258,6 +261,7 @@ def test_minicloud_config_sizing_defaults():
     assert config.lightweight_vcpus == MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
     assert config.container_memory == ""  # empty means "no docker limit"
     assert config.container_cpus == ""
+    assert (config.max_vms, config.max_vm_memory) == ("", "")  # empty means "no cap"
     assert config.container_name == MINICLOUD_CONTAINER_NAME
     assert config.state_dir == os.path.expanduser(MINICLOUD_STATE_DIR_DEFAULT)
 
