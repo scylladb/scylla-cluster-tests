@@ -97,6 +97,7 @@ from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     decorate_with_context_if_issues_open,
+    ignore_audit_log_timeouts,
     ignore_disk_quota_exceeded_errors,
     ignore_drop_table_during_repair_errors,
     ignore_ipv6_failure_to_assign,
@@ -1846,6 +1847,7 @@ class NemesisRunner:
         try:
             self.set_target_node()
             with (
+                ignore_audit_log_timeouts() if nemesis.disruptive else contextlib.nullcontext(),
                 DisruptionEvent(
                     nemesis_name=disruption_name, node=self.target_node, publish_event=True
                 ) as nemesis_event,

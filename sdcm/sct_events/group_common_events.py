@@ -247,6 +247,22 @@ def ignore_mutation_write_errors():
 
 
 @contextmanager
+def ignore_audit_log_timeouts():
+    """Downgrade audit log write timeouts, expected while nodes are down.
+
+    Not global: the same error without any disruption was a real bug (SCYLLADB-5625).
+    See: https://scylladb.atlassian.net/browse/SCT-1444
+    """
+    with EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=r".*audit - Unexpected exception when writing.*Operation timed out for audit\.audit_log",
+        extra_time_to_expiration=30,
+    ):
+        yield
+
+
+@contextmanager
 def ignore_reactor_stall_errors():
     with EventsSeverityChangerFilter(
         new_severity=Severity.WARNING, event_class=DatabaseLogEvent, regex=r".*Reactor stalled for"
