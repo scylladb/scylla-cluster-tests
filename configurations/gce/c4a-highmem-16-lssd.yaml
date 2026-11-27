@@ -1,0 +1,5 @@
+gce_instance_type_db: 'c4a-highmem-16-lssd'
+gce_root_disk_type_db: 'hyperdisk-balanced'
+gce_n_local_ssd_disk_db: 0  # the -lssd shape bundles its Titanium SSDs
+gce_instance_type_loader: 'c4-highcpu-32'
+gce_root_disk_type_loader: 'hyperdisk-balanced'
