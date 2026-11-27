@@ -30,9 +30,9 @@ YAML_ISSUE = re.compile(r"^\s*-?\s*issue:\s*['\"]?(?P<v>[^'\"#\s]+)")
 RUNTIME_REF = re.compile(r"(?:/(?:issues|pull)/|[\w.-]+/[\w.-]+#|jira:[A-Z0-9-]*|browse/[A-Z0-9-]*)$", re.IGNORECASE)
 # a %-conversion: %s, %d, %5d, %(issue)s, ...
 PERCENT_CONVERSION = re.compile(r"%(?:\([^)]*\))?[-#0 +]*\d*(?:\.\d+)?[a-zA-Z]")
-# the reader builds `jira:<key>` from its argument and holds no refs of its own;
-# .github/ holds CI helpers that build GitHub API URLs (`/repos/{repo}/issues/{n}/labels`)
-SKIPPED_PATHS = ("unit_tests/", "sdcm/utils/issues.py", ".github/")
+# the reader and this package build `jira:<key>` and GitHub API URLs (`/repos/{repo}/issues/{n}`)
+# from their arguments and hold no refs of their own; so do the CI helpers in .github/
+SKIPPED_PATHS = ("unit_tests/", "sdcm/utils/issues.py", "utils/issues_cache/", ".github/")
 
 
 def normalize(value: str) -> str | None:

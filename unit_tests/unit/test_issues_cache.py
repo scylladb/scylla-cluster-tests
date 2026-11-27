@@ -109,6 +109,8 @@ def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
     (repo / "unit_tests" / "test_a.py").write_text('SkipPerIssues("scylladb/scylladb#2", p)\n')
     (repo / ".github").mkdir()
     (repo / ".github" / "labels.py").write_text('URL = f"https://api.github.com/repos/{repo}/issues/{n}/labels"\n')
+    (repo / "utils" / "issues_cache").mkdir(parents=True)
+    (repo / "utils" / "issues_cache" / "github.py").write_text('gh("GET", f"/repos/{owner}/{repo}/issues/{number}")\n')
     _git(repo, "init", "-q")
     _git(repo, "add", ".")
     _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
@@ -122,7 +124,7 @@ def test_scan_writes_manifest_for_matching_branches_only(tmp_path):
     assert set(manifest) == {"version", "repo", "label", "label_description", "generated_at", "refs", "unresolved"}
     assert manifest["version"] == 1
     assert manifest["label"] == "used-by-sct"
-    # unit_tests/, .github/ and third-party orgs are excluded; feature-x doesn't match the branch pattern
+    # unit_tests/, utils/issues_cache/, .github/ and third-party orgs are excluded; feature-x doesn't match the branch pattern
     assert manifest["refs"] == {"scylladb/scylladb#1": [{"branch": "master", "file": "sdcm/a.py"}]}
     assert manifest["unresolved"] == ["master:sdcm/a.py:3"]
 
