@@ -1,7 +1,12 @@
 import json
 
+import pytest
+
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.test_config import TestConfig
+
+# the tests set values on the process-wide TestConfig
+pytestmark = pytest.mark.usefixtures("restore_test_config")
 
 
 def test_can_generate_valid_scylla_machine_image_payload():

@@ -104,7 +104,7 @@ def params(monkeypatch, provisioner_dir: Path):
 
 
 @pytest.fixture
-def test_config(params):
+def test_config(params, restore_test_config):
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     TestConfig.SYSLOGNG_ADDRESS = ("localhost", 12345)

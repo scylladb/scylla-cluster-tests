@@ -18,6 +18,9 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
+# the tests set values on the process-wide TestConfig
+pytestmark = pytest.mark.usefixtures("restore_test_config")
+
 
 @pytest.fixture
 def make_config(monkeypatch, defaults_dir):

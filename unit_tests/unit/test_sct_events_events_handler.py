@@ -13,12 +13,17 @@
 import time
 import unittest.mock
 
+import pytest
+
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_processes import EVENTS_HANDLER_ID, get_events_process
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.test_config import TestConfig
 from unit_tests.lib.events_utils import EventsUtilsMixin
+
+# the tests set values on the process-wide TestConfig
+pytestmark = pytest.mark.usefixtures("restore_test_config")
 
 
 class TestEventsHandler(EventsUtilsMixin):

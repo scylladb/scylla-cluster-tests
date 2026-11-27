@@ -24,6 +24,9 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from unit_tests.lib.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
 
+# the tests set values on the process-wide TestConfig
+pytestmark = pytest.mark.usefixtures("restore_test_config")
+
 DECODED_BY_SERVICE = "decoded-by-external"
 BUILD_ID = "abc123"
 RAW_TOPOLOGY_BARRIER_STALL_BACKTRACES = [
@@ -49,9 +52,7 @@ def test_config_fixture():
     config.set_decoding_queue()
     config.BACKTRACE_DECODING = True
     config.DECODING_QUEUE = Queue()
-    yield config
-    TestConfig.BACKTRACE_DECODING = False
-    TestConfig.DECODING_QUEUE = None
+    return config
 
 
 @pytest.fixture(name="dummy_node")

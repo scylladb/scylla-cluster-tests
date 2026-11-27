@@ -19,7 +19,7 @@ pytestmark = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def test_config():
+def test_config(restore_test_config):
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     config.SYSLOGNG_ADDRESS = ("localhost", 12345)
