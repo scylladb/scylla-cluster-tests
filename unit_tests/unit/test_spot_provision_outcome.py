@@ -77,6 +77,7 @@ def _run_real(plan, instance_type="i4i.2xlarge"):
 
 
 def test_event_records_spot_success():
+    """A plan whose spot step succeeds records requested and realized Spot with the instance type and count."""
     instances, mock_event = _run(_plan("Spot", "OnDemand", results=[["i-123"]]))
 
     assert instances == ["i-123"]
@@ -98,6 +99,7 @@ def test_event_flags_silent_downgrade_to_on_demand():
 
 
 def test_event_records_total_failure():
+    """A plan where every step fails returns no instances and records no realized step."""
     instances, mock_event = _run(_plan("Spot", "OnDemand", results=[[], []]))
 
     assert instances == []
@@ -105,11 +107,13 @@ def test_event_records_total_failure():
 
 
 def test_event_published_exactly_once_per_plan():
+    """A plan publishes a single outcome event, even when it falls through several steps."""
     _, mock_event = _run(_plan("Spot", "OnDemand", results=[[], ["i-123"]]))
     assert mock_event.call_count == 1
 
 
 def test_on_demand_only_plan_reports_no_downgrade():
+    """An on-demand-only plan records OnDemand as both requested and realized."""
     _, mock_event = _run(_plan("OnDemand", results=[["i-123"]]))
 
     kwargs = mock_event.call_args.kwargs
@@ -127,6 +131,7 @@ def test_on_demand_only_plan_reports_no_downgrade():
     ],
 )
 def test_event_severity_and_downgrade_flag(requested, realized, downgraded, severity):
+    """The event flags only a spot-to-on-demand fall-through as a downgrade; downgrades and failures are WARNING."""
     event = SpotProvisionOutcomeEvent(
         requested=requested, realized=realized, region="eu-west-1", availability_zone="a", count=3
     )
@@ -139,6 +144,7 @@ def test_event_severity_and_downgrade_flag(requested, realized, downgraded, seve
 
 
 def test_event_message_is_greppable():
+    """The event message carries requested, realized, downgraded, region, AZ and count as greppable key=value pairs."""
     event = SpotProvisionOutcomeEvent(
         requested="Spot",
         realized="OnDemand",
@@ -153,6 +159,7 @@ def test_event_message_is_greppable():
 
 
 def test_missing_instance_type_does_not_break_the_event():
+    """An event built without an instance type reports it as "unknown"."""
     event = SpotProvisionOutcomeEvent(requested="Spot", realized="Spot", region="eu-west-1", availability_zone="a")
     assert event.instance_type == "unknown"
 
@@ -173,6 +180,7 @@ def test_no_internal_warning_when_no_events_device(caplog):
 
 
 def test_outcome_logged_at_info_when_not_downgraded(caplog):
+    """A spot outcome without a downgrade is logged at INFO."""
     with caplog.at_level(logging.INFO, logger="sdcm.provision.common.provision_plan"):
         _run_real(_plan("Spot", "OnDemand", results=[["i-123"]]))
 
@@ -203,6 +211,7 @@ class TestArgusHandoff:
         _run_real(_plan("Spot", "OnDemand", results=results))
 
     def test_outcome_is_recorded_for_handoff(self):
+        """A provisioning outcome is stored in TestConfig.SPOT_PROVISION_OUTCOMES for the later Argus handoff."""
         self._provision([["i-1"]])
         assert len(TestConfig.SPOT_PROVISION_OUTCOMES) == 1
         assert TestConfig.SPOT_PROVISION_OUTCOMES[0]["realized"] == "Spot"
@@ -215,10 +224,12 @@ class TestArgusHandoff:
         assert outcome["severity"] == "WARNING"
 
     def test_message_is_not_double_prefixed(self):
+        """The stored outcome message omits the event class name prefix."""
         self._provision([["i-1"]])
         assert TestConfig.SPOT_PROVISION_OUTCOMES[0]["message"].count("SpotProvisionOutcomeEvent") == 0
 
     def test_submitter_drains_and_submits(self):
+        """The Argus reporter submits each stored outcome as an event and empties the store."""
         self._provision([[], ["i-1"]])
         test_config = MagicMock()
         client = MagicMock()
@@ -240,12 +251,14 @@ class TestArgusHandoff:
         sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
 
     def test_submit_event_failure_is_swallowed(self):
+        """The Argus reporter swallows a submit_event error."""
         self._provision([["i-1"]])
         test_config = MagicMock()
         test_config.argus_client.return_value.submit_event.side_effect = RuntimeError("boom")
         sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
 
     def test_nothing_submitted_when_no_outcomes(self):
+        """The Argus reporter skips creating an Argus client when there is no stored outcome."""
         TestConfig.SPOT_PROVISION_OUTCOMES.clear()
         test_config = MagicMock()
         sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)

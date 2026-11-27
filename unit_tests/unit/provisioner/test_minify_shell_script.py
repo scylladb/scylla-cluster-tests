@@ -32,6 +32,7 @@ def _run(script: str) -> subprocess.CompletedProcess:
 
 
 def test_heredoc_bodies_reach_the_file_byte_for_byte(tmp_path):
+    """Minifying strips comments and indentation but writes heredoc bodies (plain and <<-) unchanged."""
     body = "sources:\n    journald:\n        type: journald\n\n# a YAML comment, not a shell one\n"
     script = dedent(f"""
         # write the config
@@ -54,6 +55,7 @@ def test_heredoc_bodies_reach_the_file_byte_for_byte(tmp_path):
 
 
 def test_keeps_hash_signs_which_are_not_comments():
+    """Minifying keeps '#' inside quotes and in $#, removing only real trailing comments."""
     script = dedent("""
         set -- a b
         echo "$# # not a comment"
@@ -66,11 +68,13 @@ def test_keeps_hash_signs_which_are_not_comments():
 
 
 def test_keeps_the_shebang():
+    """Minifying keeps the shebang line while dropping comment lines."""
     assert minify_shell_script("#!/bin/bash\n# comment\necho x\n") == "#!/bin/bash\necho x\n"
 
 
 @pytest.mark.parametrize("logs_transport", ["vector", "syslog-ng", "libssh2"])
 def test_aws_boot_script_is_valid_bash(logs_transport):
+    """The AWS boot script passes 'bash -n' for every logs transport, with docker and ipv6 workaround on."""
     script = AWSConfigurationScriptBuilder(
         syslog_host_port=("10.0.0.1", 49153),
         logs_transport=logs_transport,

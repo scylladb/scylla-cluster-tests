@@ -17,6 +17,7 @@ from sdcm.test_config import TestConfig
 
 
 def prepare_fake_region(test_id: str, region: str, n_db_nodes: int = 3, n_loaders: int = 2, n_monitor_nodes: int = 1):
+    """Provision fake-backend spot VMs for the db, loader and monitor nodes of one region."""
     params = {
         "test_id": test_id,
         "fake_image_db": "test:image:db:2",

@@ -41,6 +41,7 @@ def embedded_python() -> str:
 
 
 def imds_interface(mac: str, private_ip: str, subnet: str, prefix: str = "24") -> dict:
+    """Return an IMDS interface entry with one IPv4 address and subnet and no IPv6 address."""
     return {
         "ipv4": {
             "ipAddress": [{"privateIpAddress": private_ip, "publicIpAddress": ""}],
@@ -101,6 +102,7 @@ def test_primary_nic_is_left_untouched(run_script):
 
 
 def test_secondary_nic_gets_address_rule_and_routes(run_script):
+    """A secondary NIC gets brought up with its address, a source rule, a subnet route and a .1 default route."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -119,6 +121,7 @@ def test_secondary_nic_gets_address_rule_and_routes(run_script):
 
 
 def test_each_secondary_nic_gets_its_own_routing_table(run_script):
+    """A NIC with no OS device fails the run with an error, while the configured secondary NIC still gets table 101."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -135,7 +138,7 @@ def test_each_secondary_nic_gets_its_own_routing_table(run_script):
 
 
 def test_incomplete_metadata_fails_loudly(run_script):
-    """A half-configured NIC breaks much later as a confusing connectivity error, so fail here."""
+    """A NIC with incomplete IMDS metadata fails the run with a 'metadata is incomplete' error."""
     result, _ = run_script(
         [imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"), {"macAddress": SECONDARY_MAC, "ipv4": {}}],
         expected_nics=2,
@@ -160,6 +163,7 @@ def test_rerunning_does_not_stack_duplicate_rules(run_script):
 
 
 def imds_dual_stack_interface(mac: str, private_ip: str, subnet: str, ipv6_address: str, ipv6_subnet: str) -> dict:
+    """Return an IMDS interface entry with both IPv4 and IPv6 addresses and subnets."""
     interface = imds_interface(mac, private_ip, subnet)
     interface["ipv6"] = {
         "ipAddress": [{"privateIpAddress": ipv6_address}],
@@ -169,6 +173,7 @@ def imds_dual_stack_interface(mac: str, private_ip: str, subnet: str, ipv6_addre
 
 
 def test_dual_stack_secondary_nic_gets_ipv6_address_rule_and_routes(run_script):
+    """A dual-stack secondary NIC also gets an IPv6 address, rule, subnet route and a ::1 default route."""
     result, commands = run_script(
         [
             imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),
@@ -186,6 +191,7 @@ def test_dual_stack_secondary_nic_gets_ipv6_address_rule_and_routes(run_script):
 
 
 def test_ipv4_only_nic_issues_no_ipv6_command(run_script):
+    """An IPv4-only NIC is configured with IPv4 'ip' commands only."""
     result, commands = run_script(
         [
             imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
@@ -199,6 +205,7 @@ def test_ipv4_only_nic_issues_no_ipv6_command(run_script):
 
 
 def test_ipv4_routing_is_unaffected_by_the_ipv6_configuration(run_script):
+    """On a dual-stack NIC the IPv4 rule and default route stay the same as on an IPv4-only one."""
     result, commands = run_script(
         [
             imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),

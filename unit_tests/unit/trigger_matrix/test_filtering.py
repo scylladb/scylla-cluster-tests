@@ -19,57 +19,67 @@ from sdcm.utils.trigger_matrix.models import JobConfig
 
 
 def test_no_filters_returns_all(sample_jobs):
+    """With only a version that no job excludes, every sample job is selected."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4")
     assert len(result) == 4
 
 
 def test_version_exclusion_always_applies(sample_jobs):
+    """exclude_versions applies on its own: the master-excluded job drops out for master:latest."""
     result = filter_jobs(sample_jobs, scylla_version="master:latest")
     assert len(result) == 3
     assert all(j.job_name != "job-d" for j in result)
 
 
 def test_filter_by_labels_single(sample_jobs):
+    """A single label selector keeps only the jobs carrying that label."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="weekly")
     assert len(result) == 2
     assert all("weekly" in j.labels for j in result)
 
 
 def test_filter_by_labels_multiple_and_logic(sample_jobs):
+    """Comma-separated labels are ANDed: only the job carrying both labels is kept."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="weekly,additional")
     assert len(result) == 1
     assert result[0].job_name == "job-b"
 
 
 def test_filter_by_labels_alternatives_or_logic(sample_jobs):
+    """Slash-separated labels are ORed: jobs carrying either label are kept."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="additional/master-weekly")
     assert {j.job_name for j in result} == {"job-b", "job-d"}
 
 
 def test_filter_by_labels_alternatives_combined_with_and(sample_jobs):
+    """Slash alternatives combine with comma AND: weekly AND (additional OR master-weekly) keeps only job-b."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="weekly,additional/master-weekly")
     assert [j.job_name for j in result] == ["job-b"]
 
 
 def test_filter_by_backend(sample_jobs):
+    """A backend filter keeps only the jobs on that backend."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", backend="aws")
     assert len(result) == 2
     assert all(j.backend == "aws" for j in result)
 
 
 def test_filter_by_version_exclusion(sample_jobs):
+    """A job excluding 2024.1 drops out for a 2024.1.x release by prefix match."""
     result = filter_jobs(sample_jobs, scylla_version="2024.1.5")
     assert len(result) == 3
     assert all(j.job_name != "job-b" for j in result)
 
 
 def test_filter_by_version_exclusion_master(sample_jobs):
+    """A job excluding master drops out for master:latest."""
     result = filter_jobs(sample_jobs, scylla_version="master:latest")
     assert len(result) == 3
     assert all(j.job_name != "job-d" for j in result)
 
 
 def test_filter_skip_list(sample_jobs):
+    """Jobs named in skip_jobs are removed from the selection."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4", skip_jobs=["job-a", "job-c"])
     assert len(result) == 2
     names = {j.job_name for j in result}
@@ -77,11 +87,13 @@ def test_filter_skip_list(sample_jobs):
 
 
 def test_no_selector_returns_all_eligible(sample_jobs):
+    """With no label selector, every job eligible for the version is selected."""
     result = filter_jobs(sample_jobs, scylla_version="2025.4")
     assert len(result) == 4
 
 
 def test_combined_filters(sample_jobs):
+    """Label and backend filters apply together, leaving only the job matching both."""
     result = filter_jobs(
         sample_jobs,
         scylla_version="2025.4",
@@ -93,24 +105,28 @@ def test_combined_filters(sample_jobs):
 
 
 def test_include_versions_passes_matching_prefix():
+    """A job whose include_versions lists master is selected for master:latest."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=["master"])]
     result = filter_jobs(jobs, scylla_version="master:latest")
     assert len(result) == 1
 
 
 def test_include_versions_blocks_non_matching():
+    """A job limited to master via include_versions is filtered out for a 2025.1 version."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=["master"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest")
     assert len(result) == 0
 
 
 def test_include_versions_prefix_match():
+    """include_versions matches by prefix: 2025.1 selects the job for 2025.1.3."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=["2025.1"])]
     result = filter_jobs(jobs, scylla_version="2025.1.3:latest")
     assert len(result) == 1
 
 
 def test_include_versions_multiple():
+    """A job is selected for any version listed in include_versions and filtered out for the rest."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=["master", "2025.1"])]
     assert len(filter_jobs(jobs, scylla_version="master:latest")) == 1
     assert len(filter_jobs(jobs, scylla_version="2025.1:latest")) == 1
@@ -118,35 +134,41 @@ def test_include_versions_multiple():
 
 
 def test_empty_include_versions_allows_all():
+    """An empty include_versions selects the job for any version."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=[])]
     assert len(filter_jobs(jobs, scylla_version="anything")) == 1
 
 
 def test_include_versions_uses_original_not_resolved():
+    """include_versions is matched against the requested version, so master still matches a resolved dev build."""
     jobs = [JobConfig(job_name="job-a", backend="aws", include_versions=["master"])]
     result = filter_jobs(jobs, scylla_version="master:latest", resolved_version="2026.3.0~dev-0.20260525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_master_always_passes():
+    """Master builds pass the pre_release filter even when the resolved version has no rc tag."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="master:latest", resolved_version="2026.3.0~dev-0.20260525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_rc1_in_resolved_passes():
+    """A resolved rc1 build passes a pre_release filter listing rc1."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-rc1-0.20250525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_rc3_in_resolved_passes():
+    """A resolved rc3 build passes a pre_release filter listing rc1 and rc3."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-rc3-0.20250525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_non_rc_blocked():
+    """A resolved GA build (no rc tag) is filtered out by a non-empty pre_release list."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-0.20250525.abc")
     assert len(result) == 0
@@ -163,35 +185,41 @@ def test_pre_release_non_rc_blocked():
     ],
 )
 def test_pre_release_matches_any_separator(resolved_version):
+    """An rc tag in pre_release matches whether it follows '-', '~' or '.' in the version."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     assert len(filter_jobs(jobs, scylla_version=resolved_version, resolved_version=resolved_version)) == 1
 
 
 @pytest.mark.parametrize("resolved_version", ["2026.4.0-rc10", "2026.4.0~rc11-0.20261026.abc", "2026.4.0.rc13"])
 def test_pre_release_tag_does_not_match_longer_number(resolved_version):
+    """rc1 matches only as a whole tag, so rc10/rc11/rc13 versions are filtered out."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     assert len(filter_jobs(jobs, scylla_version=resolved_version, resolved_version=resolved_version)) == 0
 
 
 def test_pre_release_rc2_not_in_list_blocked():
+    """A resolved rc2 build is filtered out when pre_release lists only rc1 and rc3."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1", "rc3"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-rc2-0.20250525.abc")
     assert len(result) == 0
 
 
 def test_pre_release_empty_allows_all():
+    """An empty pre_release list selects the job for any build."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=[])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-0.20250525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_fallback_to_scylla_version():
+    """Without a resolved version, pre_release matching uses the requested scylla_version."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1"])]
     result = filter_jobs(jobs, scylla_version="2025.1.3-rc1-0.20250525.abc")
     assert len(result) == 1
 
 
 def test_pre_release_with_include_versions_combined():
+    """include_versions and pre_release both apply: master passes, a non-master rc1 build is filtered out."""
     jobs = [
         JobConfig(
             job_name="job-a",
@@ -205,6 +233,7 @@ def test_pre_release_with_include_versions_combined():
 
 
 def test_include_versions_checks_original_exclude_checks_original():
+    """include_versions and exclude_versions both match the requested master, keeping only the included job."""
     jobs = [
         JobConfig(job_name="included", backend="aws", include_versions=["master"]),
         JobConfig(job_name="excluded", backend="aws", exclude_versions=["master"]),
@@ -215,6 +244,7 @@ def test_include_versions_checks_original_exclude_checks_original():
 
 
 def test_pre_release_checks_resolved_version():
+    """pre_release is matched against the resolved version: rc1 build selected, GA build filtered out."""
     jobs = [JobConfig(job_name="job-a", backend="aws", pre_release=["rc1"])]
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-rc1-0.abc")
     assert len(result) == 1
@@ -223,6 +253,7 @@ def test_pre_release_checks_resolved_version():
 
 
 def test_disabled_jobs_are_skipped():
+    """Jobs marked disabled are removed from the selection."""
     jobs = [
         JobConfig(job_name="active-job", backend="aws"),
         JobConfig(job_name="disabled-job", backend="aws", disabled=True),
@@ -233,21 +264,25 @@ def test_disabled_jobs_are_skipped():
 
 
 def test_arm64_image_keeps_only_aarch64_jobs(sample_jobs_with_arm):
+    """An aarch64 image keeps only jobs with the aarch64 label or arch field."""
     result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch="aarch64")
     assert {j.job_name for j in result} == {"job-arm", "job-arm-weekly", "job-arm-no-label"}
 
 
 def test_x86_64_image_excludes_aarch64_jobs(sample_jobs_with_arm):
+    """An x86_64 image keeps only the jobs that are not aarch64."""
     result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch="x86_64")
     assert {j.job_name for j in result} == {"job-x86"}
 
 
 def test_no_image_arch_preserves_all_jobs(sample_jobs_with_arm):
+    """Without an image arch, jobs of every architecture are selected."""
     result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch=None)
     assert len(result) == 4
 
 
 def test_arch_field_takes_precedence_over_missing_label():
+    """The arch field decides a job's architecture; the aarch64 label is the fallback when the field is unset."""
     jobs = [
         JobConfig(job_name="arm-via-field", backend="aws", arch="aarch64", labels=["weekly"]),
         JobConfig(job_name="x86-via-field", backend="aws", arch="x86_64", labels=["weekly"]),

@@ -150,6 +150,7 @@ def test_str_or_list_or_eval_invalid(value, error_fragment):
     ],
 )
 def test_dict_or_str_valid(input_val, expected):
+    """dict_or_str passes None and dicts through and parses JSON, Python-literal and YAML mapping strings."""
     assert dict_or_str(input_val) == expected
 
 
@@ -162,6 +163,7 @@ def test_dict_or_str_valid(input_val, expected):
     ],
 )
 def test_dict_or_str_invalid(input_val):
+    """dict_or_str raises ValueError for strings that parse to a list, a number or a plain scalar."""
     with pytest.raises(ValueError):
         dict_or_str(input_val)
 
@@ -183,6 +185,7 @@ def test_dict_or_str_invalid(input_val):
     ],
 )
 def test_as_list(input_val, expected):
+    """_as_list maps None to an empty list, keeps lists, and wraps a scalar string in a one-element list."""
     assert SCTConfiguration._as_list(input_val) == expected
 
 
@@ -255,6 +258,7 @@ def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match)
 
 
 def test_stress_template_context_accepts_dict(monkeypatch):
+    """A JSON mapping in SCT_STRESS_TEMPLATE_CONTEXT loads as a dict with its Jinja values kept verbatim."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -266,6 +270,7 @@ def test_stress_template_context_accepts_dict(monkeypatch):
 
 
 def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    """A YAML mapping in SCT_STRESS_TEMPLATE_CONTEXT loads as a dict with its Jinja values kept verbatim."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
@@ -278,11 +283,13 @@ def test_stress_template_context_accepts_yaml_string(monkeypatch):
 
 @pytest.mark.parametrize("value", ["y", "Yes", "T", "true", "ON", "1", " true "])
 def test_strtobool_accepts_truthy_spellings(value):
+    """`strtobool` returns True for the y/yes/t/true/on/1 spellings in any case, ignoring surrounding whitespace."""
     assert strtobool(value) is True
 
 
 @pytest.mark.parametrize("value", ["n", "No", "F", "false", "OFF", "0", " false "])
 def test_strtobool_accepts_falsy_spellings(value):
+    """`strtobool` returns False for the n/no/f/false/off/0 spellings in any case, ignoring surrounding whitespace."""
     assert strtobool(value) is False
 
 

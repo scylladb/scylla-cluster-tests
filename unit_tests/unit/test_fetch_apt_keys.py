@@ -21,6 +21,7 @@ GPG_KILL_CALL = mock.call("gpgconf --homedir /tmp --kill all", ignore_status=Tru
 
 @pytest.fixture()
 def node():
+    """Provide a node mock whose cluster params list a single apt key to fetch."""
     n = mock.MagicMock()
     n.parent_cluster.params.get.return_value = [APT_KEY]
     return n
@@ -70,6 +71,7 @@ def _export_call(temp_keyring, apt_keys=(APT_KEY,)):
 
 
 def test_fetch_apt_keys_first_keyserver_succeeds(node):
+    """When the first HKP keyserver serves the key, it is exported to the apt keyring and the temp keyring removed."""
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(True),  # first keyserver succeeds
@@ -97,6 +99,7 @@ def test_fetch_apt_keys_first_keyserver_succeeds(node):
 
 
 def test_fetch_apt_keys_first_fails_second_succeeds(node):
+    """When the first keyserver fails, the next one is tried and its key exported."""
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
@@ -128,6 +131,7 @@ def test_fetch_apt_keys_first_fails_second_succeeds(node):
 
 
 def test_fetch_apt_keys_all_hkp_fail_https_succeeds(node):
+    """When all HKP keyservers fail, the key is fetched over HTTPS from keyserver.ubuntu.com."""
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
@@ -167,6 +171,7 @@ def test_fetch_apt_keys_all_hkp_fail_https_succeeds(node):
 
 
 def test_fetch_apt_keys_all_sources_fail_raises_exception(node):
+    """When every keyserver and the HTTPS fallback fail, NodeSetupFailed is raised after cleanup."""
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
@@ -205,6 +210,7 @@ def test_fetch_apt_keys_all_sources_fail_raises_exception(node):
 
 
 def test_fetch_apt_keys_reaps_gpg_daemons_when_export_fails(node):
+    """A failing export still kills the gpg daemons and removes the temp keyring."""
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(True),  # first keyserver succeeds
@@ -230,6 +236,7 @@ PUBLISHED_URL = SCYLLA_APT_KEY_URLS[PUBLISHED_KEY]
 
 
 def test_fetch_apt_keys_published_key_skips_keyservers(node):
+    """A key with a published URL is imported from that URL and verified, with no keyserver lookups."""
     node.parent_cluster.params.get.return_value = [PUBLISHED_KEY]
     node.remoter.sudo.side_effect = [
         None,  # mkdir
@@ -258,6 +265,7 @@ def test_fetch_apt_keys_published_key_skips_keyservers(node):
 
 
 def test_fetch_apt_keys_published_key_failure_falls_back_to_keyserver(node):
+    """When the published-URL import fails, the key is fetched from the keyservers instead."""
     node.parent_cluster.params.get.return_value = [PUBLISHED_KEY]
     node.remoter.sudo.side_effect = [
         None,  # mkdir
@@ -295,6 +303,7 @@ def test_every_default_apt_key_has_a_published_url():
 
 
 def test_fetch_apt_keys_exports_only_the_requested_keys(node):
+    """The export writes exactly the configured keys into the apt keyring."""
     two_keys = [APT_KEY, PUBLISHED_KEY]
     node.parent_cluster.params.get.return_value = two_keys
     node.remoter.sudo.side_effect = [

@@ -31,12 +31,14 @@ MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_UR
 
 @pytest.fixture(autouse=True)
 def no_minicloud_env(monkeypatch):
+    """Remove the minicloud environment variables so collect-logs runs as on a regular backend."""
     for env_var in MINICLOUD_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)
 
 
 @pytest.fixture
 def runner() -> CliRunner:
+    """Provide a Click test runner."""
     return CliRunner()
 
 

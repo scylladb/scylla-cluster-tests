@@ -115,6 +115,7 @@ def test_two_stuck_vms_recovered_within_single_shared_wait(azure_service):
 
 
 def test_only_stuck_vm_in_mixed_batch_is_recreated(azure_service, events_function_scope):
+    """In a batch, only the stuck VM is deleted and recreated; the healthy VMs are kept."""
     FakeVirtualMachines.set_provision_script("node-bad", [VMCreateBehavior(stuck=True)])
     provisioner = _make_provisioner(azure_service, recreate_attempts=2)
     definitions = [_definition("node-good-1"), _definition("node-bad"), _definition("node-good-2")]
@@ -127,6 +128,7 @@ def test_only_stuck_vm_in_mixed_batch_is_recreated(azure_service, events_functio
 
 
 def test_permanently_stuck_vm_raises_unrecoverable_after_configured_attempts(azure_service, events_function_scope):
+    """An always-stuck VM is recreated per the configured attempts, then raises ProvisionUnrecoverableError."""
     FakeVirtualMachines.set_provision_script("node-dead", default=VMCreateBehavior(stuck=True))
     provisioner = _make_provisioner(azure_service, recreate_attempts=2)
     with patch.object(provisioner, "_delete_stuck_node", wraps=provisioner._delete_stuck_node) as delete_spy:

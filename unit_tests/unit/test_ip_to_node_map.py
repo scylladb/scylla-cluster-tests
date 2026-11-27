@@ -22,6 +22,7 @@ def _call_get_ip_to_node_map(nodes, subset=None):
 
 
 def test_returns_all_nodes_by_cached_ips():
+    """Every private, public and IPv6 address of every node maps to its node."""
     node1 = _make_node(private_ip="10.0.0.1", public_ip="54.0.0.1", ipv6_ip="2001:db8::1")
     node2 = _make_node(private_ip="10.0.0.2", public_ip="54.0.0.2", ipv6_ip="2001:db8::2")
 
@@ -37,6 +38,7 @@ def test_returns_all_nodes_by_cached_ips():
 
 
 def test_subset_returns_only_requested_nodes():
+    """With a nodes subset, only the addresses of those nodes are mapped."""
     node1 = _make_node(private_ip="10.0.0.1", public_ip="54.0.0.1")
     node2 = _make_node(private_ip="10.0.0.2", public_ip="54.0.0.2")
     node3 = _make_node(private_ip="10.0.0.3", public_ip="54.0.0.3")
@@ -50,6 +52,7 @@ def test_subset_returns_only_requested_nodes():
 
 
 def test_none_ips_excluded():
+    """Missing addresses are skipped; only the node's actual IPs are keys."""
     node1 = _make_node(private_ip="10.0.0.1", public_ip=None, ipv6_ip="2001:db8::1")
     node2 = _make_node(private_ip=None, public_ip="54.0.0.2", ipv6_ip=None)
 
@@ -63,6 +66,7 @@ def test_none_ips_excluded():
 
 
 def test_get_all_ip_addresses_uses_properties_not_refresh():
+    """get_all_ip_addresses() reads the cached IP properties without refreshing the instance state."""
     node = MagicMock(spec=BaseNode)
     type(node).private_ip_address = PropertyMock(return_value="10.0.0.1")
     type(node).public_ip_address = PropertyMock(return_value="54.0.0.1")
@@ -94,6 +98,7 @@ def _make_aws_node(private_ip=None, public_ip=None, ipv6_ip=None, network_interf
 
 
 def test_aws_node_get_all_ip_addresses_includes_secondary_nic():
+    """An AWS node's addresses include the private IP of its secondary NIC."""
     # Split-network config (mirrors scylla_addresses_on_different_interfaces.yaml):
     # listen/broadcast_address on nic 0, rpc_address/broadcast_rpc_address on nic 1.
     node = _make_aws_node(
@@ -107,6 +112,7 @@ def test_aws_node_get_all_ip_addresses_includes_secondary_nic():
 
 
 def test_get_ip_to_node_map_resolves_secondary_nic_address():
+    """A secondary NIC's IP maps to its node in the IP-to-node map."""
     node = _make_aws_node(
         private_ip="10.0.0.1",
         network_interfaces=[_make_interface(0, "10.0.0.1"), _make_interface(1, "10.0.1.1")],
@@ -120,6 +126,7 @@ def test_get_ip_to_node_map_resolves_secondary_nic_address():
 
 
 def test_aws_node_get_all_ip_addresses_no_duplicates_single_nic():
+    """With a single NIC, each address appears once."""
     # Common case: the only NIC carries the IPs already returned for the primary interface,
     # so no extra/duplicate entries should be introduced.
     node = _make_aws_node(
@@ -135,6 +142,7 @@ def test_aws_node_get_all_ip_addresses_no_duplicates_single_nic():
 
 
 def test_aws_node_get_all_ip_addresses_includes_secondary_nic_ipv6():
+    """A secondary NIC's IPv6 address is included in its compressed form."""
     node = _make_aws_node(
         private_ip="10.0.0.1",
         network_interfaces=[
@@ -149,6 +157,7 @@ def test_aws_node_get_all_ip_addresses_includes_secondary_nic_ipv6():
 
 
 def test_oci_node_get_all_ip_addresses_includes_secondary_nic():
+    """An OCI node's addresses include the private IP of its secondary NIC."""
     node = make_oci_node_mock(
         private_ip="10.1.3.5",
         network_interfaces=[_make_interface(0, "10.1.3.5"), _make_interface(1, "10.1.5.27")],
@@ -160,6 +169,7 @@ def test_oci_node_get_all_ip_addresses_includes_secondary_nic():
 
 
 def test_oci_node_get_all_ip_addresses_without_network_interfaces():
+    """An OCI node without network interface info returns just its private IP."""
     node = make_oci_node_mock(private_ip="10.1.3.5")
 
     result = BaseNode.get_all_ip_addresses(node)
@@ -168,6 +178,7 @@ def test_oci_node_get_all_ip_addresses_without_network_interfaces():
 
 
 def test_oci_node_get_all_ip_addresses_with_dns_names_on_secondary_nic():
+    """With DNS names in the Scylla config, both NIC IPs of an OCI node still map to the node."""
     # SCT-1360: with 'use_dns_names' the rpc/broadcast_rpc addresses of the configuration are DNS
     # names, while 'nodetool status' and 'nodetool gossipinfo' report the IP of the secondary NIC
     # where Scylla listens. That IP must still map to the node.

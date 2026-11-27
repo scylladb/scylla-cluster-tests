@@ -718,6 +718,7 @@ def _spot_oci_node(lifecycle_state="RUNNING", instance_metadata=RUNNING_METADATA
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_nothing_while_running(mock_event):
+    """A RUNNING instance yields no event and the next check delay; the state is resolved by OCID via the OCI API."""
     node, vm_provider = _spot_oci_node()
 
     assert node.check_spot_termination() == SPOT_TERMINATION_CHECK_DELAY
@@ -768,6 +769,7 @@ def test_ssh_check_timeout_checks_the_libssh2_connection():
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_preemption_notice_from_metadata(mock_event):
+    """A preemption notice in instance metadata is reported and logged with user_data and ssh keys stripped."""
     preemption_action = {"type": "TERMINATE", "timeCreated": "2026-11-10T16:28:24Z"}
     instance_metadata = json.dumps(
         {"state": "Running", "instancePreemptionAction": preemption_action, "metadata": {"user_data": "secret"}}
@@ -800,6 +802,7 @@ def test_check_spot_termination_logs_metadata_not_running_without_notice(mock_ev
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_falls_back_to_oci_api_on_unreadable_metadata(mock_event):
+    """Unparsable instance metadata falls back to the OCI API state, which reports the TERMINATING preemption."""
     node, _ = _spot_oci_node(lifecycle_state="TERMINATING", instance_metadata="<html>404 Not Found</html>")
 
     node.check_spot_termination()
@@ -824,6 +827,7 @@ def test_check_spot_termination_ignores_termination_by_the_test(mock_event):
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_reports_once(mock_event):
+    """A preemption is reported once; later checks after the first report stay silent."""
     node, _ = _spot_oci_node(lifecycle_state="TERMINATING")
 
     node.check_spot_termination()
@@ -835,6 +839,7 @@ def test_check_spot_termination_reports_once(mock_event):
 @patch("sdcm.cluster.SpotTerminationEvent")
 @patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
 def test_check_spot_termination_survives_oci_api_errors(mock_event):
+    """An OCI API error is logged as a warning and the check keeps running with the normal delay."""
     node, vm_provider = _spot_oci_node()
     vm_provider._resolve_instance.side_effect = RuntimeError("OCI API unavailable")
 

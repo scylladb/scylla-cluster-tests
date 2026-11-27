@@ -49,6 +49,8 @@ def nic_specs(count: int) -> list[dict]:
 
 @pytest.fixture(name="make_provisioner")
 def fixture_make_provisioner(azure_service):
+    """Provide a factory that builds an Azure provisioner on the fake service with the given NIC count or specs."""
+
     def _make(nic_count: int, specs: list[dict] = None):
         return provisioner_factory.create_provisioner(
             backend="azure",
@@ -63,6 +65,7 @@ def fixture_make_provisioner(azure_service):
 
 
 def definition(name: str, instance_type: str = "Standard_L8s_v3", node_type: str = "scylla-db") -> InstanceDefinition:
+    """Return an InstanceDefinition for a node of the given name, VM size and node type."""
     return InstanceDefinition(
         name=name,
         image_id="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers"
@@ -77,11 +80,13 @@ def definition(name: str, instance_type: str = "Standard_L8s_v3", node_type: str
 
 
 def nic_names(provisioner, name: str) -> list[str]:
+    """Return the names of the NICs the provisioner holds for a VM."""
     return [nic.name for nic in provisioner._nic_provider.get_all(name)]  # noqa: SLF001
 
 
 @pytest.mark.parametrize("nic_count", [1, 2, 3])
 def test_provisions_the_requested_number_of_nics(make_provisioner, nic_count):
+    """A VM gets as many NICs as the NIC specs request."""
     provisioner = make_provisioner(nic_count)
     instance = provisioner.get_or_create_instance(definition("multi-nic-vm"), PricingModel.ON_DEMAND)
 
@@ -98,6 +103,7 @@ def test_primary_nic_keeps_its_historical_name(make_provisioner):
 
 
 def test_secondary_nics_are_named_and_ordered_by_device_index(make_provisioner):
+    """Secondary NICs are named <vm>-nic<N> and listed after the primary in device index order."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("ordered-vm"), PricingModel.ON_DEMAND)
 
@@ -120,6 +126,7 @@ def test_a_vm_named_after_another_vms_nic_keeps_its_own_interfaces(make_provisio
 
 
 def test_each_nic_lands_in_its_own_subnet(make_provisioner):
+    """The primary NIC sits in the 'default' subnet and each secondary NIC in its own 'nic<N>' subnet."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("subnet-vm"), PricingModel.ON_DEMAND)
 
@@ -141,6 +148,7 @@ def test_subnets_keep_default_outbound_access(make_provisioner, azure_service):
 
 
 def test_public_ip_is_attached_to_the_primary_nic_only(make_provisioner):
+    """With the default specs, only the primary NIC gets a public IP."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(definition("public-ip-vm"), PricingModel.ON_DEMAND)
 
@@ -150,6 +158,7 @@ def test_public_ip_is_attached_to_the_primary_nic_only(make_provisioner):
 
 
 def test_private_address_of_the_instance_comes_from_the_primary_nic(make_provisioner):
+    """The instance private IP is the address of the primary NIC."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(definition("primary-addr-vm"), PricingModel.ON_DEMAND)
 
@@ -157,6 +166,7 @@ def test_private_address_of_the_instance_comes_from_the_primary_nic(make_provisi
 
 
 def test_vm_is_created_with_every_nic_and_a_single_primary(make_provisioner, azure_service):
+    """The VM network profile lists every NIC, with only the first marked primary."""
     provisioner = make_provisioner(3)
     instance = provisioner.get_or_create_instance(definition("profile-vm"), PricingModel.ON_DEMAND)
 
@@ -225,6 +235,7 @@ def test_more_nics_than_the_vm_size_allows_is_rejected(make_provisioner):
 
 
 def test_nic_count_at_the_vm_size_limit_is_accepted(make_provisioner):
+    """A NIC count equal to the VM size limit provisions successfully."""
     provisioner = make_provisioner(2)
     instance = provisioner.get_or_create_instance(
         definition("at-limit-vm", instance_type="Standard_D2_v4"), PricingModel.ON_DEMAND
@@ -237,9 +248,11 @@ class TestMaxNetworkInterfaces:
     """Reading the per-VM-size NIC limit out of the Azure SKU listing."""
 
     def test_reads_the_capability_of_the_requested_size(self, azure_service):
+        """max_network_interfaces returns the MaxNetworkInterfaces capability of the VM size."""
         assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
 
     def test_returns_none_for_a_size_absent_from_the_location(self, azure_service):
+        """max_network_interfaces returns None for a VM size missing from the region's SKU listing."""
         assert max_network_interfaces("Standard_NotAThing_v9", REGION, azure_service) is None
 
     def test_the_listing_is_cached_per_size_and_location(self, azure_service, monkeypatch):
@@ -283,12 +296,14 @@ class TestIpv6:
 
     @staticmethod
     def ipv6_specs(public_ipv6: bool = True) -> list[dict]:
+        """Return two IPv6-enabled NIC specs, the primary with a public IPv4 and optionally a public IPv6."""
         return [
             {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": public_ipv6},
             {"subnet": "nic1", "public_ip": False, "ipv6": True, "public_ipv6": False},
         ]
 
     def test_ipv6_interface_gets_a_second_ip_configuration(self, make_provisioner):
+        """An IPv6 NIC gets an IPv6 configuration after the primary IPv4 one."""
         provisioner = make_provisioner(2, specs=self.ipv6_specs())
         instance = provisioner.get_or_create_instance(definition("ipv6-vm"), PricingModel.ON_DEMAND)
 
@@ -298,6 +313,7 @@ class TestIpv6:
             assert nic.ip_configurations[0].primary is True
 
     def test_routable_ipv6_is_only_created_where_asked_for(self, make_provisioner):
+        """A public IPv6 address is attached only to the NIC whose spec requests it."""
         provisioner = make_provisioner(2, specs=self.ipv6_specs())
         instance = provisioner.get_or_create_instance(definition("ipv6-public-vm"), PricingModel.ON_DEMAND)
 
@@ -306,6 +322,7 @@ class TestIpv6:
         assert secondary.ip_configurations[1].public_ip_address is None
 
     def test_vnet_local_ipv6_needs_no_public_ip_resource(self, make_provisioner):
+        """With public_ipv6 off, NICs get a private IPv6 configuration without a public IP."""
         provisioner = make_provisioner(2, specs=self.ipv6_specs(public_ipv6=False))
         instance = provisioner.get_or_create_instance(definition("ula-only-vm"), PricingModel.ON_DEMAND)
 
@@ -314,6 +331,7 @@ class TestIpv6:
             assert nic.ip_configurations[1].public_ip_address is None
 
     def test_subnets_are_dual_stack_only_for_ipv6_interfaces(self, make_provisioner, azure_service):
+        """Subnets of IPv6 NICs get IPv4 and IPv6 prefixes; subnets of IPv4-only NICs keep only IPv4."""
         specs = [
             {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": True},
             {"subnet": "nic1", "public_ip": False, "ipv6": False, "public_ipv6": False},
@@ -329,6 +347,7 @@ class TestIpv6:
         assert not ipv4_only.address_prefixes
 
     def test_vnet_carries_ipv6_space_only_when_requested(self, make_provisioner, azure_service):
+        """With IPv6 NICs requested, the VNet address space includes the IPv6 /48."""
         provisioner = make_provisioner(2, specs=self.ipv6_specs())
         provisioner.get_or_create_instance(definition("ipv6-vnet-vm"), PricingModel.ON_DEMAND)
 
@@ -336,6 +355,7 @@ class TestIpv6:
         assert vnet.address_space.address_prefixes == ["10.0.0.0/16", "fd00:db8:5c7::/48"]
 
     def test_ipv4_only_run_leaves_the_vnet_single_stack(self, make_provisioner, azure_service):
+        """An IPv4-only run gives the VNet only the IPv4 address space."""
         provisioner = make_provisioner(2)
         provisioner.get_or_create_instance(definition("ipv4-vnet-vm"), PricingModel.ON_DEMAND)
 
@@ -393,6 +413,7 @@ class TestMonitoringConnectivity:
 
 
 def test_minicloud_vnet_subnets_are_carved_from_the_emulated_range(make_provisioner, azure_service, monkeypatch):
+    """Against a minicloud endpoint, the default subnet comes from the emulated 10.180.0.0 range."""
     monkeypatch.setattr(azure_service, "minicloud_endpoint", "https://localhost:5443")
     provisioner = make_provisioner(1)
     provisioner.get_or_create_instances([definition("node-1")])

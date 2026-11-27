@@ -4,6 +4,7 @@ from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matche
 
 
 def test_scylla_sha_lookup():
+    """Extract the SHA from dotted and GCE-label versions, normalize SHA selectors, and match versions by prefix."""
     assert scylla_sha_from_version("2026.4.0~dev-0.20261006.bedcc695789c") == "bedcc695789c"
     assert scylla_sha_from_version("2026-4-0-dev-0-20261006-bedcc695789c") == "bedcc695789c"  # GCE label
     assert scylla_sha_from_version("2026.4.0") == ""

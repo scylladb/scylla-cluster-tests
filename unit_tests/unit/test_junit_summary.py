@@ -19,31 +19,37 @@ from sdcm.utils.junit_summary import (
 
 @pytest.fixture(scope="session")
 def junit_summary_dir(test_data_dir: Path) -> Path:
+    """Path of the junit_summary test data directory."""
     return test_data_dir / "junit_summary"
 
 
 @pytest.fixture()
 def passing_xml(junit_summary_dir: Path) -> Path:
+    """Path of a JUnit XML with only passing tests."""
     return junit_summary_dir / "passing.xml"
 
 
 @pytest.fixture()
 def failing_xml(junit_summary_dir: Path) -> Path:
+    """Path of a JUnit XML with a pass, a failure, an error and a skip."""
     return junit_summary_dir / "failing.xml"
 
 
 @pytest.fixture()
 def single_suite_xml(junit_summary_dir: Path) -> Path:
+    """Path of a JUnit XML whose root is a single <testsuite>."""
     return junit_summary_dir / "single_suite.xml"
 
 
 @pytest.fixture()
 def precommit_all_passing(junit_summary_dir: Path) -> str:
+    """Text of a pre-commit log where every hook passed or was skipped."""
     return (junit_summary_dir / "precommit_all_passing.txt").read_text()
 
 
 @pytest.fixture()
 def precommit_with_failures(junit_summary_dir: Path) -> str:
+    """Text of a pre-commit log with failed, passed and skipped hooks."""
     return (junit_summary_dir / "precommit_with_failures.txt").read_text()
 
 
@@ -51,6 +57,7 @@ def precommit_with_failures(junit_summary_dir: Path) -> str:
 
 
 def test_parse_junit_xml_all_passing(passing_xml):
+    """An all-passing report counts only passes and lists no failures."""
     results = parse_junit_xml(passing_xml)
 
     assert results.passed == 3
@@ -61,6 +68,7 @@ def test_parse_junit_xml_all_passing(passing_xml):
 
 
 def test_parse_junit_xml_mixed_results(failing_xml):
+    """Passes, failures, errors and skips are counted; failures and errors are both listed."""
     results = parse_junit_xml(failing_xml)
 
     assert results.passed == 1
@@ -71,6 +79,7 @@ def test_parse_junit_xml_mixed_results(failing_xml):
 
 
 def test_parse_junit_xml_failure_details(failing_xml):
+    """A failure records the test id, file, FAILURE type and the assertion message."""
     results = parse_junit_xml(failing_xml)
     failure = results.failures[0]
 
@@ -81,6 +90,7 @@ def test_parse_junit_xml_failure_details(failing_xml):
 
 
 def test_parse_junit_xml_error_details(failing_xml):
+    """An error records the test id, ERROR type and the exception message."""
     results = parse_junit_xml(failing_xml)
     error = results.failures[1]
 
@@ -102,6 +112,7 @@ def test_parse_junit_xml_single_testsuite_root(single_suite_xml):
 
 
 def test_merge_results_counts():
+    """merge_results() sums the counters and concatenates the failure lists."""
     r1 = SuiteResults(
         passed=3,
         failed=1,
@@ -131,6 +142,7 @@ def test_merge_results_counts():
 
 
 def test_merge_results_empty_list():
+    """Merging no results yields zero counts and no failures."""
     merged = merge_results([])
 
     assert merged.passed == 0
@@ -141,6 +153,7 @@ def test_merge_results_empty_list():
 
 
 def test_format_markdown_passing_contains_checkmark():
+    """A passing suite renders a check mark and PASSED, without a failed-tests section."""
     results = SuiteResults(passed=5)
 
     output = format_markdown(results, "Unit Tests")
@@ -151,6 +164,7 @@ def test_format_markdown_passing_contains_checkmark():
 
 
 def test_format_markdown_failing_contains_failure_details():
+    """A failing suite renders FAILED with each failure's test, file, details and the build URL."""
     results = SuiteResults(
         passed=3,
         failed=1,
@@ -176,6 +190,7 @@ def test_format_markdown_failing_contains_failure_details():
 
 
 def test_format_markdown_uses_subsection_heading():
+    """The suite section uses a ### heading and leaves out the comment marker."""
     results = SuiteResults(passed=1)
 
     output = format_markdown(results, "Tests")
@@ -185,6 +200,7 @@ def test_format_markdown_uses_subsection_heading():
 
 
 def test_format_markdown_contains_summary_table():
+    """The summary table row lists total, passed, failed, errors and skipped."""
     results = SuiteResults(passed=10, failed=2, errors=1, skipped=3)
 
     output = format_markdown(results, "Tests")
@@ -213,6 +229,7 @@ def test_format_markdown_large_output_truncated():
 
 
 def test_format_markdown_no_build_url_omits_link():
+    """Without a build URL the build-log link is left out."""
     results = SuiteResults(passed=1)
 
     output = format_markdown(results, "Tests")
@@ -224,6 +241,7 @@ def test_format_markdown_no_build_url_omits_link():
 
 
 def test_parse_precommit_all_passing(precommit_all_passing):
+    """Each hook line is parsed into its name and Passed or Skipped status, in order."""
     results = parse_precommit_log(precommit_all_passing)
 
     assert len(results) == 5
@@ -234,6 +252,7 @@ def test_parse_precommit_all_passing(precommit_all_passing):
 
 
 def test_parse_precommit_with_failures(precommit_with_failures):
+    """Hooks are classified into passed, failed and skipped."""
     results = parse_precommit_log(precommit_with_failures)
 
     passed = [r for r in results if r.status == "Passed"]
@@ -246,6 +265,7 @@ def test_parse_precommit_with_failures(precommit_with_failures):
 
 
 def test_parse_precommit_failure_details(precommit_with_failures):
+    """A failed hook keeps its output, including the diff, as details."""
     results = parse_precommit_log(precommit_with_failures)
     ruff_format = [r for r in results if r.hook == "ruff-format"][0]
 
@@ -255,6 +275,7 @@ def test_parse_precommit_failure_details(precommit_with_failures):
 
 
 def test_parse_precommit_second_failure_details(precommit_with_failures):
+    """Each failed hook gets its own details, here ruff's F401 report."""
     results = parse_precommit_log(precommit_with_failures)
     ruff = [r for r in results if r.hook == "ruff"][0]
 
@@ -263,12 +284,14 @@ def test_parse_precommit_second_failure_details(precommit_with_failures):
 
 
 def test_parse_precommit_empty_input():
+    """An empty log yields no hook results."""
     results = parse_precommit_log("")
 
     assert results == []
 
 
 def test_parse_precommit_passed_hooks_have_no_details(precommit_all_passing):
+    """Passed and skipped hooks carry empty details."""
     results = parse_precommit_log(precommit_all_passing)
 
     for hook in results:
@@ -279,6 +302,7 @@ def test_parse_precommit_passed_hooks_have_no_details(precommit_all_passing):
 
 
 def test_format_precommit_markdown_all_passing():
+    """All-passing hooks render a check mark and PASSED, without a failed-hooks section."""
     hooks = [
         PrecommitHookResult(hook="ruff", status="Passed", details=""),
         PrecommitHookResult(hook="ruff-format", status="Passed", details=""),
@@ -292,6 +316,7 @@ def test_format_precommit_markdown_all_passing():
 
 
 def test_format_precommit_markdown_with_failure():
+    """A failed hook renders FAILED with the hook name and its details."""
     hooks = [
         PrecommitHookResult(hook="ruff", status="Passed", details=""),
         PrecommitHookResult(hook="ruff-format", status="Failed", details="diff output here"),
@@ -306,6 +331,7 @@ def test_format_precommit_markdown_with_failure():
 
 
 def test_format_precommit_markdown_summary_table():
+    """The pre-commit summary table row lists total, passed, failed and skipped."""
     hooks = [
         PrecommitHookResult(hook="a", status="Passed", details=""),
         PrecommitHookResult(hook="b", status="Failed", details="err"),
@@ -321,6 +347,7 @@ def test_format_precommit_markdown_summary_table():
 
 
 def test_compose_comment_precommit_only():
+    """A comment with only pre-commit results carries the marker and both overall and precommit FAILED."""
     hooks = [
         PrecommitHookResult(hook="ruff", status="Failed", details="error"),
     ]
@@ -333,6 +360,7 @@ def test_compose_comment_precommit_only():
 
 
 def test_compose_comment_tests_only():
+    """A comment with only test results carries the marker and the overall status."""
     results = SuiteResults(passed=5)
 
     output = compose_comment(test_results=results, stage_name="Test Summary")
@@ -342,6 +370,7 @@ def test_compose_comment_tests_only():
 
 
 def test_compose_comment_combined():
+    """A combined comment fails overall on a test failure, shows precommit PASSED and lists the failure."""
     hooks = [PrecommitHookResult(hook="ruff", status="Passed", details="")]
     results = SuiteResults(
         passed=5,
@@ -364,6 +393,7 @@ def test_compose_comment_combined():
 
 
 def test_compose_comment_all_passing():
+    """With passing tests and hooks the overall status is PASSED."""
     hooks = [PrecommitHookResult(hook="ruff", status="Passed", details="")]
     results = SuiteResults(passed=5)
 

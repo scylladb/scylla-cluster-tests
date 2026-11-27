@@ -19,16 +19,19 @@ HDR_TAGS2 = ["barhdr1", "barhdr2"]
 
 
 def test__find_hdr_tags_in_dict():
+    """In a dict, the value under the 'hdr_tags' key is returned."""
     assert _find_hdr_tags({"foo": HDR_TAGS1, "hdr_tags": HDR_TAGS2}) == HDR_TAGS2
 
 
 def test__find_hdr_tags_in_object_attr():
+    """On an object, its 'hdr_tags' attribute is returned."""
     obj_with_hdr_tags = type("FakeStressQueue", (), {"fake_hdr_tags": HDR_TAGS1, "hdr_tags": HDR_TAGS2})
     res = _find_hdr_tags(obj_with_hdr_tags)
     assert res == HDR_TAGS2
 
 
 def test__find_hdr_tags_in_tuple():
+    """In a tuple, the 'hdr_tags' of the first object that carries them is returned."""
     obj_with_hdr_tags = type("FakeStressQueue", (), {"hdr_tags": HDR_TAGS1})
     params = ("foo", 5, obj_with_hdr_tags)
     res = _find_hdr_tags(params)
@@ -36,6 +39,7 @@ def test__find_hdr_tags_in_tuple():
 
 
 def test__find_hdr_tags_in_tuple_of_lists():
+    """Nested lists inside a tuple are searched, returning the first object's 'hdr_tags'."""
     obj_with_hdr_tags1 = type("FakeStressQueue", (), {"hdr_tags": HDR_TAGS1})
     obj_with_hdr_tags2 = type("FakeStressQueue", (), {"hdr_tags": HDR_TAGS2})
     params = ("foo", 5, (["a", "b"], [obj_with_hdr_tags1, obj_with_hdr_tags2]))
@@ -44,6 +48,7 @@ def test__find_hdr_tags_in_tuple_of_lists():
 
 
 def test__find_hdr_tags_error():
+    """Arguments with no 'hdr_tags' anywhere raise ValueError."""
     try:
         _find_hdr_tags({"no_hdr_tags": ["foo"]})
     except ValueError:
@@ -62,6 +67,7 @@ def test__find_hdr_tags_falls_back_when_the_kwarg_is_none():
 
 
 def test__find_hdr_tags_falls_back_when_an_object_attr_is_none():
+    """An object whose 'hdr_tags' is None is skipped in favor of the next object carrying tags."""
     obj_with_none = type("FakeStressQueue", (), {"hdr_tags": None})
     obj_with_hdr_tags = type("FakeStressQueue", (), {"hdr_tags": HDR_TAGS2})
     assert _find_hdr_tags(obj_with_none, obj_with_hdr_tags) == HDR_TAGS2
@@ -191,6 +197,8 @@ REACTOR_STALLS = {
 
 
 class FakeDbCluster:
+    """DB cluster stand-in with no nodes."""
+
     nodes = []
 
 
@@ -203,16 +211,21 @@ class FakeMonitorSet:
         self.screenshot_requests = []
 
     def get_grafana_screenshots(self, node, test_start_time):
+        """Record the screenshot request and return a single fake screenshot URL."""
         self.screenshot_requests.append((node, test_start_time))
         return ["https://cloudius-jenkins-test.s3.amazonaws.com/fake-screenshot.png"]
 
 
 class FakeMonitorNode:
+    """Monitor node stand-in with a fixed name and address."""
+
     name = "monitor-node-1"
     external_address = "127.0.0.1"
 
 
 class FakeMonitorSetWithNode(FakeMonitorSet):
+    """Monitoring set with one monitor node, so latency collection and screenshots run."""
+
     nodes = [FakeMonitorNode()]
 
 
@@ -230,6 +243,7 @@ class FakeEventCounter:
 
     @staticmethod
     def get_stats():
+        """Return the fixed reactor stall stats."""
         return REACTOR_STALLS
 
 
@@ -244,9 +258,11 @@ class FakeLatencyTester:
         self.test_config = MagicMock()
 
     def get_hdrhistogram_by_interval(self, **_):
+        """Return a single interval holding the fixed HDR summary."""
         return [HDR_SUMMARY]
 
     def get_hdrhistogram(self, **_):
+        """Return the fixed HDR summary."""
         return HDR_SUMMARY
 
 
@@ -260,6 +276,10 @@ def _run_decorated_search(tester):
 
 
 def test_latency_calculator_decorator_without_monitoring_set(tmp_path):
+    """Without monitor nodes, the decorator skips latency collection and screenshots.
+
+    HDR results and reactor stalls still reach Argus and the latency results file.
+    """
     tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
 
     with (
@@ -288,6 +308,7 @@ def test_latency_calculator_decorator_without_monitoring_set(tmp_path):
 
 
 def test_latency_calculator_decorator_with_monitoring_set(tmp_path):
+    """With a monitor node, its latency metrics and one Grafana screenshot are added to the reported cycle."""
     tester = FakeLatencyTester(
         latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSetWithNode()
     )

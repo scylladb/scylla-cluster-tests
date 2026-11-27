@@ -33,6 +33,7 @@ pytestmark = [
     ],
 )
 def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
+    """scylla-bench writes in regular, TLS and quoted-keyspace modes without errors and reports its row size."""
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         f"scylla-bench -workload=sequential {extra_cmd} -mode=write -replication-factor=1 -partition-count=10 "

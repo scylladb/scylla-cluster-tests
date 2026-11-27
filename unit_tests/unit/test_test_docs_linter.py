@@ -4,22 +4,26 @@ from sdcm.utils.lint.docs_linter import LintResult, cross_reference_config, lint
 
 
 def write_yaml(tmp_path, name, data):
+    """Dump data as YAML into a file under tmp_path and return its path."""
     p = tmp_path / name
     p.write_text(yaml.dump(data))
     return p
 
 
 def test_lint_result_passed_no_errors():
+    """A LintResult with no errors reports passed."""
     r = LintResult(file_path="x.yaml")
     assert r.passed is True
 
 
 def test_lint_result_failed_with_errors():
+    """A LintResult with an error reports failed."""
     r = LintResult(file_path="x.yaml", errors=["TD-001: missing"])
     assert r.passed is False
 
 
 def test_td001_missing_test_metadata(tmp_path):
+    """Reports a single TD-001 error when the test-case has no test_metadata section."""
     p = write_yaml(tmp_path, "test.yaml", {"test_duration": 60})
     result = lint_test_metadata(p)
     assert not result.passed
@@ -28,6 +32,7 @@ def test_td001_missing_test_metadata(tmp_path):
 
 
 def test_td001_null_test_metadata(tmp_path):
+    """Reports a single TD-001 error when test_metadata is null."""
     p = write_yaml(tmp_path, "test.yaml", {"test_metadata": None})
     result = lint_test_metadata(p)
     assert not result.passed
@@ -36,6 +41,7 @@ def test_td001_null_test_metadata(tmp_path):
 
 
 def test_td002_missing_description(tmp_path):
+    """Reports TD-002 when test_metadata has no description."""
     p = write_yaml(tmp_path, "test.yaml", {"test_metadata": {"test_type": "longevity"}})
     result = lint_test_metadata(p)
     assert not result.passed
@@ -43,6 +49,7 @@ def test_td002_missing_description(tmp_path):
 
 
 def test_td002_short_description(tmp_path):
+    """Reports TD-002 when the description is too short."""
     p = write_yaml(tmp_path, "test.yaml", {"test_metadata": {"description": "Too short"}})
     result = lint_test_metadata(p)
     assert not result.passed
@@ -50,6 +57,7 @@ def test_td002_short_description(tmp_path):
 
 
 def test_td002_valid_description(tmp_path):
+    """Accepts a long enough description with no TD-002 error."""
     p = write_yaml(
         tmp_path, "test.yaml", {"test_metadata": {"description": "A valid description that is long enough to pass."}}
     )
@@ -58,6 +66,7 @@ def test_td002_valid_description(tmp_path):
 
 
 def test_td003_invalid_tier(tmp_path):
+    """Reports TD-003 for a tier outside the taxonomy."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -74,6 +83,7 @@ def test_td003_invalid_tier(tmp_path):
 
 
 def test_td003_invalid_backend(tmp_path):
+    """Reports TD-003 for an unknown supported backend."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -90,6 +100,7 @@ def test_td003_invalid_backend(tmp_path):
 
 
 def test_td008_duration_class_mismatch(tmp_path):
+    """Warns TD-008 when a 60-minute test_duration is classed as long."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -106,6 +117,7 @@ def test_td008_duration_class_mismatch(tmp_path):
 
 
 def test_td008_duration_class_correct(tmp_path):
+    """Accepts a 60-minute test_duration classed as short with no TD-008 warning."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -122,6 +134,7 @@ def test_td008_duration_class_correct(tmp_path):
 
 
 def test_td010_sanity_with_long_duration(tmp_path):
+    """Warns TD-010 when a sanity-tier test has a long duration class."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -138,6 +151,7 @@ def test_td010_sanity_with_long_duration(tmp_path):
 
 
 def test_td011_backend_not_in_supported(tmp_path):
+    """Warns TD-011 when cluster_backend is missing from supported_backends."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -154,6 +168,7 @@ def test_td011_backend_not_in_supported(tmp_path):
 
 
 def test_valid_full_metadata_passes(tmp_path):
+    """Passes a complete, consistent test_metadata section with no errors."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -179,6 +194,7 @@ def test_valid_full_metadata_passes(tmp_path):
 
 
 def test_cross_reference_td006_stress_tool_missing(tmp_path):
+    """Warns TD-006 when stress_cmd uses a tool missing from stress_tools."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -195,6 +211,7 @@ def test_cross_reference_td006_stress_tool_missing(tmp_path):
 
 
 def test_cross_reference_td009_multidc_missing_feature(tmp_path):
+    """Warns TD-009 when a multi-DC config lacks the matching feature label."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -211,6 +228,7 @@ def test_cross_reference_td009_multidc_missing_feature(tmp_path):
 
 
 def test_cross_reference_td009_tls_missing_feature(tmp_path):
+    """Warns TD-009 when server_encrypt is on but the TLS feature label is missing."""
     p = write_yaml(
         tmp_path,
         "test.yaml",
@@ -227,12 +245,14 @@ def test_cross_reference_td009_tls_missing_feature(tmp_path):
 
 
 def test_cross_reference_returns_lint_result(tmp_path):
+    """cross_reference_config() returns a LintResult even for null test_metadata."""
     p = write_yaml(tmp_path, "test.yaml", {"test_metadata": None})
     result = cross_reference_config(p)
     assert isinstance(result, LintResult)
 
 
 def test_invalid_yaml_returns_error(tmp_path):
+    """Reports a TD-000 error for a file that is not valid YAML."""
     p = tmp_path / "bad.yaml"
     p.write_text("key: [unclosed")
     result = lint_test_metadata(p)

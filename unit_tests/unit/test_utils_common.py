@@ -30,7 +30,10 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class TestUtils:
+    """Tests for convert_metric_to_ms."""
+
     def test_scylla_bench_metrics_conversion(self):
+        """Converts scylla-bench durations in s, ms, µs and h/m/s forms, and plain numbers, to milliseconds."""
         metrics = {
             "4ms": 4.0,
             "950µs": 0.95,
@@ -48,7 +51,10 @@ class TestUtils:
 
 
 class TestDownloadDir:
+    """Tests for download_dir_from_cloud with S3, GCS and no source."""
+
     def test_update_db_packages_s3(self, tmp_path):
+        """Downloads every object under an s3:// prefix into the destination directory."""
         sct_update_db_packages = "s3://downloads.scylladb.com/rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/"
 
         dst_dir = str(tmp_path / "s3_download")
@@ -68,6 +74,7 @@ class TestDownloadDir:
         assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
 
     def test_update_db_packages_gce(self, tmp_path):
+        """Downloads every blob under a gs:// prefix into the destination directory."""
         sct_update_db_packages = "gs://scratch.scylladb.com/sct_test/"
 
         class FakeObject:
@@ -92,17 +99,21 @@ class TestDownloadDir:
 
     @staticmethod
     def test_update_db_packages_none():
+        """Returns None when no source URL is given."""
         sct_update_db_packages = None
         update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         assert update_db_packages is None
 
 
 class TestSstableLoadUtils:
+    """Tests for the sstable load inventory, refresh and load-and-stream helpers."""
+
     node = None
     temp_dir = None
 
     @classmethod
     def setup_class(cls):
+        """Create a dummy db node in a dummy cluster, shared by the class tests."""
         cls.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -114,6 +125,7 @@ class TestSstableLoadUtils:
 
     @pytest.fixture(autouse=True)
     def fixture_setup(self, tmp_path, test_data_dir):
+        """Point the node system log at a copy of the load-and-stream log sample."""
         source = test_data_dir / "load_and_stream.log"
         target = tmp_path / "load_and_stream.log"
         shutil.copy(source, target)
@@ -121,6 +133,7 @@ class TestSstableLoadUtils:
 
     @staticmethod
     def test_load_column_1_data_inventory():
+        """Returns the regular or big sstable inventory for one-column data."""
         test_data = SstableLoadUtils.get_load_test_data_inventory(
             column_number=1, big_sstable=False, load_and_stream=False
         )
@@ -135,6 +148,7 @@ class TestSstableLoadUtils:
 
     @staticmethod
     def test_load_multi_column_data_inventory():
+        """Returns the regular or big multi-column inventory for 5 and 6 columns."""
         test_data = SstableLoadUtils.get_load_test_data_inventory(
             column_number=5, big_sstable=False, load_and_stream=False
         )
@@ -165,6 +179,7 @@ class TestSstableLoadUtils:
 
     @staticmethod
     def test_load_not_supported_data_inventory():
+        """Returns an empty inventory for an unsupported column count."""
         test_data = SstableLoadUtils.get_load_test_data_inventory(
             column_number=2, big_sstable=False, load_and_stream=False
         )
@@ -172,6 +187,7 @@ class TestSstableLoadUtils:
 
     @staticmethod
     def test_load_load_and_stream_data_inventory():
+        """Returns the multi-node inventory for load-and-stream."""
         test_data = SstableLoadUtils.get_load_test_data_inventory(
             column_number=5, big_sstable=False, load_and_stream=True
         )
@@ -198,6 +214,7 @@ class TestSstableLoadUtils:
 
     @staticmethod
     def test_distribute_test_files_to_cluster_nodes():
+        """Maps all 5 load-and-stream files to nodes, for 2 to 5 nodes."""
         test_cases = [
             {"nodes": ["node1", "node2", "node3"], "expected_result": 5},
             {"nodes": ["node1", "node2"], "expected_result": 5},
@@ -216,6 +233,7 @@ class TestSstableLoadUtils:
             )
 
     def test_load_and_stream_waits_for_log_lines(self):
+        """Completes once the load-and-stream start and end lines appear in the node log."""
         self.node.remoter = FakeSstableRemoter(self.node.system_log)
         SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
 
@@ -297,6 +315,7 @@ def test_get_testrun_dir_returns_single_match(tmp_path):
     ],
 )
 def test_redact_cli_secrets_masks_known_patterns(cmd, expected_redacted_substring, expected_preserved_substring):
+    """Masks password, token and API key values in CLI flag, -p and env-var forms, and keeps other args."""
     redacted = redact_cli_secrets(cmd)
     assert expected_redacted_substring in redacted
     assert expected_preserved_substring in redacted
@@ -307,16 +326,19 @@ def test_redact_cli_secrets_masks_known_patterns(cmd, expected_redacted_substrin
 
 
 def test_redact_cli_secrets_handles_empty_and_none():
+    """Returns an empty string and None as they are."""
     assert redact_cli_secrets("") == ""
     assert redact_cli_secrets(None) is None
 
 
 def test_redact_cli_secrets_does_not_touch_benign_text():
+    """Returns a command without secrets unchanged."""
     cmd = "ls -la /tmp && echo hello"
     assert redact_cli_secrets(cmd) == cmd
 
 
 def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
+    """Keeps the --api-key prefix of an --api-key-rotation flag visible in the output."""
     # --api-key-rotation should NOT be mistaken for --api-key
     # (word-boundary anchoring means the value 'enabled' stays visible)
     cmd = "tool --api-key-rotation enabled"

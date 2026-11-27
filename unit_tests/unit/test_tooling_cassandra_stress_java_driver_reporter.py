@@ -17,6 +17,7 @@ from sdcm.reporting.tooling_reporter import CassandraStressJavaDriverVersionRepo
 
 
 def test_driver_version_is_set_in_constructor():
+    """Takes the version from the constructor and reports it under the java-driver tool name."""
     reporter = CassandraStressJavaDriverVersionReporter(
         driver_version="4.19.0.1", runner=None, command_prefix=None, argus_client=None
     )
@@ -26,6 +27,7 @@ def test_driver_version_is_set_in_constructor():
 
 
 def test_collect_version_info_is_noop():
+    """Keeps the constructor version after _collect_version_info()."""
     reporter = CassandraStressJavaDriverVersionReporter(
         driver_version="3.11.5.11", runner=None, command_prefix=None, argus_client=None
     )

@@ -36,12 +36,14 @@ def generate_fake_sct_log(path, num_lines=10000, line_size=200):
 
 @pytest.fixture()
 def large_log_file(tmp_path):
+    """Provide a ~10 MB fake sct.log of 50000 timestamped lines."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=50000, line_size=220)
     return log_file
 
 
 def test_splits_file_into_expected_chunks(tmp_path):
+    """log_archive.sh splits a log into roughly file_size / chunk_size zstd archives."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=1000, line_size=200)
 
@@ -63,6 +65,7 @@ def test_splits_file_into_expected_chunks(tmp_path):
 
 
 def test_output_files_are_valid_zstd(tmp_path):
+    """Every archive log_archive.sh produces passes zstd's integrity test."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=500, line_size=100)
 
@@ -91,6 +94,7 @@ def test_output_files_are_valid_zstd(tmp_path):
 
 
 def test_decompressed_content_matches_original(tmp_path):
+    """Decompressing and concatenating the archives in order reproduces the original log."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=300, line_size=100)
 
@@ -122,6 +126,7 @@ def test_decompressed_content_matches_original(tmp_path):
 
 
 def test_timestamp_in_output_filenames(tmp_path):
+    """Archive file names start with the timestamp of the chunk's log lines."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=200, line_size=100)
 
@@ -143,6 +148,7 @@ def test_timestamp_in_output_filenames(tmp_path):
 
 
 def test_handles_single_chunk_when_file_smaller_than_chunk_size(tmp_path):
+    """A log smaller than the chunk size produces a single archive."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=100, line_size=50)
 
@@ -164,6 +170,7 @@ def test_handles_single_chunk_when_file_smaller_than_chunk_size(tmp_path):
 
 @pytest.mark.parametrize("num_chunks", [2, 4, 8])
 def test_various_chunk_counts(tmp_path, num_chunks):
+    """The archive count matches the requested number of chunks, allowing one extra for the remainder."""
     log_file = tmp_path / "sct.log"
     generate_fake_sct_log(str(log_file), num_lines=2000, line_size=100)
 
@@ -185,6 +192,7 @@ def test_various_chunk_counts(tmp_path, num_chunks):
 
 
 def test_full_split_compress_and_data_integrity(tmp_path, large_log_file):
+    """A large log split into four or more archives decompresses back to the identical bytes."""
     original_content = large_log_file.read_bytes()
     file_size = len(original_content)
     chunk_size = file_size // 4
@@ -215,6 +223,7 @@ def test_full_split_compress_and_data_integrity(tmp_path, large_log_file):
 
 
 def test_disk_efficiency_original_not_duplicated(tmp_path, large_log_file):
+    """log_archive.sh leaves no raw chunk_* files behind after compressing them."""
     file_size = os.path.getsize(large_log_file)
     chunk_size = file_size // 3
 
@@ -231,6 +240,7 @@ def test_disk_efficiency_original_not_duplicated(tmp_path, large_log_file):
 
 
 def test_many_chunks_produce_valid_archives(tmp_path, large_log_file):
+    """Splitting a large log into eight or more chunks yields archives that all pass zstd's integrity test."""
     file_size = os.path.getsize(large_log_file)
     chunk_size = file_size // 8
 

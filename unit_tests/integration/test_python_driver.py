@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
     ],
 )
 def test_02_test_python_driver(docker_scylla, params, encrypted):
+    """CQL sessions, regular and exclusive, connect over clear and TLS transport and read system.local."""
     params["client_encrypt"] = encrypted
     node = docker_scylla
     db_cluster = DummyDbCluster(nodes=[node], params=params)

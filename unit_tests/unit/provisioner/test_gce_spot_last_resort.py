@@ -112,6 +112,7 @@ def test_partial_batch_is_swept_before_retrying_another_zone():
 
 
 def test_sweep_failure_does_not_abort_the_retry():
+    """A failure terminating a leftover instance is swallowed so the zone retry can proceed."""
     provisioner = _provisioner(existing=["node-1"])
     provisioner.terminate_instance.side_effect = RuntimeError("boom")
     cluster = _cluster(provisioner)
@@ -120,6 +121,7 @@ def test_sweep_failure_does_not_abort_the_retry():
 
 
 def test_on_demand_is_the_last_resort_after_every_zone_refused_spot(gce_env):
+    """After spot is exhausted in every zone, the batch is provisioned on-demand with no further downgrade."""
     provision, _ = gce_env
     provision.side_effect = [
         ZoneResourcesExhaustedError(EXHAUSTED),  # configured zone
@@ -149,6 +151,7 @@ def test_spot_is_tried_in_every_zone_before_paying_on_demand(gce_env):
 
 
 def test_no_on_demand_retry_when_the_run_opted_out(gce_env):
+    """With on-demand fallback off, spot exhaustion in every zone propagates and only spot is requested."""
     provision, _ = gce_env
     provision.side_effect = ZoneResourcesExhaustedError(EXHAUSTED)
     cluster = _cluster(_provisioner(), fallback_on_demand=False)
@@ -170,6 +173,7 @@ def test_no_on_demand_retry_for_a_non_capacity_error(gce_env):
 
 
 def test_on_demand_run_is_left_alone(gce_env):
+    """An on-demand run that hits zone exhaustion propagates the error."""
     provision, _ = gce_env
     provision.side_effect = ZoneResourcesExhaustedError(EXHAUSTED)
     cluster = _cluster(_provisioner(), provision="on_demand")
@@ -211,6 +215,7 @@ def _run_last_resort(params, provision):
 
 
 def test_modern_path_retries_on_demand_once_every_region_is_exhausted():
+    """When all regions are exhausted, the modern path cleans up and retries once with on-demand pricing."""
     calls = []
 
     def provision():
@@ -244,6 +249,8 @@ def test_modern_path_leaves_a_configuration_error_alone():
     ids=["already-on-demand", "fallback-disabled"],
 )
 def test_modern_path_does_not_retry_when_it_should_not(params):
+    """An already on-demand run, or one with fallback off, propagates the exhaustion error."""
+
     def provision():
         raise ZoneResourcesExhaustedError(EXHAUSTED)
 
@@ -252,6 +259,7 @@ def test_modern_path_does_not_retry_when_it_should_not(params):
 
 
 def test_modern_path_success_never_touches_the_pricing_model():
+    """A successful provision keeps the configured spot pricing."""
     params = _modern_params()
     _run_last_resort(params, lambda: None)
     assert params["instance_provision"] == "spot"

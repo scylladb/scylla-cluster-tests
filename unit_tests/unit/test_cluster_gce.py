@@ -97,6 +97,7 @@ def test_instances_in_az_puts_unconfigured_zones_after_the_configured_racks():
 
 
 def test_instances_in_az_returns_nothing_for_a_zone_without_instances():
+    """A rack whose zone holds none of the given instances gets an empty list."""
     cluster = _cluster(["a", "b", "c"])
 
     assert GCECluster._instances_in_az(cluster, [_instance("db-1", "us-east1-a")], 2, 0) == []
@@ -138,6 +139,7 @@ def test_get_instances_by_name_searches_every_zone_of_the_region():
 
 
 def test_get_instances_by_name_ignores_other_regions():
+    """Instances found in a zone of another region (us-east10 vs us-east1) are left out of the search."""
     cluster = _cluster(["a"], region="us-east1")
     cluster._gce_service = MagicMock()
     cluster._gce_service.aggregated_list.return_value = [

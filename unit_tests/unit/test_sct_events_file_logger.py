@@ -27,7 +27,10 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class TestFileLogger(EventsUtilsMixin):
+    """The events file logger process and the event summaries read from its logs."""
+
     def setup_method(self) -> None:
+        """Start the main events device and the file logger, and wait until the logger is subscribed."""
         self.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
         start_events_logger(_registry=self.events_processes_registry)
         self.file_logger = get_events_logger(_registry=self.events_processes_registry)
@@ -40,10 +43,12 @@ class TestFileLogger(EventsUtilsMixin):
         assert self.file_logger._registry == self.events_processes_registry
 
     def teardown_method(self) -> None:
+        """Stop the file logger and the events processes."""
         self.file_logger.stop(timeout=3)
         self.teardown_events_processes()
 
     def test_file_logger(self) -> None:
+        """The logger writes every event, and summary and grouping count the events per severity."""
         event_normal = SpotTerminationEvent(node="n1", message="m1")
         event_normal.severity = Severity.NORMAL
         event_warning = SpotTerminationEvent(node="n2", message="m2")
@@ -91,6 +96,7 @@ class TestFileLogger(EventsUtilsMixin):
         assert len(grouped[Severity.DEBUG.name]) == 5
 
     def test_get_events_grouped_by_category_limit(self) -> None:
+        """With a limit, grouping keeps the first CRITICAL events and the latest events of other severities."""
         with self.wait_for_n_events(self.file_logger, count=len(Severity) * 10, timeout=3):
             for severity in Severity:
                 for num in range(10):

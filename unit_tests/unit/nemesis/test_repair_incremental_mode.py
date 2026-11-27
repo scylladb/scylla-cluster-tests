@@ -10,6 +10,7 @@ from sdcm.nemesis import NemesisRunner
 
 @pytest.fixture
 def nodetool_runner():
+    """Yield a mock runner and node with adaptive timeout, auto-repair toggling and tablets detection patched out."""
     runner = MagicMock()
     node = MagicMock()
     with (
@@ -41,6 +42,7 @@ def runner_with_timed_out_mgr_repair():
     ],
 )
 def test_run_repair_nodetool_incremental_mode(nodetool_runner, incremental_mode, expected_args):
+    """run_repair_nodetool passes --incremental-mode only to 'cluster repair', and only when a mode is given."""
     runner, node = nodetool_runner
 
     NemesisRunner.run_repair_nodetool.__wrapped__(runner, nodes=[node], incremental_mode=incremental_mode)
@@ -52,6 +54,7 @@ def test_run_repair_nodetool_incremental_mode(nodetool_runner, incremental_mode,
 
 @pytest.mark.parametrize("incremental_mode,flag_expected", [(RepairIncrementalMode.FULL, True), (None, False)])
 def test_create_repair_task_incremental_mode(incremental_mode, flag_expected):
+    """create_repair_task adds '--incremental-mode full' to the sctool command only when the mode is given."""
     mgr_cluster = ManagerCluster.__new__(ManagerCluster)
     mgr_cluster.id = "cluster-id"
     mgr_cluster.manager_node = MagicMock()

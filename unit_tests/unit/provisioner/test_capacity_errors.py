@@ -36,8 +36,10 @@ def _client_error(code: str, message: str) -> ClientError:
     ],
 )
 def test_is_capacity_error(exc, expected):
+    """is_capacity_error matches capacity codes, also when wrapped in the message, and rejects other codes."""
     assert is_capacity_error(exc) is expected
 
 
 def test_is_capacity_error_false_for_non_client_exception():
+    """is_capacity_error is false for an exception that is not a botocore ClientError."""
     assert is_capacity_error(ValueError("just a value error")) is False

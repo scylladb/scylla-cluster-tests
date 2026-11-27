@@ -36,6 +36,8 @@ SAMPLE_VERSION_JSON = json.dumps(
 
 @pytest.fixture
 def make_runner():
+    """Provide a factory that builds a mock runner whose run() returns the given stdout."""
+
     def _make(stdout: str) -> MagicMock:
         mock_runner = MagicMock()
         mock_output = MagicMock()
@@ -47,6 +49,7 @@ def make_runner():
 
 
 def test_version_parsed_from_json(make_runner):
+    """Takes the version from the JSON printed by ycsb --version."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(runner=runner, command_prefix="", argus_client=None)
 
@@ -56,6 +59,7 @@ def test_version_parsed_from_json(make_runner):
 
 
 def test_build_date_parsed_from_json(make_runner):
+    """Takes the build date from the ycsb --version JSON."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(runner=runner, command_prefix="", argus_client=None)
 
@@ -65,6 +69,7 @@ def test_build_date_parsed_from_json(make_runner):
 
 
 def test_git_hash_used_as_revision_id(make_runner):
+    """Uses the git hash of the ycsb --version JSON as the revision ID."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(runner=runner, command_prefix="", argus_client=None)
 
@@ -74,6 +79,7 @@ def test_git_hash_used_as_revision_id(make_runner):
 
 
 def test_version_command_targets_ycsb_binary(make_runner):
+    """Runs the ycsb binary under the YCSB home with --version."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(runner=runner, command_prefix="", argus_client=None)
 
@@ -86,6 +92,7 @@ def test_version_command_targets_ycsb_binary(make_runner):
 
 
 def test_missing_version_key_falls_back_to_marker(make_runner):
+    """Reports #FAILED_CHECK_LOGS when the JSON has no version key."""
     runner = make_runner(json.dumps({"git_hash": "abc", "build_date": "2026-01-01"}))
     reporter = YcsbVersionReporter(runner=runner, command_prefix="", argus_client=None)
 
@@ -95,6 +102,7 @@ def test_missing_version_key_falls_back_to_marker(make_runner):
 
 
 def test_dynamodb_workload_reports_aws_sdk_version(make_runner):
+    """Reports the AWS SDK version through a sub-reporter for a dynamodb workload."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -110,6 +118,7 @@ def test_dynamodb_workload_reports_aws_sdk_version(make_runner):
 
 
 def test_dynamodb_aws_sdk_reporter_receives_correct_version(make_runner):
+    """Passes the aws_sdk_version of the JSON to the AWS SDK sub-reporter."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -136,6 +145,7 @@ def test_dynamodb_aws_sdk_reporter_receives_correct_version(make_runner):
 
 
 def test_scylla_workload_reports_scylla_driver_version(make_runner):
+    """Reports the Scylla driver version through a sub-reporter for a scylla workload."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -151,6 +161,7 @@ def test_scylla_workload_reports_scylla_driver_version(make_runner):
 
 
 def test_scylla_driver_reporter_receives_correct_version(make_runner):
+    """Passes the scylla_driver_version of the JSON to the Scylla driver sub-reporter."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -177,6 +188,7 @@ def test_scylla_driver_reporter_receives_correct_version(make_runner):
 
 
 def test_unrecognized_workload_reports_no_sub_reporters(make_runner):
+    """Reports only the YCSB version for a workload other than dynamodb or scylla."""
     runner = make_runner(SAMPLE_VERSION_JSON)
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -196,6 +208,7 @@ def test_unrecognized_workload_reports_no_sub_reporters(make_runner):
 
 
 def test_dynamodb_workload_without_aws_sdk_key_does_not_crash(make_runner):
+    """Reports the YCSB version for a dynamodb workload when the JSON lacks the AWS SDK version."""
     runner = make_runner(json.dumps({"version": "1.0.0", "git_hash": "abc", "build_date": "2026-01-01"}))
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -210,6 +223,7 @@ def test_dynamodb_workload_without_aws_sdk_key_does_not_crash(make_runner):
 
 
 def test_scylla_workload_without_driver_version_key_does_not_crash(make_runner):
+    """Reports the YCSB version for a scylla workload when the JSON lacks the driver version."""
     runner = make_runner(json.dumps({"version": "1.0.0", "git_hash": "abc", "build_date": "2026-01-01"}))
     reporter = YcsbVersionReporter(
         runner=runner,
@@ -224,24 +238,29 @@ def test_scylla_workload_without_driver_version_key_does_not_crash(make_runner):
 
 
 def test_aws_sdk_reporter_stores_version():
+    """The AWS SDK reporter keeps the version given to its constructor."""
     reporter = YcsbAwsSdkVersionReporter(version="2.0.0")
 
     assert reporter.version == "2.0.0"
 
 
 def test_scylla_driver_reporter_stores_version():
+    """The Scylla driver reporter keeps the version given to its constructor."""
     reporter = YcsbScyllaDriverVersionReporter(version="3.10.2")
 
     assert reporter.version == "3.10.2"
 
 
 def test_tool_name_is_ycsb():
+    """Reports the YCSB version under the ycsb tool name."""
     assert YcsbVersionReporter.TOOL_NAME == "ycsb"
 
 
 def test_aws_sdk_reporter_tool_name():
+    """Reports the AWS SDK version under the ycsb-aws-sdk tool name."""
     assert YcsbAwsSdkVersionReporter.TOOL_NAME == "ycsb-aws-sdk"
 
 
 def test_scylla_driver_reporter_tool_name():
+    """Reports the Scylla driver version under the ycsb-scylla-driver tool name."""
     assert YcsbScyllaDriverVersionReporter.TOOL_NAME == "ycsb-scylla-driver"

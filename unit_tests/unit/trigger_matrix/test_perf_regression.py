@@ -33,6 +33,7 @@ PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-re
 
 
 def write_matrix(tmp_path, data) -> Path:
+    """Dump the matrix data to matrix.yaml under tmp_path and return the path."""
     path = tmp_path / "matrix.yaml"
     path.write_text(yaml.dump(data))
     return path
@@ -40,6 +41,7 @@ def write_matrix(tmp_path, data) -> Path:
 
 @pytest.fixture()
 def perf_config(tmp_path):
+    """Load a synthetic perf matrix: a master-2weeks job, two rc1-only latte jobs and two rolling-upgrade jobs."""
     path = write_matrix(
         tmp_path,
         {
@@ -87,10 +89,12 @@ def perf_config(tmp_path):
 
 @pytest.fixture()
 def production_perf_config():
+    """Load the production configurations/triggers/perf-regression.yaml matrix."""
     return load_matrix_config(PERF_YAML)
 
 
 def test_master_2weeks_selects_expected_jobs(perf_config):
+    """The master-2weeks selector on master picks only the i8g tablets job."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="master:latest",
@@ -103,6 +107,7 @@ def test_master_2weeks_selects_expected_jobs(perf_config):
 
 
 def test_gce_custom_monthly_with_master_selects_latte(perf_config):
+    """The gce-custom-monthly selector on master picks both latte jobs; master bypasses pre_release."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="master:latest",
@@ -114,6 +119,7 @@ def test_gce_custom_monthly_with_master_selects_latte(perf_config):
 
 
 def test_gce_custom_monthly_non_rc_excluded(perf_config):
+    """A GA (non-rc) 2025.1 build selects no rc1-only gce-custom-monthly job."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="2025.1:latest",
@@ -124,6 +130,7 @@ def test_gce_custom_monthly_non_rc_excluded(perf_config):
 
 
 def test_gce_custom_monthly_rc1_included(perf_config):
+    """An rc1 build selects both rc1-only gce-custom-monthly latte jobs."""
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="2026.1:latest",
@@ -225,11 +232,13 @@ MICROBENCHMARK_VARIANTS = ("x86_64", "x86_64-write", "arm64", "arm64-write")
 
 
 def microbenchmark_jobs(tool: str) -> set[str]:
+    """Return the four weekly microbenchmark job names (x86/arm, read/write) of the given perf tool."""
     return {f"scylla-enterprise-{tool}-weekly-microbenchmark_{variant}" for variant in MICROBENCHMARK_VARIANTS}
 
 
 @pytest.fixture()
 def production_pgo_config():
+    """Load the production pgo-offline-installer.yaml trigger matrix."""
     return load_matrix_config(PERF_YAML.parent / "pgo-offline-installer.yaml")
 
 

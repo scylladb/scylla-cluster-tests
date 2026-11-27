@@ -17,10 +17,11 @@ UNPACKING_KWARGS = [{"timeout": t, "msg": f"test{i}"} for i, t in enumerate(RAND
 
 
 class DummyException(Exception):
-    pass
+    """Exception raised on purpose by the dummy worker functions."""
 
 
 def dummy_func_return_tuple(timeout):
+    """Sleep `timeout` seconds and return a (timeout, "test") tuple."""
     LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(timeout)
     LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
@@ -28,6 +29,7 @@ def dummy_func_return_tuple(timeout):
 
 
 def dummy_func_return_single(timeout):
+    """Sleep `timeout` seconds and return the timeout."""
     LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(timeout)
     LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
@@ -35,6 +37,7 @@ def dummy_func_return_single(timeout):
 
 
 def dummy_func_raising_exception(timeout):
+    """Sleep in three steps and raise DummyException after a random one of them."""
     LOGGER.debug("start %s", dummy_func_raising_exception.__name__)
     steps = 3
     raise_after = random.randint(1, steps)
@@ -48,6 +51,7 @@ def dummy_func_raising_exception(timeout):
 
 
 def dummy_func_accepts_list_as_parameter(accepted_list):
+    """Sleep the list's first item in seconds and return its second item."""
     LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(accepted_list[0])
     LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
@@ -55,6 +59,7 @@ def dummy_func_accepts_list_as_parameter(accepted_list):
 
 
 def dummy_func_with_several_parameters(timeout, msg):
+    """Sleep `timeout` seconds and return a (timeout, msg) tuple."""
     LOGGER.debug("start %s with timeout %s", msg, timeout)
     time.sleep(timeout)
     LOGGER.info("finished %s", dummy_func_return_tuple.__name__)
@@ -62,6 +67,7 @@ def dummy_func_with_several_parameters(timeout, msg):
 
 
 def test_successful_parallel_run_func_returning_tuple():
+    """Results of a tuple-returning function come back in the order of the input items."""
     parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=MAX_TIMEOUT + 0.5, num_workers=len(RAND_TIMEOUTS))
     results = parallel_object.run(dummy_func_return_tuple)
     returned_results = [r.result for r in results]
@@ -70,6 +76,7 @@ def test_successful_parallel_run_func_returning_tuple():
 
 
 def test_successful_parallel_run_func_returning_single_value():
+    """Results of a single-value function come back in the order of the input items."""
     parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=MAX_TIMEOUT + 0.5)
     results = parallel_object.run(dummy_func_return_single)
     returned_results = [r.result for r in results]
@@ -77,6 +84,7 @@ def test_successful_parallel_run_func_returning_single_value():
 
 
 def test_raised_exception_by_timeout():
+    """A run exceeding its timeout raises ParallelObjectException holding TimeoutError results."""
     test_timeout = min(RAND_TIMEOUTS)
     start_time = time.time()
     with pytest.raises(ParallelObjectException) as exc_info:
@@ -88,12 +96,14 @@ def test_raised_exception_by_timeout():
 
 
 def test_parallel_object_exception_raised():
+    """An exception raised in the worker function surfaces as ParallelObjectException."""
     with pytest.raises(ParallelObjectException):
         parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=MAX_TIMEOUT + 0.5)
         parallel_object.run(dummy_func_raising_exception)
 
 
 def test_ignore_exception_raised_in_func_and_get_results():
+    """With ignore_exceptions, each failed call's result carries its DummyException and a None result."""
     parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=MAX_TIMEOUT + 0.5)
     results = parallel_object.run(dummy_func_raising_exception, ignore_exceptions=True)
     for res_obj in results:
@@ -107,6 +117,7 @@ def test_ignore_exception_raised_in_func_and_get_results():
 
 
 def test_ignore_exception_by_timeout():
+    """With ignore_exceptions, calls that time out carry a TimeoutError and the others their result."""
     parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=min(RAND_TIMEOUTS))
     results = parallel_object.run(dummy_func_return_tuple, ignore_exceptions=True)
     for res_obj in results:
@@ -119,6 +130,7 @@ def test_ignore_exception_by_timeout():
 
 
 def test_less_number_of_workers_than_length_of_iterable():
+    """With fewer workers than items, every item still runs and results keep the input order."""
     parallel_object = ParallelObject(RAND_TIMEOUTS, timeout=MAX_TIMEOUT + 0.5, num_workers=2)
     results = parallel_object.run(dummy_func_return_tuple)
     returned_results = [r.result for r in results]
@@ -127,6 +139,7 @@ def test_less_number_of_workers_than_length_of_iterable():
 
 
 def test_unpack_args_for_func():
+    """With unpack_objects, list items are passed to the function as positional args."""
     parallel_object = ParallelObject(UNPACKING_ARGS, timeout=MAX_TIMEOUT + 0.5, num_workers=2)
     results = parallel_object.run(dummy_func_with_several_parameters, unpack_objects=True)
     returned_results = [r.result for r in results]
@@ -135,6 +148,7 @@ def test_unpack_args_for_func():
 
 
 def test_unpack_kwargs_for_func():
+    """With unpack_objects, dict items are passed to the function as keyword args."""
     parallel_object = ParallelObject(UNPACKING_KWARGS, timeout=MAX_TIMEOUT + 0.5, num_workers=2)
     results = parallel_object.run(dummy_func_with_several_parameters, unpack_objects=True)
     returned_results = [r.result for r in results]
@@ -143,6 +157,7 @@ def test_unpack_kwargs_for_func():
 
 
 def test_successfull_parallel_run_func_accepted_list_as_parameter():
+    """With unpack_objects, an item that wraps a list passes that list as the single argument."""
     parallel_object = ParallelObject(LIST_AS_ARG, timeout=MAX_TIMEOUT + 0.5)
     results = parallel_object.run(dummy_func_accepts_list_as_parameter, unpack_objects=True)
     returned_results = [r.result for r in results]

@@ -11,11 +11,13 @@ from sdcm.remote.remote_long_running import run_long_running_cmd
 
 @pytest.fixture(scope="function", autouse=True)
 def fixture_check_tmp_files_cleared():
+    """After each test, assert no remoter_* temp files are left in /tmp."""
     yield
     assert list(Path("/tmp").glob("remoter_*")) == []
 
 
 def test_long_command_failing():
+    """A failing long-running command raises UnexpectedExit carrying its command, stderr, exit code and duration."""
     with pytest.raises(UnexpectedExit, match=r".*Exit code: 127.*") as exc_info:
         run_long_running_cmd(LOCALRUNNER, cmd="sleep 1 && bbb", timeout=100)
 
@@ -28,6 +30,7 @@ def test_long_command_failing():
 
 
 def test_long_command_timeout():
+    """A long-running command exceeding its timeout raises CommandTimedOut promptly at the deadline."""
     start = time.perf_counter()
     try:
         with pytest.raises(CommandTimedOut) as exc_info:
@@ -46,6 +49,7 @@ def test_long_command_timeout():
 
 
 def test_long_command_success():
+    """A successful long-running command returns its stdout, exit code 0 and duration."""
     result = run_long_running_cmd(LOCALRUNNER, cmd="sleep 1 && echo 'cmd is done'", timeout=100)
     assert result.ok
     assert result.stdout == "cmd is done\n"

@@ -18,6 +18,7 @@ from unit_tests.unit.nemesis import (
 
 @pytest.fixture
 def registry():
+    """Provide a NemesisRegistry over the test-only nemesis class tree."""
     return NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)
 
 
@@ -37,6 +38,7 @@ def registry():
     ],
 )
 def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_classes):
+    """filter_subclasses selects classes by a single flag or class name; an empty or None phrase selects all."""
     filtered = registry.filter_subclasses(logical_phrase)
     assert set(filtered) == expected_classes
 
@@ -50,6 +52,7 @@ def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_cla
     ],
 )
 def test_filter_subclasses_by_combined_flags(registry, logical_phrase, expected_classes):
+    """filter_subclasses evaluates 'and', 'or' and 'not' combinations of flags and class names."""
     filtered = registry.filter_subclasses(logical_phrase)
     assert set(filtered) == expected_classes
 
@@ -62,16 +65,19 @@ def test_filter_subclasses_by_combined_flags(registry, logical_phrase, expected_
     ],
 )
 def test_filter_subclasses_with_complex_expression(registry, logical_phrase, expected_classes):
+    """filter_subclasses evaluates parenthesised expressions mixing class names and negated flags."""
     filtered = registry.filter_subclasses(logical_phrase)
     assert set(filtered) == expected_classes
 
 
 def test_get_subclasses(registry):
+    """get_subclasses returns every concrete nemesis class of the test tree."""
     subclasses = registry.get_subclasses()
     assert set(subclasses) == {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisAD}
 
 
 def test_gather_properties(registry):
+    """gather_properties maps each nemesis class name to the resolved values of all its flags."""
     class_properties = registry.gather_properties()
 
     expected_class_properties = {

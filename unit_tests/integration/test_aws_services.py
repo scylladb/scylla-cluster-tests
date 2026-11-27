@@ -29,6 +29,7 @@ AWS_REGION = "us-east-1"
 
 @pytest.fixture(scope="session", autouse=True)
 def fixture_get_real_keys():
+    """Sync the real SCT test SSH keys from the KeyStore into ~/.ssh before the session starts."""
     KeyStore().sync(
         keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
         local_path=Path("~/.ssh/").expanduser(),
@@ -59,6 +60,7 @@ def moto_server():
 
 @pytest.fixture(scope="module", autouse=True)
 def keystore_configure(moto_server):
+    """Seed the moto S3 keystore bucket and Secrets Manager with fake credentials and the test SSH keys."""
     entries = {
         "gcp-sct-project-1.json": b"{}",
         "aws_images_role.json": (
@@ -85,6 +87,7 @@ def keystore_configure(moto_server):
 
 @pytest.fixture(scope="module")
 def aws_region(keystore_configure) -> AwsRegion:
+    """Return an AwsRegion configured in moto with SCT networking and the manager backup instance profile."""
     # we need all of SCT info configured in moto
     # hence we configure the region first
     _aws_region = AwsRegion(region_name=AWS_REGION)
@@ -116,6 +119,7 @@ def test_02_keystore_sync(tmp_path) -> None:
 def test_03_provision(aws_region: AwsRegion, instance_provision: str) -> None:
     # test AWS provision flow
 
+    """Provisioning a 3-db/1-monitor/1-loader AWS layout completes against moto for each instance provision mode."""
     # TODO: switch all this to configuration yaml, it would be clear and easier to maintain
     with environment(
         SCT_CLUSTER_BACKEND="aws",
@@ -141,6 +145,7 @@ def test_03_provision(aws_region: AwsRegion, instance_provision: str) -> None:
 
 
 def test_04_get_scylla_ami_versions() -> None:
+    """Searching all Scylla AMI versions returns exactly the AMIs from the mocked AMI data."""
     amis = get_scylla_ami_versions(region_name=AWS_REGION, version="all")
 
     assert {ami.id for ami in amis} == {
@@ -194,6 +199,7 @@ def test_04b_get_scylla_ami_versions_full_tag() -> None:
 
 
 def test_05_ec2_client_spot(aws_region: AwsRegion) -> None:
+    """Creating a spot instance returns one instance with the requested image and instance type."""
     ec2 = EC2ClientWrapper(region_name=aws_region.region_name)
     instances = ec2.create_spot_instances(
         instance_type="m5.xlarge",

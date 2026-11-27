@@ -62,6 +62,7 @@ COMPLEX_CMD_EXPECTATIONS = {
 
 
 def test_05_latte_parse_final_output():
+    """parse_final_output extracts the p99 latency, mean latency and op rate from latte's final summary."""
     latte = LatteStressThread(
         loader_set=["fake-loader"],
         stress_cmd="fake",
@@ -95,6 +96,7 @@ def test_05_latte_parse_final_output():
     ),
 )
 def test_find_latte_fn_names(cmd, items):
+    """find_latte_fn_names extracts the function names from every form of the -f/--function(s) option."""
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
     for fn_param in fn_params:
         result = find_latte_fn_names(cmd % fn_param)
@@ -152,6 +154,7 @@ def test_find_latte_fn_names(cmd, items):
     ),
 )
 def test_get_latte_operation_type(cmd, expected_operation_type):
+    """get_latte_operation_type maps the called functions to write, read, counter_write, counter_read, mixed or user."""
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
     for fn_param in fn_params:
         result = get_latte_operation_type(cmd % fn_param)
@@ -171,6 +174,7 @@ def test_get_latte_operation_type(cmd, expected_operation_type):
     ),
 )
 def test_find_latte_tags(cmd, items):
+    """find_latte_tags collects the values of every --tag option, comma-separated or repeated."""
     result = find_latte_tags(cmd % "latte run /foo/bar.rn")
     assert len(result) > 0
     assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
@@ -227,6 +231,7 @@ SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000
 
 
 def test_a_staged_file_needs_an_absolute_container_path():
+    """A staged file with a relative container path is rejected with ValueError."""
     with pytest.raises(ValueError, match="not absolute"):
         _staging_thread([("/local/documents.tsv", "documents.tsv")])
 
@@ -243,6 +248,7 @@ def test_round_robin_stages_files_whatever_stress_num_says():
 
 
 def test_staged_files_need_a_docker_loader():
+    """Staging files on a k8s loader is rejected with ValueError."""
     with pytest.raises(ValueError, match="k8s loaders lack"):
         _staging_thread([SHARD], backend="k8s-eks")
 
@@ -262,6 +268,7 @@ def _hdr_thread(stress_cmd, use_hdrhistogram=True, **kwargs):
 
 
 def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
+    """A latte run records an HDR histogram when use_hdrhistogram is enabled."""
     assert _hdr_thread("latte run -f search data_dir/latte/x.rn").records_hdr()
 
 
@@ -274,6 +281,7 @@ def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
     ],
 )
 def test_no_hdr_is_recorded(stress_cmd, use_hdrhistogram, kwargs):
+    """HDR recording is off when opted out with record_hdr=False, for latte schema, or with use_hdrhistogram off."""
     assert not _hdr_thread(stress_cmd, use_hdrhistogram, **kwargs).records_hdr()
 
 
@@ -315,6 +323,7 @@ def _thread(stress_cmd="latte run -f load data_dir/latte/bench/bench.rn -d 100")
 
 @pytest.fixture(autouse=True)
 def nothing_sent_yet(monkeypatch):
+    """Reset the module-level staging caches and pin the staging run id for every test."""
     monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
     monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
     monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
@@ -334,6 +343,7 @@ def script_dir(tmp_path, monkeypatch):
 
 
 def test_the_script_directory_is_sent_once_per_loader(script_dir):
+    """The script directory's top-level files are sent once per loader and mounted read-only into the container."""
     loader = _loader()
 
     first = _thread()._script_dir_mount(loader)
@@ -363,6 +373,7 @@ def test_another_run_on_the_same_host_stages_apart(script_dir, monkeypatch):
 
 
 def test_every_loader_gets_a_copy_of_its_own(script_dir):
+    """Each loader gets its own copy of the script directory in a separate host directory."""
     first, second = _loader("loader-1"), _loader("loader-2")
 
     _thread()._script_dir_mount(first)
@@ -374,6 +385,7 @@ def test_every_loader_gets_a_copy_of_its_own(script_dir):
 
 
 def test_a_changed_file_is_sent_again(script_dir):
+    """A script file whose mtime changed is sent to the loader again."""
     loader = _loader()
     _thread()._script_dir_mount(loader)
 
@@ -386,6 +398,7 @@ def test_a_changed_file_is_sent_again(script_dir):
 
 
 def test_a_failed_send_fails_the_call_and_is_retried(script_dir):
+    """A failed send raises RuntimeError and the next call sends all the files again."""
     loader = _loader()
     loader.remoter.send_files = lambda src, dst, **_: False
     with pytest.raises(RuntimeError, match="Failed to send"):
@@ -398,6 +411,7 @@ def test_a_failed_send_fails_the_call_and_is_retried(script_dir):
 
 
 def test_host_paths_are_quoted(script_dir):
+    """Host paths containing spaces are shell-quoted in the mount option and the mkdir command."""
     loader = _loader("loader 1")
 
     mount = _thread()._script_dir_mount(loader)
@@ -415,6 +429,7 @@ def test_host_paths_are_quoted(script_dir):
 
 @pytest.fixture
 def shard(tmp_path):
+    """Provide a local shard file paired with its container path."""
     path = tmp_path / "documents_000.tsv"
     path.write_text("doc_0\tbody\n", encoding="utf-8")
     return str(path), SHARD[1]
@@ -424,6 +439,7 @@ HOST_SHARD = "/home/loader/latte-staging/run/loader-1/files/tmp/fts/ds/shards/do
 
 
 def test_a_staged_file_goes_to_the_loaders_host_and_is_mounted_read_only(shard):
+    """A staged file is sent under the loader's staging dir, mounted read-only and removed after the block."""
     loader = _loader()
 
     with _staging_thread([shard])._staged_files(loader) as mounts:
@@ -444,6 +460,7 @@ def test_nothing_is_staged_by_default():
 
 
 def test_a_staged_file_is_removed_even_when_the_command_fails(shard):
+    """A staged file is removed from the loader host when the command inside the block fails."""
     loader = _loader()
 
     with pytest.raises(RuntimeError, match="latte failed"), _staging_thread([shard])._staged_files(loader):
@@ -480,6 +497,7 @@ def test_a_failed_removal_does_not_replace_the_commands_outcome(shard):
 
 
 def test_staging_stops_when_the_home_cannot_be_resolved(shard):
+    """Staging raises RuntimeError and sends no file when the loader's home directory resolves empty."""
     loader = _loader()
     loader.remoter.run = lambda cmd, **_: types.SimpleNamespace(stdout="\n")
 
@@ -499,6 +517,7 @@ def test_a_file_sent_ahead_is_not_sent_again(shard):
 
 
 def test_a_removed_file_is_sent_again(shard):
+    """A staged file removed after its run is sent again for the next run."""
     loader = _loader()
     with _staging_thread([shard])._staged_files(loader):
         pass
@@ -516,6 +535,7 @@ def test_docker_loaders_stage_apart(shard):
 
 
 def test_a_staged_file_mount_is_quoted(shard):
+    """A staged file host path containing spaces is shell-quoted in the mount option and the rm command."""
     loader = _loader("loader 1")
 
     with _staging_thread([shard])._staged_files(loader) as mounts:
@@ -537,6 +557,7 @@ def _fail_sends_to(loader, path_part):
     "stop_test_on_failure, severity", [(True, Severity.CRITICAL), (False, Severity.ERROR)], ids=["stops", "continues"]
 )
 def test_a_failed_script_directory_send_is_reported_as_a_failed_run(script_dir, stop_test_on_failure, severity):
+    """A failed script directory send skips the container and returns an event with the configured severity."""
     loader = _loader()
     _fail_sends_to(loader, "/scripts/")
     thread = _thread()
@@ -552,6 +573,7 @@ def test_a_failed_script_directory_send_is_reported_as_a_failed_run(script_dir, 
 
 
 def test_a_failed_staged_file_send_is_reported_as_a_failed_run_and_removed(shard):
+    """A failed staged file send skips the container, returns a CRITICAL event and removes the file."""
     loader = _loader()
     _fail_sends_to(loader, "/files/")
     thread = _staging_thread([shard])
@@ -567,6 +589,7 @@ def test_a_failed_staged_file_send_is_reported_as_a_failed_run_and_removed(shard
 
 
 def test_a_run_gets_the_mounts_of_both_the_script_directory_and_its_staged_files(shard):
+    """The container gets the script directory and staged file mounts, and the file is removed after the run."""
     loader = _loader()
     thread = _staging_thread([shard])
 
@@ -609,6 +632,7 @@ def test_a_pinned_loader_runs_the_command_there_only():
 
 
 def test_without_a_pinned_loader_round_robin_picks_it():
+    """Without a pinned loader, the round-robin loader set picks the loader for the command."""
     thread = _pinnable_thread()
     thread.configure_executer()
     assert thread.loaders == ["next-round-robin-loader"]

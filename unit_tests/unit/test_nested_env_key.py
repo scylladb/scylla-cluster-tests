@@ -31,6 +31,7 @@ from sdcm.utils.nested_env_key import nested_env_subkey, split_earliest_nested_k
     ],
 )
 def test_split_earliest_nested_key(key, expected):
+    """A nested key splits at its earliest "." or "__" separator, or yields None without one."""
     assert split_earliest_nested_key(key) == expected
 
 
@@ -52,4 +53,5 @@ def test_split_earliest_nested_key(key, expected):
     ],
 )
 def test_nested_env_subkey(env_key, prefix, sep, expected):
+    """The env key's first nested level after the anchored `prefix + sep` is returned, or None on no match."""
     assert nested_env_subkey(env_key, prefix, sep) == expected

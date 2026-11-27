@@ -32,6 +32,7 @@ def monkeymodule():
 
 @pytest.fixture(name="conf", scope="module")
 def fixture_conf(monkeymodule):
+    """Yield a module-scoped SCTConfiguration for AWS with a dummy AMI and the minimal test-case."""
     monkeymodule.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeymodule.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeymodule.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
@@ -41,6 +42,7 @@ def fixture_conf(monkeymodule):
 
 @pytest.fixture(autouse=True)
 def fixture_env(monkeypatch):
+    """Quiet noisy loggers and default each test to a docker backend on the latest Scylla release."""
     logging.basicConfig(level=logging.ERROR)
     logging.getLogger("botocore").setLevel(logging.CRITICAL)
     logging.getLogger("boto3").setLevel(logging.CRITICAL)
@@ -54,9 +56,11 @@ def fixture_env(monkeypatch):
 
 @pytest.fixture(scope="module")
 def help_yaml():
+    """Return the configuration help rendered as YAML."""
     return sct_config.SCTConfiguration.dump_help_config_yaml()
 
 
 @pytest.fixture(scope="module")
 def help_markdown():
+    """Return the configuration help rendered as Markdown."""
     return sct_config.SCTConfiguration.dump_help_config_markdown()

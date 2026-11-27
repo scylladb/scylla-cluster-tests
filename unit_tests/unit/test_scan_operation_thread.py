@@ -43,42 +43,54 @@ DEFAULT_PARAMS = {
 
 
 class DBCluster(DummyDbCluster):
+    """DB cluster stub that hands out the given CQL connection mock and lists the tables test and a.b."""
+
     def __init__(self, connection_mock, nodes, params):
         super().__init__(nodes, params=params)
         self.connection_mock = connection_mock
         self.params = {"nemesis_seed": [1]}
 
     def get_non_system_ks_cf_list(*args, **kwargs):
+        """Return a fixed list of keyspace.table names."""
         return ["test", "a.b"]
 
     def cql_connection_patient(self, *args, **kwargs):
+        """Return the CQL connection mock given at construction."""
         return self.connection_mock
 
 
 def get_event_log_file(events):
+    """Return the formatted lines of the events written to the main events device."""
     return events.get_formatted_event_lines() or ""
 
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_event_log_file(events):
+    """Clear the main events device before each test so assertions see only that test's events."""
     events.events_main_device.clear()
 
 
 @pytest.fixture(scope="module", autouse=True)
 def mock_get_partition_keys():
+    """Patch partition-key lookup to return fixed keys for the whole module."""
     with patch("sdcm.scan_operation_thread.get_partition_keys", return_value=["a", "b"]):
         yield
 
 
 @pytest.fixture(scope="module")
 def node():
+    """Provide a dummy DB node shared by the module's tests."""
     return DummyNode(
         name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
     )
 
 
 class MockCqlConnectionPatient(MagicMock):
+    """CQL session mock whose execute_async completes at once with a single-row page."""
+
     def execute_async(*args, **kwargs):
+        """Return a future that invokes its callback immediately with one row and no further pages."""
+
         class MockFuture:
             has_more_pages = False
 
@@ -92,6 +104,7 @@ class MockCqlConnectionPatient(MagicMock):
 
 @pytest.fixture(scope="module", name="cluster")
 def new_cluster(node):
+    """Provide a DB cluster wired to the node, with a stub tester whose monitors resolve any attribute."""
     db_cluster = DBCluster(MockCqlConnectionPatient(), [node], {})
     node.parent_cluster = db_cluster
 
@@ -116,6 +129,7 @@ def new_cluster(node):
 
 @pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
 def test_scan_positive(mode, events, cluster):
+    """A successful scan emits a NORMAL begin event and a NORMAL end event in every scan mode."""
     default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode=mode, **DEFAULT_PARAMS)
     with patch.object(PrometheusDBStats, "__init__", return_value=None):
         with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "2"]]}]):
@@ -128,6 +142,10 @@ def test_scan_positive(mode, events, cluster):
 
 
 def test_negative_prometheus_validation_error(events, cluster):
+    """An aggregate scan whose mapreduce dispatch metric stays flat ends with an ERROR event naming the metric.
+
+    The event is a WARNING while scylladb#21578 is open.
+    """
     default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode="aggregate", **DEFAULT_PARAMS)
     with patch.object(PrometheusDBStats, "__init__", return_value=None):
         with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "1"]]}]):
@@ -155,6 +173,7 @@ def test_negative_prometheus_validation_error(events, cluster):
 )
 @pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
 def test_scan_negative_execution_errors(mode, exception, events, node):
+    """Read timeouts, host-down errors and client timeouts end the scan with a WARNING event in every mode."""
     if mode == "partition":
 
         class Connection(MockCqlConnectionPatient):
@@ -184,12 +203,18 @@ def test_scan_negative_execution_errors(mode, exception, events, node):
 
 
 class ExecuteExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
+    """CQL session mock whose synchronous execute raises a generic exception."""
+
     def execute(*args, **kwargs):
+        """Raise a generic exception for every query."""
         raise Exception("Exception")
 
 
 class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
+    """CQL session mock whose execute_async raises a generic exception."""
+
     def execute_async(*args, **kwargs):
+        """Raise a generic exception for every query."""
         raise Exception("Exception")
 
 
@@ -198,6 +223,7 @@ class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
     ("mode", "execute_mock"), [["partition", "execute_async"], ["aggregate", "execute"], ["table", "execute"]]
 )
 def test_scan_negative_running_nemesis(mode, severity, running_nemesis, execute_mock, events, node):
+    """A failed scan ends with a WARNING event while a nemesis runs on the node, and with ERROR otherwise."""
     if running_nemesis:
         node.running_nemesis = MagicMock()
     else:

@@ -17,6 +17,7 @@ def _snapshot_ops(params: dict) -> SnapshotOperations:
 
 
 def test_backup_s3_client_uses_plain_boto3_outside_oci():
+    """Outside OCI the backup S3 client is a plain boto3 client for the requested region."""
     ops = _snapshot_ops({"cluster_backend": "aws"})
     with patch("sdcm.mgmt.operations.boto3.client") as mock_client:
         ops._backup_s3_client("us-east-1")
@@ -24,6 +25,7 @@ def test_backup_s3_client_uses_plain_boto3_outside_oci():
 
 
 def test_backup_s3_client_uses_oci_endpoint_and_credentials():
+    """On OCI the backup S3 client uses the OCI endpoint, its region, the OCI creds, and path-style addressing."""
     ops = _snapshot_ops(
         {
             "cluster_backend": "oci",
@@ -66,6 +68,7 @@ def test_backup_s3_client_uses_endpoint_region_on_oci(region_name):
 
 
 def test_backup_s3_client_fills_region_placeholder_from_oci_region_name():
+    """On OCI the `{region}` placeholder in the endpoint and region is filled from oci_region_name."""
     ops = _snapshot_ops(
         {
             "cluster_backend": "oci",

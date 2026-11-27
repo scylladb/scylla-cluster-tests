@@ -29,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 @pytest.fixture(name="kafka_cluster", scope="function")
 def fixture_kafka_cluster(tmp_path_factory, params, monkeypatch):
+    """Yield a started local Kafka cluster with logs under a temp dir; stop it after the test."""
     monkeypatch.setenv("_SCT_TEST_LOGDIR", str(tmp_path_factory.mktemp("logs")))
     kafka = LocalKafkaCluster(params=params)
 

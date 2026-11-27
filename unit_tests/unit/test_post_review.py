@@ -70,6 +70,7 @@ def post_review(tmp_path):
 
 
 def test_posts_a_comment_review_pinned_to_the_reviewed_commit(post_review):
+    """The review is posted as a COMMENT on the reviewed commit, whatever event or commit the input gives."""
     output, posted = post_review({"event": "APPROVE", "commit_id": "other", "body": "LGTM", "comments": []})
 
     assert posted == {"commit_id": "abc123", "event": "COMMENT", "body": "LGTM", "comments": []}
@@ -77,6 +78,7 @@ def test_posts_a_comment_review_pinned_to_the_reviewed_commit(post_review):
 
 
 def test_moves_comments_outside_the_diff_to_the_body(post_review):
+    """Comments outside the diff move to a "Findings outside the diff" body section; blank comments are dropped."""
     _, posted = post_review({
         "body": "Summary.",
         "comments": [
@@ -98,6 +100,7 @@ def test_moves_comments_outside_the_diff_to_the_body(post_review):
 
 
 def test_keeps_a_multi_line_range_inside_the_diff(post_review):
+    """A multi-line comment whose range lies inside the diff is kept inline with start and end on the RIGHT side."""
     _, posted = post_review({"comments": [{"path": "a.py", "start_line": 10, "line": 13, "body": "♻️ **refactor:** x"}]})
 
     assert posted["comments"] == [
@@ -115,6 +118,7 @@ def test_keeps_a_multi_line_range_inside_the_diff(post_review):
 
 @pytest.mark.parametrize("secret", ["sk-ant-api03-abcdefgh1234", "ghs_" + "a" * 36])
 def test_refuses_to_post_a_review_that_holds_a_secret(post_review, secret):
+    """A review containing an API key or GitHub token fails with "refusing to post"."""
     with pytest.raises(subprocess.CalledProcessError) as error:
         post_review({"body": "LGTM", "comments": [{"path": "a.py", "line": 11, "body": f"key: {secret}"}]})
 
@@ -122,6 +126,7 @@ def test_refuses_to_post_a_review_that_holds_a_secret(post_review, secret):
 
 
 def test_dry_run_prints_the_review_and_posts_nothing(post_review):
+    """With --dry-run the review JSON is printed and nothing is posted."""
     output, posted = post_review({"body": "LGTM"}, "--dry-run")
 
     assert posted is None

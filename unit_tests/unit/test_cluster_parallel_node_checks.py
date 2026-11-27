@@ -89,6 +89,7 @@ def _set_schema_info(nodes, disagreeing=()):
 
 
 def test_wait_for_schema_agreement_checks_nodes_concurrently(caplog):
+    """Schema checks of all nodes run at the same time (a shared barrier) and reach agreement."""
     nodes = _make_nodes(5)
     _set_schema_info(nodes)
     barrier = threading.Barrier(len(nodes), timeout=OVERLAP_TIMEOUT)
@@ -105,6 +106,7 @@ def test_wait_for_schema_agreement_checks_nodes_concurrently(caplog):
 
 
 def test_wait_for_schema_agreement_disagreeing_nodes_raise_assertion_error_of_first_node():
+    """With two disagreeing nodes the raised AssertionError is the first node's, after all its retries."""
     nodes = _make_nodes(5)
     _set_schema_info(nodes, disagreeing=("node-1", "node-3"))
     node_3_checked = threading.Event()
@@ -143,6 +145,7 @@ def _nodetool_status(nodes, down=()):
 
 
 def test_wait_all_nodes_un_down_node_raises_cluster_nodes_not_ready():
+    """A node seen as DN by one peer raises ClusterNodesNotReady naming that node after all retries."""
     nodes = _make_nodes(4)
     for node in nodes:
         node.run_nodetool.return_value = _nodetool_status(nodes)
@@ -157,6 +160,7 @@ def test_wait_all_nodes_un_down_node_raises_cluster_nodes_not_ready():
 
 
 def test_wait_all_nodes_un_unexpected_error_is_not_retried():
+    """An unexpected error is retried only by get_nodetool_status and then propagates to the caller."""
     nodes = _make_nodes(3)
     for node in nodes:
         node.run_nodetool.return_value = _nodetool_status(nodes)
@@ -170,4 +174,5 @@ def test_wait_all_nodes_un_unexpected_error_is_not_retried():
 
 
 def test_wait_all_nodes_un_no_nodes_does_nothing():
+    """An empty cluster returns from wait_all_nodes_un right away."""
     DummyScyllaCluster([]).wait_all_nodes_un()

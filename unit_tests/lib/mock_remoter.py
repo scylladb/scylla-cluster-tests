@@ -40,9 +40,11 @@ class MockRemoter:
             self.responses = responses
 
     def is_up(self, timeout=None):
+        """Report the host as reachable."""
         return True
 
     def send_files(self, src, dst, **kwargs):
+        """Report the file transfer as successful."""
         return True
 
     def _process_response(self, response):
@@ -65,6 +67,7 @@ class MockRemoter:
         timestamp_logs=False,
         change_context: bool = False,
     ) -> Result:
+        """Replay the recorded response for cmd: return a Result, raise an Exception, or step through a list per call."""
         response = self.responses.get(cmd)
         if response is None:
             raise RuntimeError("Can't find response")

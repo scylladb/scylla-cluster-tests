@@ -18,6 +18,7 @@ from sdcm.sct_events.health import ClusterHealthValidatorEvent, DataValidatorEve
 
 
 def test_cluster_health_validator_event():
+    """ClusterHealthValidatorEvent exposes its node and cluster health check subtypes."""
     assert hasattr(ClusterHealthValidatorEvent, "NodeStatus")
     assert issubclass(ClusterHealthValidatorEvent.NodeStatus, ClusterHealthValidatorEvent)
     assert hasattr(ClusterHealthValidatorEvent, "NodePeersNulls")
@@ -31,6 +32,7 @@ def test_cluster_health_validator_event():
 
 
 def test_cluster_health_validator_event_msgfmt():
+    """ClusterHealthValidatorEvent and its subtypes render node, error or message, and survive pickling."""
     chc_event = ClusterHealthValidatorEvent()
     chc_event.publish_event = False
     chc_event.event_id = "7208cfbb-a083-4b7a-b0db-1982d88f6da0"
@@ -81,6 +83,7 @@ def test_cluster_health_validator_event_msgfmt():
 
 
 def test_data_validator_event():
+    """DataValidatorEvent exposes a subtype per row validator."""
     assert hasattr(DataValidatorEvent, "DataValidator")
     assert issubclass(DataValidatorEvent.DataValidator, DataValidatorEvent)
     assert hasattr(DataValidatorEvent, "ImmutableRowsValidator")
@@ -92,6 +95,7 @@ def test_data_validator_event():
 
 
 def test_data_validator_event_msgfmt():
+    """DataValidatorEvent subtypes render their error or message at the given severity and survive pickling."""
     critical_event = DataValidatorEvent.DataValidator(severity=Severity.ERROR, error="e1")
     critical_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
     assert str(critical_event) == (

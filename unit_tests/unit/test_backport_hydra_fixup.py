@@ -31,12 +31,14 @@ _spec.loader.exec_module(fixup)
 
 
 def lock(**packages):
+    """Return a minimal uv.lock text listing the given package versions."""
     return "version = 1\n" + "".join(
         f'\n[[package]]\nname = "{name}"\nversion = "{version}"\n' for name, version in packages.items()
     )
 
 
 def test_lock_bumps_lists_changed_and_added_packages():
+    """lock_bumps() returns sorted name==version pins for changed and newly added packages."""
     old = lock(boto3="1.43.0", awscli="1.45.0", attrs="25.1.0")
     new = lock(boto3="1.43.28", awscli="1.45.28", attrs="25.1.0", s3transfer="0.18.0")
 
@@ -44,10 +46,12 @@ def test_lock_bumps_lists_changed_and_added_packages():
 
 
 def test_lock_bumps_ignores_removed_packages():
+    """lock_bumps() returns an empty list when packages were only removed."""
     assert fixup.lock_bumps(lock(a="1", b="2"), lock(a="1")) == []
 
 
 def pr(number=1, head="backport/100/to-2026.1", files=("uv.lock",), labels=(), comments=()):
+    """Return a GitHub PR payload with the given number, head branch, files, labels and comments."""
     return {
         "number": number,
         "headRefName": head,
@@ -68,10 +72,12 @@ def pr(number=1, head="backport/100/to-2026.1", files=("uv.lock",), labels=(), c
     ids=["not-a-backport", "no-image-input", "already-labeled", "already-handled"],
 )
 def test_candidates_skips(skipped):
+    """candidates() leaves out non-backports, PRs without image inputs, and labeled or handled PRs."""
     assert fixup.candidates([skipped]) == []
 
 
 def test_candidates_picks_unhandled_backport_and_only_pr_reruns_handled_ones():
+    """candidates() picks unhandled backports, and only_pr selects that PR even when already handled."""
     fresh = pr(number=1, files=("pyproject.toml", "uv.lock"))
     handled = pr(number=2, labels=("New Hydra Version",))
 
@@ -80,6 +86,7 @@ def test_candidates_picks_unhandled_backport_and_only_pr_reruns_handled_ones():
 
 
 def test_scan_keeps_going_after_a_failed_pr_and_fails_at_the_end(monkeypatch):
+    """scan() processes every PR despite a failure, then exits listing the failed PR numbers."""
     prs = [pr(number=1), pr(number=2)]
     seen = []
 
@@ -100,6 +107,7 @@ def test_scan_keeps_going_after_a_failed_pr_and_fails_at_the_end(monkeypatch):
 
 
 def test_edit_todo_drops_chosen_commits_and_relocks_after_each_other(tmp_path, monkeypatch):
+    """edit_todo() removes the commits named in the drop env var and adds a relock exec after each kept pick."""
     monkeypatch.setenv(fixup.DROP_ENV, "2222222abcdef")
     todo = tmp_path / "git-rebase-todo"
     todo.write_text(
@@ -117,10 +125,12 @@ def test_edit_todo_drops_chosen_commits_and_relocks_after_each_other(tmp_path, m
 
 
 def git(repo, *args):
+    """Run a git command in the repo and return its stdout."""
     return subprocess.run(["git", *args], cwd=repo, check=True, text=True, capture_output=True).stdout
 
 
 def commit(repo, message, **files):
+    """Write the given files into the repo and commit them all with the message."""
     for name, content in files.items():
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)

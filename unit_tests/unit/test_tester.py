@@ -35,7 +35,10 @@ from unit_tests.lib.fake_tester import ClusterTesterForTests, FakeSCTConfigurati
 
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
+    """Fails two subtests and the main test with ValueError, and fails a silenced teardown step."""
+
     def test(self):
+        """Raise ValueError in each subtest and in the main test body."""
         with self.subTest("SUBTEST1"):
             # This wont create error in events
             raise ValueError("Subtest1 failed")
@@ -45,11 +48,15 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
 
     @silence()
     def collect_relocatable_package(self):
+        """Raise in teardown; silence() reports it as an ERROR event."""
         raise ValueError()
 
 
 class CriticalErrorNotCaughtTest(ClusterTesterForTests):
+    """Publishes a CRITICAL health event from a test body that passes."""
+
     def test(self):
+        """Publish a CRITICAL node status event and give the events device time to receive it."""
         try:
             ClusterHealthValidatorEvent.NodeStatus(
                 node="node-1",
@@ -65,7 +72,10 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
 
 
 class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
+    """Fails two subtests and the main test with assertions, and fails a silenced teardown step."""
+
     def test(self):
+        """Fail an assertion in each subtest and in the main test body."""
         with self.subTest("SUBTEST1"):
             # This wont create error in events
             assert False, "Subtest1 failed"
@@ -75,40 +85,55 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
 
     @silence()
     def collect_relocatable_package(self):
+        """Raise in teardown; silence() reports it as an ERROR event."""
         raise ValueError()
 
 
 class TeardownFailsTest(ClusterTesterForTests):
+    """Passes the test body and fails a silenced teardown step."""
+
     def test(self):
-        pass
+        """Empty test body: pass and publish no events."""
 
     @silence()
     def collect_relocatable_package(self):
+        """Raise in teardown; silence() reports it as an ERROR event."""
         raise ValueError()
 
 
 class SetupFailsTest(ClusterTesterForTests):
+    """Fails in setUp while preparing the KMS host."""
+
     def prepare_kms_host(self):
+        """Raise to fail the setUp stage."""
         raise RuntimeError("prepare_kms_host failed")
 
     def test(self):
-        pass
+        """Empty test body; setUp fails before it runs."""
 
 
 class TestErrorTest(ClusterTesterForTests):
+    """Publishes an ERROR TestFrameworkEvent from the test body."""
+
     def test(self):
+        """Publish an ERROR TestFrameworkEvent."""
         TestFrameworkEvent(
             source=self.__class__.__name__, source_method="test", message="Something went wrong"
         ).publish()
 
 
 class SuccessTest(ClusterTesterForTests):
+    """Passes with no error events."""
+
     def test(self):
-        pass
+        """Empty test body: pass and publish no events."""
 
 
 class SubtestsSuccessTest(ClusterTesterForTests):
+    """Passes two subtests with no error events."""
+
     def test(self):
+        """Run two passing subtests."""
         with self.subTest("SUBTEST1"):
             pass
         with self.subTest("SUBTEST2"):
@@ -188,6 +213,7 @@ class SubtestsSuccessTest(ClusterTesterForTests):
     ],
 )
 def test_tester_subclass(pytester, test_class, results, outcomes):
+    """Runs each ClusterTester subclass under pytester and checks the outcomes, event summary and test status."""
     # pytester sets HOME to its temp path; create a mock SSH key file
     # so the ExistingFile validator for user_credentials_path succeeds.
     ssh_dir = pytester.path / ".ssh"
@@ -418,6 +444,7 @@ class TestGatherFailureStatistics:
 
 
 def test_teardown_without_params_runs_reduced_teardown(tmp_path, caplog):
+    """Runs a reduced teardown with no errors and no resource cleanup when setUp failed before params."""
     tester = ClusterTesterForTests()
     tester._init_logging(tmp_path / "test_teardown_no_params")
     tester.logdir = str(tmp_path)
@@ -630,6 +657,7 @@ def test_stop_perf_collector_no_db_cluster(tmp_path):
 
 
 def test_stop_perf_collector_stops_the_service(tmp_path):
+    """Stops the scylla-perf-collector service on the db node, ignoring its status."""
     tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_stop")
 
     tester.stop_perf_collector()
@@ -657,6 +685,7 @@ def test_stop_perf_collector_skips_node_without_the_service(tmp_path):
     ),
 )
 def test_stop_perf_collector_skips_nodes_without_systemd(tmp_path, node_attrs):
+    """Leaves a k8s, docker or xcloud node untouched: no service check and no stop, as it runs no systemd."""
     tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_no_systemd", node_attrs)
 
     tester.stop_perf_collector()
@@ -685,6 +714,7 @@ def test_stop_perf_collector_tolerates_an_unreachable_node(tmp_path):
 
 
 def test_start_perf_collector_starts_the_service(tmp_path):
+    """Starts the scylla-perf-collector service on the db node, ignoring its status."""
     tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_start")
 
     tester.start_perf_collector()
@@ -694,6 +724,7 @@ def test_start_perf_collector_starts_the_service(tmp_path):
 
 
 def test_start_perf_collector_tolerates_an_unreachable_node(tmp_path):
+    """Swallows the failure to start the collector on an unreachable node."""
     tester, mock_node = _perf_collector_tester(
         tmp_path,
         "test_perf_collector_start_unreachable",
@@ -1054,6 +1085,7 @@ def test_run_latte_thread_forwards_the_files_to_stage():
 
 
 def test_run_latte_thread_stages_nothing_by_default():
+    """Without extra files, passes extra_files_to_stage=None and the resolved timeout to LatteStressThread."""
     with (
         patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
         patch.object(LatteStressThread, "run", return_value="thread-pool") as mock_run,
@@ -1101,6 +1133,7 @@ ENFORCE_RACK_LIST = {"enforce_rack_list": True}
     ],
 )
 def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_nodes, racks_count, expected_rf):
+    """With tablets and a rack-bound scylla.yaml option, the RF is bounded by the rack count and kept at 1 or more."""
     rf = _rf_tester(
         n_db_nodes=n_db_nodes,
         racks_count=racks_count,
@@ -1149,6 +1182,7 @@ def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_n
     ],
 )
 def test_run_latte_thread_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    """Replaces a time-based latte --duration with the given duration and keeps a cycle count."""
     tester = ClusterTesterForTests()
     tester.params = FakeSCTConfiguration()
     tester.loaders = MagicMock()
@@ -1187,6 +1221,7 @@ def test_run_latte_thread_duration_overrides_time_based_duration(stress_cmd, exp
     ],
 )
 def test_run_latte_thread_stress_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    """Replaces a time-based latte --duration with the stress_duration param and keeps a cycle count."""
     tester = ClusterTesterForTests()
     tester.params = FakeSCTConfiguration()
     tester.loaders = MagicMock()
@@ -1215,6 +1250,7 @@ def test_run_latte_thread_forwards_record_hdr(record_hdr):
 
 
 def test_run_latte_thread_forwards_the_loader():
+    """Passes the requested loader to LatteStressThread."""
     with (
         patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
         patch.object(LatteStressThread, "run", return_value="thread-pool"),

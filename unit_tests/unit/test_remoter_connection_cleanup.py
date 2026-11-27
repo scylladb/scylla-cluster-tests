@@ -30,6 +30,8 @@ from sdcm.remote.remote_base import RemoteCmdRunnerBase
 
 
 class MockRemoter(RemoteCmdRunnerBase):
+    """Remoter that counts the mock connections it creates and treats every host as up."""
+
     exception_unexpected = Exception
     exception_failure = Exception
     exception_retryable = (Exception,)
@@ -45,6 +47,7 @@ class MockRemoter(RemoteCmdRunnerBase):
         return connection
 
     def is_up(self, timeout: float = 30):
+        """Report the host as always reachable."""
         return True
 
     def _run_on_retryable_exception(self, exc, new_session, suppress_errors=False):

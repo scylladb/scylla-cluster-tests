@@ -55,19 +55,24 @@ build_args = {}
 
 
 class DummyDockerClient:
+    """Docker client stand-in whose api, containers and images return their call arguments or canned objects."""
+
     class api:
         @staticmethod
         def build(*args, **kwargs):
+            """Record the build arguments under image id 123456 and return a successful build stream."""
             build_args["123456"] = (args, kwargs)
             return """{"stream": "Successfully built 123456"}"""
 
     class containers:
         @staticmethod
         def list(*args, **kwargs):
+            """Return the positional and keyword arguments of the call."""
             return args, kwargs
 
         @staticmethod
         def get(c_id):
+            """Return a named container for 'deadbeef', raising NullResource for None and NotFound otherwise."""
             if c_id is None:
                 raise NullResource("Resource ID was not provided")
             if c_id == "deadbeef":
@@ -76,6 +81,7 @@ class DummyDockerClient:
 
         @staticmethod
         def run(*args, **kwargs):
+            """Return a new DummyContainer carrying the arguments of the call."""
             container = DummyContainer()
             container.run_args = args, kwargs
             return container
@@ -83,6 +89,7 @@ class DummyDockerClient:
     class images:
         @staticmethod
         def build(*args, **kwargs):
+            """Return the arguments of the call and a one-entry build log."""
             return (
                 args,
                 kwargs,
@@ -90,6 +97,7 @@ class DummyDockerClient:
 
         @staticmethod
         def get(image_tag):
+            """Return the recorded build arguments for image 123456, raising ImageNotFound for any other tag."""
             if image_tag == "123456":
                 return build_args["123456"]
 
@@ -97,46 +105,56 @@ class DummyDockerClient:
 
 
 class DummyContainer:
+    """Docker container stand-in, exited by default, with an overridable status and attrs."""
+
     _status = "exited"
     name = "dummy"
     client = sentinel.c1_docker_client
 
     @staticmethod
     def reload():
-        pass
+        """Stub: accept the reload and return immediately."""
 
     @property
     def status(self):
+        """Return the container status via get_status()."""
         return self.get_status()
 
     def get_status(self):
+        """Return the current fake status."""
         return self._status
 
     @property
     def attrs(self):
+        """Return the container attrs via get_attrs()."""
         return self.get_attrs()
 
     @staticmethod
     def get_attrs():
+        """Return empty container attrs."""
         return {}
 
     def rename(self, name):
+        """Rename the container."""
         self.name = name
 
     @staticmethod
     def remove(*_, **__):
-        pass
+        """Accept the container removal."""
 
     @staticmethod
     def logs():
+        """Return fixed container logs."""
         return "container logs"
 
     @staticmethod
     def start():
-        pass
+        """Accept the container start."""
 
 
 class DummyNode:
+    """Node stand-in with tags, an empty container registry and empty SCT params."""
+
     tags = {
         "key1": "value1",
     }
@@ -148,11 +166,15 @@ class DummyNode:
 
     @staticmethod
     def c3_container_run_args(**kwargs):
+        """Run-args hook for the c3 container family that swaps keys and values of the given kwargs."""
         return {v: k for k, v in kwargs.items()}
 
 
 class TestName:
+    """Parsing of container names in the 'family:member' format."""
+
     def test_none(self):
+        """A None name has no full name, family or member, and is falsy."""
         name = _Name(None)
         assert name.full is None
         assert name.family is None
@@ -162,6 +184,7 @@ class TestName:
         assert not name
 
     def test_empty_name(self):
+        """An empty name has an empty family, no member, and is truthy."""
         name = _Name("")
         assert name.family == ""
         assert name.member is None
@@ -170,6 +193,7 @@ class TestName:
         assert name  # Yep, empty name is True too.
 
     def test_name_without_member(self):
+        """A name without ':' is its own family with no member."""
         name = _Name("blah")
         assert name.full == "blah"
         assert name.family == "blah"
@@ -179,6 +203,7 @@ class TestName:
         assert name
 
     def test_name_with_member(self):
+        """A 'foo:bar' name splits into family 'foo' and member 'bar'."""
         name = _Name("foo:bar")
         assert name.full == "foo:bar"
         assert name.family == "foo"
@@ -204,57 +229,69 @@ class TestContainerManager:
     """
 
     def setup_method(self) -> None:
+        """Create a node with an exited container registered as 'c1'."""
         self.node = DummyNode()
         self.node._containers["c1"] = self.container = DummyContainer()
 
     def test_get_docker_client_default(self):
+        """An unknown container with no client attributes on the node gets the default docker client."""
         assert ContainerManager.get_docker_client(self.node, "c2") == dummy_default_client
 
     def test_get_docker_client_without_name(self):
+        """Without a container name, the node-wide docker_client is used."""
         self.node.None_docker_client = Mock()
         self.node.docker_client = sentinel.none_docker_client
         assert ContainerManager.get_docker_client(self.node) == sentinel.none_docker_client
         self.node.None_docker_client.assert_not_called()
 
     def test_get_docker_client_from_existent_container(self):
+        """A registered container's own docker client is returned."""
         assert ContainerManager.get_docker_client(self.node, "c1") == sentinel.c1_docker_client
 
     def test_get_docker_client_node_wide_none(self):
+        """A None node-wide docker_client falls back to the default client."""
         self.node.docker_client = None
         assert ContainerManager.get_docker_client(self.node, "c2") == dummy_default_client
 
     def test_get_docker_client_node_wide_not_callable(self):
+        """A non-callable node-wide docker_client is returned as is."""
         self.node.docker_client = sentinel.node_property_docker_client
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_property_docker_client
 
     def test_get_docker_client_node_wide_callable_returns_none(self):
+        """A node-wide docker_client callable returning None falls back to the default client."""
         self.node.docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2") == dummy_default_client
         self.node.docker_client.assert_called_once_with()
 
     def test_get_docker_client_node_wide_callable(self):
+        """A node-wide docker_client callable is called and its result returned."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
     def test_get_docker_client_node_wide_callable_with_member(self):
+        """A node-wide docker_client callable is called without the member name."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2:blah") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
     def test_get_docker_client_per_family_none(self):
+        """A None per-family client falls back to the node-wide docker_client."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = None
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
     def test_get_docker_client_per_family_not_callable(self):
+        """A non-callable per-family client wins over the node-wide one."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = sentinel.c2_property_docker_client
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.c2_property_docker_client
         self.node.docker_client.assert_not_called()
 
     def test_get_docker_client_per_family_callable_returns_none(self):
+        """A per-family callable returning None falls back to the node-wide docker_client."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
@@ -262,6 +299,7 @@ class TestContainerManager:
         self.node.docker_client.assert_called_once_with()
 
     def test_get_docker_client_per_family_callable(self):
+        """A per-family callable's result wins over the node-wide docker_client."""
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = Mock(return_value=sentinel.c2_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.c2_callable_docker_client
@@ -269,6 +307,7 @@ class TestContainerManager:
         self.node.docker_client.assert_not_called()
 
     def test_get_docker_client_per_family_callable_with_member(self):
+        """A per-family callable receives the member name; with every hook returning None the default client is used."""
         self.node.docker_client = Mock(return_value=None)
         self.node.c2_docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2:blah") == dummy_default_client
@@ -276,33 +315,41 @@ class TestContainerManager:
         self.node.docker_client.assert_called_once_with()
 
     def test_get_container_existent(self):
+        """get_container returns the registered container."""
         assert ContainerManager.get_container(self.node, "c1") is self.container
 
     def test_get_container_nonexistent_no_exception(self):
+        """get_container returns None for an unknown name when raise_not_found_exc=False."""
         assert ContainerManager.get_container(self.node, "c2", raise_not_found_exc=False) is None
 
     def test_get_container_nonexistent_raises(self):
+        """get_container raises NotFound for an unknown name."""
         with pytest.raises(NotFound):
             ContainerManager.get_container(self.node, "c2")
 
     def test_is_running_exited_container(self):
+        """is_running is False for an exited container."""
         assert not ContainerManager.is_running(self.node, "c1")
 
     def test_is_running_running_container(self):
+        """is_running is True for a running container."""
         self.container._status = "running"
         assert ContainerManager.is_running(self.node, "c1")
 
     def test_is_running_nonexistent_raises(self):
+        """is_running raises NotFound for an unknown container."""
         with pytest.raises(NotFound):
             ContainerManager.is_running(self.node, "c2")
 
     @patch("time.sleep", int)
     def test_wait_for_status_nonexistent_raises(self):
+        """wait_for_status raises NotFound for an unknown container."""
         with pytest.raises(NotFound):
             ContainerManager.wait_for_status(self.node, "c2", status="exited")
 
     @patch("time.sleep", int)
     def test_wait_for_status_running(self):
+        """wait_for_status polls until the container reaches 'running', then stops."""
         statuses = iter(("exited", "exited", "running", "mark1"))
         self.container.get_status = lambda: next(statuses)
         ContainerManager.wait_for_status(self.node, "c1", status="running")
@@ -310,6 +357,7 @@ class TestContainerManager:
 
     @patch("time.sleep", int)
     def test_wait_for_status_exited(self):
+        """wait_for_status polls until the container reaches 'exited', then stops."""
         statuses = iter(("running", "running", "exited", "mark2"))
         self.container.get_status = lambda: next(statuses)
         ContainerManager.wait_for_status(self.node, "c1", status="exited")
@@ -317,6 +365,7 @@ class TestContainerManager:
 
     @patch("time.sleep", int)
     def test_wait_for_status_too_many_retries(self):
+        """wait_for_status raises Retry when the status never reaches the requested one."""
         statuses = iter(("exited",) * 20)
         self.container.get_status = lambda: next(statuses)
         with pytest.raises(Retry):
@@ -324,6 +373,7 @@ class TestContainerManager:
 
     @patch("time.sleep", int)
     def test_get_ip_address(self):
+        """get_ip_address raises NotFound for unknown containers, polls until an IP shows, and raises Retry on none."""
         no_ip_address = dict(NetworkSettings=dict(Networks=dict(bridge=dict(IPAddress=""))))
         ip_address = dict(NetworkSettings=dict(Networks=dict(bridge=dict(IPAddress="10.0.0.1"))))
         ip_addresses = iter(
@@ -354,6 +404,7 @@ class TestContainerManager:
             ContainerManager.get_ip_address(self.node, "c1")
 
     def test_get_container_port(self):
+        """get_container_port maps a container port, int or str, to its host port, or None when unpublished."""
         self.container.ports = {
             "9999/tcp": [
                 {"HostIp": "0.0.0.0", "HostPort": 1111},
@@ -372,6 +423,7 @@ class TestContainerManager:
         assert ContainerManager.get_container_port(self.node, "c1", "9999") == 1111
 
     def test_get_environ(self):
+        """get_environ parses the container env into a dict, with None for variables without a value."""
         self.container.get_attrs = lambda: {
             "Config": {
                 "Env": [
@@ -389,6 +441,7 @@ class TestContainerManager:
         assert ContainerManager.get_environ(self.node, "c1") == {"A": None, "B": "1"}
 
     def test_get_containers_by_prefix(self):
+        """get_containers_by_prefix lists all containers whose name matches the prefix."""
         assert ContainerManager.get_containers_by_prefix("blah") == (
             (),
             {
@@ -398,6 +451,7 @@ class TestContainerManager:
         )
 
     def test_get_container_name_by_id(self):
+        """get_container_name_by_id returns the container name, raising NotFound for an unknown id."""
         # Try to get name of non-existent container
         with pytest.raises(NotFound):
             ContainerManager.get_container_name_by_id("not_found")
@@ -406,9 +460,11 @@ class TestContainerManager:
         assert ContainerManager.get_container_name_by_id("deadbeef") == "deadbeef-blah"
 
     def test_run_container_existing(self):
+        """run_container returns the already registered container."""
         assert ContainerManager.run_container(self.node, "c1") == self.container
 
     def test_run_container_no_hook(self):
+        """run_container without a run-args hook starts a detached container labeled with node tags and registers it."""
         container2 = ContainerManager.run_container(self.node, "c2", arg1="value1", arg2="value2")
         assert container2.run_args == (
             (),
@@ -422,6 +478,7 @@ class TestContainerManager:
         assert ContainerManager.get_container(self.node, "c2") == container2
 
     def test_run_container_no_hook_with_member(self):
+        """A 'family:member' container runs and registers separately from its family's base container."""
         container2 = ContainerManager.run_container(self.node, "c2", arg1="value1", arg2="value2")
         c2another = ContainerManager.run_container(self.node, "c2:another", arg1="value1", arg2="value2")
         assert container2 != c2another
@@ -438,6 +495,7 @@ class TestContainerManager:
         assert ContainerManager.get_container(self.node, "c2:another") == c2another
 
     def test_run_container_with_hook(self):
+        """The family's run-args hook transforms the kwargs passed to the container run."""
         container3 = ContainerManager.run_container(self.node, "c3", blah="name")
         assert container3.run_args == (
             (),
@@ -450,6 +508,7 @@ class TestContainerManager:
         assert ContainerManager.get_container(self.node, "c3") == container3
 
     def test_run_container_with_hook_and_member(self):
+        """The run-args hook result gets the member name appended to the container name."""
         c3another = ContainerManager.run_container(self.node, "c3:another", blah="name")
         assert c3another.run_args == (
             (),
@@ -462,32 +521,39 @@ class TestContainerManager:
         assert ContainerManager.get_container(self.node, "c3:another") == c3another
 
     def test_rerun_existing_container(self):
+        """run_container starts an already registered container."""
         self.container.start = Mock()
         ContainerManager.run_container(self.node, "c1")
         self.container.start.assert_called_once_with()
 
     def test_set_container_keep_alive_nonexistent_raises(self):
+        """set_container_keep_alive raises NotFound for an unknown container."""
         with pytest.raises(NotFound):
             ContainerManager.set_container_keep_alive(self.node, "c2")
 
     def test_set_container_keep_alive_sets_name(self):
+        """set_container_keep_alive appends the ---KEEPALIVE suffix to the container name."""
         ContainerManager.set_container_keep_alive(self.node, "c1")
         assert self.container.name == "dummy---KEEPALIVE"
 
     def test_set_container_keep_alive_idempotent(self):
+        """set_container_keep_alive appends the ---KEEPALIVE suffix only once."""
         ContainerManager.set_container_keep_alive(self.node, "c1")
         ContainerManager.set_container_keep_alive(self.node, "c1")
         assert self.container.name == "dummy---KEEPALIVE"
 
     def test_set_all_containers_keep_alive(self):
+        """set_all_containers_keep_alive marks the registered container as keep-alive."""
         ContainerManager.set_all_containers_keep_alive(self.node)
         assert self.container.name == "dummy---KEEPALIVE"
 
     def test_ssh_copy_id_nonexistent_raises(self):
+        """ssh_copy_id raises NotFound for an unknown container."""
         with pytest.raises(NotFound):
             ContainerManager.ssh_copy_id(self.node, "c2", user="root", key_file="/root/.ssh/id_rsa")
 
     def test_ssh_copy_id_success(self):
+        """ssh_copy_id adds the key file's public key in the container as the given user."""
         self.container.exec_run = Mock()
         self.container.exec_run.return_value.exit_code = 0
 
@@ -503,6 +569,7 @@ class TestContainerManager:
         assert self.container.exec_run.call_args[1]["user"] == sentinel.ssh_user
 
     def test_ssh_copy_id_exec_failure_raises(self):
+        """A failing exec in ssh_copy_id raises DockerException with the command output."""
         self.container.exec_run = Mock()
         self.container.exec_run.return_value.exit_code = 126
         self.container.exec_run.return_value.output = b"blah"
@@ -517,6 +584,10 @@ class TestContainerManager:
                 )
 
     def test_register_container(self):
+        """register_container rejects a container already registered under any name, or a taken name.
+
+        With replace=True, a container registered nowhere else replaces the one under a taken name.
+        """
         c2_container = DummyContainer()
 
         # Try to register registered container
@@ -562,6 +633,7 @@ class TestContainerManager:
             )
 
     def test_unregister_container(self):
+        """unregister_container removes the name from the registry, raising NotFound for an unknown name."""
         # Unregister non-existent name
         with pytest.raises(NotFound):
             ContainerManager.unregister_container(self.node, "c2")
@@ -572,6 +644,7 @@ class TestContainerManager:
             ContainerManager.get_container(self.node, "c1")
 
     def test_destroy(self):
+        """destroy_container removes and unregisters the container, raising NotFound for an unknown name."""
         # Try to destroy non-existent container
         with pytest.raises(NotFound):
             ContainerManager.destroy_container(self.node, "c2")
@@ -584,6 +657,10 @@ class TestContainerManager:
             ContainerManager.destroy_container(self.node, "c1")
 
     def test_build_container_image(self):
+        """build_container_image needs a per-family image tag and Dockerfile args.
+
+        It builds with node tags as labels, passing kwargs as is or through the family build-args hook.
+        """
         # Try to build image for existent container
         with pytest.raises(ContainerAlreadyRegistered):
             ContainerManager.build_container_image(self.node, "c1")
@@ -640,6 +717,7 @@ class TestContainerManager:
         self.node.c2_container_image_dockerfile_args.assert_called_once_with("another")
 
     def test_destroy_logfile(self):
+        """destroy_container appends the container logs to the family's logfile before removing it."""
         self.node.c1_container_logfile = "container.log"
 
         with patch("builtins.open", mock_open()) as mock_file:
@@ -654,6 +732,7 @@ class TestContainerManager:
             ContainerManager.destroy_container(self.node, "c1")
 
     def test_destroy_logfile_callable(self):
+        """A callable logfile hook gets the member name and names the log file; keep-alive members remain."""
         members = []
 
         def logfile(member=None):
@@ -683,6 +762,7 @@ class TestContainerManager:
             ContainerManager.destroy_container(self.node, "c1")
 
     def test_destroy_keep_alive(self):
+        """A keep-alive container survives destroy_container unless ignore_keepalive=True."""
         ContainerManager.set_container_keep_alive(self.node, "c1")
 
         # Try to destroy container with keep-alive tag
@@ -695,6 +775,7 @@ class TestContainerManager:
             ContainerManager.get_container(self.node, "c1")
 
     def test_destroy_all(self):
+        """destroy_all_containers removes containers without keep-alive, and all of them with ignore_keepalive=True."""
         ContainerManager.run_container(self.node, "c2")
         ContainerManager.set_container_keep_alive(self.node, "c1")
 
@@ -710,6 +791,7 @@ class TestContainerManager:
             ContainerManager.get_container(self.node, "c1")
 
     def test_destroy_unregistered_containers(self):
+        """destroy_unregistered_containers removes a node-labeled unregistered container and keeps a registered one."""
         tags = {"TestId": "test123", "Name": "nodeA"}
 
         r_c1, r_c2, nr_c = [DummyContainer() for _ in range(3)]

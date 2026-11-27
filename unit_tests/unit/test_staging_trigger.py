@@ -62,19 +62,26 @@ from utils.staging_trigger.trigger import (
 
 
 class TestPreset:
+    """Preset construction and its default staging folder."""
+
     def test_preset_fields(self):
+        """A Preset keeps the given params and folder prefix."""
         p = Preset(params={"key": "val"}, folder_prefix="test-folder")
         assert p.params == {"key": "val"}
         assert p.folder_prefix == "test-folder"
 
     def test_preset_default_folder(self):
+        """A Preset without a folder prefix defaults to scylla-staging/<username>."""
         with patch("utils.staging_trigger.constants.get_username", return_value="testuser"):
             p = Preset(params={})
             assert p.folder_prefix == "scylla-staging/testuser"
 
 
 class TestTriggeredJob:
+    """TriggeredJob fields and defaults."""
+
     def test_fields(self):
+        """TriggeredJob keeps the given URL, build number, job name and description."""
         job = TriggeredJob(job_url="http://j/job/x/", build_number=42, job_name="x-test", description="desc")
         assert job.job_url == "http://j/job/x/"
         assert job.build_number == 42
@@ -82,13 +89,17 @@ class TestTriggeredJob:
         assert job.description == "desc"
 
     def test_default_description(self):
+        """TriggeredJob defaults to an empty description."""
         job = TriggeredJob(job_url="http://j/job/x/", build_number=1, job_name="x")
         assert job.description == ""
 
 
 class TestGetPresets:
+    """Building the preset map from get_presets."""
+
     @patch("utils.staging_trigger.constants.get_username", return_value="alice")
     def test_presets_contain_expected_keys(self, _mock_user):
+        """get_presets returns a Preset with a params dict for every name in PRESET_NAMES."""
         # Reset cached presets
         constants_mod._PRESETS = None
         presets = get_presets()
@@ -101,6 +112,7 @@ class TestGetPresets:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="alice")
     def test_preset_email_contains_username(self, _mock_user):
+        """The longevity, manager, artifacts and perf presets email <username>@scylladb.com."""
         constants_mod._PRESETS = None
         presets = get_presets()
         for name in ["longevity", "manager", "artifacts", "perf"]:
@@ -109,13 +121,17 @@ class TestGetPresets:
 
 
 class TestPipelineToPreset:
+    """Pipeline-function-to-preset mapping and the dtest topology flags."""
+
     def test_known_pipeline_functions(self):
+        """The longevity, manager, artifacts and perfRegressionParallel pipeline functions map to their presets."""
         assert PIPELINE_TO_PRESET["longevityPipeline"] == "longevity"
         assert PIPELINE_TO_PRESET["managerPipeline"] == "manager"
         assert PIPELINE_TO_PRESET["artifactsPipeline"] == "artifacts"
         assert PIPELINE_TO_PRESET["perfRegressionParallelPipeline"] == "perf"
 
     def test_dtest_topology_flags(self):
+        """DTEST_TOPOLOGY_FLAGS holds the no-tablets, tablets and gossip flags."""
         assert "no-tablets" in DTEST_TOPOLOGY_FLAGS
         assert "tablets" in DTEST_TOPOLOGY_FLAGS
         assert "gossip" in DTEST_TOPOLOGY_FLAGS
@@ -127,11 +143,15 @@ class TestPipelineToPreset:
 
 
 class TestCache:
+    """Loading and saving the local staging trigger cache file."""
+
     def test_load_missing_file(self, tmp_path):
+        """A missing cache file loads as an empty dict."""
         with patch("utils.staging_trigger.cache._CACHE_FILE", tmp_path / "missing.json"):
             assert _load_cache() == {}
 
     def test_save_and_load(self, tmp_path):
+        """A saved cache is written to disk and loads back with the same data."""
         cache_file = tmp_path / "cache.json"
         with patch("utils.staging_trigger.cache._CACHE_FILE", cache_file):
             _save_cache({"last_branch": "my-branch"})
@@ -140,6 +160,7 @@ class TestCache:
             assert data["last_branch"] == "my-branch"
 
     def test_load_corrupt_json(self, tmp_path):
+        """A cache file with invalid JSON loads as an empty dict."""
         cache_file = tmp_path / "cache.json"
         cache_file.write_text("not json{{{", encoding="utf-8")
         with patch("utils.staging_trigger.cache._CACHE_FILE", cache_file):
@@ -147,8 +168,11 @@ class TestCache:
 
 
 class TestLookupPr:
+    """Resolving a PR number to its head repository and branch via gh."""
+
     @patch("utils.staging_trigger.cache.subprocess.run")
     def test_lookup_pr_success(self, mock_run):
+        """lookup_pr returns the SSH URL of the PR's head repository and its head branch."""
         mock_run.return_value = MagicMock(
             stdout=json.dumps(
                 {
@@ -170,6 +194,8 @@ class TestLookupPr:
 
 
 class TestDetectPresetFromJobName:
+    """Preset detection from a Jenkins job name."""
+
     @pytest.mark.parametrize(
         "name,expected",
         [
@@ -185,46 +211,61 @@ class TestDetectPresetFromJobName:
         ],
     )
     def test_detect(self, name, expected):
+        """Job names map to the preset whose keyword they contain; gemini, rolling-upgrade, jepsen map to longevity."""
         assert detect_preset_from_job_name(name) == expected
 
 
 class TestDetectPresetFromJenkinsfile:
+    """Preset detection from the pipeline function a Jenkinsfile calls."""
+
     def test_longevity_pipeline(self, tmp_path):
+        """A Jenkinsfile calling longevityPipeline maps to the longevity preset."""
         jf = tmp_path / "test.jenkinsfile"
         jf.write_text("longevityPipeline(\n  params: ...\n)", encoding="utf-8")
         assert detect_preset_from_jenkinsfile(jf) == "longevity"
 
     def test_manager_pipeline(self, tmp_path):
+        """A Jenkinsfile calling managerPipeline maps to the manager preset."""
         jf = tmp_path / "test.jenkinsfile"
         jf.write_text("managerPipeline(\n  params: ...\n)", encoding="utf-8")
         assert detect_preset_from_jenkinsfile(jf) == "manager"
 
     def test_unknown_pipeline(self, tmp_path):
+        """A Jenkinsfile calling an unknown pipeline function maps to None."""
         jf = tmp_path / "test.jenkinsfile"
         jf.write_text("unknownPipeline(\n  params: ...\n)", encoding="utf-8")
         assert detect_preset_from_jenkinsfile(jf) is None
 
 
 class TestParseSetParams:
+    """Parsing KEY=VALUE pairs given with --set."""
+
     def test_valid_pairs(self):
+        """Each KEY=VALUE pair becomes a dict entry."""
         result = parse_set_params(("key1=val1", "key2=val2"))
         assert result == {"key1": "val1", "key2": "val2"}
 
     def test_value_with_equals(self):
+        """Only the first "=" splits key from value; the rest stays in the value."""
         result = parse_set_params(("key=a=b=c",))
         assert result == {"key": "a=b=c"}
 
     def test_invalid_pair(self):
+        """A pair without "=" raises click.BadParameter."""
         with pytest.raises(click.BadParameter, match="Expected KEY=VALUE"):
             parse_set_params(("no_equals_here",))
 
     def test_empty_value(self):
+        """An entry `KEY=` maps the key to an empty string."""
         result = parse_set_params(("key=",))
         assert result == {"key": ""}
 
 
 class TestFormatChecklist:
+    """Rendering triggered jobs as a Markdown checklist."""
+
     def test_single_job(self):
+        """A job renders as an unchecked item with its name, build number, description and build URL."""
         jobs = [
             TriggeredJob(
                 job_url="http://jenkins/job/test/", build_number=42, job_name="test-job", description="longevity"
@@ -237,11 +278,13 @@ class TestFormatChecklist:
         assert "http://jenkins/job/test/42/" in md
 
     def test_no_description(self):
+        """A job without a description renders without empty parentheses."""
         jobs = [TriggeredJob(job_url="http://jenkins/job/test/", build_number=1, job_name="test-job")]
         md = format_checklist(jobs)
         assert "()" not in md
 
     def test_multiple_jobs(self):
+        """Each job renders as its own checklist item."""
         jobs = [
             TriggeredJob(job_url="http://j/job/a/", build_number=1, job_name="a"),
             TriggeredJob(job_url="http://j/job/b/", build_number=2, job_name="b"),
@@ -251,8 +294,11 @@ class TestFormatChecklist:
 
 
 class TestMakeDryRunJob:
+    """Building the placeholder TriggeredJob reported in dry-run mode."""
+
     @patch("utils.staging_trigger.trigger._get_jenkins_url", return_value="http://jenkins.example.com")
     def test_dry_run_job(self, _mock_url):
+        """A dry-run job has build number 0 and a URL with "/job/" between the folder path parts."""
         job = _make_dry_run_job("staging/folder/test-job-test", "test-job-test", "desc")
         assert job.build_number == 0
         assert job.job_name == "test-job-test"
@@ -260,6 +306,7 @@ class TestMakeDryRunJob:
         assert "staging/job/folder/job/test-job-test" in job.job_url
 
     def test_dry_run_with_explicit_url(self):
+        """A dry-run job uses the given Jenkins URL as its URL base."""
         job = _make_dry_run_job("folder/job-test", "job-test", jenkins_url="http://custom")
         assert job.job_url.startswith("http://custom")
 
@@ -270,12 +317,16 @@ class TestMakeDryRunJob:
 
 
 class TestRuffFormat:
+    """Formatting generated code with ruff."""
+
     def test_fallback_on_missing_ruff(self):
+        """_ruff_format returns the code unchanged when ruff is missing."""
         code = "x=1\n"
         with patch("utils.staging_trigger.interactive.subprocess.run", side_effect=FileNotFoundError):
             assert _ruff_format(code) == code
 
     def test_formats_code(self):
+        """_ruff_format returns code that keeps its statements."""
         code = "x=1\ny=2\n"
         result = _ruff_format(code)
         # Should either format or return original
@@ -284,9 +335,12 @@ class TestRuffFormat:
 
 
 class TestGeneratePythonCode:
+    """Generating a StagingTrigger Python script from the selected jobs."""
+
     @patch("utils.staging_trigger.interactive._default_folder", return_value="scylla-staging/testuser")
     @patch("utils.staging_trigger.interactive._ruff_format", side_effect=lambda c: c)
     def test_basic_generation(self, _fmt, _folder):
+        """The script builds a StagingTrigger from the job's preset and branch, selects the jobs and runs them."""
         code = generate_python_code(
             ["longevity-100gb-4h-test"],
             branch="my-branch",
@@ -303,6 +357,7 @@ class TestGeneratePythonCode:
     @patch("utils.staging_trigger.interactive._default_folder", return_value="scylla-staging/testuser")
     @patch("utils.staging_trigger.interactive._ruff_format", side_effect=lambda c: c)
     def test_dtest_generation(self, _fmt, _folder):
+        """A dtest job generates a script that runs the dtest topology variants."""
         code = generate_python_code(
             ["dtest-pytest-gating"],
             branch="master",
@@ -316,6 +371,7 @@ class TestGeneratePythonCode:
     @patch("utils.staging_trigger.interactive._default_folder", return_value="scylla-staging/testuser")
     @patch("utils.staging_trigger.interactive._ruff_format", side_effect=lambda c: c)
     def test_empty_params_excluded(self, _fmt, _folder):
+        """Param overrides with empty values are left out of the script."""
         code = generate_python_code(
             ["longevity-100gb-4h-test"],
             branch="my-branch",
@@ -329,6 +385,7 @@ class TestGeneratePythonCode:
     @patch("utils.staging_trigger.interactive._default_folder", return_value="scylla-staging/testuser")
     @patch("utils.staging_trigger.interactive._ruff_format", side_effect=lambda c: c)
     def test_output_to_file(self, _fmt, _folder, tmp_path):
+        """With output_path, the script is written to that file."""
         out = tmp_path / "gen.py"
         generate_python_code(
             ["longevity-100gb-4h-test"],
@@ -347,7 +404,10 @@ class TestGeneratePythonCode:
 
 
 class TestCollectFolderTree:
+    """Collecting the Jenkins folders to create for a set of Jenkinsfiles."""
+
     def test_single_jenkinsfile_in_subdir(self, tmp_path):
+        """A nested Jenkinsfile yields each of its parent folders, parents before children."""
         pipelines_dir = tmp_path / "jenkins-pipelines"
         sub = pipelines_dir / "oss" / "longevity"
         sub.mkdir(parents=True)
@@ -362,6 +422,7 @@ class TestCollectFolderTree:
         assert paths.index("oss") < paths.index("oss/longevity")
 
     def test_reads_folder_definitions(self, tmp_path):
+        """A folder's name and description come from its _folder_definitions.yaml."""
         pipelines_dir = tmp_path / "jenkins-pipelines"
         sub = pipelines_dir / "mycat"
         sub.mkdir(parents=True)
@@ -376,6 +437,7 @@ class TestCollectFolderTree:
         assert tree[0] == ("mycat", "My Category", "Custom desc")
 
     def test_reads_display_name_file(self, tmp_path):
+        """A folder's display name comes from its stripped _display_name file."""
         pipelines_dir = tmp_path / "jenkins-pipelines"
         sub = pipelines_dir / "mycat"
         sub.mkdir(parents=True)
@@ -387,11 +449,13 @@ class TestCollectFolderTree:
         assert tree[0][1] == "Fancy Name"
 
     def test_empty_list(self, tmp_path):
+        """No Jenkinsfiles yield no folders."""
         pipelines_dir = tmp_path / "jenkins-pipelines"
         pipelines_dir.mkdir()
         assert _collect_folder_tree([], pipelines_dir) == []
 
     def test_root_level_jenkinsfile(self, tmp_path):
+        """A Jenkinsfile at the pipelines root yields no folders."""
         pipelines_dir = tmp_path / "jenkins-pipelines"
         pipelines_dir.mkdir()
         jf = pipelines_dir / "test.jenkinsfile"
@@ -407,7 +471,10 @@ class TestCollectFolderTree:
 
 
 class TestCli:
+    """Smoke tests of the staging_trigger CLI help and examples."""
+
     def test_help(self):
+        """The top-level help lists the trigger, generate and run-config commands."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
@@ -416,6 +483,7 @@ class TestCli:
         assert "run-config" in result.output
 
     def test_trigger_help(self):
+        """The trigger help lists the --branch and --dry-run options."""
         runner = CliRunner()
         result = runner.invoke(cli, ["trigger", "--help"])
         assert result.exit_code == 0
@@ -423,18 +491,21 @@ class TestCli:
         assert "--dry-run" in result.output
 
     def test_generate_help(self):
+        """The generate help lists the --branch option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["generate", "--help"])
         assert result.exit_code == 0
         assert "--branch" in result.output
 
     def test_run_config_help(self):
+        """The run-config help names the CONFIG_FILE argument."""
         runner = CliRunner()
         result = runner.invoke(cli, ["run-config", "--help"])
         assert result.exit_code == 0
         assert "CONFIG_FILE" in result.output
 
     def test_trigger_example_keeps_group_path(self, capsys):
+        """The trigger example keeps the job's group path below the staging folder."""
         _show_trigger_examples(["scylla-staging/u/oss/artifacts/artifacts-ami-test"], folder="scylla-staging/u", pr=1)
         assert "-f scylla-staging/u trigger --pr 1 oss/artifacts/artifacts-ami-test\n" in capsys.readouterr().out
 
@@ -445,8 +516,11 @@ class TestCli:
 
 
 class TestFindJenkinsfile:
+    """Locating a Jenkinsfile under jenkins-pipelines by path or stem."""
+
     @patch("utils.staging_trigger.trigger.get_sct_root_path")
     def test_find_by_full_path(self, mock_root, tmp_path):
+        """A path relative to jenkins-pipelines, without extension, finds its Jenkinsfile."""
         pipelines = tmp_path / "jenkins-pipelines"
         jf = pipelines / "oss" / "longevity" / "longevity-100gb-4h.jenkinsfile"
         jf.parent.mkdir(parents=True)
@@ -458,6 +532,7 @@ class TestFindJenkinsfile:
 
     @patch("utils.staging_trigger.trigger.get_sct_root_path")
     def test_find_by_stem_single_match(self, mock_root, tmp_path):
+        """A unique file stem finds its Jenkinsfile anywhere under jenkins-pipelines."""
         pipelines = tmp_path / "jenkins-pipelines"
         jf = pipelines / "oss" / "unique-test.jenkinsfile"
         jf.parent.mkdir(parents=True)
@@ -469,6 +544,7 @@ class TestFindJenkinsfile:
 
     @patch("utils.staging_trigger.trigger.get_sct_root_path")
     def test_find_no_match(self, mock_root, tmp_path):
+        """A name matching no Jenkinsfile returns None."""
         pipelines = tmp_path / "jenkins-pipelines"
         pipelines.mkdir(parents=True)
         mock_root.return_value = tmp_path
@@ -493,8 +569,11 @@ def mock_jenkins():
 
 
 class TestStagingTrigger:
+    """StagingTrigger construction from presets and triggering of selected jobs."""
+
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_from_preset(self, _mock_user, mock_jenkins):
+        """from_preset sets the git branch and repo and fills the preset's email with the username."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("longevity", branch="my-branch", repo="git@github.com:user/repo.git")
@@ -506,6 +585,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_from_preset_with_folder_override(self, _mock_user, mock_jenkins):
+        """from_preset with a folder uses it as the preset's folder prefix."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("longevity", branch="my-branch", folder="custom-folder")
@@ -515,6 +595,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_select_jobs(self, _mock_user, mock_jenkins):
+        """select_jobs stores the selected job names in order."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("longevity", branch="master")
@@ -525,6 +606,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_dry_run(self, _mock_user, mock_jenkins):
+        """A dry run returns a build-0 job per selected job, leaving SCM and triggering untouched."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("longevity", branch="master", folder="staging/testuser")
@@ -541,6 +623,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_triggers_jobs(self, _mock_user, mock_jenkins):
+        """A real run updates the job's SCM, triggers it, and returns its build number."""
         constants_mod._PRESETS = None
         mock_jenkins.get_last_build_params.return_value = {"old_param": "old_val"}
         mock_jenkins.get_job_url.return_value = "http://jenkins/job/test/"
@@ -559,6 +642,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_multi_dry_run(self, _mock_user, mock_jenkins):
+        """run_multi in dry run returns one job per entry, in order."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("longevity", branch="master", folder="staging/testuser")
@@ -634,6 +718,7 @@ class TestStagingTrigger:
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_dtest_variants_dry_run(self, _mock_user, mock_jenkins):
+        """run_dtest_variants in dry run returns one job per topology, described by the topology name."""
         constants_mod._PRESETS = None
         try:
             trigger = StagingTrigger.from_preset("dtest", branch="master", folder="staging/testuser")
@@ -683,9 +768,12 @@ class TestStagingTrigger:
 
 
 class TestRunFromConfig:
+    """Running staging jobs from a YAML config file."""
+
     @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_from_config_dry_run(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """A dry run of a config with one job returns a single build-0 job."""
         constants_mod._PRESETS = None
 
         mock_client = MagicMock()
@@ -713,6 +801,7 @@ class TestRunFromConfig:
     @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_from_config_missing_branch_raises(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """A config without a branch or PR raises click.UsageError."""
         constants_mod._PRESETS = None
 
         config = {"jobs": [{"name": "test-job"}]}
@@ -728,6 +817,7 @@ class TestRunFromConfig:
     @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_from_config_dtest_topologies(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """A dtest job with dtest_topologies runs one job per topology."""
         constants_mod._PRESETS = None
 
         mock_client = MagicMock()
@@ -757,6 +847,7 @@ class TestRunFromConfig:
     @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_from_config_auto_detects_preset(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """A dry run of a config job without a preset, whose name implies the manager preset, returns one job."""
         constants_mod._PRESETS = None
 
         mock_client = MagicMock()
@@ -850,9 +941,12 @@ class TestRunFromConfig:
 
 
 class TestGenerateYamlConfig:
+    """Generating a run-config YAML from selected Jenkinsfiles."""
+
     @patch("utils.staging_trigger.interactive.get_username", return_value="testuser")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_generates_valid_yaml(self, _mock_user1, _mock_user2, tmp_path):
+        """The YAML holds the branch, folder and a job with its detected preset, and is written to output_path."""
         constants_mod._PRESETS = None
 
         pipelines_dir = tmp_path / "jenkins-pipelines"
@@ -885,6 +979,7 @@ class TestGenerateYamlConfig:
     @patch("utils.staging_trigger.interactive.get_username", return_value="testuser")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_includes_custom_repo(self, _mock_user1, _mock_user2, tmp_path):
+        """The YAML records the given fork repo."""
         constants_mod._PRESETS = None
 
         pipelines_dir = tmp_path / "jenkins-pipelines"
@@ -906,9 +1001,12 @@ class TestGenerateYamlConfig:
 
 
 class TestWriteJobsYamlConfig:
+    """Generating a run-config YAML from job names."""
+
     @patch("utils.staging_trigger.interactive.get_username", return_value="testuser")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_generates_yaml_from_job_names(self, _mock_user1, _mock_user2, tmp_path):
+        """Each job name becomes a job entry with its detected preset, and the YAML is written to output_path."""
         constants_mod._PRESETS = None
 
         out_path = tmp_path / "jobs.yaml"
@@ -933,6 +1031,7 @@ class TestWriteJobsYamlConfig:
     @patch("utils.staging_trigger.interactive.get_username", return_value="testuser")
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_param_overrides_applied(self, _mock_user1, _mock_user2, tmp_path):
+        """Param overrides go into the YAML's params section."""
         constants_mod._PRESETS = None
 
         try:
@@ -956,18 +1055,25 @@ class TestWriteJobsYamlConfig:
 
 
 class TestParamDefinition:
+    """ParamDefinition fields and defaults."""
+
     def test_basic_fields(self):
+        """A ParamDefinition keeps its default and has no choices unless given."""
         p = ParamDefinition(default="val")
         assert p.default == "val"
         assert p.choices is None
 
     def test_with_choices(self):
+        """A ParamDefinition keeps the given choices."""
         p = ParamDefinition(default="a", choices=["a", "b", "c"])
         assert p.choices == ["a", "b", "c"]
 
 
 class TestParseParameterDefinitions:
+    """Parsing Jenkins job config XML into ParamDefinitions."""
+
     def test_string_param(self):
+        """A string parameter yields its default value and no choices."""
         xml = """<project>
           <properties><hudson.model.ParametersDefinitionProperty>
             <parameterDefinitions>
@@ -984,6 +1090,7 @@ class TestParseParameterDefinitions:
         assert result["scylla_version"].choices is None
 
     def test_choice_param(self):
+        """A choice parameter yields its choices and, without a defaultValue, the first choice as default."""
         xml = """<project>
           <properties><hudson.model.ParametersDefinitionProperty>
             <parameterDefinitions>
@@ -1007,6 +1114,7 @@ class TestParseParameterDefinitions:
         assert result["provision_type"].default == "on_demand"
 
     def test_choice_param_with_default(self):
+        """A choice parameter with a defaultValue keeps that default alongside its choices."""
         xml = """<project>
           <properties><hudson.model.ParametersDefinitionProperty>
             <parameterDefinitions>
@@ -1029,6 +1137,7 @@ class TestParseParameterDefinitions:
         assert result["backend"].choices == ["aws", "gce", "docker"]
 
     def test_mixed_params(self):
+        """String and choice parameters in one config are parsed side by side."""
         xml = """<project>
           <properties><hudson.model.ParametersDefinitionProperty>
             <parameterDefinitions>
@@ -1054,6 +1163,7 @@ class TestParseParameterDefinitions:
         assert result["region"].choices == ["us-east-1", "eu-west-1"]
 
     def test_empty_xml(self):
+        """A config without parameters yields an empty dict."""
         xml = "<project></project>"
         result = parse_parameter_definitions(xml)
         assert result == {}
@@ -1094,8 +1204,11 @@ class TestParseParameterDefinitions:
 
 
 class TestGetVersionSuggestions:
+    """Building the scylla_version suggestions for the interactive prompt."""
+
     @patch("utils.staging_trigger.interactive.get_latest_scylla_release", return_value="2025.1.3")
     def test_suggestions_with_release(self, _mock_release):
+        """Suggestions include master:latest, the latest release and the custom value entry."""
         _fetch_latest_release.cache_clear()
         suggestions = _get_version_suggestions("master:latest")
         values = [c.value for c in suggestions]
@@ -1106,6 +1219,7 @@ class TestGetVersionSuggestions:
 
     @patch("utils.staging_trigger.interactive.get_latest_scylla_release", side_effect=Exception("network error"))
     def test_suggestions_when_release_fetch_fails(self, _mock_release):
+        """With the release lookup failing, suggestions hold master:latest, the current value and the custom entry."""
         _fetch_latest_release.cache_clear()
         suggestions = _get_version_suggestions("5.4.0")
         values = [c.value for c in suggestions]
@@ -1116,6 +1230,7 @@ class TestGetVersionSuggestions:
 
     @patch("utils.staging_trigger.interactive.get_latest_scylla_release", return_value="2025.1.3")
     def test_no_duplicate_current_value(self, _mock_release):
+        """A current value equal to a standard suggestion appears only once."""
         _fetch_latest_release.cache_clear()
         suggestions = _get_version_suggestions("master:latest")
         values = [c.value for c in suggestions]
@@ -1191,37 +1306,46 @@ class TestPromptForValue:
 
 
 class TestMaybeSetDockerImage:
+    """Deriving scylla_docker_image from scylla_version in the interactive flow."""
+
     def test_sets_nightly_for_master_latest(self):
+        """master:latest sets the scylla-nightly image."""
         params = {"scylla_version": "master:latest"}
         maybe_set_docker_image(params)
         assert params["scylla_docker_image"] == "scylladb/scylla-nightly"
 
     def test_sets_release_repo_for_release_version(self):
+        """A release version sets the scylladb/scylla image."""
         params = {"scylla_version": "2025.1.3"}
         maybe_set_docker_image(params)
         assert params["scylla_docker_image"] == "scylladb/scylla"
 
     def test_skips_when_no_version(self):
+        """An empty scylla_version leaves scylla_docker_image unset."""
         params = {"scylla_version": ""}
         maybe_set_docker_image(params)
         assert "scylla_docker_image" not in params
 
     def test_skips_when_backend_not_docker(self):
+        """A non-docker backend leaves scylla_docker_image unset."""
         params = {"scylla_version": "master:latest", "backend": "aws"}
         maybe_set_docker_image(params)
         assert "scylla_docker_image" not in params
 
     def test_skips_when_already_set(self):
+        """An already set scylla_docker_image is kept."""
         params = {"scylla_version": "master:latest", "scylla_docker_image": "my-custom-image"}
         maybe_set_docker_image(params)
         assert params["scylla_docker_image"] == "my-custom-image"
 
     def test_allows_empty_backend(self):
+        """An empty backend counts as docker and gets the image set."""
         params = {"scylla_version": "master:latest", "backend": ""}
         maybe_set_docker_image(params)
         assert params["scylla_docker_image"] == "scylladb/scylla-nightly"
 
     def test_handles_invalid_version(self):
+        """An unparsable scylla_version leaves scylla_docker_image unset."""
         params = {"scylla_version": "not-a-version"}
         maybe_set_docker_image(params)
         # Should not crash; image not set
@@ -1232,16 +1356,19 @@ class TestAutoSetDockerImageTrigger:
     """Test _auto_set_docker_image from trigger module."""
 
     def test_sets_nightly_for_master_latest(self):
+        """master:latest sets the scylla-nightly image."""
         params = {"scylla_version": "master:latest"}
         _auto_set_docker_image(params)
         assert params["scylla_docker_image"] == "scylladb/scylla-nightly"
 
     def test_skips_when_backend_not_docker(self):
+        """A non-docker backend leaves scylla_docker_image unset."""
         params = {"scylla_version": "master:latest", "backend": "aws"}
         _auto_set_docker_image(params)
         assert "scylla_docker_image" not in params
 
     def test_skips_when_already_set(self):
+        """An already set scylla_docker_image is kept."""
         params = {"scylla_version": "master:latest", "scylla_docker_image": "custom"}
         _auto_set_docker_image(params)
         assert params["scylla_docker_image"] == "custom"
@@ -1269,6 +1396,7 @@ class TestJenkinsJobTriggerTrigger:
         return client
 
     def test_drops_undefined_parameters(self):
+        """Params the job does not define are dropped, and the next build number is returned."""
         client = self._client(JOB_CONFIG_XML)
         params = {"scylla_version": "master:latest", "scylla_docker_image": "scylladb/scylla-nightly"}
 
@@ -1279,6 +1407,7 @@ class TestJenkinsJobTriggerTrigger:
         )
 
     def test_keeps_parameters_when_definitions_unknown(self):
+        """When the job config cannot be read, all params are sent as given."""
         client = self._client(None)
         client.jenkins.get_job_config.side_effect = Exception("no config")
         params = {"scylla_version": "master:latest", "scylla_docker_image": "x"}
@@ -1291,6 +1420,7 @@ class TestJenkinsJobTriggerTrigger:
 
     @pytest.mark.parametrize("params", [{}, {"requested_by_user": ""}], ids=["missing", "empty"])
     def test_fills_requested_by_user(self, params):
+        """A missing or empty requested_by_user is filled with the current username."""
         client = self._client(JOB_CONFIG_XML)
 
         client.trigger("folder/job", {"backend": "aws", **params})
@@ -1300,6 +1430,7 @@ class TestJenkinsJobTriggerTrigger:
         )
 
     def test_keeps_explicit_requested_by_user(self):
+        """An explicit requested_by_user is sent as given."""
         client = self._client(JOB_CONFIG_XML)
 
         client.trigger("folder/job", {"requested_by_user": "other"})
@@ -1307,6 +1438,7 @@ class TestJenkinsJobTriggerTrigger:
         client.jenkins.build_job.assert_called_once_with(name="folder/job", parameters={"requested_by_user": "other"})
 
     def test_drops_requested_by_user_when_job_lacks_it(self):
+        """A job without a requested_by_user parameter gets none sent."""
         client = self._client(JOB_CONFIG_XML.replace("requested_by_user", "other_param"))
 
         client.trigger("folder/job", {"backend": "aws"})
@@ -1315,6 +1447,7 @@ class TestJenkinsJobTriggerTrigger:
 
 
 def test_jenkins_job_trigger_uses_caller_credentials_from_env(monkeypatch):
+    """JenkinsJobTrigger logs in with JENKINS_URL, JENKINS_USERNAME and JENKINS_API_TOKEN from the environment."""
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com/")
     monkeypatch.setenv("JENKINS_USERNAME", "alice")
     monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
@@ -1353,6 +1486,7 @@ def _fake_secret_stores(keyring=NOTHING, onepassword=NOTHING):
 
 @pytest.fixture()
 def no_jenkins_env(monkeypatch):
+    """Remove JENKINS_USERNAME and JENKINS_API_TOKEN from the environment."""
     monkeypatch.delenv("JENKINS_USERNAME", raising=False)
     monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
 
@@ -1367,6 +1501,7 @@ def fresh_jenkins_login(monkeypatch):
 
 
 def test_jenkins_job_trigger_looks_up_credentials_once_per_process(capsys, no_jenkins_env):
+    """Two JenkinsJobTriggers share one Jenkins login, looked up and verified once."""
     with (
         _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run,
         patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls,
@@ -1380,6 +1515,7 @@ def test_jenkins_job_trigger_looks_up_credentials_once_per_process(capsys, no_je
 
 
 def test_job_name_completion_keeps_credential_messages_off_the_prompt(capsys, monkeypatch):
+    """Job name shell completion lists matching jobs and prints nothing to stderr."""
     monkeypatch.setenv("JENKINS_USERNAME", "alice")
     monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
     ctx = MagicMock(parent=None)
@@ -1416,11 +1552,13 @@ def test_job_name_completion_keeps_credential_messages_off_the_prompt(capsys, mo
     ],
 )
 def test_iter_jenkins_credentials_reads_secret_stores(keyring, onepassword, expected):
+    """iter_jenkins_credentials yields 1Password then keyring logins, skipping entries without a user or valid JSON."""
     with _fake_secret_stores(keyring, onepassword):
         assert list(iter_jenkins_credentials()) == expected
 
 
 def test_iter_jenkins_credentials_env_comes_first_and_overrides_stored_user(monkeypatch):
+    """Environment credentials come first, and JENKINS_USERNAME replaces the user stored in the keyring."""
     monkeypatch.setenv("JENKINS_USERNAME", "alice")
     monkeypatch.setenv("JENKINS_API_TOKEN", "alice-token")
     with _fake_secret_stores(KEYRING_SEARCH_OUTPUT):
@@ -1431,6 +1569,7 @@ def test_iter_jenkins_credentials_env_comes_first_and_overrides_stored_user(monk
 
 
 def test_iter_jenkins_credentials_skips_keyring_when_1password_is_enough(no_jenkins_env):
+    """A full 1Password login comes first, found with a single secret-store call."""
     with _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run:
         assert next(iter_jenkins_credentials())[2] == "1Password"
 
@@ -1439,6 +1578,8 @@ def test_iter_jenkins_credentials_skips_keyring_when_1password_is_enough(no_jenk
 
 @pytest.mark.parametrize("status", [401, 403])
 def test_jenkins_job_trigger_falls_back_when_a_store_is_rejected(capsys, no_jenkins_env, status):
+    """A login rejected with 401 or 403 is reported, and the next credential source is tried."""
+
     def make_client(url, username, password):
         client = MagicMock()
         if password == "op-token":
@@ -1471,6 +1612,7 @@ def test_jenkins_job_trigger_falls_back_when_a_store_is_rejected(capsys, no_jenk
     ],
 )
 def test_jenkins_job_trigger_stops_when_jenkins_fails_for_another_reason(capsys, no_jenkins_env, error):
+    """A Jenkins timeout or server error raises ClickException naming the whoAmI failure; other logins are skipped."""
     with (
         _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT) as run,
         patch("utils.staging_trigger.jenkins_client.jenkins.Jenkins") as jenkins_cls,
@@ -1506,6 +1648,7 @@ def _generate_one(how):
 
 @pytest.mark.parametrize("how", ["generate_job", "generate_jobs"])
 def test_generate_creates_jobs_with_the_callers_login(fake_job_creation, how):
+    """generate_job and generate_jobs create the job through the caller's Jenkins login and verify it exists."""
     login, pipelines_cls = fake_job_creation
 
     assert _generate_one(how) == [LATTE_PRELOAD_JOB]
@@ -1516,6 +1659,7 @@ def test_generate_creates_jobs_with_the_callers_login(fake_job_creation, how):
 
 @pytest.mark.parametrize("how", ["generate_job", "generate_jobs"])
 def test_generate_stops_when_jenkins_did_not_create_the_job(capsys, fake_job_creation, how):
+    """Job generation raises ClickException naming the jobs Jenkins did not create, without reporting success."""
     _, pipelines_cls = fake_job_creation
     # JenkinsPipelines logs a refused create (e.g. 403) and returns; the job just isn't there
     pipelines_cls.return_value.jenkins.job_exists.return_value = False
@@ -1535,6 +1679,7 @@ def test_generate_stops_when_jenkins_did_not_create_the_job(capsys, fake_job_cre
     ],
 )
 def test_jenkins_job_trigger_refuses_to_run_without_working_credentials(keyring, onepassword):
+    """With no stored credentials or only rejected ones, JenkinsJobTrigger raises ClickException naming the env vars."""
     rejected = MagicMock()
     rejected.get_whoami.side_effect = jenkins.JenkinsException("Possibly authentication failed [401]")
     with (
@@ -1558,6 +1703,7 @@ def test_jenkins_job_trigger_refuses_to_run_without_working_credentials(keyring,
     ],
 )
 def test_run_secret_command_says_why_a_store_failed(capsys, error, expected):
+    """_run_secret_command returns empty output and prints why the store failed; a missing CLI prints nothing."""
     with patch("utils.staging_trigger.jenkins_client.subprocess.run", side_effect=error):
         assert _run_secret_command(["op", "item", "get"]) == ("", "")
 
@@ -1575,12 +1721,14 @@ def test_run_secret_command_says_why_a_store_failed(capsys, error, expected):
     ],
 )
 def test_jenkins_credentials_source_limits_lookup_to_one_source(monkeypatch, wanted, expected):
+    """JENKINS_CREDENTIALS_SOURCE limits the lookup to the named source, case-insensitively."""
     monkeypatch.setenv("JENKINS_CREDENTIALS_SOURCE", wanted)
     with _fake_secret_stores(KEYRING_SEARCH_OUTPUT, ONEPASSWORD_OUTPUT):
         assert list(iter_jenkins_credentials()) == expected
 
 
 def test_jenkins_credentials_source_rejects_unknown_value(monkeypatch):
+    """An unknown JENKINS_CREDENTIALS_SOURCE raises ClickException listing the valid sources."""
     monkeypatch.setenv("JENKINS_CREDENTIALS_SOURCE", "vault")
     with pytest.raises(click.ClickException, match="not one of: env, 1password, keyring"):
         list(iter_jenkins_credentials())

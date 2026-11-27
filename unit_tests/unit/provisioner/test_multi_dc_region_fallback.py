@@ -98,6 +98,7 @@ def _fake_convert_name_to_ami_if_needed(name, regions):
 
 @pytest.fixture(name="restore_region_env")
 def restore_region_env_fixture():
+    """Save SCT_REGION_NAME and restore (or unset) it after the test."""
     saved = os.environ.get("SCT_REGION_NAME")
     yield
     if saved is None:

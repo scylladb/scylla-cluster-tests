@@ -44,15 +44,18 @@ class FakeClock:
         self.slept: list[float] = []
 
     def time(self) -> float:
+        """Return the current fake time."""
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        """Record the requested sleep and advance the fake time by it."""
         self.slept.append(seconds)
         self.now += seconds
 
 
 @pytest.fixture()
 def clock(monkeypatch):
+    """Replace the jenkins_client time module with a FakeClock and return the clock."""
     fake = FakeClock()
     monkeypatch.setattr("sdcm.utils.trigger_matrix.jenkins_client.time", fake)
     return fake
@@ -74,6 +77,7 @@ def _responses(*payloads):
 
 
 def pending(name="tier1/longevity", queue_url=f"{URL}/queue/item/1/", collect=None, timeout=3600, fail_on_error=False):
+    """Build a _PendingWaitJob for a queued build, with defaults for every field."""
     return _PendingWaitJob(
         job_name=name,
         queue_url=queue_url,
@@ -89,12 +93,14 @@ def pending(name="tier1/longevity", queue_url=f"{URL}/queue/item/1/", collect=No
 
 
 def test_build_start_returns_number_once_queue_item_is_executed(client, clock):
+    """Once the queue item has an executable, its build number is returned."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({}, {"executable": {"number": 17}})
     assert jenkins._wait_for_build_start(f"{URL}/queue/item/1/") == 17
 
 
 def test_build_start_polls_until_a_number_appears(client, clock):
+    """The queue item is polled every 5s until it carries a build number."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({}, {"executable": None}, {"executable": {"number": 3}})
     assert jenkins._wait_for_build_start(f"{URL}/queue/item/1/") == 3
@@ -103,6 +109,7 @@ def test_build_start_polls_until_a_number_appears(client, clock):
 
 
 def test_build_start_raises_when_the_queue_item_is_cancelled(client, clock):
+    """A cancelled queue item raises JenkinsTriggerError."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({"cancelled": True})
     with pytest.raises(JenkinsTriggerError, match="cancelled"):
@@ -110,6 +117,7 @@ def test_build_start_raises_when_the_queue_item_is_cancelled(client, clock):
 
 
 def test_build_start_times_out(client, clock):
+    """A queue item that never starts raises JenkinsTriggerError after the timeout."""
     jenkins, api = client
     api.jenkins_open.return_value = json.dumps({})
     with pytest.raises(JenkinsTriggerError, match="did not start within 20s"):
@@ -117,6 +125,7 @@ def test_build_start_times_out(client, clock):
 
 
 def test_a_build_queued_longer_than_ten_minutes_is_still_waited_for(client, clock):
+    """A build queued for over ten minutes is still awaited as long as it starts within the job's wait timeout."""
     jenkins, api = client
     queued = [{}] * 25  # 25 polls, 30s apart: 750s in the queue, within the job's wait_timeout
     api.jenkins_open.side_effect = _responses(
@@ -128,6 +137,7 @@ def test_a_build_queued_longer_than_ten_minutes_is_still_waited_for(client, cloc
 
 
 def test_a_build_queued_past_its_wait_timeout_is_not_started(client, clock, caplog):
+    """A build still queued at its wait timeout is reported NOT_STARTED with the job URL and an error log."""
     jenkins, api = client
     api.jenkins_open.return_value = json.dumps({})  # never gets an executable
     with caplog.at_level(logging.ERROR):
@@ -165,6 +175,7 @@ def test_a_build_stuck_in_the_queue_does_not_hold_back_the_others(client, clock,
 
 
 def test_build_start_finds_the_build_by_queue_id_once_the_queue_item_is_gone(client, clock):
+    """When the queue item has expired, the build is found in the job's builds by its queue id."""
     jenkins, api = client
     api.jenkins_open.side_effect = [
         jenkins_lib.NotFoundException("queue item expired"),
@@ -175,6 +186,7 @@ def test_build_start_finds_the_build_by_queue_id_once_the_queue_item_is_gone(cli
 
 
 def test_build_start_polls_only_the_builds_once_the_queue_item_is_gone(client, clock):
+    """After the queue item expires, only the job's build list is polled until the build appears."""
     jenkins, api = client
     api.jenkins_open.side_effect = [
         jenkins_lib.NotFoundException("queue item expired"),
@@ -189,6 +201,7 @@ def test_build_start_polls_only_the_builds_once_the_queue_item_is_gone(client, c
 
 
 def test_build_start_fails_when_the_queue_item_is_gone_and_the_job_is_unknown(client, clock):
+    """An expired queue item without a job name to look builds up by raises JenkinsTriggerError."""
     jenkins, api = client
     api.jenkins_open.side_effect = [jenkins_lib.NotFoundException("queue item expired")]
     with pytest.raises(JenkinsTriggerError, match="Queue item 40 is gone"):
@@ -196,12 +209,14 @@ def test_build_start_fails_when_the_queue_item_is_gone_and_the_job_is_unknown(cl
 
 
 def test_build_start_rejects_a_url_that_is_not_a_queue_item(client, clock):
+    """A URL that is not a queue item URL raises JenkinsTriggerError."""
     jenkins, _ = client
     with pytest.raises(JenkinsTriggerError, match="Not a queue item URL"):
         jenkins._wait_for_build_start(f"{URL}/job/folder/job/job/")
 
 
 def test_build_start_survives_a_transient_jenkins_error(client, clock):
+    """A transient Jenkins error while polling the queue is retried until the build number arrives."""
     jenkins, api = client
     api.jenkins_open.side_effect = [
         jenkins_lib.JenkinsException("502"),
@@ -211,6 +226,7 @@ def test_build_start_survives_a_transient_jenkins_error(client, clock):
 
 
 def test_build_start_strips_a_trailing_slash_once(client, clock):
+    """The queue item's API URL is built from the queue URL with exactly one slash before api/json."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({"executable": {"number": 1}})
     jenkins._wait_for_build_start(f"{URL}/queue/item/1/")
@@ -224,12 +240,14 @@ def test_build_start_strips_a_trailing_slash_once(client, clock):
 
 
 def test_no_patterns_skips_the_api_entirely(client):
+    """With no artifact patterns, no artifacts are collected and Jenkins is left uncalled."""
     jenkins, api = client
     assert jenkins._collect_artifacts("job", 1, []) == []
     api.jenkins_open.assert_not_called()
 
 
 def test_artifacts_are_matched_by_filename_glob(client):
+    """Artifacts whose filename matches a glob are returned as full artifact URLs."""
     jenkins, api = client
     api.jenkins_open.return_value = json.dumps(
         {
@@ -257,6 +275,7 @@ def test_glob_matches_the_basename_not_the_path(client):
 
 
 def test_multiple_patterns_and_no_match(client):
+    """Artifacts matching any of several patterns are all returned; a pattern matching nothing gives []."""
     jenkins, api = client
     api.jenkins_open.return_value = json.dumps({"artifacts": [{"relativePath": "a.txt"}, {"relativePath": "b.json"}]})
     assert len(jenkins._collect_artifacts("job", 1, ["*.json", "*.txt"])) == 2
@@ -264,6 +283,7 @@ def test_multiple_patterns_and_no_match(client):
 
 
 def test_empty_or_failing_artifact_response_is_not_fatal(client):
+    """An empty response or a Jenkins error while listing artifacts yields an empty list."""
     jenkins, api = client
     api.jenkins_open.return_value = ""
     assert jenkins._collect_artifacts("job", 1, ["*.json"]) == []
@@ -278,6 +298,7 @@ def test_empty_or_failing_artifact_response_is_not_fatal(client):
 
 
 def test_dry_run_reports_synthetic_success_without_calling_jenkins():
+    """A dry run returns a successful build #0 for every pending job, in order."""
     jenkins = JenkinsClient()
     results = jenkins.wait_for_builds([pending(name="a"), pending(name="b")], dry_run=True)
     assert [r.job_name for r in results] == ["a", "b"]
@@ -285,10 +306,12 @@ def test_dry_run_reports_synthetic_success_without_calling_jenkins():
 
 
 def test_no_pending_jobs_returns_empty():
+    """Waiting on no pending jobs returns an empty list."""
     assert JenkinsClient().wait_for_builds([], dry_run=False) == []
 
 
 def test_successful_build_is_reported_with_artifacts(client, clock):
+    """A successful build is reported with its number, build URL and matching artifact URLs."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses(
         {"executable": {"number": 12}},  # queue poll
@@ -305,6 +328,7 @@ def test_successful_build_is_reported_with_artifacts(client, clock):
 
 @pytest.mark.parametrize("verdict", ["FAILURE", "ABORTED", "UNSTABLE"])
 def test_non_success_verdicts_are_passed_through(client, clock, verdict):
+    """FAILURE, ABORTED and UNSTABLE verdicts are reported as-is and count as unsuccessful."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({"executable": {"number": 1}}, {"building": False, "result": verdict})
     (result,) = jenkins.wait_for_builds([pending()])
@@ -313,6 +337,7 @@ def test_non_success_verdicts_are_passed_through(client, clock, verdict):
 
 
 def test_failed_build_keeps_its_description_and_is_logged(client, clock, caplog):
+    """A failed build keeps its Jenkins description and is logged as FAILED."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses(
         {"executable": {"number": 1}}, {"building": False, "result": "FAILURE", "description": "SD analyzer failed"}
@@ -324,6 +349,7 @@ def test_failed_build_keeps_its_description_and_is_logged(client, clock, caplog)
 
 
 def test_a_still_building_job_is_polled_again(client, clock):
+    """A build still running is polled again after each poll interval until it finishes."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses(
         {"executable": {"number": 4}},
@@ -337,6 +363,7 @@ def test_a_still_building_job_is_polled_again(client, clock):
 
 
 def test_build_that_never_finishes_is_reported_as_timeout(client, clock):
+    """A build still running at its timeout is reported TIMEOUT with its number and URL."""
     jenkins, api = client
     api.jenkins_open.side_effect = [json.dumps({"executable": {"number": 8}})] + [json.dumps({"building": True})] * 50
     (result,) = jenkins.wait_for_builds([pending(timeout=90)], poll_interval=30)
@@ -346,6 +373,7 @@ def test_build_that_never_finishes_is_reported_as_timeout(client, clock):
 
 
 def test_job_cancelled_in_the_queue_is_reported_as_failure(client, clock):
+    """A job cancelled in the queue is reported FAILURE with build number 0 and the job URL."""
     jenkins, api = client
     api.jenkins_open.return_value = json.dumps({"cancelled": True})  # never gets an executable
     (result,) = jenkins.wait_for_builds([pending(timeout=20)])
@@ -377,6 +405,7 @@ def test_one_queue_failure_does_not_abandon_the_other_jobs(client, clock):
 
 
 def test_polling_error_is_retried_rather_than_failing_the_build(client, clock):
+    """A Jenkins error while polling a running build is retried and the final verdict is reported."""
     jenkins, api = client
     api.jenkins_open.side_effect = [
         json.dumps({"executable": {"number": 6}}),
@@ -405,6 +434,7 @@ def test_payload_without_a_building_field_is_treated_as_still_running(client, cl
 
 
 def test_missing_result_field_becomes_unknown(client, clock):
+    """A finished build with no result field is reported UNKNOWN and unsuccessful."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({"executable": {"number": 1}}, {"building": False})
     (result,) = jenkins.wait_for_builds([pending()])
@@ -413,6 +443,7 @@ def test_missing_result_field_becomes_unknown(client, clock):
 
 
 def test_slash_in_job_name_becomes_a_jenkins_job_path(client, clock):
+    """Each slash-separated part of a job name becomes a /job/ segment of the build URL."""
     jenkins, api = client
     api.jenkins_open.side_effect = _responses({"executable": {"number": 3}}, {"building": False, "result": "SUCCESS"})
     (result,) = jenkins.wait_for_builds([pending(name="scylla-2025.4/tier1/longevity")])
@@ -420,6 +451,7 @@ def test_slash_in_job_name_becomes_a_jenkins_job_path(client, clock):
 
 
 def test_results_are_in_trigger_order_not_completion_order(client, clock):
+    """Results come back in trigger order even when a later build finishes first."""
     jenkins, api = client
 
     def respond(request):

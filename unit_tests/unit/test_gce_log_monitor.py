@@ -6,6 +6,8 @@ from unit_tests.lib.fake_events import FakeEventsMixin
 
 
 class FakeGceLogClient(GceLoggingClient):
+    """GceLoggingClient stand-in returning canned GCE audit-log system events."""
+
     def __init__(self):
         pass
 
@@ -55,14 +57,19 @@ class FakeGceLogClient(GceLoggingClient):
 
 
 class FakeGceNode(GCENode):
+    """GCENode stand-in wired to a given logging client, with a fixed last-fetch time."""
+
     def __init__(self, logging_client: GceLoggingClient):
         self._gce_logging_client = logging_client
         self._last_logs_fetch_time = 1656590843.0
 
 
 class TestGceErrorLog(FakeEventsMixin):
+    """Mapping of GCE system events from the instance audit log to SCT events."""
+
     @staticmethod
     def logging_client():
+        """Return the fake GCE logging client (or a real one when use_real_gce is flipped for manual runs)."""
         use_real_gce = False
         if use_real_gce:
             return GceLoggingClient(instance_name="longevity-10gb-3h-master-db-node-fac7b27a-0-6", zone="us-east1-d")
@@ -70,6 +77,7 @@ class TestGceErrorLog(FakeEventsMixin):
             return FakeGceLogClient()
 
     def test_host_error_log_entry_creates_sct_error_event(self):
+        """check_spot_termination() turns each GCE system event into an SCT event of the expected severity."""
         node = FakeGceNode(logging_client=self.logging_client())
         node.check_spot_termination()
 

@@ -19,16 +19,19 @@ SOURCES = {"jenkins": ["192.0.2.10/32"], "office": ["198.51.100.10/32"]}
 
 
 def test_validate_rejects_missing_jenkins_role():
+    """validate_builder_ssh_sources() raises ValueError when the jenkins role is missing."""
     with pytest.raises(ValueError, match="jenkins"):
         validate_builder_ssh_sources({"office": ["198.51.100.10/32"]})
 
 
 def test_validate_rejects_world_range():
+    """validate_builder_ssh_sources() raises ValueError for a 0.0.0.0/0 source."""
     with pytest.raises(ValueError, match="0.0.0.0/0"):
         validate_builder_ssh_sources({"jenkins": ["0.0.0.0/0"]})
 
 
 def test_builder_ingress_diff_keeps_only_allowed_rules():
+    """builder_ingress_diff() revokes unlisted rules and authorizes only the allowed CIDRs still missing."""
     current = [
         {
             "FromPort": 22,

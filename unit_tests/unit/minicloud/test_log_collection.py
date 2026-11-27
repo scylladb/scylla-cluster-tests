@@ -13,6 +13,7 @@ from sdcm.utils.minicloud.log_collection import (
 
 
 def test_collect_native_log_copies_into_logdir(tmp_path):
+    """The native minicloud log is copied into the run's log directory."""
     native_log = tmp_path / "state" / "minicloud-native.log"
     native_log.parent.mkdir()
     native_log.write_text("minicloud output\n")
@@ -23,11 +24,13 @@ def test_collect_native_log_copies_into_logdir(tmp_path):
 
 
 def test_collect_native_log_without_log_file(tmp_path):
+    """A missing native log returns False and leaves the log directory uncreated."""
     assert not collect_native_minicloud_log(str(tmp_path / "run"), str(tmp_path / "missing.log"))
     assert not (tmp_path / "run").exists()
 
 
 def test_collect_native_log_into_its_own_dir(tmp_path):
+    """A native log that already sits in the log directory is reported collected and left intact."""
     native_log = tmp_path / "minicloud-native.log"
     native_log.write_text("minicloud output\n")
 
@@ -36,6 +39,7 @@ def test_collect_native_log_into_its_own_dir(tmp_path):
 
 
 def test_redact_docker_inspect_strips_credentials():
+    """redact_docker_inspect masks AWS credentials in the container env and keeps other fields."""
     raw = (
         b'[{"Config": {"Env": ["AWS_ACCESS_KEY_ID=AKIAXXXX", "AWS_SECRET_ACCESS_KEY=verysecret", '
         b'"AWS_SESSION_TOKEN=tok", "AWS_REGION=eu-west-1", "PATH=/usr/bin"]}, "State": {"ExitCode": 137}}]'

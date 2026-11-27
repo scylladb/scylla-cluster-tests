@@ -30,6 +30,7 @@ pytestmark = [
 
 @pytest.mark.skip("test isn't yet fully working")
 def test_01_kcl_with_ycsb(request, docker_scylla, events, params):
+    """YCSB loads Alternator while KCL replicates the stream to a destination table whose size then matches the source."""
     params.update(
         dict(
             dynamodb_primarykey_type="HASH_AND_RANGE",

@@ -17,6 +17,8 @@ from unit_tests.unit.nemesis.fake_cluster import PARAMS, Cluster, FakeTester, No
 
 # Use multiple inheritance to ensure we override registry after Nemesis but before Sisyphus
 class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
+    """SisyphusMonkey that discovers disruptions from the test-only TestNemesisClass tree."""
+
     def __init__(self, tester_obj, *args, termination_event=None, nemesis_selector=None, nemesis_seed=None, **kwargs):
         super().__init__(
             tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
@@ -25,6 +27,8 @@ class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
 
 @pytest.fixture()
 def get_sisyphus():
+    """Provide a factory that builds a FakeSisyphusMonkey for the given params."""
+
     def _create_sisyphus(params=PARAMS):
         return FakeSisyphusMonkey(FakeTester(params=params))
 
@@ -57,6 +61,7 @@ def test_same_seed_yields_same_disruption_order(seed):
 
 
 def test_disruptions_list(get_sisyphus):
+    """SisyphusMonkey without a selector collects every disruption of the test nemesis tree."""
     nemesis = get_sisyphus()
     assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == {
         "CustomNemesisA",

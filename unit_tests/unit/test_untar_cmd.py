@@ -11,6 +11,7 @@ from sdcm.utils.sstable.load_utils import untar_cmd
 
 @pytest.mark.parametrize("has_tar", [pytest.param(True, id="tar"), pytest.param(False, id="no-tar-python-fallback")])
 def test_untar_cmd_extracts(tmp_path, has_tar):
+    """Extracts a tar.gz with tar when present and with the scylla python fallback otherwise."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "md-1-big-Data.db").write_text("data")
     archive = tmp_path / "sstables.tar.gz"

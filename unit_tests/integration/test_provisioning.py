@@ -53,7 +53,7 @@ class MinimalProvisioningTester(ClusterTester):
     __test__ = False
 
     def runTest(self):
-        pass
+        """Satisfy unittest.TestCase so the tester can be instantiated outside a test run."""
 
     def prepare(self, params: SCTConfiguration) -> None:
         """Replicate only the setUp() lines that init_resources() depends on."""
@@ -93,6 +93,7 @@ def blank_info() -> dict:
 
 @pytest.fixture
 def mock_gce_backend():
+    """Patch the GCE cluster, loader, monitor, provisioner and credential classes in sdcm.tester."""
     with ExitStack() as stack:
         stack.enter_context(patch("sdcm.tester.ScyllaGCECluster"))
         stack.enter_context(patch("sdcm.tester.LoaderSetGCE"))
@@ -108,6 +109,7 @@ def mock_gce_backend():
 
 @pytest.fixture
 def mock_azure_backend():
+    """Patch the Azure cluster, loader, monitor, provisioner and credential classes in sdcm.tester."""
     with ExitStack() as stack:
         stack.enter_context(patch("sdcm.tester.ScyllaAzureCluster"))
         stack.enter_context(patch("sdcm.tester.LoaderSetAzure"))
@@ -121,6 +123,7 @@ def mock_azure_backend():
 
 @pytest.fixture
 def mock_oci_backend():
+    """Patch the OCI cluster, loader, monitor, provisioner and credential classes in sdcm.tester."""
     with ExitStack() as stack:
         stack.enter_context(patch("sdcm.tester.ScyllaOciCluster"))
         stack.enter_context(patch("sdcm.tester.LoaderSetOci"))
@@ -134,6 +137,7 @@ def mock_oci_backend():
 
 @pytest.fixture
 def mock_aws_backend():
+    """Patch the AWS cluster classes, EC2/AMI helpers, AZ resolution, capacity checks and KeyStore."""
     with ExitStack() as stack:
         stack.enter_context(patch("sdcm.tester.ScyllaAWSCluster"))
         stack.enter_context(patch("sdcm.tester.LoaderSetAWS"))

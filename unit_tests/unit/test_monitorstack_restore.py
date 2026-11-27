@@ -111,6 +111,7 @@ def default_ports(monkeypatch):
 
 
 def test_pick_monitoring_stack_ports_uses_defaults_when_nothing_runs(default_ports):
+    """With no stacks running and default ports free, the default Grafana/Alertmanager/Prometheus ports are used."""
     assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (3000, 6000, 9090)
 
 
@@ -122,12 +123,14 @@ def test_pick_monitoring_stack_ports_skips_half_started_stack(default_ports):
 
 
 def test_pick_monitoring_stack_ports_skips_slot_with_port_bound_by_other_process(default_ports):
+    """A default port bound by another process makes the stack fall back to random free ports."""
     default_ports.add(3000)
 
     assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (40000, 40001, 40002)
 
 
 def test_pick_monitoring_stack_ports_uses_next_tenant_slot(default_ports):
+    """With the first tenant's slot taken, the next tenant slot's ports (default + 1) are used."""
     assert pick_monitoring_stack_ports(tenants_number=2, occupied_ports={3000, 6000, 9090}) == (3001, 6001, 9091)
 
 
@@ -169,6 +172,7 @@ def test_restore_monitoring_stack_removes_only_its_own_containers_on_failure(mon
 
 
 def test_restore_monitoring_stack_keeps_containers_on_success(monkeypatch, restore_until_dashboards):
+    """A successful restore returns the restored clusters and keeps their containers running."""
     monkeypatch.setattr(restore, "restore_grafana_dashboards_and_annotations", lambda *_, **__: True)
 
     assert set(restore_monitoring_stack("test-id")) == {"cluster-1", "cluster-2"}

@@ -26,17 +26,22 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class RealEventsTest(EventsUtilsMixin):
+    """Base test class running the real events device, with log files in a per-class temp dir."""
+
     @classmethod
     def setup_class(cls) -> None:
+        """Start the metrics server and the real events device with a patched registry."""
         start_metrics_server()
         cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
 
     @classmethod
     def teardown_class(cls) -> None:
+        """Stop the events device and remove its temp dir."""
         cls.teardown_events_processes()
 
     @classmethod
     def get_event_log_file(cls, name: str) -> str:
+        """Return the text of the named events log file, or an empty string when it is missing."""
         if (log_file := Path(cls.temp_dir, "events_log", name)).exists():
             return log_file.read_text(encoding="utf-8")
         return ""

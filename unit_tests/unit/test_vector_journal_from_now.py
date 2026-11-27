@@ -26,6 +26,7 @@ CHECKPOINT = "/var/lib/vector/journald/checkpoint.txt"
 
 
 def vector_journald_source(script: str) -> dict:
+    """Return the journald source section of the vector config embedded in the configuration script."""
     return yaml.safe_load(re.search(r"<<'EOF'\n(.*?)\nEOF", script, re.S).group(1))["sources"]["journald"]
 
 

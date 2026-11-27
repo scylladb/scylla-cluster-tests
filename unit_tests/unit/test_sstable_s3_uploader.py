@@ -42,6 +42,7 @@ def make_remoter() -> MagicMock:
 
 
 def make_db_node() -> Mock:
+    """Build a mock SSH-reachable DB node with a recording remoter."""
     node = Mock(spec=BaseNode)
     node.name = "db-node-1"
     node.remoter = make_remoter()
@@ -50,6 +51,7 @@ def make_db_node() -> Mock:
 
 
 def commands_run(node: Mock) -> list[str]:
+    """Return the commands run on the node's remoter, in order."""
     return [call.args[0] for call in node.remoter.run.call_args_list]
 
 
@@ -59,6 +61,7 @@ def test_k8s_nodes_report_being_docker():
 
 
 def test_upload_system_table_to_s3_uploads_from_ssh_node():
+    """A system table is dumped as JSON via cqlsh and uploaded to S3 under a file named after the table."""
     node = make_db_node()
 
     with patch(
@@ -77,6 +80,7 @@ def test_upload_system_table_to_s3_uploads_from_ssh_node():
 
 
 def test_upload_sstables_to_s3_uploads_from_ssh_node():
+    """Sstables are snapshotted, located and uploaded to S3, then the snapshot is cleared."""
     node = make_db_node()
 
     with patch(

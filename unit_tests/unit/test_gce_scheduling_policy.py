@@ -73,10 +73,12 @@ def _provider_insert_request(_mock_sa, tags: dict[str, str]) -> compute_v1.Insta
 
 
 def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart() -> None:
+    """VirtualMachineProvider inserts instances with TERMINATE on host maintenance and automatic restart off."""
     _assert_terminate_no_restart(_provider_insert_request(tags={"env": "test"}))
 
 
 def test_instance_provider_insert_carries_normalized_labels() -> None:
+    """VirtualMachineProvider sends instance labels lowercased to satisfy GCE label rules."""
     instance = _provider_insert_request(tags={"NodeType": "scylla-db", "TestId": "Abc-1"})
     assert dict(instance.labels) == {"nodetype": "scylla-db", "testid": "abc-1"}
 
@@ -104,6 +106,7 @@ def _create_instance_insert_request(machine_type: str, disks: list[compute_v1.At
 
 
 def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> None:
+    """create_instance sets TERMINATE on host maintenance and automatic restart off for a regular machine type."""
     instance = _create_instance_insert_request(
         "n2-standard-1", [compute_v1.AttachedDisk(boot=True, device_name="boot")]
     )

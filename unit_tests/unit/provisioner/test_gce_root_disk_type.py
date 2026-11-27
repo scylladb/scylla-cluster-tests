@@ -41,6 +41,7 @@ from sdcm.utils.gce_machine_types import bundles_local_ssds
 )
 @pytest.mark.parametrize("configured", ["pd-standard", "pd-balanced", "pd-ssd", None])
 def test_hyperdisk_only_families_override_the_configured_root_disk_type(instance_type, configured):
+    """Hyperdisk-only machine families get a hyperdisk-balanced root disk whatever type is configured."""
     assert _resolve_root_disk_type(instance_type, configured) == DISK_TYPE_HYPERDISK_BALANCED
 
 
@@ -54,6 +55,7 @@ def test_hyperdisk_only_families_override_the_configured_root_disk_type(instance
     ],
 )
 def test_other_families_keep_the_configured_root_disk_type(instance_type, configured, expected):
+    """Other families keep the configured root disk type, defaulting to pd-standard."""
     assert _resolve_root_disk_type(instance_type, configured) == expected
 
 
@@ -74,6 +76,7 @@ def test_other_families_keep_the_configured_root_disk_type(instance_type, config
     ],
 )
 def test_bundles_local_ssds(instance_type, expected):
+    """bundles_local_ssds is true for z3, z4d and -lssd machine types, which come with their own local SSDs."""
     assert bundles_local_ssds(instance_type) is expected
 
 

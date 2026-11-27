@@ -6,6 +6,7 @@ from unit_tests.lib.fake_cluster import DummyScyllaCluster
 
 @pytest.mark.integration
 def test_fetch_all_rows(docker_scylla, params, events):
+    """fetch_all_rows returns the rows of a CQL SELECT."""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 

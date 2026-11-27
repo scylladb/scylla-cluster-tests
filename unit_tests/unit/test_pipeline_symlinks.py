@@ -8,6 +8,7 @@ from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 @pytest.fixture()
 def mock_jenkins_pipelines(tmp_path):
+    """Provide JenkinsPipelines rooted at tmp_path with a mock Jenkins where no job exists yet."""
     with patch("utils.build_system.create_test_release_jobs.KeyStore"):
         with patch("utils.build_system.create_test_release_jobs.jenkins.Jenkins"):
             with patch("utils.build_system.create_test_release_jobs.get_sct_root_path", return_value=tmp_path):
@@ -26,6 +27,7 @@ def mock_jenkins_pipelines(tmp_path):
 
 @pytest.fixture()
 def pipeline_tree(tmp_path):
+    """Create two artifacts jenkinsfiles and an empty scylla-doctor folder for symlink definitions."""
     target_dir = tmp_path / "jenkins-pipelines" / "oss" / "artifacts"
     target_dir.mkdir(parents=True)
 
@@ -39,6 +41,7 @@ def pipeline_tree(tmp_path):
 
 
 def test_process_symlinks_creates_jobs(mock_jenkins_pipelines, pipeline_tree):
+    """Each _symlinks.yaml entry creates a job named after the entry plus the folder's suffix."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
     symlink_dir.joinpath("_symlinks.yaml").write_text(
         "symlinks:\n"
@@ -57,6 +60,7 @@ def test_process_symlinks_creates_jobs(mock_jenkins_pipelines, pipeline_tree):
 
 
 def test_process_symlinks_no_file(mock_jenkins_pipelines, pipeline_tree):
+    """A folder without _symlinks.yaml creates no jobs."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
 
     mock_jenkins_pipelines.process_symlinks(symlink_dir, "scylla-doctor", "-test", {})
@@ -65,6 +69,7 @@ def test_process_symlinks_no_file(mock_jenkins_pipelines, pipeline_tree):
 
 
 def test_process_symlinks_missing_target(mock_jenkins_pipelines, pipeline_tree, caplog):
+    """An entry whose target jenkinsfile is missing is logged as an error and creates no job."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
     symlink_dir.joinpath("_symlinks.yaml").write_text(
         'symlinks:\n  - name: "nonexistent"\n    target: "jenkins-pipelines/oss/artifacts/nonexistent.jenkinsfile"\n'
@@ -78,6 +83,7 @@ def test_process_symlinks_missing_target(mock_jenkins_pipelines, pipeline_tree, 
 
 
 def test_process_symlinks_invalid_entry(mock_jenkins_pipelines, pipeline_tree, caplog):
+    """An entry missing its name or target is logged as a warning and creates no job."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
     symlink_dir.joinpath("_symlinks.yaml").write_text('symlinks:\n  - name: "missing-target"\n')
 
@@ -89,6 +95,7 @@ def test_process_symlinks_invalid_entry(mock_jenkins_pipelines, pipeline_tree, c
 
 
 def test_process_symlinks_custom_suffix(mock_jenkins_pipelines, pipeline_tree):
+    """An entry's job_name_suffix replaces the folder's default suffix in the job name."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
     symlink_dir.joinpath("_symlinks.yaml").write_text(
         "symlinks:\n"
@@ -104,6 +111,7 @@ def test_process_symlinks_custom_suffix(mock_jenkins_pipelines, pipeline_tree):
 
 
 def test_process_symlinks_integrated_in_create_job_tree(mock_jenkins_pipelines, pipeline_tree):
+    """create_job_tree processes the folder's _symlinks.yaml and creates the linked jobs."""
     symlink_dir = pipeline_tree / "jenkins-pipelines" / "scylla-doctor"
     symlink_dir.joinpath("_symlinks.yaml").write_text(
         "symlinks:\n"

@@ -221,6 +221,7 @@ def fixture_monitor_node(monitoring_sources, grafana_port):
 
 @pytest.fixture(name="screenshot_entity")
 def fixture_screenshot_entity(params, grafana_port) -> GrafanaScreenShot:
+    """Return a GrafanaScreenShot covering the last hour, configured from params and pointed at grafana_port."""
     entity = GrafanaScreenShot(name="grafana-screenshot", test_start_time=time.time() - 3600)
     entity.set_params(params)
     entity.grafana_port = grafana_port

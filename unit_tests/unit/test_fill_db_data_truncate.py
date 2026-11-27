@@ -45,6 +45,7 @@ def _truncate_tables(harness, session=None):
 
 
 def test_all_tables_truncated_when_nothing_fails():
+    """With no failures, every table is truncated in order."""
     harness = _Harness([_item("a", "t_a"), _item("b", "t_b"), _item("c", "t_c")])
 
     _truncate_tables(harness)
@@ -64,6 +65,7 @@ def test_one_failure_does_not_skip_the_remaining_tables():
 
 
 def test_error_names_every_table_left_untruncated():
+    """TruncateTablesError names each item whose table failed to truncate and counts them."""
     harness = _Harness(
         [_item("alpha", "t_a"), _item("beta", "t_b"), _item("gamma", "t_c")],
         failing=["TRUNCATE t_a", "TRUNCATE t_c"],
@@ -79,6 +81,7 @@ def test_error_names_every_table_left_untruncated():
 
 
 def test_skipped_items_are_not_truncated():
+    """Items marked skip are left out of the truncate pass."""
     harness = _Harness([_item("a", "t_a"), _item("b", "t_b", skip="disabled for a reason")])
 
     _truncate_tables(harness)
@@ -99,6 +102,7 @@ def test_gives_up_after_the_failure_cap_instead_of_burning_the_budget():
 
 
 def test_no_early_exit_while_under_the_failure_cap():
+    """Below MAX_TRUNCATE_FAILURES, every table is attempted before the error is raised."""
     items = [_item(f"t{i}", f"t_{i}") for i in range(MAX_TRUNCATE_FAILURES + 3)]
     # One fewer failure than the cap, so every remaining table still gets attempted.
     failing = [f"TRUNCATE t_{i}" for i in range(MAX_TRUNCATE_FAILURES - 1)]
@@ -124,6 +128,7 @@ def test_truncate_table_applies_the_timeout_on_both_sides():
 
 
 def test_truncate_table_keeps_an_explicit_using_timeout():
+    """A TRUNCATE that already has USING TIMEOUT is sent as given."""
     session = MagicMock()
     harness = MagicMock()
 

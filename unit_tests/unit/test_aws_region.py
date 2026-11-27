@@ -21,6 +21,7 @@ from sdcm.utils.aws_region import AwsRegion
 
 @pytest.fixture(name="aws_region")
 def aws_region_fixture():
+    """Provide an AwsRegion for us-east-1 with boto3 stubbed; its EC2 client mock is on _mock_ec2."""
     with (
         patch("sdcm.utils.aws_region.boto3.client", return_value=MagicMock()) as mock_client,
         patch("sdcm.utils.aws_region.boto3.resource"),
@@ -38,6 +39,7 @@ def _set_offerings(region: AwsRegion, offerings: list[tuple[str, str]]) -> None:
 
 
 def test_get_common_availability_zones_intersection(aws_region):
+    """Only AZs offering every requested instance type are returned."""
     _set_offerings(
         aws_region,
         [
@@ -61,6 +63,7 @@ def test_get_common_availability_zones_intersection(aws_region):
     ],
 )
 def test_get_common_availability_zones_preferred_first(aws_region, preferred_azs, expected_prefix):
+    """Preferred AZs come first, in the given order."""
     _set_offerings(
         aws_region,
         [
@@ -75,6 +78,7 @@ def test_get_common_availability_zones_preferred_first(aws_region, preferred_azs
 
 
 def test_get_common_availability_zones_empty_when_no_overlap(aws_region):
+    """An empty list is returned when no AZ offers all requested types."""
     _set_offerings(
         aws_region,
         [
@@ -86,6 +90,7 @@ def test_get_common_availability_zones_empty_when_no_overlap(aws_region):
 
 
 def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region):
+    """A preferred AZ lacking the type is dropped; the supported AZs are still returned."""
     _set_offerings(
         aws_region,
         [
@@ -101,6 +106,7 @@ def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region)
 
 
 def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
+    """An already-owned backup bucket is reused and still gets the 7-day expiration lifecycle."""
     for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
         monkeypatch.delenv(var, raising=False)
     with (
@@ -133,6 +139,7 @@ def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
 
 
 def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region):
+    """An existing builder security group is tagged keep=alive."""
     group = MagicMock(ip_permissions=[])
     aws_region._mock_ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-builder"}]}
     aws_region.resource.SecurityGroup.return_value = group
@@ -142,6 +149,7 @@ def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region)
 
 
 def test_configure_skips_builder_group_under_minicloud(aws_region, monkeypatch):
+    """Under minicloud, configure() leaves out the builder security group and the keystore lookup."""
     aws_region._is_minicloud = True
     for name in (
         "update_sct_key_pair",

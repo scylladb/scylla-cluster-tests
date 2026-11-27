@@ -40,15 +40,20 @@ def _gce_instance_event(node_name: str, method: str, severity: Severity = Severi
 
 
 class TestEventsAnalyzer(EventsUtilsMixin):
+    """The events analyzer process: subscribing to the main device, killing the test, and stopping."""
+
     @classmethod
     def setup_class(cls) -> None:
+        """Start the main events device in a dedicated events processes registry."""
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
     def teardown_class(cls) -> None:
+        """Stop the events processes started in setup_class."""
         cls.teardown_events_processes()
 
     def test_events_analyzer(self):
+        """The analyzer consumes every published event and kills the test once on a SpotTerminationEvent."""
         initial_events_no = self.events_main_device.events_counter  # coming from other tests
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
@@ -137,6 +142,7 @@ class TestEventsAnalyzer(EventsUtilsMixin):
             events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_can_stop_events_analyzer_during_stream_of_events(self):
+        """The analyzer stops within the timeout while events keep arriving."""
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 
@@ -162,20 +168,24 @@ class TestEventsAnalyzer(EventsUtilsMixin):
 
 
 def test_is_benign_gce_live_migration_of_loader_true_for_loader():
+    """A GCE live migration of a loader node is benign."""
     event = _gce_instance_event("loader-node-1", "compute.instances.migrateOnHostMaintenance")
     assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is True
 
 
 def test_is_benign_gce_live_migration_of_loader_false_for_db_node():
+    """A GCE live migration of a DB node is classified as harmful."""
     event = _gce_instance_event("db-node-1", "compute.instances.migrateOnHostMaintenance")
     assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is False
 
 
 def test_is_benign_gce_live_migration_of_loader_false_for_non_live_migration_event():
+    """A GCE host-maintenance termination of a loader is classified as harmful."""
     event = _gce_instance_event("loader-node-1", "compute.instances.terminateOnHostMaintenance")
     assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is False
 
 
 def test_is_benign_gce_live_migration_of_loader_false_for_other_event_class():
+    """Events other than GceInstanceEvent are classified as harmful."""
     event = SpotTerminationEvent(node="loader-node-1", message="m")
     assert _is_benign_gce_live_migration_of_loader("SpotTerminationEvent", event) is False

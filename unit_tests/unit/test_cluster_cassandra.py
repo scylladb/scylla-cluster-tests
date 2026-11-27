@@ -51,6 +51,7 @@ def _make_params(values=None):
 
 @pytest.fixture()
 def make_cassandra_cluster(tmp_path, monkeypatch):
+    """Factory building a Docker Cassandra cluster; with a result_map it gets one node whose FakeRemoter answers it."""
     monkeypatch.setenv("_SCT_TEST_LOGDIR", str(tmp_path))
 
     def _make(params=None, result_map=None) -> BaseCassandraCluster:
@@ -70,6 +71,7 @@ def make_cassandra_cluster(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def cassandra_cluster(make_cassandra_cluster):
+    """A Docker Cassandra cluster with default params and no nodes."""
     return make_cassandra_cluster()
 
 
@@ -88,24 +90,29 @@ def cassandra_cluster(make_cassandra_cluster):
     ],
 )
 def test_compute_jvm_heap_sizes(total_ram_mb, expected_max, expected_new):
+    """The JVM max heap is half the RAM with a 256 MB floor; the new-gen heap is a quarter of it, capped at 800 MB."""
     max_heap, heap_new = compute_jvm_heap_mb(total_ram_mb)
     assert max_heap == expected_max
     assert heap_new == expected_new
 
 
 def test_parallel_startup_is_false(cassandra_cluster):
+    """Cassandra nodes are started one after another."""
     assert cassandra_cluster.parallel_startup is False
 
 
 def test_get_scylla_args_returns_empty(cassandra_cluster):
+    """Cassandra clusters pass no Scylla command-line args."""
     assert cassandra_cluster.get_scylla_args() == ""
 
 
 def test_update_seed_provider_is_noop(cassandra_cluster):
+    """update_seed_provider completes on a Cassandra cluster with nothing to update."""
     cassandra_cluster.update_seed_provider()
 
 
 def test_validate_seeds_is_noop(cassandra_cluster):
+    """validate_seeds_on_all_nodes completes on a Cassandra cluster with nothing to validate."""
     cassandra_cluster.validate_seeds_on_all_nodes()
 
 
@@ -119,27 +126,32 @@ def test_validate_seeds_is_noop(cassandra_cluster):
     ],
 )
 def test_jdk_version(version, expected_jdk, make_cassandra_cluster):
+    """Cassandra 4.x runs on JDK 11 and Cassandra 5.x on JDK 17."""
     cluster = make_cassandra_cluster(params=_make_params({"cassandra_version": version}))
     assert cluster.jdk_version() == expected_jdk
 
 
 def test_cassandra_version_from_params(cassandra_cluster):
+    """cassandra_version is read from the cassandra_version param."""
     cassandra_cluster.params = _make_params({"cassandra_version": "5.0"})
     assert cassandra_cluster.cassandra_version == "5.0"
 
 
 def test_cassandra_version_falls_back_to_oracle_version(cassandra_cluster):
+    """Without cassandra_version the version comes from cassandra_oracle_version."""
     cassandra_cluster.params = _make_params({"cassandra_version": None, "cassandra_oracle_version": "4.1"})
     assert cassandra_cluster.cassandra_version == "4.1"
 
 
 def test_data_nodes_returns_all_nodes(cassandra_cluster):
+    """Every node of a Cassandra cluster is a data node."""
     node1, node2 = MagicMock(), MagicMock()
     cassandra_cluster.nodes = [node1, node2]
     assert cassandra_cluster.data_nodes == [node1, node2]
 
 
 def test_zero_nodes_returns_empty(cassandra_cluster):
+    """A Cassandra cluster has no zero-token nodes."""
     cassandra_cluster.nodes = [MagicMock(), MagicMock()]
     assert cassandra_cluster.zero_nodes == []
 

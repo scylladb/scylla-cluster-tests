@@ -43,15 +43,17 @@ class IdleSession:
 
     @staticmethod
     def simple_select(timeout=None):
+        """Sleep briefly, as a select on a silent socket would."""
         time.sleep(0.01)
 
     @staticmethod
     def eagain(func, args=(), kwargs=None, timeout=None):
+        """Return None, as a call that would block returns."""
         return None
 
     @staticmethod
     def drop_channel(channel):
-        pass
+        """Accept the channel and release nothing."""
 
 
 class SilentChannel:
@@ -59,34 +61,42 @@ class SilentChannel:
 
     @staticmethod
     def read():
+        """Report EAGAIN with no stdout data."""
         return LIBSSH2_ERROR_EAGAIN, b""
 
     @staticmethod
     def read_stderr():
+        """Report EAGAIN with no stderr data."""
         return LIBSSH2_ERROR_EAGAIN, b""
 
     @staticmethod
     def eof():
+        """Report EAGAIN for the EOF check."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def wait_eof():
+        """Report EAGAIN while waiting for EOF."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def close():
+        """Report EAGAIN on close."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def wait_closed():
+        """Report EAGAIN while waiting for the close."""
         return LIBSSH2_ERROR_EAGAIN
 
     @staticmethod
     def get_exit_status():
+        """Report the -1 exit status of a command still running."""
         return -1
 
 
 def run_in_thread(target) -> tuple[threading.Thread, list]:
+    """Start `target` in a daemon thread and return the thread and the list collecting its exceptions."""
     raised = []
 
     def _wrapper():
@@ -101,6 +111,7 @@ def run_in_thread(target) -> tuple[threading.Thread, list]:
 
 
 def test_no_watchers_read_loop_raises_on_abort():
+    """The no-watchers read loop waits on a silent channel and raises CommandAborted once abort is set."""
     abort_event = threading.Event()
     thread, raised = run_in_thread(
         lambda: Client._process_output_no_watchers(
@@ -126,6 +137,7 @@ def test_no_watchers_read_loop_raises_on_abort():
 
 
 def test_reader_thread_stops_on_abort():
+    """The SSH reader thread waits on a silent channel and stops with CommandAborted once abort is set."""
     abort_event = threading.Event()
     reader = SSHReaderThread(IdleSession(), SilentChannel(), None, 0.01, abort_event=abort_event)
     reader.start()
@@ -140,6 +152,7 @@ def test_reader_thread_stops_on_abort():
 
 
 def test_aborted_client_does_not_run_commands():
+    """An aborted client raises CommandAborted on run before connecting."""
     client = Client(host="10.0.0.1", user="test")
     client.connect = MagicMock()
 
@@ -171,12 +184,14 @@ def test_aborted_run_is_not_wrapped_as_retryable():
 
 @pytest.fixture(name="remoter")
 def fixture_remoter():
+    """Provide a libssh2 remoter to a fake host and stop it after the test."""
     remoter = RemoteLibSSH2CmdRunner(hostname="10.0.0.1", user="test", key_file="/tmp/test_key")
     yield remoter
     remoter.stop()
 
 
 def test_abort_running_commands_reaches_connections_of_other_threads(remoter):
+    """abort_running_commands aborts the own connections of two worker threads and of the main thread."""
     connections = []
 
     def _get_connection():
@@ -197,16 +212,19 @@ def test_abort_running_commands_reaches_connections_of_other_threads(remoter):
 
 
 def test_abort_running_commands_without_connections(remoter):
+    """abort_running_commands completes on a remoter that has opened no connections."""
     remoter.abort_running_commands()
 
 
 def test_abort_running_commands_is_noop_for_non_ssh_runners():
+    """abort_running_commands is callable on a local runner and completes as a no-op."""
     # NOTE: loaders on the docker backend or with the SCT agent don't use an SSH remoter,
     #       `kill_docker_loaders` must still be able to call it on them
     LocalCmdRunner().abort_running_commands()
 
 
 def test_k8s_pod_runner_tracks_connections_for_abort():
+    """KubernetesPodRunner tracks the connection of a run so abort_running_commands aborts it."""
     # NOTE: `KubernetesPodRunner` keeps its own `_connections` list, tracking connections for abort
     #       must not clash with it
     runner = KubernetesPodRunner(

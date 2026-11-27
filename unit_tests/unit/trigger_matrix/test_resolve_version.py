@@ -35,6 +35,7 @@ FULL_TAG = "2025.4.1-0.20250601.abc123def456-1"
     ],
 )
 def test_full_version_tag_returned_as_is(full_version):
+    """A full version tag (release or dev nightly) is returned unchanged, without an image lookup."""
     result = resolve_to_full_version(full_version)
     assert result == full_version
 
@@ -48,12 +49,14 @@ def test_full_version_tag_returned_as_is(full_version):
     ],
 )
 def test_release_version_returned_as_is(release_version):
+    """A three-part release version is returned unchanged."""
     result = resolve_to_full_version(release_version)
     assert result == release_version
 
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_branch_qualifier_version_passes_as_is(mock_resolve):
+    """A branch-qualified version is resolved via the AWS AMI lookup in eu-west-1 for x86_64."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("master:latest")
@@ -64,6 +67,7 @@ def test_branch_qualifier_version_passes_as_is(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_simple_version_looked_up_as_release_branch(mock_resolve):
+    """A bare major.minor version is looked up as branch-<version>:latest."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("2025.4")
@@ -74,6 +78,7 @@ def test_simple_version_looked_up_as_release_branch(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_custom_region_forwarded(mock_resolve):
+    """A custom region is passed to the AMI lookup."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("2025.4", region="us-east-1")
@@ -84,6 +89,7 @@ def test_custom_region_forwarded(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_gce_image")
 def test_gce_backend_resolved_against_gce_images(mock_resolve):
+    """With backend gce the version is resolved through the GCE image lookup."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("master:latest", backend="gce")
@@ -94,6 +100,7 @@ def test_gce_backend_resolved_against_gce_images(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_azure_image")
 def test_azure_backend_defaults_to_eastus(mock_resolve):
+    """With backend azure the version is resolved through the Azure image lookup in eastus."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("master:latest", backend="azure")
@@ -104,6 +111,7 @@ def test_azure_backend_defaults_to_eastus(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_arch_forwarded_to_lookup(mock_resolve):
+    """The requested arch is passed to the image lookup."""
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("master:latest", arch="aarch64")
@@ -114,6 +122,7 @@ def test_arch_forwarded_to_lookup(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_gce_image")
 def test_error_mentions_the_backend_that_failed(mock_resolve):
+    """A failed resolution raises TriggerMatrixError naming the backend that was queried."""
     mock_resolve.return_value = ""
 
     with pytest.raises(TriggerMatrixError, match="on backend 'gce'"):
@@ -122,6 +131,7 @@ def test_error_mentions_the_backend_that_failed(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_raises_when_version_cannot_be_resolved(mock_resolve):
+    """A bare version that no image resolves raises TriggerMatrixError quoting it."""
     mock_resolve.return_value = ""
 
     with pytest.raises(TriggerMatrixError, match="Cannot resolve '2025.4'"):
@@ -130,6 +140,7 @@ def test_raises_when_version_cannot_be_resolved(mock_resolve):
 
 @patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_branch_version_fallthrough_raises(mock_resolve):
+    """A branch-qualified version that no image resolves raises TriggerMatrixError quoting it."""
     mock_resolve.return_value = ""
 
     with pytest.raises(TriggerMatrixError, match="Cannot resolve 'branch-2025.4:latest'"):
@@ -138,6 +149,7 @@ def test_branch_version_fallthrough_raises(mock_resolve):
 
 @patch("sdcm.utils.aws_utils.get_scylla_images_ec2_resource")
 def test_resolve_architecture_from_ami_scylla_account(mock_ec2_resource):
+    """The AMI arch is read via the Scylla images account and arm64 is reported as aarch64."""
     mock_image = MagicMock()
     mock_image.architecture = "arm64"
     mock_ec2 = MagicMock()
@@ -153,6 +165,7 @@ def test_resolve_architecture_from_ami_scylla_account(mock_ec2_resource):
 @patch("boto3.resource")
 @patch("sdcm.utils.aws_utils.get_scylla_images_ec2_resource")
 def test_resolve_architecture_from_ami_fallback_to_default(mock_ec2_resource, mock_boto3_resource):
+    """When the Scylla images account is unreachable, the AMI arch is read with the default boto3 credentials."""
     mock_ec2_resource.side_effect = Exception("STS role assumption failed")
 
     mock_image = MagicMock()
@@ -170,6 +183,7 @@ def test_resolve_architecture_from_ami_fallback_to_default(mock_ec2_resource, mo
 @patch("boto3.resource")
 @patch("sdcm.utils.aws_utils.get_scylla_images_ec2_resource")
 def test_resolve_architecture_from_ami_both_fail(mock_ec2_resource, mock_boto3_resource):
+    """When both AMI lookups fail, the arch is reported as an empty string."""
     mock_ec2_resource.side_effect = Exception("STS failed")
     mock_boto3_resource.side_effect = Exception("No credentials")
 
@@ -189,11 +203,13 @@ def test_resolve_architecture_from_ami_both_fail(mock_ec2_resource, mock_boto3_r
     ],
 )
 def test_arch_from_image_name(image_name, expected):
+    """The arch is taken from aarch64/arm64/x86_64 in an image name; a name without one gives ''."""
     assert _arch_from_image_name(image_name) == expected
 
 
 @patch("sdcm.utils.trigger_matrix.images.resolve_architecture_from_ami")
 def test_resolve_image_architecture_ami(mock_resolve_ami):
+    """With an AMI id the image arch is resolved from the AMI in the given region."""
     mock_resolve_ami.return_value = "aarch64"
 
     result = resolve_image_architecture(scylla_ami_id="ami-123", region="us-east-1")
@@ -203,18 +219,21 @@ def test_resolve_image_architecture_ami(mock_resolve_ami):
 
 
 def test_resolve_image_architecture_gce_name():
+    """A GCE image name with aarch64 resolves to aarch64."""
     result = resolve_image_architecture(gce_image_db="projects/scylla-images/global/images/scylla-aarch64-2026-07")
 
     assert result == "aarch64"
 
 
 def test_resolve_image_architecture_azure_name():
+    """An Azure image name with arm64 resolves to aarch64."""
     result = resolve_image_architecture(azure_image_db="/subscriptions/.../scylla-enterprise-arm64-2026.1")
 
     assert result == "aarch64"
 
 
 def test_resolve_image_architecture_no_arch_hint():
+    """An image name with no arch hint resolves to an empty string."""
     result = resolve_image_architecture(gce_image_db="projects/scylla-images/global/images/scylla-2026-07")
 
     assert result == ""

@@ -53,6 +53,7 @@ WARN_DAYS = 30
     ],
 )
 def test_parse_expiry(raw, expected):
+    """parse_expiry() reads dates and ISO timestamps as their own calendar date, and returns None for junk."""
     assert check_keystore_expiry.parse_expiry(raw) == expected
 
 
@@ -67,24 +68,28 @@ def test_parse_expiry(raw, expected):
     ],
 )
 def test_classify_boundaries(expires_on, expected_status, expected_days):
+    """classify() marks past dates expired, up to warn_days ahead expiring, beyond that ok, with days_left."""
     result = check_keystore_expiry.classify("sct/azure.json", {"expires_on": expires_on}, TODAY, WARN_DAYS)
     assert result["status"] == expected_status
     assert result["days_left"] == expected_days
 
 
 def test_classify_missing_tag_is_untracked():
+    """A secret without an expires_on tag is classified untracked with no days_left."""
     result = check_keystore_expiry.classify("sct/azure.json", {"team": "sct"}, TODAY, WARN_DAYS)
     assert result["status"] == check_keystore_expiry.STATUS_UNTRACKED
     assert result["days_left"] is None
 
 
 def test_classify_unparsable_tag_is_untracked_and_keeps_raw_value():
+    """An unparsable expires_on tag is classified untracked and its raw value is kept for the report."""
     result = check_keystore_expiry.classify("sct/azure.json", {"expires_on": "whenever"}, TODAY, WARN_DAYS)
     assert result["status"] == check_keystore_expiry.STATUS_UNTRACKED
     assert result["expires_on"] == "whenever"
 
 
 def test_render_markdown_orders_worst_first_and_counts():
+    """The report lists expired, expiring, untracked, then ok secrets, and summarises the count of each."""
     results = [
         check_keystore_expiry.classify("sct/ok.json", {"expires_on": "2027-01-01"}, TODAY, WARN_DAYS),
         check_keystore_expiry.classify("sct/untracked.json", {}, TODAY, WARN_DAYS),
@@ -117,6 +122,7 @@ def test_apply_azure_truth_overrides_tag_and_flags_drift(monkeypatch):
 
 
 def test_apply_azure_truth_fills_in_a_missing_tag(monkeypatch):
+    """With no tag, the expiry read from Azure AD classifies the secret and the note says so."""
     results = [check_keystore_expiry.classify("sct/azure.json", {}, TODAY, WARN_DAYS)]
     monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _fake_azure(datetime.date(2026, 10, 1)))
 
@@ -185,6 +191,7 @@ def test_apply_azure_truth_keeps_the_tag_when_the_lookup_is_unreliable(monkeypat
 
 
 def test_apply_azure_truth_flags_an_app_with_no_secret(monkeypatch):
+    """An Azure app with no client secret marks the azure.json entry expired."""
     results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
     monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _fake_azure(None))
 
@@ -194,6 +201,7 @@ def test_apply_azure_truth_flags_an_app_with_no_secret(monkeypatch):
 
 
 def test_apply_azure_truth_is_a_noop_when_azure_json_is_absent(monkeypatch):
+    """Without an azure.json row, Azure is left unqueried and the results stay as classified."""
     results = [check_keystore_expiry.classify("sct/docker.json", {"expires_on": "2027-01-01"}, TODAY, WARN_DAYS)]
     monkeypatch.setattr(
         check_keystore_expiry,

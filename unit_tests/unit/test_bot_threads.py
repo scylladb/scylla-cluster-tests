@@ -13,6 +13,7 @@ SCRIPT_PATH = Path(__file__).parents[2] / "scripts" / "review_analysis" / "bot_t
 
 
 def thread(*authors, resolved=False, outdated=False):
+    """Return a GraphQL review thread payload with comments by the given (login, type) authors."""
     return {
         "isResolved": resolved,
         "isOutdated": outdated,
@@ -53,6 +54,7 @@ PAGE = {
 
 @pytest.fixture
 def bot_threads(tmp_path):
+    """Provide a runner that serves a page through a fake gh, runs bot_threads.py and returns its output lines."""
     fake_gh = tmp_path / "gh"
     fake_gh.write_text(f'#!/bin/sh\ncat "{tmp_path / "page.json"}"\n')
     fake_gh.chmod(0o755)
@@ -72,6 +74,7 @@ def bot_threads(tmp_path):
 
 
 def test_acted_on_rate_per_reviewer(bot_threads):
+    """Per bot, threads it started count as acted on when resolved, outdated or answered by a human."""
     lines = bot_threads()
 
     assert "pull requests scanned: 1" in lines
@@ -108,4 +111,5 @@ def _page_with_cut_threads():
     ],
 )
 def test_warns_when_counts_are_incomplete(bot_threads, page, warning):
+    """A warning is printed when the search exceeds 1000 PRs or threads are cut at query limits."""
     assert warning in bot_threads(page)

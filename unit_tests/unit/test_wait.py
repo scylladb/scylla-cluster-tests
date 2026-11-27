@@ -35,14 +35,17 @@ class FakeClock:
         self.now = 0.0
 
     def monotonic(self):
+        """Return the fake current time."""
         return self.now
 
     def sleep(self, seconds):
+        """Advance the fake time by the requested seconds instead of sleeping."""
         self.now += seconds
 
 
 @pytest.fixture
 def fake_clock(monkeypatch):
+    """Patch tenacity's clock and sleep with a FakeClock and return that clock."""
     clock = FakeClock()
     monkeypatch.setattr("tenacity.time", clock)
     monkeypatch.setattr("tenacity.nap.time", clock)
@@ -50,6 +53,7 @@ def fake_clock(monkeypatch):
 
 
 def test_wait_simple(fake_clock):
+    """A callback that always raises is called once per step until the timeout, and wait_for returns quietly."""
     calls = []
 
     def callback(arg1, arg2):
@@ -61,6 +65,7 @@ def test_wait_simple(fake_clock):
 
 
 def test_wait_throw_exc(fake_clock):
+    """With throw_exc=True, the callback's last exception is raised once the timeout expires."""
     calls = []
 
     def callback(arg1, arg2):
@@ -73,6 +78,7 @@ def test_wait_throw_exc(fake_clock):
 
 
 def test_wait_false_return(fake_clock):
+    """A callback that keeps returning False is retried once per step until the timeout."""
     calls = []
 
     def callback(arg1, arg2):
@@ -84,6 +90,7 @@ def test_wait_false_return(fake_clock):
 
 
 def test_wait_false_return_reraise(fake_clock):
+    """With throw_exc=True, a callback that keeps returning False ends in a timeout error."""
     calls = []
 
     def callback(arg1, arg2):
@@ -96,6 +103,7 @@ def test_wait_false_return_reraise(fake_clock):
 
 
 def test_wait_return_value():
+    """The first truthy callback result ends the wait and is returned."""
     calls = []
 
     def callback(arg1, arg2):
@@ -125,6 +133,7 @@ def event_stop_state(fake_clock):
 
 @pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
 def test_stop_by_event(event_stop_state, throw_exc):
+    """Setting the stop event ends the wait after the current call: ExitByEventError or a falsy result."""
     state = event_stop_state
     state.set_event_after = 1
     state.return_true_after = 3
@@ -147,6 +156,7 @@ def test_stop_by_event(event_stop_state, throw_exc):
 
 
 def test_stop_by_event_in_main_thread():
+    """A stop event set from the main thread ends a wait_for running in a worker thread with a falsy result."""
     stop_event = threading.Event()
     first_call_done = threading.Event()
 
@@ -162,6 +172,7 @@ def test_stop_by_event_in_main_thread():
 
 
 def test_return_result_before_stop_event_and_wait_timeout(event_stop_state):
+    """A truthy result arriving before both the stop event and the timeout is returned."""
     state = event_stop_state
     state.return_true_after = 2
     state.set_event_after = 4
@@ -171,6 +182,7 @@ def test_return_result_before_stop_event_and_wait_timeout(event_stop_state):
 
 
 def test_raise_by_timeout_before_set_event(event_stop_state):
+    """When the timeout expires before the stop event is set, WaitForTimeoutError is raised."""
     state = event_stop_state
     state.set_event_after = 8
     state.return_true_after = 9
@@ -189,6 +201,7 @@ def test_raise_by_timeout_before_set_event(event_stop_state):
 
 @pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
 def test_raise_exception_in_func_before_set_event(event_stop_state, throw_exc):
+    """A callback exception is retried like a failure until the stop event ends the wait."""
     state = event_stop_state
     state.set_event_after = 5
 
@@ -251,6 +264,7 @@ class DummyNode(BaseNode):
 
 
 def write_to_file(filename, lines):
+    """Append the lines to the file one by one, pausing briefly after each."""
     for line in lines:
         with open(filename, "a") as f:
             f.write(f"{line}\n")
@@ -258,6 +272,7 @@ def write_to_file(filename, lines):
 
 
 def test_wait_for_log_start_line_and_end_line(tmp_path):
+    """wait_for_log_lines returns once the start and then the end line patterns appear in the node log."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = [
@@ -279,6 +294,7 @@ def test_wait_for_log_start_line_and_end_line(tmp_path):
 
 
 def test_wait_for_log_timeout_when_no_start_line(tmp_path):
+    """With no start line in the log, wait_for_log_lines raises TimeoutError for the start line."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["end", "cde", "end"]  # no start line provided
@@ -295,6 +311,7 @@ def test_wait_for_log_timeout_when_no_start_line(tmp_path):
 
 
 def test_wait_for_log_timeout_when_no_end_line(tmp_path):
+    """With a start line but no end line in the log, wait_for_log_lines raises TimeoutError for the end line."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["start", "cde", "start"]  # no start line provided
@@ -311,6 +328,7 @@ def test_wait_for_log_timeout_when_no_end_line(tmp_path):
 
 
 def test_wait_for_log_reraises_exception(tmp_path):
+    """An exception raised inside the wait_for_log_lines block propagates once the end line is seen."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     lines = ["start", "cde", "end"]  # no start line provided
@@ -328,6 +346,7 @@ def test_wait_for_log_reraises_exception(tmp_path):
 
 
 def test_wait_for_log_reraises_exception_and_timeout_error(tmp_path):
+    """A start-line timeout is raised with the exception from the block kept in its context."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     file_path.touch()
@@ -342,6 +361,7 @@ def test_wait_for_log_reraises_exception_and_timeout_error(tmp_path):
 
 
 def test_wait_for_log_reraises_timeout_error_with_error_context(tmp_path):
+    """The end-line timeout message includes the node name and the error_msg_ctx text."""
     file_path = tmp_path / "wait_for_log_lines_1.log"
     node = DummyNode(log_path=file_path)
     # Provide lines that will not satisfy the end pattern so that a timeout occurs.

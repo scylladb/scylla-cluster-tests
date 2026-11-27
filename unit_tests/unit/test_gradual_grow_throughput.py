@@ -219,6 +219,7 @@ def test_aggregate_ops_rate_ignores_bad_values():
 
 
 def test_aggregate_ops_rate_empty_results():
+    """No stress results aggregate to an op rate of zero."""
     assert _aggregate_ops_rate([], num_loaders=2, num_commands=2) == 0.0
 
 

@@ -39,6 +39,7 @@ def _add_nodes(cluster, count):
 
 
 def test_add_nodes_returns_the_nodes_it_created():
+    """add_nodes() returns exactly the nodes it created, and [] for a count of 0."""
     cluster = _cluster()
     _add_nodes(cluster, count=2)
 
@@ -49,6 +50,7 @@ def test_add_nodes_returns_the_nodes_it_created():
 
 
 def test_add_nodes_does_not_return_the_nodes_of_a_concurrent_call():
+    """When another call adds a node mid-way, each call gets back only its own nodes."""
     cluster = _cluster()
     nodes_of_the_other_call = []
 

@@ -45,6 +45,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FakeNode:
+    """Minimal DB node with a remoter, a Scylla version and a one-node parent cluster."""
+
     def __init__(self, name: str, remoter):
         self.name = name
         self.remoter = remoter
@@ -55,6 +57,8 @@ class FakeNode:
 
 
 class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
+    """In-memory AdaptiveTimeoutStore that keeps stored metrics for the tests to query."""
+
     def __init__(self):
         self._data = {}
 
@@ -67,6 +71,7 @@ class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         timeout_occurred: bool,
         hard_timeout: int | None = None,
     ) -> None:
+        """Record the metrics, merged with the operation, duration and timeouts, under a random key."""
         metrics.update(
             {
                 "operation": operation,
@@ -80,6 +85,7 @@ class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         self._data[key] = metrics
 
     def get(self, operation: str | None, timeout_occurred: bool = False):
+        """Return stored metrics matching the operation (any if None) and the timeout_occurred flag."""
         matching_items = []
         for item in self._data.values():
             if (operation is None or item["operation"] == operation) and item["timeout_occurred"] == timeout_occurred:
@@ -87,11 +93,13 @@ class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         return matching_items
 
     def clear(self):
+        """Drop all stored metrics."""
         self._data = {}
 
 
 @pytest.fixture
 def adaptive_timeout_remoter(fake_remoter):
+    """Provide a fake remoter answering io_properties, metrics and nodetool info for a 3-shard, 100 GB node."""
     io_properties = """
        disks:
          - mountpoint: /var/lib/scylla
@@ -151,11 +159,13 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
 
 @pytest.fixture
 def fake_node(adaptive_timeout_remoter):
+    """Provide a FakeNode backed by the adaptive timeout remoter."""
     return FakeNode("test-node", adaptive_timeout_remoter)
 
 
 @pytest.fixture
 def adaptive_timeout_store():
+    """Provide an empty in-memory adaptive timeout store."""
     store = MemoryAdaptiveTimeoutStore()
     store.clear()
     return store
@@ -163,6 +173,7 @@ def adaptive_timeout_store():
 
 @pytest.fixture(autouse=True)
 def mock_tablets_feature():
+    """Patch is_tablets_feature_enabled to False; tests flip it via the yielded mock."""
     with mock.patch("sdcm.utils.adaptive_timeouts.is_tablets_feature_enabled") as mock_feature:
         mock_feature.return_value = False
         yield mock_feature
@@ -177,6 +188,7 @@ def clear_node_load_info_services_singleton():
 
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node, adaptive_timeout_store):
+    """Exceeding the soft timeout publishes one event and stores metrics with timeout_occurred=True."""
     with adaptive_timeout(
         operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=0.1, stats_storage=adaptive_timeout_store
     ) as timeout:
@@ -194,6 +206,7 @@ def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node,
 
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fake_node, adaptive_timeout_store):
+    """Finishing within the soft timeout publishes no event but still stores the metrics."""
     with adaptive_timeout(
         operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=1, stats_storage=adaptive_timeout_store
     ) as timeout:
@@ -206,6 +219,7 @@ def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fa
 
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_node, adaptive_timeout_store):
+    """Without tablets, decommission gets a data-size based timeout and stores no hard timeout."""
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
@@ -221,6 +235,7 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
 def test_tablets_decommission_timeout_is_calculated_from_data_size(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """With tablets, decommission yields a hard timeout of twice the throughput-based soft timeout."""
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
@@ -245,6 +260,7 @@ def test_tablets_decommission_timeout_is_calculated_from_data_size(
 def test_tablets_new_node_uses_predefined_timeouts(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """With tablets, adding a node yields TABLETS_HARD_TIMEOUT, overriding the caller's timeout."""
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
         operation=Operations.NEW_NODE, node=fake_node, stats_storage=adaptive_timeout_store, timeout=9999
@@ -262,6 +278,7 @@ def test_tablets_new_node_uses_predefined_timeouts(
 def test_tablets_tablet_migration_timeout_is_calculated_from_disk_size(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """With tablets, tablet migration gets a hard timeout computed from 90% of the disk size."""
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
         operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
@@ -286,6 +303,7 @@ def test_tablets_tablet_migration_timeout_is_calculated_from_disk_size(
 def test_tablet_migration_timeout_fallback_uses_caller_timeout(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """When the disk size cannot be read, tablet migration falls back to the caller's timeout."""
     mock_tablets_feature.return_value = True
     # Force metrics gathering to fail by making node_disk_size_mb raise
     with mock.patch.object(
@@ -302,6 +320,7 @@ def test_tablet_migration_timeout_fallback_uses_caller_timeout(
 def test_tablet_migration_uses_formula_when_tablets_disabled(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
 ):
+    """Without tablets, tablet migration uses the non-tablets formula, floored at 7200 seconds."""
     # With tablets disabled, non-tablets formula: max(int(102400 MB * 0.9 * 0.03), 7200) = max(2764, 7200) = 7200 s
     # hard_timeout is None, so yields soft_timeout directly.
     with adaptive_timeout(
@@ -318,6 +337,7 @@ def test_tablet_migration_uses_formula_when_tablets_disabled(
 def test_tablets_refresh_timeout_is_calculated_as_tablet_migration(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """With tablets, refresh gets the same hard timeout as a tablet migration."""
     # With tablets, refresh is a load-and-stream, which waits for a running tablet migration first
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
@@ -341,6 +361,7 @@ def test_tablets_refresh_timeout_is_calculated_as_tablet_migration(
 def test_refresh_uses_caller_timeout_when_tablets_disabled(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
 ):
+    """Without tablets, refresh uses the caller's timeout and stores no hard timeout."""
     with adaptive_timeout(
         operation=Operations.REFRESH, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
     ) as timeout:
@@ -381,6 +402,7 @@ def test_node_disk_size_mb(fake_node):
     ],
 )
 def test_nodetool_size_to_mb(value, expected_mb):
+    """nodetool_size_to_mb() converts sizes from bytes up to PiB into whole MB."""
     assert nodetool_size_to_mb(value) == expected_mb
 
 
@@ -391,16 +413,19 @@ def test_nodetool_size_to_mb(value, expected_mb):
     [("K", 10), ("M", 10240), ("G", 10240 * 1024), ("T", 10240 * 1024**2), ("P", 10240 * 1024**3)],
 )
 def test_nodetool_size_to_mb_treats_legacy_and_iec_labels_alike(prefix, expected_mb):
+    """Legacy KB/MB/GB labels and IEC KiB/MiB/GiB labels convert to the same MB value."""
     assert nodetool_size_to_mb(f"10240.00 {prefix}B") == nodetool_size_to_mb(f"10240.00 {prefix}iB") == expected_mb
 
 
 @pytest.mark.parametrize("value", ["", "GiB", "1.55", "1.55 iB", "1.55 XiB", "1.55 gib", "-1.00 GiB"])
 def test_nodetool_size_to_mb_rejects_invalid_value(value):
+    """nodetool_size_to_mb() raises ValueError for malformed, unitless or negative sizes."""
     with pytest.raises(ValueError, match="Couldn't parse value"):
         nodetool_size_to_mb(value)
 
 
 def test_node_data_size_mb(fake_node):
+    """node_data_size_mb reports the nodetool info Load value in MB."""
     service = NodeLoadInfoService(
         remoter=fake_node.remoter,
         name=fake_node.name,
@@ -458,6 +483,7 @@ def test_expected_throughput_falls_back_to_estimate_when_zero(fake_node):
     ],
 )
 def test_get_operation_timeout_factor(operation, config_value, expected):
+    """The factor is the configured multiplier for the operation, or 1.0 when unconfigured."""
     params = SCTConfiguration()
     params["adaptive_timeout_multipliers"] = config_value
     assert _get_operation_timeout_factor(params, operation) == expected
@@ -472,6 +498,7 @@ def test_get_operation_timeout_factor(operation, config_value, expected):
     ],
 )
 def test_multiplier_model_validates_input(input_val, expected_key, expected_val):
+    """AdaptiveTimeoutMultipliers accepts dicts of known operations with positive values."""
     model = AdaptiveTimeoutMultipliers.model_validate(input_val)
     assert model.root[expected_key] == expected_val
 
@@ -485,6 +512,7 @@ def test_multiplier_model_validates_input(input_val, expected_key, expected_val)
     ],
 )
 def test_multiplier_model_rejects_invalid_input(input_val, match_pattern):
+    """AdaptiveTimeoutMultipliers raises for unknown operations and non-positive values."""
     with pytest.raises(ValueError, match=match_pattern):
         AdaptiveTimeoutMultipliers.model_validate(input_val)
 
@@ -501,6 +529,7 @@ def test_multiplier_model_rejects_invalid_input(input_val, match_pattern):
 def test_multiplier_scaling(
     publish_or_dump, fake_node, adaptive_timeout_store, multipliers, operation, timeout_arg, expected
 ):
+    """The operation's multiplier scales its timeout; other operations keep their base timeout."""
     fake_node.parent_cluster.params["adaptive_timeout_multipliers"] = multipliers
 
     kwargs = dict(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store)
@@ -516,6 +545,7 @@ def test_multiplier_scaling(
 def test_decommission_multiplier_scales_hard_timeout_for_tablets(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
+    """A decommission multiplier of 2 doubles the tablets hard timeout."""
     mock_tablets_feature.return_value = True
 
     # Get base timeout without multiplier
@@ -661,6 +691,7 @@ def test_sct_config_with_multipliers_is_json_serializable(monkeypatch):
 
 @mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
 def test_argus_store_reports_hard_timeout_when_set(mock_submit):
+    """The Argus store submits a hard_timeout cell, truncated to int, when a hard timeout is given."""
     with (
         mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
         mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),
@@ -683,6 +714,7 @@ def test_argus_store_reports_hard_timeout_when_set(mock_submit):
 
 @mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
 def test_argus_store_reports_no_hard_timeout_when_not_set(mock_submit):
+    """The Argus store submits no hard_timeout cell when no hard timeout is given."""
     with (
         mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
         mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),

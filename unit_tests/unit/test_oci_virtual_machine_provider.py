@@ -388,6 +388,7 @@ def test_az_fallback_goes_over_the_availability_domains_in_rounds(fallback_provi
 
 
 def test_az_fallback_gives_up_after_the_timeout(fallback_provider_factory):
+    """After the AZ fallback timeout, provisioning raises "No capacity" having tried every availability domain."""
     provider = fallback_provider_factory(az_fallback=True, launch_results=[OUT_OF_CAPACITY] * 3)
 
     with (
@@ -400,6 +401,7 @@ def test_az_fallback_gives_up_after_the_timeout(fallback_provider_factory):
 
 
 def test_az_fallback_does_not_retry_configuration_errors(fallback_provider_factory):
+    """A configuration error such as InvalidParameter fails at once in the first AD, without AZ fallback."""
     invalid_parameter = oci.exceptions.ServiceError(400, "InvalidParameter", {}, "Invalid shape.")
     provider = fallback_provider_factory(az_fallback=True, launch_results=[invalid_parameter])
 

@@ -42,18 +42,21 @@ pytest_plugins = ["pytester"]
 
 @pytest.fixture(scope="module")
 def events():
+    """Yield a module-scoped fake SCT events device that captures published events."""
     with make_fake_events() as device:
         yield device
 
 
 @pytest.fixture(scope="function")
 def events_function_scope():
+    """Yield a fresh fake SCT events device for each test function."""
     with make_fake_events() as device:
         yield device
 
 
 @pytest.fixture(scope="session")
 def prom_address():
+    """Start the Prometheus metrics server once per session and yield its address."""
     yield start_metrics_server()
 
 
@@ -71,16 +74,22 @@ def data_dir() -> Path:
 
 @pytest.fixture(scope="session", autouse=True)
 def fake_provisioner():
+    """Register FakeProvisioner as the provisioner for the "fake" backend."""
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def fake_region_definition_builder():
+    """Register FakeDefinitionBuilder as the region definition builder for the "fake" backend."""
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
 
 
 @pytest.fixture(scope="function", name="params")
 def fixture_params(request: pytest.FixtureRequest, monkeypatch):
+    """Yield an SCTConfiguration for the docker backend with password authentication and Cassandra authorizer.
+
+    Config files come from the `sct_config(files=...)` marker when present.
+    """
     if sct_config_marker := request.node.get_closest_marker("sct_config"):
         config_files = sct_config_marker.kwargs.get("files")
         monkeypatch.setenv("SCT_CONFIG_FILES", config_files)
@@ -106,10 +115,12 @@ def no_spot_advisor_fetch(monkeypatch):
 
 @pytest.fixture(scope="function", autouse=True)
 def fixture_cleanup_continuous_events_registry():
+    """Clear the continuous events registry before each test so events from earlier tests are dropped."""
     ContinuousEventsRegistry().cleanup_registry()
 
 
 def pytest_sessionfinish():
+    """Let logging swallow write errors once pytest closes its captured stdout/stderr at session end."""
     # pytest's capsys is enabled by default, see
     # https://docs.pytest.org/en/7.1.x/how-to/capture-stdout-stderr.html.
     # but pytest closes its internal stream for capturing the stdout and

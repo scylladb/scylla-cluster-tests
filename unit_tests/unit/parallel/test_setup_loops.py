@@ -29,6 +29,7 @@ from sdcm.cluster_docker import VectorStoreSetDocker
 
 
 def update_seed_provider(cluster_of, nodes, hook, monkeypatch):
+    """Set up `update_seed_provider`, calling the hook when each node opens its remote scylla.yaml."""
     for node in nodes:
 
         @contextmanager
@@ -42,6 +43,7 @@ def update_seed_provider(cluster_of, nodes, hook, monkeypatch):
 
 
 def cassandra_wait_for_init(cluster_of, nodes, hook, monkeypatch):
+    """Set up the Cassandra AWS `wait_for_init` loop, calling the hook in each node's wait."""
     monkeypatch.setattr("sdcm.cluster_aws.wait.wait_for", lambda func, node, **kwargs: hook(node))
     cluster = cluster_of(CassandraAWSCluster, nodes)
     # wait_for_init_wrap sets up and starts every node before it calls wait_for_init; this checks
@@ -50,6 +52,7 @@ def cassandra_wait_for_init(cluster_of, nodes, hook, monkeypatch):
 
 
 def vector_store_aws_reconfigure(cluster_of, nodes, hook, monkeypatch):
+    """Set up the AWS vector-store reconfigure loop, calling the hook in each node's service configuration."""
     for node in nodes:
         node.configure_vector_store_service.side_effect = lambda node=node: hook(node)
     cluster = cluster_of(VectorStoreSetAWS, nodes)
@@ -58,6 +61,7 @@ def vector_store_aws_reconfigure(cluster_of, nodes, hook, monkeypatch):
 
 
 def vector_store_docker_reconfigure(cluster_of, nodes, hook, monkeypatch):
+    """Set up the Docker vector-store reconfigure loop, calling the hook when each node's container starts."""
     container_manager = MagicMock()
     container_manager.is_running.return_value = False
     container_manager.run_container.side_effect = lambda node, container_name: hook(node)

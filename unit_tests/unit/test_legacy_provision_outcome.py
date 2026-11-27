@@ -54,6 +54,7 @@ def _run(cluster, on_demand=None, spot=None):
 
 
 def test_spot_success_records_no_downgrade():
+    """A successful spot request publishes an event with spot as both the requested and realized provision type."""
     cluster = _cluster()
     instances, event = _run(cluster, spot={"return_value": ["i-1"]})
 
@@ -113,6 +114,7 @@ def test_any_client_error_downgrades_and_is_recorded():
 
 
 def test_no_fallback_configured_records_failure():
+    """With on-demand fallback disabled, a spot failure raises and publishes an event with no realized type."""
     cluster = _cluster(fallback_on_demand=False)
     instances, event = _run(cluster, spot={"side_effect": CreateSpotInstancesError("capacity-not-available")})
 

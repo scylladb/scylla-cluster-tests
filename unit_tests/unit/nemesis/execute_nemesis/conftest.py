@@ -26,19 +26,23 @@ def nemesis_runner(events):
 
 @pytest.fixture
 def nemesis(nemesis_runner):
+    """Provide a CustomTestNemesis that disrupts successfully."""
     return CustomTestNemesis(runner=nemesis_runner)
 
 
 @pytest.fixture
 def skipping_nemesis(nemesis_runner):
+    """Provide a SkippingTestNemesis that raises UnsupportedNemesis."""
     return SkippingTestNemesis(runner=nemesis_runner)
 
 
 @pytest.fixture
 def failing_nemesis(nemesis_runner):
+    """Provide a FailingTestNemesis that raises RuntimeError."""
     return FailingTestNemesis(runner=nemesis_runner)
 
 
 @pytest.fixture
 def kill_nemesis(nemesis_runner):
+    """Provide a KillTestNemesis that raises KillNemesis."""
     return KillTestNemesis(runner=nemesis_runner)

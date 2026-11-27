@@ -103,6 +103,7 @@ def _current_latest_version() -> str:
 
 @contextmanager
 def running_container(image: str):
+    """Pull the image and yield the id of a container sleeping in it; skip when the pull fails, remove it on exit."""
     pull = _run(["docker", "pull", "-q", image])
     if pull.returncode != 0:
         pytest.skip(f"cannot pull {image}: {pull.stderr.strip()}")
@@ -119,6 +120,7 @@ def running_container(image: str):
 
 @pytest.mark.parametrize("image", DISTRO_IMAGES)
 def test_vector_installs_and_runs(image):
+    """The vector install script installs the latest vector and its systemd unit on each supported distro."""
     with running_container(image) as container_id:
         setup = _docker_exec(container_id, SETUP_SCRIPT)
         assert setup.returncode == 0, f"test setup failed on {image}: {_tail(setup)}"

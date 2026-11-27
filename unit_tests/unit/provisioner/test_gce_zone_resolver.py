@@ -45,6 +45,7 @@ def _make_params(**overrides):
 
 @pytest.fixture(name="mock_gce_zone_resolver")
 def mock_gce_zone_resolver_fixture():
+    """Patch GceZoneResolver with a mock whose common zones are us-east1-b/c/d; yield (class mock, instance)."""
     with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
         instance = mock_cls.return_value
         instance.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
@@ -52,6 +53,7 @@ def mock_gce_zone_resolver_fixture():
 
 
 def test_required_machine_types_collects_all_role_types_when_active():
+    """With every role active, required_machine_types() returns the deduplicated machine types of all roles."""
     params = _make_params(
         gce_instance_type_db="n2-highmem-8",
         gce_instance_type_loader="e2-standard-2",
@@ -81,6 +83,7 @@ def test_required_machine_types_collects_all_role_types_when_active():
 
 
 def test_required_machine_types_excludes_types_with_zero_node_count():
+    """Roles with a zero node count or inactive features contribute no machine type; only the DB type remains."""
     params = _make_params(
         gce_instance_type_db="n2-highmem-8",
         gce_instance_type_loader="e2-standard-2",
@@ -99,12 +102,14 @@ def test_required_machine_types_excludes_types_with_zero_node_count():
 
 
 def test_resolve_disabled_returns_unchanged(mock_gce_zone_resolver):
+    """With zone pre-filtering disabled, resolve() leaves the configured availability_zone as is."""
     params = _make_params(pre_filter_unavailable_availability_zones=False, availability_zone="b,c")
     GceAZResolver(params).resolve()
     assert params["availability_zone"] == "b,c"
 
 
 def test_resolve_replaces_invalid_zone_with_valid_alternative(mock_gce_zone_resolver):
+    """resolve() swaps a zone lacking the machine types for one of the supported zones."""
     _, resolver_instance = mock_gce_zone_resolver
     resolver_instance.get_common_zones.return_value = ["us-east1-c", "us-east1-d"]
     params = _make_params(availability_zone="b")
@@ -113,6 +118,7 @@ def test_resolve_replaces_invalid_zone_with_valid_alternative(mock_gce_zone_reso
 
 
 def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_gce_zone_resolver):
+    """resolve() keeps supported zones, drops unsupported ones and fills the count back from supported zones."""
     _, resolver_instance = mock_gce_zone_resolver
     resolver_instance.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
     params = _make_params(availability_zone="b,f,e")
@@ -126,6 +132,7 @@ def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_gce_zone
 
 
 def test_resolve_raises_when_no_valid_zone_in_region(mock_gce_zone_resolver):
+    """resolve() raises NoValidAvailabilityZoneError when the region has no zone supporting all machine types."""
     _, resolver_instance = mock_gce_zone_resolver
     resolver_instance.get_common_zones.return_value = []
     params = _make_params(availability_zone="b")
@@ -135,6 +142,7 @@ def test_resolve_raises_when_no_valid_zone_in_region(mock_gce_zone_resolver):
 
 @pytest.fixture(name="mock_multi_region")
 def mock_multi_region_fixture():
+    """Patch GceZoneResolver with a stub serving zones per region; yield the region->zones dict to fill in."""
     region_returns: dict[str, list[str]] = {}
 
     class _ResolverStub:
@@ -150,6 +158,7 @@ def mock_multi_region_fixture():
 
 
 def test_resolve_multi_region_intersects_supported_zone_letters(mock_multi_region):
+    """For several regions, resolve() picks a zone letter supported in every region."""
     mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c"]
     mock_multi_region["us-east4"] = ["us-east4-c", "us-east4-a"]
     params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="b")
@@ -158,6 +167,7 @@ def test_resolve_multi_region_intersects_supported_zone_letters(mock_multi_regio
 
 
 def test_resolve_multi_region_raises_when_no_common_letter(mock_multi_region):
+    """resolve() raises NoValidAvailabilityZoneError when the regions share no supported zone letter."""
     mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c"]
     mock_multi_region["us-east4"] = ["us-east4-a", "us-east4-d"]
     params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="b")
@@ -166,6 +176,7 @@ def test_resolve_multi_region_raises_when_no_common_letter(mock_multi_region):
 
 
 def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_region):
+    """Multi-region, multi-AZ: unsupported letters are replaced by letters common to all regions."""
     mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c", "us-east1-d"]
     mock_multi_region["us-east4"] = ["us-east4-b", "us-east4-c", "us-east4-d"]
     params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="a,b,c")
@@ -210,6 +221,8 @@ def test_resolve_does_not_raise_when_the_zone_count_is_preserved(mock_gce_zone_r
 
 @pytest.fixture(name="mock_discovery_resolver")
 def mock_discovery_resolver_fixture():
+    """Patch GceZoneResolver with a stub listing zones b/c/d per region, of which b/c support the machine types."""
+
     class _DiscoveryStub:
         def get_zones_for_region(self, region):
             return [f"{region}-b", f"{region}-c", f"{region}-d"]
@@ -223,6 +236,7 @@ def mock_discovery_resolver_fixture():
 
 @pytest.mark.parametrize("az_value", ["", None])
 def test_resolve_with_unset_availability_zone_discovers_valid_zone(mock_discovery_resolver, az_value):
+    """An empty or None availability_zone is resolved to a discovered zone supporting the machine types."""
     params = _make_params(availability_zone=az_value)
     GceAZResolver(params).resolve()
     assert params["availability_zone"] in {"b", "c"}
@@ -246,10 +260,12 @@ def test_resolve_with_unset_availability_zone_discovers_valid_zone(mock_discover
     ],
 )
 def test_node_count_positive(value, expected):
+    """_node_count_positive() is True only for a positive int/bool or a list holding a positive count."""
     assert _node_count_positive(value) is expected
 
 
 def test_required_machine_types_skips_target_when_none():
+    """Empty or None instance-type params are left out of required_machine_types()."""
     params = _make_params(
         gce_instance_type_db="n2-highmem-8",
         instance_type_db_target=None,
@@ -279,21 +295,25 @@ def mock_zone_letters_fixture():
 
 
 def test_get_alternative_zones_excludes_exhausted_zone_letter(mock_zone_letters):
+    """get_alternative_zones() leaves out the exhausted zone given as a letter."""
     alternatives = get_alternative_zones("us-east1", "b")
     assert "b" not in alternatives
 
 
 def test_get_alternative_zones_excludes_exhausted_full_zone_name(mock_zone_letters):
+    """get_alternative_zones() leaves out the exhausted zone given as a full zone name."""
     alternatives = get_alternative_zones("us-east1", "us-east1-b")
     assert "b" not in alternatives
 
 
 def test_get_alternative_zones_returns_remaining_zone_letters(mock_zone_letters):
+    """get_alternative_zones() returns the region's other zone letters."""
     alternatives = get_alternative_zones("us-east1", "c")
     assert "d" in alternatives
 
 
 def test_get_alternative_zones_returns_empty_for_unknown_region(mock_zone_letters):
+    """get_alternative_zones() returns an empty list for a region with no known zones."""
     assert get_alternative_zones("unknown-region-1", "a") == []
 
 
@@ -305,6 +325,7 @@ def test_get_alternative_zones_returns_deterministic_order(mock_zone_letters):
 
 
 def test_get_alternative_zones_single_zone_region_returns_empty():
+    """A region with only the exhausted zone yields no alternative zones."""
     with patch("sdcm.utils.gce_utils._get_zone_letters_for_region", return_value=["a"]):
         assert get_alternative_zones("single-region-1", "a") == []
 
@@ -325,21 +346,26 @@ class TestDefaultZoneIsNotAChoice:
         return params
 
     def test_a_defaults_only_zone_lets_the_advice_choose(self):
+        """A zone that comes only from defaults lets the spot score choose the AZ."""
         assert GceAZResolver(self._params(explicit=False))._score_may_choose_az() is True
 
     def test_a_deliberate_pin_is_honoured(self):
+        """An explicitly set availability_zone keeps the spot score from choosing the AZ."""
         assert GceAZResolver(self._params(explicit=True))._score_may_choose_az() is False
 
     def test_the_override_flag_still_beats_a_deliberate_pin(self):
+        """spot_score_overrides_configured_az lets the spot score choose even over an explicit zone."""
         params = self._params(explicit=True, spot_score_overrides_configured_az=True)
         assert GceAZResolver(params)._score_may_choose_az() is True
 
     def test_on_demand_runs_never_reorder_regardless_of_provenance(self):
+        """On-demand runs keep the configured zone order whatever the zone's provenance."""
         assert (
             GceAZResolver(self._params(explicit=False, instance_provision="on_demand"))._score_may_choose_az() is False
         )
 
     def test_params_without_provenance_keep_todays_behaviour(self):
+        """Params lacking is_explicitly_set treat the zone as pinned, keeping it ahead of the spot score."""
         params = _make_params(instance_provision="spot", use_spot_placement_scores=True, availability_zone="b")
         assert GceAZResolver(params)._score_may_choose_az() is False
 
@@ -352,6 +378,7 @@ class TestRegionFallbackOrdering:
     """
 
     def test_candidates_are_ordered_by_capacity_advice(self):
+        """Fallback regions come back in rank_regions() order, with the excluded region left out of scoring."""
         params = _make_params(instance_provision="spot", use_spot_placement_scores=True)
         with (
             patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-east4", "us-west1"]),
@@ -365,6 +392,7 @@ class TestRegionFallbackOrdering:
         assert rank.call_args.kwargs["regions"] == ["us-east1", "us-west1"], "the excluded region is never scored"
 
     def test_unavailable_advice_keeps_the_configured_order(self):
+        """When rank_regions() returns None, fallback regions keep the SUPPORTED_GCE_REGIONS order."""
         params = _make_params(instance_provision="spot", use_spot_placement_scores=True)
         with (
             patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-west1"]),
@@ -375,6 +403,7 @@ class TestRegionFallbackOrdering:
             assert GceAZResolver(params)._ordered_fallback_regions(exclude=set()) == ["us-east1", "us-west1"]
 
     def test_on_demand_runs_never_call_the_advice_api(self):
+        """On-demand runs return fallback regions in configured order without calling rank_regions()."""
         params = _make_params(instance_provision="on_demand", use_spot_placement_scores=True)
         with (
             patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-west1"]),
@@ -404,6 +433,7 @@ class TestCapacityAdviceZoneRanking:
         return params
 
     def test_zones_are_reordered_best_first(self):
+        """Zone letters are returned in the order ranked by capacity advice."""
         resolver = GceAZResolver(self._params())
         with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d", "b", "c"]):
             assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"]) == ["d", "b", "c"]
@@ -438,17 +468,20 @@ class TestCapacityAdviceZoneRanking:
                 resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"])
 
     def test_a_threshold_keeping_enough_zones_is_fine(self):
+        """A threshold that leaves enough zones for the configured count returns the ranked survivors."""
         resolver = GceAZResolver(self._params(gce_spot_obtainability_min=0.5))
         with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d", "b"]):
             assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"]) == ["d", "b"]
 
     def test_on_demand_runs_never_call_the_advice_api(self):
+        """On-demand runs skip the capacity advice ranking API."""
         resolver = GceAZResolver(self._params(instance_provision="on_demand"))
         with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles") as rank:
             resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c"])
         rank.assert_not_called()
 
     def test_a_single_candidate_is_not_worth_an_api_call(self):
+        """A single candidate zone is returned as is, without calling the ranking API."""
         resolver = GceAZResolver(self._params())
         with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles") as rank:
             assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b"]) == ["b"]
@@ -496,6 +529,7 @@ class TestRolesNeverSplitAcrossZones:
         ]
 
     def test_one_configured_zone_resolves_to_exactly_one(self):
+        """With roles preferring different zones, a single configured zone resolves to one shared zone."""
         params = self._params("b")
         with (
             patch.object(GceAZResolver, "_common_supported_letters", return_value=["b", "c", "d"]),

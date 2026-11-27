@@ -32,6 +32,7 @@ def _kvm_path_patch(kvm_exists):
 
 
 def test_preflight_check_fails_no_kvm(tmp_path):
+    """Preflight raises MinicloudError naming /dev/kvm when KVM is unavailable."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
 
     with _kvm_path_patch(kvm_exists=False):
@@ -40,6 +41,7 @@ def test_preflight_check_fails_no_kvm(tmp_path):
 
 
 def test_preflight_check_fails_docker_not_found(tmp_path):
+    """Preflight raises MinicloudError when docker is missing from PATH."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
 
     with _kvm_path_patch(kvm_exists=True):
@@ -49,6 +51,7 @@ def test_preflight_check_fails_docker_not_found(tmp_path):
 
 
 def test_preflight_check_fails_bad_aws_credentials(tmp_path):
+    """Preflight raises MinicloudError when the AWS credentials check fails."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
 
     bad_result = MagicMock()
@@ -62,6 +65,7 @@ def test_preflight_check_fails_bad_aws_credentials(tmp_path):
 
 
 def test_preflight_check_fails_aws_cli_not_found(tmp_path):
+    """Preflight raises MinicloudError when the AWS CLI is missing."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
 
     with _kvm_path_patch(kvm_exists=True):
@@ -72,6 +76,7 @@ def test_preflight_check_fails_aws_cli_not_found(tmp_path):
 
 
 def test_preflight_check_skip_aws_creds(tmp_path):
+    """With skip_aws_creds, preflight passes without running the AWS credentials check."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
 
     with _kvm_path_patch(kvm_exists=True):
@@ -86,6 +91,7 @@ def test_preflight_check_skip_aws_creds(tmp_path):
     [("4GiB", 4.0), ("2.5GiB", 2.5), ("4096MiB", 4.0), ("4G", 4.0), ("1TiB", 1024.0)],
 )
 def test_parse_memory_gib(value, expected):
+    """Memory strings in GiB, MiB, G and TiB parse to GiB."""
     assert MinicloudManager._parse_memory_gib(value) == pytest.approx(expected)
 
 
@@ -101,10 +107,12 @@ def test_parse_memory_gib_rejects_garbage(value):
     [(3, 3), ([3, 3], 6), (None, 0), ([], 0)],
 )
 def test_sum_node_counts(value, expected):
+    """Node counts sum across a list of per-DC values; None and an empty list count as zero."""
     assert MinicloudManager._sum_node_counts(value) == expected
 
 
 def test_check_host_memory_fails_when_guests_exceed_available(tmp_path):
+    """The host memory gate raises with the guest count, needed and available GiB when guests exceed free memory."""
     # 6 db + 1 loader + 1 monitor = 8 guests x 4GiB + (2GiB + 8 x 1GiB) headroom = 42GiB needed, 16GiB available
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
@@ -147,6 +155,7 @@ def test_check_host_memory_kill_switch(tmp_path):
 
 
 def test_check_host_memory_passes_when_it_fits(tmp_path):
+    """The host memory gate passes when the guests fit in available memory."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": 1, "n_loaders": 0, "n_monitor_nodes": 0}
     with _meminfo_path_patch(16 * 1024 * 1024):
@@ -259,6 +268,7 @@ def test_check_host_memory_ignores_a_target_below_the_initial_size(tmp_path):
 
 
 def test_nemesis_growth_skips_a_selection_without_disruptive_nemeses():
+    """Nemesis growth is zero for non-disruptive selections and for NoOpMonkey."""
     params = {
         "nemesis_class_name": ["SisyphusMonkey"],
         "nemesis_selector": ["not disruptive"],
@@ -269,6 +279,7 @@ def test_nemesis_growth_skips_a_selection_without_disruptive_nemeses():
 
 
 def test_check_host_memory_counts_nemesis_growth(tmp_path):
+    """Nodes added by disruptive nemeses count as guests in the host memory gate."""
     # 6 x 4 + 2 + 2 + (2 + 8) = 38GiB, where the 3 db guests alone fit
     config = MinicloudConfig(
         state_dir=str(tmp_path), lightweight=True, lightweight_memory_loader="2GiB", lightweight_memory_monitor="2GiB"
@@ -325,6 +336,7 @@ def test_check_host_memory_adds_mem_in_use_by_running_guests(tmp_path):
 
 
 def test_check_host_memory_skipped_outside_lightweight_mode(tmp_path):
+    """Outside lightweight mode the host memory gate returns without reading host memory."""
     # non-lightweight sizing follows the requested instance types - no fixed per-guest figure
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=False))
     with patch("sdcm.utils.minicloud.preflight.Path") as mock_path_cls:
@@ -333,6 +345,7 @@ def test_check_host_memory_skipped_outside_lightweight_mode(tmp_path):
 
 
 def test_container_mem_in_use_gib_reads_docker_stats():
+    """container_mem_in_use_gib parses the container's memory in use from docker stats."""
     stats = MagicMock(returncode=0, stdout=b"24.3GiB / 125.6GiB\n")
     with patch("sdcm.utils.minicloud.preflight.subprocess.run", return_value=stats):
         assert container_mem_in_use_gib("minicloud") == pytest.approx(24.3)
@@ -346,6 +359,7 @@ def test_container_mem_in_use_gib_is_zero_without_a_container():
 
 
 def test_preflight_check_runs_memory_check_when_params_given(tmp_path):
+    """preflight_check runs the host memory gate when params are given."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
 
@@ -367,26 +381,31 @@ def _reserve_params(reserve="3G", guest="8GiB", vcpus=2, **extra):
 
 
 def test_scylla_reserve_memory_off_by_default():
+    """An empty minicloud_scylla_reserve_memory reserves nothing."""
     # it is bought out of Scylla's own budget, so a test has to ask for it
     assert scylla_reserve_memory(_reserve_params(reserve="")) is None
 
 
 def test_scylla_reserve_memory_passes_the_request_through_when_it_fits():
+    """A reserve that fits the guest is returned as is, in megabytes."""
     assert scylla_reserve_memory(_reserve_params(guest="8GiB", vcpus=2)) == "3072M"
 
 
 def test_scylla_reserve_memory_capped_to_leave_scylla_running():
+    """A reserve too large for the guest is capped so Scylla keeps its minimum memory."""
     # a 4GiB guest cannot spare 3GiB: Scylla still needs its own floor
     assert scylla_reserve_memory(_reserve_params(guest="4GiB", vcpus=1)) == "2048M"
 
 
 def test_scylla_reserve_memory_floor_follows_the_shard_count():
+    """With more shards the Scylla memory floor grows and leaves nothing to reserve in the same guest."""
     # 3 shards need ~3GiB, so the same 4GiB guest has nothing worth reserving left over -
     # a fixed floor would hand Scylla less memory than it can boot on
     assert scylla_reserve_memory(_reserve_params(guest="4GiB", vcpus=3)) is None
 
 
 def test_scylla_reserve_memory_survives_a_bad_value():
+    """An unparsable reserve value yields no reservation."""
     # preflight is where a typo fails the run; a node coming up mid-run must not die on top of it
     assert scylla_reserve_memory(_reserve_params(reserve="three gigs")) is None
 
@@ -427,10 +446,12 @@ def test_memory_per_shard_floor_follows_the_vcpus(guest, vcpus, fits):
 
 
 def test_memory_per_shard_skipped_outside_lightweight_mode():
+    """Outside lightweight mode the per-shard memory check passes any guest size."""
     check_scylla_memory_budget(_reserve_params(reserve="", guest="1GiB", vcpus=4, minicloud_lightweight=False))
 
 
 def test_preflight_check_rejects_an_impossible_request(tmp_path):
+    """preflight_check raises MinicloudError when the requested reserve does not fit the guest."""
     # the other half of the contract above: unhonourable is fatal before anything is provisioned,
     # and going through preflight_check also proves the gate is actually wired in
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
@@ -462,6 +483,7 @@ def _no_meminfo_path_patch():
 
 
 def test_host_available_memory_reads_vm_stat_on_macos():
+    """On macOS, available host memory is free plus inactive pages from vm_stat."""
     # (65536 free + 196608 inactive) pages x 16 KiB = 4 GiB
     with (
         _no_meminfo_path_patch(),
@@ -475,6 +497,7 @@ def test_host_available_memory_reads_vm_stat_on_macos():
 
 
 def test_check_host_memory_fails_on_macos_when_guests_exceed_available(tmp_path):
+    """On macOS the host memory gate measures against vm_stat and fails when guests exceed it."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     params = {"n_db_nodes": 3, "n_loaders": 1, "n_monitor_nodes": 0}
     with (
@@ -490,16 +513,19 @@ def test_check_host_memory_fails_on_macos_when_guests_exceed_available(tmp_path)
 
 
 def test_host_available_memory_is_none_without_a_source():
+    """Available host memory is None on a platform with neither /proc/meminfo nor vm_stat."""
     with _no_meminfo_path_patch(), patch("sdcm.utils.minicloud.preflight.sys.platform", "freebsd"):
         assert host_available_memory_gib() is None
 
 
 def test_db_guest_count_counts_the_peak_db_guests():
+    """db_guest_count sums per-DC DB nodes and uses cluster_target_size when it is larger."""
     assert db_guest_count({"n_db_nodes": [3, 3]}) == 6
     assert db_guest_count({"n_db_nodes": 3, "cluster_target_size": 5}) == 5
 
 
 def test_db_guest_count_counts_an_oracle_cluster_only_when_one_is_provisioned():
+    """db_guest_count adds the oracle nodes only for a mixed db_type."""
     oracle = {"n_db_nodes": 3, "n_test_oracle_db_nodes": 1}
     assert db_guest_count({**oracle, "db_type": "mixed_scylla"}) == 4
     assert db_guest_count({**oracle, "db_type": "scylla"}) == 3

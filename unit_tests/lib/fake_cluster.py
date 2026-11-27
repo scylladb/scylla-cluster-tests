@@ -36,6 +36,7 @@ class FakeSstableRemoter:
         self.system_log = system_log
 
     def run(self, *args, **kwargs):
+        """Append a load_and_stream start line and a successful SSTables load line to the system log."""
         lines = [
             "[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
             "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace_refresh, table=standard1, load_and_stream=true, "
@@ -59,12 +60,13 @@ class DummyNode(BaseNode):
     distro = Distro.CENTOS7
 
     def init(self):
+        """Run BaseNode init, then swap the remoter for a FakeSstableRemoter writing to the system log."""
         super().init()
         self.remoter.stop()
         self.remoter = FakeSstableRemoter(self.system_log)
 
     def do_default_installations(self):
-        pass  # we don't need to install anything for these unit tests
+        """No-op: unit tests install nothing on the node."""
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
@@ -77,14 +79,15 @@ class DummyNode(BaseNode):
 
     @property
     def cql_address(self):
+        """Return the loopback address."""
         return "127.0.0.1"
 
     def start_task_threads(self) -> None:
-        # disable all background threads
-        pass
+        """No-op: background task threads stay off."""
 
     @property
     def system_log(self) -> str:
+        """Return the path of the node system log."""
         return self._system_log
 
     @system_log.setter
@@ -92,33 +95,38 @@ class DummyNode(BaseNode):
         self._system_log = log
 
     def wait_for_cloud_init(self):
-        pass
+        """No-op: the node has no cloud-init to wait for."""
 
     def set_hostname(self) -> None:
-        pass
+        """No-op: the hostname stays as is."""
 
     def configure_remote_logging(self):
-        pass
+        """No-op: remote logging stays unconfigured."""
 
     def wait_ssh_up(self, verbose=True, timeout=500) -> None:
-        pass
+        """No-op: the node counts as reachable at once."""
 
     @property
     def is_nonroot_install(self) -> bool:
+        """Report a root install."""
         return False
 
     @property
     def scylla_shards(self):
+        """Report zero Scylla shards."""
         return 0
 
     @property
     def cpu_cores(self) -> int:
+        """Report zero CPU cores."""
         return 0
 
     def jmx_up(self):
+        """Report JMX as up."""
         return True
 
     def db_up(self):
+        """Report the database as up."""
         return True
 
 
@@ -144,17 +152,18 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         self.kms_key_rotation_threads = []
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+        """Grow the cluster by repeating its last node count times."""
         for _ in range(count):
             self.nodes += [self.nodes[-1]]
 
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
-        pass
+        """No-op: the nodes count as initialized at once."""
 
     def validate_seeds_on_all_nodes(self):
-        pass
+        """No-op: seeds count as valid."""
 
     def start_nemesis(self):
-        pass
+        """No-op: no nemesis threads are started."""
 
 
 class NodetoolDummyNode(BaseNode):
@@ -170,13 +179,16 @@ class NodetoolDummyNode(BaseNode):
 
     @property
     def region(self):
+        """Return the region given at construction."""
         return self.myregion
 
     @property
     def name(self):
+        """Return the name given at construction."""
         return self.myname
 
     def run_nodetool(self, *args, **kwargs):
+        """Return a successful nodetool Result whose stdout is the canned response."""
         return Result(exited=0, stderr="", stdout=self.resp)
 
     def db_up(self):

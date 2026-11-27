@@ -19,6 +19,8 @@ from sdcm.prometheus import PrometheusAlertManagerListener
 
 
 class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListener):
+    """Alert manager listener fed from a canned alert list that records the alerts it publishes."""
+
     interval = 0
 
     def __init__(self, artificial_alerts: list):
@@ -43,18 +45,23 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         self._results["_publish_new_alerts"].append(alerts)
 
     def get_result(self):
+        """Return the recorded new-alert and end-of-alert publications."""
         return self._results
 
     def wait_till_alert_manager_up(self):
-        pass
+        """Treat the alert manager as up immediately."""
 
 
 class TestPrometheusAlertManager:
+    """Cover how PrometheusAlertManagerListener turns changing alert lists into publications."""
+
     @pytest.fixture(autouse=True)
     def inject_test_data_dir(self, test_data_dir):
+        """Store the shared test data dir on the test instance."""
         self.test_data_dir = test_data_dir
 
     def test_alert_manager_listener_artificial_run(self):
+        """Replaying the canned alerts publishes exactly the expected new and ended alerts."""
         with (self.test_data_dir / "test_prometheus" / "test_alert_manager_listener_artificial_run.yaml").open(
             encoding="utf-8"
         ) as file:

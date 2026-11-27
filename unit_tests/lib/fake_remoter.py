@@ -37,6 +37,7 @@ class FakeRemoter(RemoteCmdRunnerBase):
         timestamp_logs=False,
         change_context=False,
     ) -> Result:
+        """Return the result_map entry whose pattern matches cmd; raise when it failed unless ignore_status is set."""
         for pattern, result in self.result_map.items():
             if re.match(pattern, cmd) is not None:
                 if ignore_status is True:
@@ -57,6 +58,7 @@ class FakeRemoter(RemoteCmdRunnerBase):
         pass
 
     def is_up(self, timeout: float = 30):
+        """Report the host as reachable."""
         return True
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:

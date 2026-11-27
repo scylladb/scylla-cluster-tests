@@ -168,23 +168,29 @@ class TestXCloudSuperIfSupportedDecorator:
 
 
 class TestCloudClusterNaming:
+    """build_cloud_cluster_name: Cloud cluster names fit 63 characters and carry the keep-hours tag."""
+
     def test_simple_username(self):
+        """The name is the test name, username, short test ID and a zero-padded keep-hours tag."""
         name = build_cloud_cluster_name("john", "PR-test", "abc12345", 6)
         assert name == "PR-test-john-abc12345-keep-006h"
         assert len(name) <= 63
 
     def test_username_with_dot(self):
+        """Dots in the username are replaced with underscores."""
         name = build_cloud_cluster_name("john.doe", "PR-test", "abc12345", 60)
         assert name == "PR-test-john_doe-abc12345-keep-060h"
         assert len(name) <= 63
 
     def test_no_space_for_testname_prefix(self):
+        """A username too long to leave room for the test name drops the test name prefix."""
         long_username = "123456789-abcdefghi-123456789-abcdefghi-123"  # 43 chars
         name = build_cloud_cluster_name(long_username, "PR-provision-test", "abc12345", 360)
         assert name == f"{long_username}-abc12345-keep-360h"
         assert len(name) <= 63
 
     def test_testname_prefix_truncation(self):
+        """A long test name is truncated so the cluster name fits 63 characters."""
         name = build_cloud_cluster_name("firstname.laastname", "very-long-test-name-to-be-truncated", "abc12345", 360)
         assert name.startswith("very-long-test-name-to-b-")
         assert len(name) <= 63
@@ -195,6 +201,7 @@ class TestScyllaCloudClusterDiagnostics:
 
     @patch("sdcm.cluster_cloud.wait.wait_for")
     def test_wait_for_cluster_ready_timeout_includes_diagnostics(self, mock_wait_for):
+        """A cluster-ready timeout error carries the status, per-node DB and VS states and the Siren error code."""
         mock_cluster = MagicMock(spec=ScyllaCloudCluster)
         mock_cluster._account_id, mock_cluster._cluster_id, mock_cluster.dc_id = 123, 456, 1
         mock_cluster.log = MagicMock()
@@ -284,16 +291,20 @@ class TestScyllaCloudClusterUpdateName:
         mock_cluster.log.info.assert_any_call("Cluster name updated successfully to '%s'", "new-cluster-name")
 
     def test_update_cluster_name_no_cluster_id(self, mock_cluster):
+        """Renaming a cluster whose ID is unset raises ScyllaCloudError."""
         mock_cluster._cluster_id = None
         with pytest.raises(ScyllaCloudError, match="Cannot update cluster name: cluster ID is not set"):
             mock_cluster.update_cluster_name("new-name")
 
     def test_update_cluster_name_exceeds_max_length(self, mock_cluster):
+        """A name longer than 63 characters raises ValueError."""
         with pytest.raises(ValueError, match="Cluster name exceeds maximum length of 63 characters"):
             mock_cluster.update_cluster_name("a" * 64)
 
 
 class TestApplyKeepTag:
+    """apply_keep_tag_to_name: the keep-hours tag of a cluster name."""
+
     @pytest.mark.parametrize(
         "input_name,hours,expected",
         [
@@ -304,12 +315,16 @@ class TestApplyKeepTag:
         ],
     )
     def test_apply_keep_tag_to_name(self, input_name, hours, expected):
+        """The keep tag is replaced, or appended when missing, with the zero-padded hour count."""
         assert apply_keep_tag_to_name(input_name, hours) == expected
 
 
 class TestScyllaCloudClusterUpdateKeepTag:
+    """Keep-alive and keep-duration settings rename the cluster's keep tag."""
+
     @pytest.fixture
     def mock_cluster(self):
+        """A real ScyllaCloudCluster with a mocked API client, ID 456 and a 4-hour keep tag in its name."""
         mock_api_client = MagicMock(get_current_account_id=MagicMock(return_value=123))
         with (
             patch("sdcm.cluster_cloud.TestConfig"),
@@ -334,14 +349,17 @@ class TestScyllaCloudClusterUpdateKeepTag:
             return cluster
 
     def test_set_keep_alive_updates_cluster_name(self, mock_cluster):
+        """Keep-alive renames the cluster with the CLOUD_KEEP_ALIVE_HOURS (72h) keep tag."""
         assert mock_cluster._set_keep_alive() is True
         assert mock_cluster.name == "test-user-abc12345-keep-072h"
 
     def test_set_keep_duration_updates_cluster_name(self, mock_cluster):
+        """A keep duration renames the cluster with that many hours in its keep tag."""
         mock_cluster._set_keep_duration(24)
         assert mock_cluster.name == "test-user-abc12345-keep-024h"
 
     def test_keep_methods_skip_api_call_if_name_unchanged(self, mock_cluster):
+        """Setting the keep duration already in the name leaves the name unchanged."""
         mock_cluster.name = "test-user-abc12345-keep-024h"
         mock_cluster._set_keep_duration(24)
         assert mock_cluster.name == "test-user-abc12345-keep-024h"
@@ -352,6 +370,7 @@ class TestWaitForVectorSearchInstalled:
 
     @pytest.fixture
     def mock_cluster(self):
+        """A cluster mock using the real _find_cluster_request and a mocked request-completion wait."""
         mock = MagicMock()
         mock._account_id = 123
         mock._cluster_id = 456
@@ -364,6 +383,7 @@ class TestWaitForVectorSearchInstalled:
         return mock
 
     def test_waits_for_vs_request_in_progress(self, mock_cluster):
+        """An in-progress INSTALL_VECTOR_SEARCH request is waited for until completed."""
         mock_cluster._api_client.get_cluster_requests.return_value = [
             {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
         ]
@@ -375,6 +395,7 @@ class TestWaitForVectorSearchInstalled:
         )
 
     def test_skips_wait_when_vs_request_completed(self, mock_cluster):
+        """An already completed INSTALL_VECTOR_SEARCH request needs no wait."""
         mock_cluster._api_client.get_cluster_requests.return_value = [
             {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "COMPLETED"},
         ]
@@ -385,6 +406,7 @@ class TestWaitForVectorSearchInstalled:
 
     @patch("sdcm.cluster_cloud.time.sleep")
     def test_retries_until_vs_request_appears(self, mock_sleep, mock_cluster):
+        """The cluster requests are polled again until the INSTALL_VECTOR_SEARCH request shows up."""
         mock_cluster._api_client.get_cluster_requests.side_effect = [
             [],
             [{"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "QUEUED"}],
@@ -399,6 +421,7 @@ class TestWaitForVectorSearchInstalled:
 
     @patch("sdcm.cluster_cloud.time.sleep")
     def test_raises_when_vs_request_never_appears(self, mock_sleep, mock_cluster):
+        """A INSTALL_VECTOR_SEARCH request that never appears raises ScyllaCloudError."""
         mock_cluster._api_client.get_cluster_requests.return_value = []
 
         with pytest.raises(ScyllaCloudError, match="INSTALL_VECTOR_SEARCH request did not appear"):
@@ -418,6 +441,7 @@ def _make_cloud_node():
 
 
 def test_configure_remote_logging_managed_path_does_not_self_install():
+    """With the Cloud-managed Vector ready, only the target config is applied."""
     node = _make_cloud_node()
     node._managed_vector_ready.return_value = True
     CloudNode.configure_remote_logging(node)
@@ -427,6 +451,7 @@ def test_configure_remote_logging_managed_path_does_not_self_install():
 
 
 def test_configure_remote_logging_falls_back_to_self_install():
+    """Without managed Vector, Vector is self-installed before the target config is applied."""
     node = _make_cloud_node()
     node._managed_vector_ready.return_value = False
     CloudNode.configure_remote_logging(node)
@@ -466,6 +491,7 @@ def make_cloud_node_payload(
     ],
 )
 def test_cloud_node_region_prefers_external_id(drop_external_id, expected):
+    """A node's region is the region's external ID, or its display name when the external ID is missing."""
     payload = make_cloud_node_payload()
     if drop_external_id:
         del payload["region"]["externalId"]
@@ -474,6 +500,7 @@ def test_cloud_node_region_prefers_external_id(drop_external_id, expected):
 
 
 def test_refresh_instance_state_requests_enriched_payload():
+    """Refreshing a node's state requests the enriched cluster nodes payload."""
     node = MagicMock(_node_id=1, _public_ip="54.0.0.1", _private_ip="10.0.0.1")
     node._account_id, node._cluster_id = 1, 2
     node._api_client = MagicMock()
@@ -499,6 +526,7 @@ def test_init_nodes_from_data_mixed_az_and_azless_nodes():
 
 
 def test_vs_nodes_data_injects_az_id_from_group():
+    """VS node data gets the azId of its availability zone group, skipping PENDING_DELETE nodes."""
     vs_set = MagicMock(spec=VectorStoreSetCloud)
     vs_set._get_vs_info.return_value = {
         "availabilityZones": [
@@ -545,6 +573,7 @@ def _build_real_cloud_cluster():
 
 
 def test_cloud_cluster_datacenter_is_list():
+    """The datacenter of a Cloud cluster is a list holding its region name."""
     cluster_obj = _build_real_cloud_cluster()
     assert cluster_obj.datacenter == ["us-east-1"]
 
@@ -568,6 +597,7 @@ def test_cloud_cluster_exposes_api_client_and_ids_once_created():
 
 
 def test_update_racks_count_from_nodes():
+    """The racks count is the number of distinct racks of the cluster's nodes."""
     cluster_obj = _build_real_cloud_cluster()
     cluster_obj.nodes = [MagicMock(rack=0), MagicMock(rack=1), MagicMock(rack=2)]
     cluster_obj._update_racks_count()
@@ -591,17 +621,20 @@ def _rackaware_conf(**overrides):
 
 @pytest.mark.parametrize("zones", ["", "use1-az1,use1-az1,use1-az1"])
 def test_rackaware_verification_xcloud_requires_two_distinct_zones(zones):
+    """A rack-aware loader on xcloud needs at least two distinct availability zones."""
     conf = _rackaware_conf(cluster_backend="xcloud", xcloud_availability_zones=zones)
     with pytest.raises(ValueError, match="xcloud_availability_zones"):
         SCTConfiguration._verify_rackaware_configuration(conf)
 
 
 def test_rackaware_verification_xcloud_passes_with_multi_az():
+    """A rack-aware loader on xcloud with three distinct zones passes validation."""
     conf = _rackaware_conf(cluster_backend="xcloud", xcloud_availability_zones="use1-az1,use1-az2,use1-az3")
     SCTConfiguration._verify_rackaware_configuration(conf)
 
 
 def test_rackaware_verification_non_xcloud_unchanged():
+    """A rack-aware loader on a non-xcloud backend passes with the usual AZ-based checks."""
     conf = _rackaware_conf(cluster_backend="aws", availability_zone="a,b,c", simulated_racks=0)
     SCTConfiguration._verify_rackaware_configuration(conf)
 
@@ -626,6 +659,7 @@ def test_rackaware_verification_non_xcloud_unchanged():
     ],
 )
 def test_xcloud_az_validation_rejects_bad_config(values, error):
+    """Pinned zones combined with a scaling policy, or a node count not divisible by the zones, raise ValueError."""
     with pytest.raises(ValueError, match=error):
         SCTConfiguration._validate_xcloud_availability_zones(_fake_conf(values), MagicMock(), 1, 1)
 
@@ -639,6 +673,7 @@ def test_xcloud_az_validation_rejects_bad_config(values, error):
     ],
 )
 def test_xcloud_az_validation_checks_zones_are_available(zones, raises):
+    """Zones that cannot host the instance type in the region raise ValueError; available ones pass."""
     conf = _fake_conf(
         {
             "xcloud_availability_zones": zones,
@@ -667,6 +702,7 @@ def _make_api_client():
 
 
 def test_get_availability_zones_resolves_cloud_account_and_sorts():
+    """Zones are fetched through the active cloud account of the provider and returned sorted by ID."""
     client = _make_api_client()
     active_accounts = [
         {"id": 201, "cloudProviderId": 2, "state": "ACTIVE"},
@@ -715,6 +751,7 @@ def _minimal_create_kwargs():
 
 
 def test_create_cluster_request_without_az_override_keeps_payload():
+    """Without an AZ override the create-cluster payload holds only the base fields."""
     client = _make_api_client()
     client.request = MagicMock(return_value={"requestId": 1})
     client.create_cluster_request(**_minimal_create_kwargs())
@@ -744,6 +781,7 @@ def test_create_cluster_request_without_az_override_keeps_payload():
 
 
 def test_create_cluster_request_with_az_override_sets_placement():
+    """An AZ override adds availabilityZoneIdsOverride and placement to the create-cluster payload."""
     client = _make_api_client()
     client.request = MagicMock(return_value={"requestId": 1})
     client.create_cluster_request(
@@ -783,6 +821,7 @@ def _mock_cluster_for_prepare_config(az_knob=""):
 @patch("sdcm.cluster_cloud.get_username", return_value="user")
 @patch("sdcm.cluster_cloud.get_test_name", return_value="test")
 def test_prepare_cluster_config_expands_knob_to_node_count(mock_test_name, mock_username):
+    """The configured zone IDs are repeated to give one zone ID per node."""
     az_ids = ["use1-az1", "use1-az2", "use1-az3"]
     cluster = _mock_cluster_for_prepare_config(az_knob=",".join(az_ids))
     config = ScyllaCloudCluster._prepare_cluster_config(cluster, node_count=6, instance_type=None)
@@ -798,6 +837,7 @@ def test_prepare_cluster_config_expands_knob_to_node_count(mock_test_name, mock_
     ],
 )
 def test_resolve_scaling_config_replaces_instance_types_with_ids(instance_types, expected_ids):
+    """Instance type names in the scaling config become instance type IDs in a copy; the original stays as is."""
     cluster = _mock_cluster_for_prepare_config()
     ids = {"i8g.large": 1, "i8g.xlarge": 2}
     cluster._api_client.get_instance_id_by_name = MagicMock(side_effect=lambda **kw: ids[kw["instance_type_name"]])
@@ -812,6 +852,7 @@ def test_resolve_scaling_config_replaces_instance_types_with_ids(instance_types,
 
 
 def test_resolve_scaling_config_without_instance_types():
+    """A scaling config without instance types is returned unchanged without API lookups."""
     cluster = _mock_cluster_for_prepare_config()
     cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceFamilies": ["i8g"]}
 
@@ -822,6 +863,7 @@ def test_resolve_scaling_config_without_instance_types():
 @patch("sdcm.cluster_cloud.get_username", return_value="user")
 @patch("sdcm.cluster_cloud.get_test_name", return_value="test")
 def test_prepare_cluster_config_sends_resolved_scaling_config(mock_test_name, mock_username):
+    """The cluster config carries the resolved scaling config and a node count of 0 under a scaling policy."""
     cluster = _mock_cluster_for_prepare_config()
     cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceTypes": ["i8g.large"]}
     cluster._resolve_scaling_config = MagicMock(return_value={"Mode": "xcloud", "InstanceTypeIDs": [1]})

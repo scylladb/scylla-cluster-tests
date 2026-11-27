@@ -26,6 +26,7 @@ pytestmark = pytest.mark.skipif(not shutil.which("bash"), reason="bash is not av
 @pytest.mark.parametrize("install_docker", [False, True])
 @pytest.mark.parametrize("vector_journal_from_now", [False, True])
 def test_configuration_script_survives_shell_quoting(logs_transport, install_docker, vector_journal_from_now):
+    """The boot script parses as bash after the single-quote wrapping that configure_remote_logging() applies."""
     script = ConfigurationScriptBuilder(
         syslog_host_port=("10.0.0.1", 5000),
         logs_transport=logs_transport,

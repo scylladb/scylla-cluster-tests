@@ -20,6 +20,7 @@ pytestmark = pytest.mark.parametrize(
 
 @pytest.fixture
 def test_config():
+    """Provide a TestConfig with a fixed test ID and syslog-ng address."""
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     config.SYSLOGNG_ADDRESS = ("localhost", 12345)
@@ -27,6 +28,7 @@ def test_config():
 
 
 def test_user_data_format_version_v2_building(logs_transport, test_config):
+    """Builds v2 user data as JSON with a post-configuration script, RAID 0 and scylla stopped on first boot."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         syslog_host_port=("0.0.0.0", 1234),
@@ -42,6 +44,7 @@ def test_user_data_format_version_v2_building(logs_transport, test_config):
 
 
 def test_user_data_format_version_v1_building(logs_transport, test_config):
+    """Builds v1 user data as CLI flags that stop services and carry a base64 post script."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         syslog_host_port=("0.0.0.0", 1234),
@@ -54,6 +57,7 @@ def test_user_data_format_version_v1_building(logs_transport, test_config):
 
 
 def test_user_data_format_version_v3_building(logs_transport, test_config):
+    """Builds v3 user data as a MIME multipart whose gzip part holds the post-configuration script."""
     builder = ScyllaUserDataBuilder(
         cluster_name="test",
         user_data_format_version="3",

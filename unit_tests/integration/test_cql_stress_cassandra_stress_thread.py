@@ -28,6 +28,7 @@ pytestmark = [
 
 
 def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, params):
+    """A cql-stress c-s write publishes positive Prometheus write gauges and reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -66,6 +67,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
 
 
 def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, params):
+    """cql-stress c-s in multi-region mode against a single node reports positive mean and p99 latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
     loader_set.test_config.set_multi_region(True)
     request.addfinalizer(lambda: loader_set.test_config.set_multi_region(False))
@@ -94,6 +96,7 @@ def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, par
 
 
 def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_address, params):
+    """A cql-stress c-s mixed run after a write load publishes positive mixed gauges and positive latencies."""
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (

@@ -245,6 +245,7 @@ def _with_marker(node, marker: str | None):
 
 
 def test_a_source_build_is_dated_by_the_commit_it_built(vector_store_aws_node):
+    """A source-built vector store is dated by the commit time and hash recorded in its build marker."""
     vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "my-branch"
     node = _with_marker(vector_store_aws_node, "3f162c9 my-branch 1760000000\n")
 

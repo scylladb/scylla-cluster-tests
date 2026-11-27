@@ -97,6 +97,7 @@ def _graphed(table):
 
 
 def test_an_untracked_record_goes_only_to_its_log():
+    """A record without a track is sent only to its log table: searches and index builds each to their own."""
     tables = _report(SEARCH, BUILD)
 
     assert [table.name for table in tables] == ["SB searches", "SB index builds"]
@@ -110,6 +111,7 @@ def test_the_logs_graph_nothing():
 
 
 def test_each_log_has_only_its_own_columns():
+    """The search and index-build logs each carry only the columns of their own record kind."""
     search, build = _report(SEARCH, BUILD)
 
     assert "build time" not in {column.name for column in search.columns}
@@ -117,6 +119,7 @@ def test_each_log_has_only_its_own_columns():
 
 
 def test_a_search_in_its_log():
+    """A search record becomes a log row named by run order and query set, with formatted text cells."""
     (table,) = _report(SEARCH)
 
     row = "#01 term_common"
@@ -138,6 +141,7 @@ def test_a_search_in_its_log():
 
 
 def test_an_index_build_in_its_log():
+    """An index build record becomes a log row with its dataset, step, count, build time, throughput and track."""
     (table,) = _report(TRACKED_BUILD)[:1]
 
     row = "#01 index build"
@@ -152,12 +156,14 @@ def test_an_index_build_in_its_log():
 
 
 def test_overview_rows_keep_the_run_order_and_a_repeated_configuration_apart():
+    """Log rows are numbered in run order, so a repeated configuration gets a row of its own."""
     tables = _report(BUILD, SEARCH, {**SEARCH, "query_index": 2})
 
     assert [next(iter(table.results)).row.split(" ")[0] for table in tables] == ["#01", "#02", "#03"]
 
 
 def test_an_unmeasured_value_is_left_out_rather_than_sent_as_null():
+    """A record value of None is left out of the row's cells."""
     (table,) = _report({**BUILD, "build_time_s": None, "indexing_throughput": None})
 
     assert {cell.column for cell in table.results} == {"dataset", "step", "document count"}
@@ -169,6 +175,7 @@ def test_an_unmeasured_value_is_left_out_rather_than_sent_as_null():
 
 
 def test_a_tracked_search_is_also_a_row_of_its_track():
+    """A tracked search goes to the searches log and to a track table, in a row named by the track label."""
     overview, track = _report(TRACKED_SEARCH)
 
     assert overview.name == "SB searches"
@@ -189,6 +196,7 @@ def test_a_tracked_search_is_also_a_row_of_its_track():
 
 
 def test_a_track_graphs_only_measurements():
+    """A search track graphs only the latency percentiles and the throughput."""
     _, track = _report(TRACKED_SEARCH)
 
     assert _graphed(track) == ["P50", "P90", "P99", "P99.9", "throughput"]
@@ -203,6 +211,7 @@ def test_a_rate_limited_track_graphs_no_throughput():
 
 
 def test_a_rate_limited_tracks_p99_is_checked_against_the_plans_expectation():
+    """A rate-limited search track checks P99 against the plan's expected_p99_read_ms as a fixed limit."""
     _, track = _report({**TRACKED_SEARCH, "rate": 50})
 
     assert track.validation_rules["P99"].fixed_limit == 20.0
@@ -217,6 +226,7 @@ def test_an_unthrottled_track_checks_nothing():
 
 
 def test_a_tracked_index_build_is_a_row_of_its_track():
+    """A tracked index build goes to the index build track, graphing build time and indexing throughput."""
     _, track = _report(TRACKED_BUILD)
 
     assert track.name == "SB index build"
@@ -252,6 +262,7 @@ def test_a_workload_without_a_description_is_named_by_its_name():
 
 
 def test_a_workload_without_a_table_prefix_names_its_tables_by_its_name():
+    """A workload without a table prefix names its tables after the workload name."""
     unprefixed = dataclasses.replace(WORKLOAD, table_prefix="")
     client = _ArgusClient()
     reporter = SearchArgusReporter(unprefixed, client)
@@ -294,11 +305,13 @@ def test_a_failed_log_row_still_sends_the_track_row():
 
 
 def test_an_unknown_phase_is_an_error():
+    """A record with an unknown phase raises ValueError."""
     with pytest.raises(ValueError, match="Unknown results record phase 'warmup'"):
         _report({**BUILD, "phase": "warmup"})
 
 
 def test_every_table_carries_the_runs_x_position():
+    """Every submitted table carries the run's sut_timestamp."""
     tables = _report(TRACKED_BUILD, TRACKED_SEARCH, sut_timestamp=1760000123)
 
     assert [table.sut_timestamp for table in tables] == [1760000123] * 4
@@ -314,6 +327,7 @@ def _day(date: str) -> int:
 
 
 def test_the_later_build_sets_the_day():
+    """sut_timestamp lands on the day of the later of the ScyllaDB build and the vector-store build."""
     vector_store_noon = _day("20261005") + 12 * 3600
 
     newer_scylla = sut_timestamp("20261007", "abc", vector_store_noon, "1.11.0")
@@ -340,10 +354,12 @@ def test_each_pair_of_builds_has_its_own_position_and_keeps_it():
 
 
 def test_one_known_date_is_enough():
+    """sut_timestamp falls back to whichever of the two build dates is known."""
     assert _day("20261007") <= sut_timestamp("20261007", "abc", None, "") < _day("20261008")
     assert _day("20261005") <= sut_timestamp(None, "", _day("20261005") + 5, "x") < _day("20261006")
 
 
 @pytest.mark.parametrize("scylla_date", (None, "#NO_DATE"))
 def test_no_known_date_leaves_the_position_to_argus(scylla_date):
+    """sut_timestamp returns 0 when no build date is known, so Argus picks the position."""
     assert sut_timestamp(scylla_date, "", None, "") == 0

@@ -52,6 +52,7 @@ def defaults_dir(provisioner_dir: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def azure_service(tmp_path_factory) -> AzureService:
+    """Provide a file-backed FakeAzureService (or the real AzureService when switched on) for the session."""
     run_on_real_azure = False  # make it True to test with real Azure
     if run_on_real_azure:
         # When true this becomes e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)
@@ -63,6 +64,7 @@ def azure_service(tmp_path_factory) -> AzureService:
 
 @pytest.fixture
 def fallback_on_demand(monkeypatch):
+    """Configure spot provisioning with on-demand fallback and a build tag that makes the fake fail spot DB requests."""
     monkeypatch.setenv("SCT_INSTANCE_PROVISION", "spot")
     monkeypatch.setenv("SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND", "true")
     monkeypatch.setenv("BUILD_TAG", "FailSpotDB")
@@ -70,6 +72,7 @@ def fallback_on_demand(monkeypatch):
 
 @pytest.fixture
 def params(monkeypatch, provisioner_dir: Path):
+    """Provide an SCTConfiguration for a two-region Azure setup, built from SCT_* environment variables."""
     EnvConfig = namedtuple(
         "EnvConfig",
         [
@@ -105,6 +108,7 @@ def params(monkeypatch, provisioner_dir: Path):
 
 @pytest.fixture
 def test_config(params):
+    """Provide the TestConfig with a fixed test id and a local syslog-ng address."""
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     TestConfig.SYSLOGNG_ADDRESS = ("localhost", 12345)

@@ -16,6 +16,7 @@ class Owner:
 
     @property
     def expensive(self):
+        """Return 42 and count how many times the property is read."""
         self.call_count += 1
         return 42
 
@@ -39,22 +40,26 @@ def render(owner, template_str, whitelist=None):
     ],
 )
 def test_resolves_owner_attributes(template_str, expected):
+    """Template variables resolve to the owner's plain attributes and properties."""
     assert render(Owner(), template_str) == expected
 
 
 def test_property_not_called_when_not_referenced():
+    """An owner property that the template does not reference stays unevaluated."""
     owner = Owner()
     render(owner, "{{ plain }}")
     assert owner.call_count == 0
 
 
 def test_property_called_once_per_render():
+    """A property referenced twice in one template is evaluated once per render."""
     owner = Owner()
     render(owner, "{{ expensive }}{{ expensive }}")
     assert owner.call_count == 1
 
 
 def test_missing_attribute_raises_undefined_error():
+    """A variable missing on the owner raises UndefinedError under StrictUndefined."""
     with pytest.raises(UndefinedError):
         render(Owner(), "{{ nonexistent }}")
 
@@ -67,6 +72,7 @@ def test_missing_attribute_raises_undefined_error():
     ],
 )
 def test_whitelist_allows_listed_keys(template_str, whitelist, expected):
+    """Variables in the whitelist resolve from the owner."""
     assert render(Owner(), template_str, whitelist=whitelist) == expected
 
 
@@ -78,10 +84,12 @@ def test_whitelist_allows_listed_keys(template_str, whitelist, expected):
     ],
 )
 def test_whitelist_blocks_unlisted_keys(template_str, whitelist):
+    """Variables missing from the whitelist raise UndefinedError even when the owner has them."""
     with pytest.raises(UndefinedError):
         render(Owner(), template_str, whitelist=whitelist)
 
 
 def test_no_whitelist_allows_all_attributes():
+    """Without a whitelist every owner attribute is resolvable."""
     result = render(Owner(), "{{ plain }} {{ expensive }}", whitelist=None)
     assert result == "plain_value 42"

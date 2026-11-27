@@ -32,6 +32,7 @@ def _get_latest_branch() -> str:
 
 @pytest.fixture(scope="session", autouse=True)
 def setup():
+    """Quiet the root, boto and anyconfig loggers for the whole session."""
     logging.basicConfig(level=logging.ERROR)
     logging.getLogger("botocore").setLevel(logging.CRITICAL)
     logging.getLogger("boto3").setLevel(logging.CRITICAL)
@@ -42,11 +43,13 @@ def setup():
 
 @pytest.fixture(scope="session")
 def latest_release():
+    """Return the latest Scylla enterprise release branch, e.g. "2025.1"."""
     return _get_latest_branch()
 
 
 @pytest.fixture(scope="function", autouse=True)
 def function_setup(monkeypatch):
+    """Point each test at the minimal test-case config and set the GCE/Azure db instance types."""
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     # gce/azure instance_type_db default to empty and are now required; set them so
     # gce/azure backends pass the per-backend required-params check.
@@ -65,6 +68,7 @@ def function_setup(monkeypatch):
 def test_docker(
     scylla_version, expected_docker_image, expected_version, expected_is_enterprise, monkeypatch, latest_release
 ):
+    """The docker backend picks the release or nightly image from scylla_version and reports an OSS version."""
     if scylla_version == "LATEST":
         scylla_version = latest_release
     if expected_version == "LATEST":
@@ -94,6 +98,7 @@ def test_docker(
     ],
 )
 def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch, latest_release):
+    """Repo-based GCE installs resolve release, master and branch versions as enterprise for each distro."""
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
         expected_version = latest_release
@@ -126,6 +131,7 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
 def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch, latest_release):
+    """AWS, GCE and Azure image lookups resolve release, master and branch versions as enterprise."""
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
         expected_version = latest_release
@@ -144,6 +150,7 @@ def test_images(backend, scylla_version, expected_version, expected_is_enterpris
 
 
 def test_baremetal(monkeypatch):
+    """The baremetal backend takes the version straight from scylla_version and reports it as OSS."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "6.1")
     monkeypatch.setenv("SCT_S3_BAREMETAL_CONFIG", "some_config")
@@ -160,6 +167,7 @@ def test_baremetal(monkeypatch):
 
 
 def test_unified_package(monkeypatch):
+    """A unified_package URL disables preinstalled Scylla and its version is read from the downloaded package."""
     # Unlike the sibling tests below, this one actually downloads and unpacks the
     # package to read SCYLLA-VERSION-FILE, so the URL has to point at a package
     # that still exists. Resolve the current master build instead of pinning one:
@@ -213,6 +221,7 @@ def test_unified_package_aws_fails_fast_without_ami_and_user(ami, user, monkeypa
 
 
 def test_unified_package_aws_keeps_configured_user(monkeypatch):
+    """unified_package on AWS keeps the configured AMI user and disables preinstalled Scylla."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_UNIFIED_PACKAGE", UNIFIED_PACKAGE_X86)
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-test123")
@@ -261,6 +270,7 @@ def test_relocatable_version_on_aws_with_ubuntu_ami(scylla_version, arch, ssm_ar
 
 
 def test_relocatable_version_resolves_unified_package_on_gce(monkeypatch):
+    """On GCE, scylla_version "relocatable:latest" resolves to a unified_package and disables preinstalled Scylla."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "relocatable:latest")
     monkeypatch.setenv(

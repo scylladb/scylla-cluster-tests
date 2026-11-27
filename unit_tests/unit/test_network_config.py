@@ -24,12 +24,16 @@ from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile
 
 
 class RegionAZSubnets(NamedTuple):
+    """Subnets of one availability zone in one AWS region."""
+
     region: str
     availability_zone: str
     subnets: list[str]
 
 
 class RegionsData:
+    """Static AWS subnet layout for us-east-1 and eu-central-1, used in place of EC2 lookups."""
+
     UsEast1Region = [
         RegionAZSubnets(
             region="us-east-1", availability_zone="a", subnets=["subnet-0a09ba4421ec6aaa8", "subnet-03d8900174e00a73d"]
@@ -44,6 +48,7 @@ class RegionsData:
     ]
 
     def subnets_per_region(self, regions: list[str], availability_zones: list[str], network_interfaces_count: int):
+        """Map each region to {az: first `network_interfaces_count` subnets} from the static layout."""
         subnets_per_region_dict = {}
         for region in regions:
             subnets_per_region_dict[region] = {}
@@ -58,6 +63,8 @@ class RegionsData:
 
 
 class FakeEC2NetworkConfiguration(EC2NetworkConfiguration):
+    """EC2NetworkConfiguration whose subnets come from the static RegionsData instead of AWS."""
+
     def __init__(
         self, regions: list[str], availability_zones: list[str], network_interfaces_count: int, params: dict = None
     ):
@@ -68,6 +75,7 @@ class FakeEC2NetworkConfiguration(EC2NetworkConfiguration):
 
     @property
     def subnets_per_region(self):
+        """Return the static per-region, per-AZ subnets for the configured regions, AZs and NIC count."""
         return RegionsData().subnets_per_region(
             regions=self.regions,
             availability_zones=self.availability_zones,
@@ -76,7 +84,10 @@ class FakeEC2NetworkConfiguration(EC2NetworkConfiguration):
 
 
 class TestAWSNetworkConfiguration:
+    """Cover how EC2NetworkConfiguration.subnets nests subnets per region, AZ and interface."""
+
     def test_subnets_property_one_region_one_az_one_interface(self):
+        """One region, one AZ, one NIC yields a single subnet nested per region and AZ."""
         net_config = FakeEC2NetworkConfiguration(
             regions=["eu-central-1"], availability_zones=["a"], network_interfaces_count=1
         )
@@ -84,6 +95,7 @@ class TestAWSNetworkConfiguration:
         assert subnets == [[["subnet-085db77751694e2a6"]]]
 
     def test_subnets_property_one_region_two_az_one_interface(self):
+        """One region with two AZs yields one subnet list per AZ under that region."""
         net_config = FakeEC2NetworkConfiguration(
             regions=["eu-central-1"], availability_zones=["a", "b"], network_interfaces_count=1
         )
@@ -91,6 +103,7 @@ class TestAWSNetworkConfiguration:
         assert subnets == [[["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]]]
 
     def test_subnets_property_one_region_two_az_two_interface(self):
+        """Two NICs per AZ yield two subnets in each AZ's list."""
         net_config = FakeEC2NetworkConfiguration(
             regions=["us-east-1"], availability_zones=["a", "b"], network_interfaces_count=2
         )
@@ -103,6 +116,7 @@ class TestAWSNetworkConfiguration:
         ]
 
     def test_subnets_property_two_region_two_az_one_interface(self):
+        """Two regions yield one per-AZ subnet group for each region, in region order."""
         net_config = FakeEC2NetworkConfiguration(
             regions=["us-east-1", "eu-central-1"], availability_zones=["a", "b"], network_interfaces_count=1
         )
@@ -117,6 +131,7 @@ class FakeAzureParams(dict):
     """Minimal stand-in for SCTConfiguration: the Azure validator only reads params via get()."""
 
     def get(self, key, default=None):
+        """Return the param value, or the default when the key is absent."""
         return super().get(key, default)
 
 
@@ -135,6 +150,7 @@ def azure_scylla_network_config(nic: int = 0, ip_type: str = "ipv4", public: boo
 
 
 def validate_azure(params: dict) -> None:
+    """Run SCTConfiguration's Azure network interfaces validation on the given params."""
     SCTConfiguration._validate_azure_network_interfaces(FakeAzureParams(params))
 
 
@@ -142,11 +158,13 @@ class TestAzureNetworkInterfaces:
     """The Azure NIC layout is derived from 'scylla_network_config', there is no Azure-only option."""
 
     def test_no_network_config_yields_one_public_ipv4_nic(self):
+        """Without a scylla_network_config the layout is a single NIC with a public IPv4 only."""
         assert azure_network_interfaces({}) == [
             {"subnet": "default", "public_ip": True, "ipv6": False, "public_ipv6": False}
         ]
 
     def test_secondary_interfaces_get_their_own_private_subnet(self):
+        """Each secondary NIC gets its own private "nicN" subnet; only the primary has a public IP."""
         interfaces = azure_network_interfaces(
             {
                 "scylla_network_config": azure_scylla_network_config()
@@ -158,10 +176,12 @@ class TestAzureNetworkInterfaces:
         assert [interface["public_ip"] for interface in interfaces] == [True, False, False]
 
     def test_an_ipv6_address_makes_its_interface_dual_stack(self):
+        """A private IPv6 address makes the interface dual-stack without a public IPv6."""
         (interface,) = azure_network_interfaces({"scylla_network_config": azure_scylla_network_config(ip_type="ipv6")})
         assert interface == {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": False}
 
     def test_a_public_ipv6_address_asks_for_the_billed_public_ip(self):
+        """A public IPv6 address requests a public IPv6 IP on the interface."""
         (interface,) = azure_network_interfaces(
             {"scylla_network_config": azure_scylla_network_config(ip_type="ipv6", public=True)}
         )
@@ -169,25 +189,35 @@ class TestAzureNetworkInterfaces:
 
 
 class TestAzureIpv6Enabled:
+    """Cover detection of IPv6 use in an Azure scylla_network_config."""
+
     def test_disabled_without_a_network_config(self):
+        """IPv6 is off when there is no scylla_network_config."""
         assert azure_ipv6_enabled({}) is False
 
     def test_disabled_when_no_address_asks_for_ipv6(self):
+        """IPv6 is off when every address is IPv4."""
         assert azure_ipv6_enabled({"scylla_network_config": azure_scylla_network_config(nic=1)}) is False
 
     def test_enabled_when_any_address_asks_for_ipv6(self):
+        """IPv6 is on when any address uses IPv6."""
         assert azure_ipv6_enabled({"scylla_network_config": azure_scylla_network_config(ip_type="ipv6")}) is True
 
 
 class TestAzureNetworkInterfacesValidation:
+    """Cover the Azure checks of scylla_network_config at configuration time."""
+
     def test_default_single_nic_config_is_valid(self):
+        """A single-NIC IPv4 config passes validation."""
         validate_azure({"scylla_network_config": azure_scylla_network_config()})
 
     def test_a_gap_in_the_nic_indexes_is_rejected(self):
+        """NIC indexes must start at 0 and be contiguous; a lone nic=1 is rejected."""
         with pytest.raises(ValueError, match="defines only 1 interface"):
             validate_azure({"scylla_network_config": azure_scylla_network_config(nic=1)})
 
     def test_public_ipv4_outside_the_primary_interface_is_rejected(self):
+        """A public IPv4 on a secondary NIC is rejected; it is allowed on the primary only."""
         with pytest.raises(ValueError, match="IPv4 Public IP to the primary NIC only"):
             validate_azure(
                 {
@@ -197,13 +227,16 @@ class TestAzureNetworkInterfacesValidation:
             )
 
     def test_ipv6_ssh_needs_a_routable_address_on_the_primary_interface(self):
+        """IPv6 SSH without a public IPv6 on the primary NIC is rejected, as SSH has no routable address."""
         with pytest.raises(ValueError, match="IPv6 SSH connections need a routable address"):
             validate_azure({"scylla_network_config": azure_scylla_network_config(ip_type="ipv6")})
 
     def test_fully_configured_public_ipv6_setup_is_valid(self):
+        """An all-IPv6 config with public addresses on the primary NIC passes validation."""
         validate_azure({"scylla_network_config": azure_scylla_network_config(ip_type="ipv6", public=True)})
 
     def test_two_interfaces_with_a_private_secondary_are_valid(self):
+        """A public primary NIC plus a private secondary NIC passes validation."""
         validate_azure({"scylla_network_config": azure_scylla_network_config() + azure_scylla_network_config(nic=1)})
 
 
@@ -215,9 +248,11 @@ class TestAzureNetworkConfigProfiles:
 
     @staticmethod
     def load(path: str) -> dict:
+        """Load a YAML file into a dict."""
         return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
     def profiles(self) -> list[str]:
+        """Return the sorted names of the shared network_config profiles."""
         return sorted(path.stem for path in self.PROFILE_DIR.glob("*.yaml"))
 
     def test_every_azure_override_has_a_shared_profile_of_its_name(self):

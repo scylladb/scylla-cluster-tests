@@ -20,6 +20,7 @@ pytestmark = [
 
 @pytest.mark.parametrize("use_redundant_symbols", [True, False])
 def test_01_cqlsh_check_escaping(docker_scylla, use_redundant_symbols):
+    """run_cqlsh keeps a quoted numeric-leading keyspace name intact, with or without surrounding whitespace."""
     prefix, suffix = ("\n    ", "    \n") if use_redundant_symbols else ("", "")
     cql_cmd = (
         f'{prefix}create keyspace if not exists "10gb_keyspace" with replication = '
@@ -36,6 +37,7 @@ def test_01_cqlsh_check_escaping(docker_scylla, use_redundant_symbols):
 
 
 def test_02_cqlsh_check_multiline(docker_scylla):
+    """run_cqlsh runs a CQL statement that spans several lines."""
     cql_cmd = """
         create keyspace if not exists "10gb_keyspace" with replication =
         {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}

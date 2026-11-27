@@ -20,6 +20,8 @@ import sct
 
 
 class TestCleanResourcesCommand:
+    """The clean-resources command and how --clean-runners, --user and --dry-run reach the cleanup calls."""
+
     ENV_VARS = {
         "SCT_REGION_NAME": "us-east-1",
         "SCT_GCE_DATACENTER": "us-central1-a",
@@ -27,6 +29,7 @@ class TestCleanResourcesCommand:
     }
 
     def setup_method(self):
+        """Create a Click test runner for each test."""
         self.runner = CliRunner()
 
     @patch("sct.clean_cloud_resources")
@@ -116,7 +119,10 @@ class TestCleanResourcesCommand:
 
 
 class TestCleanRunnerInstancesCommand:
+    """The clean-runner-instances command and the arguments it passes to clean_sct_runners."""
+
     def setup_method(self):
+        """Create a Click test runner for each test."""
         self.runner = CliRunner()
 
     @patch("sct.clean_sct_runners")

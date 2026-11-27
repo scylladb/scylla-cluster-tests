@@ -235,6 +235,7 @@ def test_terminate_uses_the_zone_of_the_instance(gce_providers):
 
 
 def test_reboot_and_tagging_use_the_zone_of_the_instance(gce_providers):
+    """Reboot and tag updates go through the provider of the zone the instance lives in."""
     provisioner = _provisioner("a,b,c")
     provisioner.get_or_create_instances([_make_definition(3)], PricingModel.ON_DEMAND)
 
@@ -290,6 +291,7 @@ def test_existing_instances_are_cached_with_their_own_zone(gce_providers):
 
 
 def test_single_az_places_every_node_in_that_zone(gce_providers):
+    """With a single configured AZ, every node is created in that zone."""
     provisioner = _provisioner("b")
 
     provisioner.get_or_create_instances([_make_definition(idx) for idx in range(1, 4)], PricingModel.ON_DEMAND)
@@ -300,6 +302,7 @@ def test_single_az_places_every_node_in_that_zone(gce_providers):
 
 @pytest.mark.parametrize("availability_zone", ["a, b , c", "a,,b,c,"], ids=["spaces", "empty-parts"])
 def test_zone_letters_are_normalized(gce_providers, availability_zone):
+    """Spaces and empty entries in the availability_zone list are dropped when building zone names."""
     assert _provisioner(availability_zone).availability_zones == ["us-east1-a", "us-east1-b", "us-east1-c"]
 
 

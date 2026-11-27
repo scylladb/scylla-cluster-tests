@@ -20,6 +20,7 @@ def _tags(tags):
 @patch.object(AwsBuilder, "mixed_instances_policy", new_callable=PropertyMock, return_value={})
 @patch("sdcm.utils.aws_builder.boto3.client")
 def test_aws_new_asg_launches_with_keep(client, _):
+    """A new builder ASG propagates keep=BUILDER_KEEP_HOURS and keep_action=terminate tags at launch."""
     _aws_builder().create_auto_scaling_group()
 
     tags = client.return_value.create_auto_scaling_group.call_args.kwargs["Tags"]
@@ -30,6 +31,7 @@ def test_aws_new_asg_launches_with_keep(client, _):
 @patch.object(GceBuilder, "_wait_for_extended_operation")
 @patch("sdcm.utils.gce_builder.compute_v1.InstanceTemplatesClient")
 def test_gce_template_launches_with_keep(client, _):
+    """The GCE builder template sets keep and keep_action=terminate in both labels and metadata."""
     builder = GceBuilder.__new__(GceBuilder)
     builder.region = MagicMock(project="sct-project-1", region_name="us-east1")
     builder.region.network.self_link = "network"

@@ -43,6 +43,7 @@ def _make_config(explicit: set[str] | None = None, **values):
     ],
 )
 def test_duration_selects_provision_type(duration, expected):
+    """Runs up to spot_max_test_duration (inclusive) get spot instances; longer runs get on_demand."""
     config = _make_config(test_duration=duration)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == expected
@@ -56,6 +57,7 @@ def test_explicit_on_demand_is_never_overridden():
 
 
 def test_explicit_spot_is_never_overridden_for_long_tests():
+    """An explicitly set spot stays spot even for a run longer than the threshold."""
     config = _make_config(explicit={"instance_provision"}, instance_provision="spot", test_duration=7200)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot"
@@ -69,6 +71,7 @@ def test_spot_fleet_is_not_flattened_to_spot():
 
 
 def test_spot_fleet_still_moves_to_on_demand_for_long_tests():
+    """A spot_fleet run longer than the threshold switches to on_demand."""
     config = _make_config(instance_provision="spot_fleet", test_duration=7200)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
@@ -83,6 +86,7 @@ def test_policy_skipped_for_unsupported_backends(backend):
 
 
 def test_policy_disabled_when_threshold_is_zero():
+    """A spot_max_test_duration of 0 turns the policy off and keeps the configured provision type."""
     config = _make_config(spot_max_test_duration=0, instance_provision="spot", test_duration=99999)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "spot"
@@ -96,12 +100,14 @@ def test_policy_noop_without_test_duration():
 
 
 def test_custom_threshold_is_respected():
+    """A custom spot_max_test_duration sets where runs switch to on_demand."""
     config = _make_config(spot_max_test_duration=120, test_duration=180)
     config._apply_duration_based_provision_policy()
     assert config.get("instance_provision") == "on_demand"
 
 
 def test_is_explicitly_set_reads_captured_provenance():
+    """is_explicitly_set() reports True exactly for params recorded as explicitly set."""
     config = _make_config(explicit={"instance_provision", "region_name"})
     assert config.is_explicitly_set("instance_provision") is True
     assert config.is_explicitly_set("region_name") is True
@@ -137,6 +143,7 @@ class TestProvenanceCapture:
         assert config.is_explicitly_set("instance_provision") is False
 
     def test_env_var_marks_param_explicit(self, monkeypatch):
+        """A param set through an SCT_* env var is recorded as explicit and takes that value."""
         config = self._load(monkeypatch, SCT_INSTANCE_PROVISION="on_demand")
         assert config.is_explicitly_set("instance_provision") is True
         assert config.get("instance_provision") == "on_demand"
@@ -150,11 +157,13 @@ class TestProvenanceCapture:
         assert config.is_explicitly_set("fallback_to_next_region") is False
 
     def test_short_test_gets_spot_from_policy(self, monkeypatch):
+        """A short test loaded from config files ends up on spot."""
         config = self._load(monkeypatch)
         assert config.get("test_duration") <= config.get("spot_max_test_duration")
         assert config.get("instance_provision") == "spot"
 
     def test_long_test_gets_on_demand_from_policy(self, monkeypatch):
+        """A test with a 7200-minute duration loaded from config files ends up on on_demand."""
         config = self._load(monkeypatch, SCT_TEST_DURATION="7200")
         assert config.get("instance_provision") == "on_demand"
 
@@ -168,10 +177,12 @@ class TestEffectiveDuration:
     """`stress_duration`, not `test_duration`, drives real runtime when set (see tester._init_test_duration)."""
 
     def test_uses_test_duration_when_no_stress_duration(self):
+        """Without stress_duration, the effective duration is test_duration."""
         config = _make_config(test_duration=240, stress_duration=0, prepare_stress_duration=300)
         assert config.effective_test_duration() == 240
 
     def test_stress_duration_dominates(self):
+        """With stress_duration set, the effective duration is prepare + stress + 60 minutes of overhead."""
         config = _make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
         assert config.effective_test_duration() == 300 + 2880 + 60
 
@@ -191,11 +202,13 @@ class TestAutoProvisionType:
     """
 
     def test_auto_resolves_to_spot_for_short_test(self):
+        """'auto' resolves to spot for a test shorter than the threshold."""
         config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=90)
         config._apply_duration_based_provision_policy()
         assert config.get("instance_provision") == "spot"
 
     def test_auto_resolves_to_on_demand_for_long_test(self):
+        """'auto' resolves to on_demand for a test longer than the threshold."""
         config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=7200)
         config._apply_duration_based_provision_policy()
         assert config.get("instance_provision") == "on_demand"
@@ -224,6 +237,7 @@ class TestAutoProvisionType:
         assert config.get("instance_provision") == "on_demand"
 
     def test_auto_without_a_threshold_falls_back_to_on_demand(self):
+        """'auto' resolves to on_demand when the threshold is 0."""
         config = _make_config(
             explicit={"instance_provision"}, instance_provision="auto", spot_max_test_duration=0, test_duration=60
         )
@@ -252,19 +266,23 @@ class TestNegativeDurationNormalization:
     """
 
     def test_negative_stress_duration_uses_magnitude(self):
+        """A negative stress_duration counts by its absolute value in the effective duration."""
         config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
         assert config.effective_test_duration() == 781
 
     def test_negative_stress_duration_selects_on_demand(self):
+        """A negative stress_duration counted by magnitude pushes a long run to on_demand."""
         config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
         config._apply_duration_based_provision_policy()
         assert config.get("instance_provision") == "on_demand"
 
     def test_negative_prepare_duration_uses_magnitude(self):
+        """A negative prepare_stress_duration counts by its absolute value in the effective duration."""
         config = _make_config(test_duration=5, stress_duration=421, prepare_stress_duration=-300)
         assert config.effective_test_duration() == 781
 
     def test_negative_test_duration_uses_magnitude(self):
+        """A negative test_duration counts by its absolute value and selects on_demand for a long run."""
         config = _make_config(test_duration=-900, stress_duration=0)
         assert config.effective_test_duration() == 900
         config._apply_duration_based_provision_policy()

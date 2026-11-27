@@ -50,6 +50,7 @@ PERF_ALTERNATOR_CONFIG = BASE_CONFIG | {
 
 
 def expected_command(benchmark: str, workload: str) -> str:
+    """Build the exact scylla benchmark command line expected for the given benchmark and workload."""
     workdir = f"/tmp/scylla-{benchmark}-workdir"
     return (
         f"/usr/bin/scylla {benchmark} --json-result {benchmark}-result.json"
@@ -97,6 +98,7 @@ def make_test(test_class, fail_at=None):
 
 
 def benchmark_commands(node):
+    """Return the scylla benchmark commands the test ran on the node."""
     return [call.args[0] for call in node.remoter.run.call_args_list if call.args[0].startswith("/usr/bin/scylla ")]
 
 
@@ -131,6 +133,7 @@ def test_command_config_and_result(test_class, benchmark, benchmark_name, config
     ],
 )
 def test_scylla_server_is_down_for_the_run_and_starts_again(test_class, fail_at, expected_steps):
+    """scylla-server is stopped for the benchmark and started again on success or on a failure at any step."""
     test, node, steps = make_test(test_class, fail_at=fail_at)
 
     if fail_at:

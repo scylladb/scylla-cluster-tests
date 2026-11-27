@@ -22,6 +22,8 @@ from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException
 
 @dataclass
 class FakeParentCluster:
+    """Stand-in parent cluster exposing only the cluster backend name."""
+
     cluster_backend: str = "aws"
 
 
@@ -42,7 +44,7 @@ class FakeNode:
         self.remoter.run.return_value = run_result
 
     def install_package(self, pkg):
-        pass
+        """Accept a package install request and do nothing."""
 
 
 @dataclass
@@ -64,6 +66,7 @@ def mock_test_config():
 
 @pytest.fixture()
 def mock_node():
+    """Provide a FakeNode whose remoter reports a successful run with a home directory on stdout."""
     return FakeNode()
 
 
@@ -352,6 +355,7 @@ def test_download_full_with_tarball_url_skips_version_lookup(
     ],
 )
 def test_parse_s3_url(url, expected):
+    """_parse_s3_url splits path-style, virtual-hosted and bare-host S3 URLs into (bucket, key), with a default."""
     assert ScyllaDoctor._parse_s3_url(url, default_bucket="default-bkt") == expected
 
 

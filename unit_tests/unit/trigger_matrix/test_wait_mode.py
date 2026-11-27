@@ -25,6 +25,7 @@ from sdcm.utils.trigger_matrix.models import JobConfig
 
 
 def test_job_config_wait_defaults_false():
+    """A JobConfig defaults to wait=False, fail_on_error=False and no collect_results patterns."""
     job = JobConfig(job_name="test", backend="aws")
     assert job.wait is False
     assert job.fail_on_error is False
@@ -32,6 +33,7 @@ def test_job_config_wait_defaults_false():
 
 
 def test_load_yaml_with_wait_fields(tmp_path):
+    """wait, fail_on_error and collect_results are loaded from the matrix YAML."""
     data = {
         "jobs": [
             {
@@ -52,6 +54,7 @@ def test_load_yaml_with_wait_fields(tmp_path):
 
 
 def test_dry_run_wait_mode(tmp_path, caplog):
+    """A dry run of a wait-mode job triggers it and records a synthetic SUCCESS build under waited."""
     data = {
         "jobs": [
             {
@@ -77,6 +80,7 @@ def test_dry_run_wait_mode(tmp_path, caplog):
 
 
 def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
+    """A fail_on_error wait job whose trigger raises is reported failed; the non-wait job is still triggered."""
     data = {
         "jobs": [
             {
@@ -111,6 +115,7 @@ def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
 
 
 def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
+    """Wait jobs of every requested version are awaited in one batch and reported in one email."""
     data = {
         "jobs": [
             {"job_name": "/gating/job-1", "backend": "docker", "wait": True},
@@ -150,6 +155,7 @@ def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
     ],
 )
 def test_no_wait_job_triggered_fails(tmp_path, filters):
+    """A wait-mode matrix raises TriggerMatrixError and sends no email when filters leave no wait job to trigger."""
     data = {
         "jobs": [
             {"job_name": "/gating/job-1", "backend": "docker", "wait": True, "labels": ["os-a"]},
@@ -166,6 +172,7 @@ def test_no_wait_job_triggered_fails(tmp_path, filters):
 
 
 def test_no_job_triggered_without_wait_jobs_does_not_fail(tmp_path):
+    """A matrix without wait jobs returns empty triggered/failed lists when no job matches."""
     data = {"jobs": [{"job_name": "/sanity/job-1", "backend": "docker", "labels": ["weekly"]}]}
     path = tmp_path / "matrix.yaml"
     path.write_text(yaml.dump(data))
@@ -184,6 +191,7 @@ def test_no_job_triggered_without_wait_jobs_does_not_fail(tmp_path):
     ],
 )
 def test_report_recipients(tmp_path, cli_recipients, expected):
+    """The report email goes to the matrix's email_recipients unless recipients are given on the CLI."""
     data = {
         "email_recipients": "matrix@example.com",
         "jobs": [{"job_name": "/gating/job-1", "backend": "docker", "wait": True}],

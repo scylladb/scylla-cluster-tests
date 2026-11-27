@@ -12,6 +12,7 @@ from sdcm.cluster import BaseMonitorSet, NodeSetupFailed
 
 
 def run_prereqs(missing: str) -> MagicMock:
+    """Run the monitor prereqs install on a mock node whose probe reports the given missing items."""
     node = MagicMock()
 
     def run(cmd, **_):
@@ -28,6 +29,7 @@ def run_prereqs(missing: str) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def no_node_exporter_or_hub_login(monkeypatch):
+    """Replace the node exporter setup and Docker Hub login with mocks for every test."""
     monkeypatch.setattr("sdcm.cluster.NodeExporterSetup", MagicMock())
     monkeypatch.setattr("sdcm.cluster.docker_hub_login", MagicMock())
 
@@ -38,6 +40,7 @@ def commands(node: MagicMock) -> list[str]:
 
 
 def test_host_with_everything_gets_no_install_and_no_docker_restart():
+    """A host with every prerequisite gets only the marker check and the probe, with no installs or restarts."""
     node = run_prereqs("")
 
     node.update_repo_cache.assert_not_called()
@@ -47,6 +50,7 @@ def test_host_with_everything_gets_no_install_and_no_docker_restart():
 
 
 def test_only_missing_packages_are_installed():
+    """Only the packages the probe reports missing are installed, reusing the already refreshed repo cache."""
     node = run_prereqs("unzip\n")
 
     node.update_repo_cache.assert_not_called()  # node_setup already refreshed it
@@ -55,6 +59,7 @@ def test_only_missing_packages_are_installed():
 
 
 def test_missing_python_modules_are_pip_installed():
+    """Missing Python modules are installed with pip after installing the missing pip package."""
     node = run_prereqs("python-libs\npython3-pip\n")
 
     node.install_package.assert_called_once_with("python3-pip")
@@ -62,6 +67,7 @@ def test_missing_python_modules_are_pip_installed():
 
 
 def test_docker_usable_only_by_root_adds_the_user_to_the_group_without_restart():
+    """When only root can use Docker, the user is added to the docker group with no Docker restart."""
     node = run_prereqs("docker-group\n")
 
     node.remoter.sudo.assert_not_called()
@@ -69,6 +75,7 @@ def test_docker_usable_only_by_root_adds_the_user_to_the_group_without_restart()
 
 
 def test_missing_docker_is_installed():
+    """Missing Docker is installed via get.docker.com and the user is added to the docker group."""
     node = run_prereqs("docker\n")
 
     assert "get.docker.com" in node.remoter.sudo.call_args.args[0]
@@ -77,6 +84,7 @@ def test_missing_docker_is_installed():
 
 @pytest.mark.parametrize("missing", ["docker\n", "docker-group\n"])
 def test_host_sct_does_not_own_fails_instead_of_changing_docker(missing):
+    """On a host SCT does not own, a Docker gap fails setup asking to install Docker, leaving Docker as is."""
     node = MagicMock()
     node.remoter.run.return_value = MagicMock(ok=False, stdout=missing)
     monitor_set = MagicMock(is_formal_monitor_image=False, owns_host=False)
@@ -101,6 +109,7 @@ def shared_host_setup(monkeypatch, start_error=None) -> tuple[MagicMock, MagicMo
 
 
 def test_shared_host_keeps_its_firewall_and_ssh_packages(monkeypatch):
+    """Setup on a shared host leaves its firewall and SSH packages as they are."""
     node, _ = shared_host_setup(monkeypatch)
 
     node.disable_firewall.assert_not_called()
@@ -108,6 +117,7 @@ def test_shared_host_keeps_its_firewall_and_ssh_packages(monkeypatch):
 
 
 def test_shared_host_fails_a_stack_that_does_not_start_instead_of_restarting_it(monkeypatch):
+    """On a shared host a monitoring stack that fails to start fails the setup with the start error."""
     error = UnexpectedExit(MagicMock(exited=1))
 
     with pytest.raises(UnexpectedExit):

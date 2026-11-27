@@ -36,15 +36,20 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class TestGrafana(EventsUtilsMixin):
+    """The Grafana annotation pipeline: annotator, aggregator and postman processes."""
+
     @classmethod
     def setup_class(cls) -> None:
+        """Start the main events device in a dedicated events processes registry."""
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
     def teardown_class(cls) -> None:
+        """Stop the events processes started in setup_class."""
         cls.teardown_events_processes()
 
     def test_grafana(self):
+        """Annotations post only after posting is started, capped at max_duplicates per window, with event tags."""
         start_grafana_pipeline(_registry=self.events_processes_registry)
         grafana_annotator = get_events_process(EVENTS_GRAFANA_ANNOTATOR_ID, _registry=self.events_processes_registry)
         grafana_aggregator = get_events_process(EVENTS_GRAFANA_AGGREGATOR_ID, _registry=self.events_processes_registry)
@@ -125,13 +130,16 @@ class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
 
     @classmethod
     def setup_class(cls) -> None:
+        """Start the main events device in a dedicated events processes registry."""
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
     def teardown_class(cls) -> None:
+        """Stop the events processes started in setup_class."""
         cls.teardown_events_processes()
 
     def test_duplicate_in_the_next_time_window_is_posted_again(self):
+        """A duplicate annotation arriving after the time window expires is posted again."""
         start_grafana_pipeline(_registry=self.events_processes_registry)
         grafana_annotator = get_events_process(EVENTS_GRAFANA_ANNOTATOR_ID, _registry=self.events_processes_registry)
         grafana_aggregator = get_events_process(EVENTS_GRAFANA_AGGREGATOR_ID, _registry=self.events_processes_registry)

@@ -40,6 +40,7 @@ def triggered(monkeypatch):
 
 @pytest.fixture()
 def matrix(tmp_path):
+    """Write a one-job docker matrix with a post_behavior_db_nodes default and return its path."""
     data = {
         "defaults": {"post_behavior_db_nodes": "destroy"},
         "jobs": [{"job_name": "/gating/job-1", "backend": "docker"}],
@@ -50,22 +51,26 @@ def matrix(tmp_path):
 
 
 def run(matrix, *args):
+    """Invoke trigger-matrix on the matrix for scylla 2025.4.3 with extra args and assert it exits cleanly."""
     result = CliRunner().invoke(cli, ["trigger-matrix", "--matrix", matrix, "--scylla-version", "2025.4.3", *args])
     assert result.exit_code == 0, result.output
     return result
 
 
 def test_post_behavior_db_nodes_overrides_the_matrix(matrix, triggered):
+    """--post-behavior-db-nodes replaces the matrix default in the triggered job's parameters."""
     run(matrix, "--post-behavior-db-nodes", "keep-on-failure")
     assert triggered["gating/job-1"]["post_behavior_db_nodes"] == "keep-on-failure"
 
 
 def test_post_behavior_db_nodes_defaults_to_the_matrix(matrix, triggered):
+    """Without --post-behavior-db-nodes the job gets the matrix's post_behavior_db_nodes value."""
     run(matrix)
     assert triggered["gating/job-1"]["post_behavior_db_nodes"] == "destroy"
 
 
 def test_report_dir_saves_the_wait_mode_report(tmp_path, triggered):
+    """--report-dir writes the wait-mode summary line for a dry run into the given directory."""
     path = tmp_path / "wait.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "/gating/job-1", "backend": "docker", "wait": True}]}))
     run(str(path), "--dry-run", "--report-dir", str(tmp_path / "report"))
@@ -74,6 +79,7 @@ def test_report_dir_saves_the_wait_mode_report(tmp_path, triggered):
 
 @pytest.fixture()
 def supported_only_matrix(tmp_path):
+    """Write a one-job matrix flagged supported_versions_only and return its path."""
     path = tmp_path / "supported-only.yaml"
     path.write_text(
         yaml.dump({"supported_versions_only": True, "jobs": [{"job_name": "/gating/job-1", "backend": "docker"}]})
@@ -82,6 +88,7 @@ def supported_only_matrix(tmp_path):
 
 
 def test_supported_only_matrix_refuses_other_versions(supported_only_matrix, triggered):
+    """A supported-only matrix exits with an error naming the unsupported version and triggers no jobs."""
     with patch(FETCH, return_value=["2026.3", "2025.1"]):
         result = CliRunner().invoke(
             cli, ["trigger-matrix", "--matrix", supported_only_matrix, "--scylla-version", "2026.3.3 2025.4.3"]
@@ -92,6 +99,7 @@ def test_supported_only_matrix_refuses_other_versions(supported_only_matrix, tri
 
 
 def test_supported_only_matrix_accepts_supported_versions(supported_only_matrix, triggered):
+    """A supported-only matrix triggers jobs for a version whose release line is supported."""
     with patch(FETCH, return_value=["2026.3", "2025.4"]):
         run(supported_only_matrix)
     assert triggered["gating/job-1"]["scylla_version"] == "2025.4.3"
@@ -100,6 +108,7 @@ def test_supported_only_matrix_accepts_supported_versions(supported_only_matrix,
 def test_supported_only_matrix_runs_every_supported_version_without_scylla_version(
     supported_only_matrix, triggered, monkeypatch
 ):
+    """Without --scylla-version, a supported-only matrix triggers the latest release of every supported line."""
     versions = []
     monkeypatch.setattr(
         JenkinsClient,
@@ -116,6 +125,7 @@ def test_supported_only_matrix_runs_every_supported_version_without_scylla_versi
 
 
 def test_other_matrix_still_needs_a_scylla_version(matrix, triggered):
+    """A regular matrix exits with an error asking for --scylla-version when none is given."""
     result = CliRunner().invoke(cli, ["trigger-matrix", "--matrix", matrix])
     assert result.exit_code == 1
     assert "Either --scylla-version" in result.output
@@ -133,6 +143,7 @@ def test_other_matrix_still_needs_a_scylla_version(matrix, triggered):
 def test_supported_only_matrix_runs_the_release_of_a_typed_in_line(
     supported_only_matrix, triggered, monkeypatch, requested, expected
 ):
+    """A typed-in release line is resolved to its latest release; a full release version is kept as given."""
     versions = []
     monkeypatch.setattr(
         JenkinsClient,
@@ -149,6 +160,7 @@ def test_supported_only_matrix_runs_the_release_of_a_typed_in_line(
 
 
 def test_supported_versions_are_fetched_once_without_scylla_version(supported_only_matrix, triggered, monkeypatch):
+    """The supported version list is fetched a single time per run without --scylla-version."""
     monkeypatch.setattr(images, "latest_release_of_line", lambda line, region: f"{line}.1")
     with patch(FETCH, return_value=["2026.3", "2025.1"]) as fetch:
         result = CliRunner().invoke(cli, ["trigger-matrix", "--matrix", supported_only_matrix])

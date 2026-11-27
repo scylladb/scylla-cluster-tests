@@ -8,6 +8,7 @@ from sdcm.nemesis.utils.indexes import get_column_names, get_random_column_name
 
 @pytest.fixture
 def mocked_session():
+    """Provide a CQL session mock whose schema query returns scalar, collection, counter and duration columns."""
     session = MagicMock()
     session.execute.return_value = [
         MagicMock(column_name="id", type="int"),
@@ -22,12 +23,14 @@ def mocked_session():
 
 
 def test_get_column_names_no_filters(mocked_session):
+    """Without filters every column of the table is returned."""
     result = set(get_column_names(mocked_session, "ks", "cf"))
     expected = {"id", "username", "tags", "scores", "metadata", "counter_col", "duration_col"}
     assert result == expected
 
 
 def test_get_column_names_filter_collections(mocked_session):
+    """filter_out_collections drops list, set and map columns and keeps the rest."""
     result = set(get_column_names(mocked_session, "ks", "cf", filter_out_collections=True))
     excluded = {"tags", "scores", "metadata"}
     included = {"id", "username", "counter_col", "duration_col"}
@@ -36,6 +39,7 @@ def test_get_column_names_filter_collections(mocked_session):
 
 
 def test_get_column_names_filter_unsupported(mocked_session):
+    """filter_out_column_types drops columns of the listed types and keeps the rest."""
     result = set(get_column_names(mocked_session, "ks", "cf", filter_out_column_types=["counter", "duration"]))
     excluded = {"counter_col", "duration_col"}
     included = {"id", "username", "tags", "scores", "metadata"}
@@ -44,6 +48,7 @@ def test_get_column_names_filter_unsupported(mocked_session):
 
 
 def test_get_column_names_combined_filters(mocked_session):
+    """Both filters together leave only the plain scalar columns."""
     result = set(
         get_column_names(
             mocked_session, "ks", "cf", filter_out_collections=True, filter_out_column_types=["counter", "duration"]

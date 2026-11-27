@@ -42,6 +42,7 @@ def make_runner():
     ],
 )
 def test_parsing_reports_driver_based_on_flag(make_runner, is_driver_4x, expected_additional):
+    """Parses the c-s version and reports the 4.x or 3.x java-driver version per is_driver_4x."""
     stdout = "Version: 3.20.1\nscylla-java-driver: 3.11.5.11\nscylla-java-driver-4x: 4.19.0.1\n"
     runner = make_runner(stdout)
     reporter = CassandraStressVersionReporter(
@@ -56,6 +57,7 @@ def test_parsing_reports_driver_based_on_flag(make_runner, is_driver_4x, expecte
 
 
 def test_parsing_no_driver_info(make_runner):
+    """Parses the c-s version and leaves additional_data unset when no driver line is printed."""
     runner = make_runner("Version: 3.12.0-SNAPSHOT\n")
     reporter = CassandraStressVersionReporter(runner=runner, command_prefix="", argus_client=None, is_driver_4x=False)
 
@@ -66,6 +68,7 @@ def test_parsing_no_driver_info(make_runner):
 
 
 def test_parsing_malformed_output(make_runner):
+    """Extracts the version line and ignores the lines without a key: value format."""
     stdout = "Some random text\nNo colon here\nVersion: 3.12.0-SNAPSHOT\nAnother line without proper format\n"
     runner = make_runner(stdout)
     reporter = CassandraStressVersionReporter(runner=runner, command_prefix="", argus_client=None, is_driver_4x=False)
@@ -77,6 +80,7 @@ def test_parsing_malformed_output(make_runner):
 
 
 def test_parsing_missing_version_reports_fallback(make_runner):
+    """Reports #FAILED_CHECK_LOGS as the version when it is missing, and still the driver version."""
     runner = make_runner("scylla-java-driver: 3.11.5.11\n")
     reporter = CassandraStressVersionReporter(runner=runner, command_prefix="", argus_client=None, is_driver_4x=False)
 
@@ -87,6 +91,7 @@ def test_parsing_missing_version_reports_fallback(make_runner):
 
 
 def test_command_prefix_is_used_in_command(make_runner):
+    """Runs cassandra-stress version behind the given command prefix."""
     stdout = "Version: 3.20.1\nscylla-java-driver: 3.11.5.11\nscylla-java-driver-4x: 4.19.0.1\n"
     runner = make_runner(stdout)
     reporter = CassandraStressVersionReporter(
@@ -103,6 +108,7 @@ def test_command_prefix_is_used_in_command(make_runner):
 
 @patch("sdcm.reporting.tooling_reporter.CassandraStressJavaDriverVersionReporter")
 def test_calls_java_driver_reporter_for_v4(mock_driver_reporter_class, make_runner):
+    """Reports the 4.x java-driver version through a separate CassandraStressJavaDriverVersionReporter."""
     stdout = "Version: 3.20.1\nscylla-java-driver: 3.11.5.11\nscylla-java-driver-4x: 4.19.0.1\n"
     runner = make_runner(stdout)
     mock_instance = MagicMock()

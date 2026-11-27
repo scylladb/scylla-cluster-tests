@@ -25,10 +25,12 @@ FETCH = "utils.get_supported_scylla_base_versions.fetch_official_supported_versi
 
 
 def ami(scylla_version):
+    """Return a fake AMI tagged with the given scylla_version."""
     return SimpleNamespace(tags=[{"Key": "scylla_version", "Value": scylla_version}])
 
 
 def test_latest_release_is_the_highest_patch_of_the_line():
+    """The latest release of a line is its highest GA patch, ignoring other lines and release candidates."""
     amis = [
         ami("2025.4.2-0.20260101.aaaaaaaaaaaa-1"),
         ami("2025.4.10-0.20260301.bbbbbbbbbbbb-1"),
@@ -42,11 +44,13 @@ def test_latest_release_is_the_highest_patch_of_the_line():
 
 
 def test_latest_release_is_empty_without_released_amis():
+    """A line with no released AMIs has an empty latest release."""
     with patch("sdcm.utils.common.get_scylla_ami_versions", return_value=[]):
         assert latest_release_of_line("2025.4") == ""
 
 
 def test_a_failed_ami_lookup_raises_its_cause():
+    """An AMI lookup failure propagates with its original exception."""
     with (
         patch("sdcm.utils.common.get_scylla_ami_versions", side_effect=RuntimeError("expired AWS token")),
         pytest.raises(RuntimeError, match="expired AWS token"),
@@ -55,6 +59,7 @@ def test_a_failed_ami_lookup_raises_its_cause():
 
 
 def test_supported_releases_are_the_latest_release_of_each_supported_line(monkeypatch):
+    """supported_releases returns the latest release of each officially supported line, in order."""
     monkeypatch.setattr(
         images, "latest_release_of_line", lambda line, region: {"2026.1": "2026.1.3", "2025.4": "2025.4.10"}[line]
     )
@@ -63,12 +68,14 @@ def test_supported_releases_are_the_latest_release_of_each_supported_line(monkey
 
 
 def test_supported_releases_fail_when_a_supported_line_has_no_release(monkeypatch):
+    """supported_releases raises TriggerMatrixError naming a supported line that has no release."""
     monkeypatch.setattr(images, "latest_release_of_line", lambda line, region: "")
     with patch(FETCH, return_value=["2026.1"]), pytest.raises(TriggerMatrixError, match="2026.1"):
         supported_releases()
 
 
 def test_supported_releases_fail_without_supported_lines():
+    """supported_releases raises TriggerMatrixError when no line is officially supported."""
     with patch(FETCH, return_value=[]), pytest.raises(TriggerMatrixError, match="No officially supported"):
         supported_releases()
 
@@ -84,11 +91,13 @@ def test_supported_releases_fail_without_supported_lines():
     ],
 )
 def test_versions_of_a_supported_line_are_accepted(version):
+    """Any form of a version on a supported line (line, release, full tag, rc, branch) passes the check."""
     with patch(FETCH, return_value=["2026.3", "2025.1"]):
         check_only_supported_versions([version, "2025.1.16"])
 
 
 @pytest.mark.parametrize("version", ["master:latest", "2025.4.3", "2026.30.1", "", "latest"])
 def test_other_versions_are_rejected(version):
+    """A version outside the supported lines (master, other line, empty) raises TriggerMatrixError."""
     with patch(FETCH, return_value=["2026.3", "2025.1"]), pytest.raises(TriggerMatrixError, match="not supported"):
         check_only_supported_versions(["2026.3.3", version])

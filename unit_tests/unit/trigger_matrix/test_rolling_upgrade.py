@@ -38,6 +38,7 @@ ROLLING_UPGRADE_YAML = Path(__file__).parents[3] / "configurations" / "triggers"
     ],
 )
 def test_extract_branch_from_version(version, expected):
+    """The branch is master, the branch-qualified name, or the major.minor of a release/dev/rc version."""
     assert _extract_branch_from_version(version) == expected
 
 
@@ -101,6 +102,7 @@ def test_branch_id_template_resolved_in_params(scylla_version, expected_repo):
 
 
 def test_branch_template_resolved_in_params():
+    """{branch} in new_scylla_repo is replaced with master for master:latest."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -117,6 +119,7 @@ def test_branch_template_resolved_in_params():
 
 
 def test_branch_template_from_simple_version():
+    """{branch} in new_scylla_repo is replaced with a bare major.minor version."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -130,6 +133,7 @@ def test_branch_template_from_simple_version():
 
 
 def test_branch_template_from_full_version_tag():
+    """{branch} in new_scylla_repo is replaced with the major.minor of a full version tag."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
@@ -143,6 +147,7 @@ def test_branch_template_from_full_version_tag():
 
 
 def test_no_template_no_change():
+    """A new_scylla_repo without placeholders is passed through unchanged."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
@@ -156,6 +161,7 @@ def test_no_template_no_change():
 
 
 def test_cli_override_wins_over_template():
+    """A CLI new_scylla_repo override replaces the job's templated value."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -169,6 +175,7 @@ def test_cli_override_wins_over_template():
 
 
 def test_empty_version_no_resolution():
+    """With an empty scylla_version the {branch} placeholder is left in place."""
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
@@ -182,6 +189,7 @@ def test_empty_version_no_resolution():
 
 
 def test_rolling_upgrade_yaml_loads():
+    """rolling-upgrade.yaml loads with jobs and its two biweekly Saturday crons plus the Friday minicloud cron."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     assert len(config.jobs) > 0
     # Two biweekly cron lines, both at Saturday 06:00 UTC (SCT-716), and the every-Friday
@@ -194,12 +202,14 @@ def test_rolling_upgrade_yaml_loads():
 
 
 def test_all_jobs_have_new_scylla_repo():
+    """Every job in rolling-upgrade.yaml defines new_scylla_repo in its params."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     for job in config.jobs:
         assert "new_scylla_repo" in job.params, f"Job {job.job_name} missing new_scylla_repo param"
 
 
 def test_weekly_label_filter():
+    """The weekly and weekly-minicloud selectors on master together select at least nine jobs."""
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     weekly_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly")
     minicloud_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly-minicloud")

@@ -7,6 +7,7 @@ from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
 
 
 def test_ensure_minicloud_ready_retries_then_succeeds(monkeypatch):
+    """ensure_minicloud_ready retries the reachability check until it passes, then exports AWS_ENDPOINT_URL."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
 
     call_count = {"n": 0}
@@ -43,6 +44,7 @@ def test_ensure_minicloud_ready_healthy_path_sets_gce_endpoint(monkeypatch):
 
 
 def test_ensure_minicloud_ready_falls_through_to_auto_start(monkeypatch):
+    """An unreachable minicloud gets a full preflight, a start and region preparation from ensure_minicloud_ready."""
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
 
     def mock_check_always_fails(endpoint=None, timeout=5):

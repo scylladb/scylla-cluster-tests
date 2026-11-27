@@ -23,10 +23,12 @@ TARBALL = "https://s3.amazonaws.com/bucket/sd/scylla-doctor-1.15.0.tar.gz"
 
 
 def sent():
+    """Return the keyword arguments of the last send() call on the stubbed Email."""
     return reporting.Email.return_value.send.call_args.kwargs
 
 
 def test_subject_names_the_matrix_and_the_tested_build():
+    """The subject names the matrix, the subject params' file name and versions; set run params are listed in the body."""
     send_trigger_matrix_email(
         build_results=[BuildResult(job_name="gating/job-1", build_number=3, result="SUCCESS")],
         scylla_version="2025.4.3, 2026.1.1",
@@ -43,6 +45,7 @@ def test_subject_names_the_matrix_and_the_tested_build():
 
 
 def test_subject_without_run_params():
+    """Without run params the subject carries the matrix name and the version only."""
     send_trigger_matrix_email(
         build_results=[BuildResult(job_name="tier1/job", build_number=1, result="FAILURE")],
         scylla_version="2025.4.3",
@@ -52,6 +55,7 @@ def test_subject_without_run_params():
 
 
 def test_results_are_a_grid_of_jobs_by_version():
+    """Results are a job-by-version table linking each build and its artifacts, with a dash for missing cells."""
     url = "https://jenkins/job/a/7"
     send_trigger_matrix_email(
         build_results=[
@@ -80,6 +84,7 @@ def test_results_are_a_grid_of_jobs_by_version():
 
 
 def test_failures_section_says_why_each_build_failed():
+    """The Failures section lists each failed build with its version, link and description."""
     send_trigger_matrix_email(
         build_results=[
             BuildResult("gating/a", 7, "SUCCESS", scylla_version="2025.4.3"),
@@ -103,6 +108,7 @@ def test_failures_section_says_why_each_build_failed():
 
 
 def test_all_passed_banner():
+    """When every build passes the email shows the all-passed banner and no Failures section."""
     send_trigger_matrix_email(
         build_results=[BuildResult("gating/a", 7, "SUCCESS")], scylla_version="2025.4.3", matrix_file="m.yaml"
     )
@@ -111,6 +117,7 @@ def test_all_passed_banner():
 
 
 def test_report_is_saved_with_a_summary(tmp_path):
+    """The report is written as a one-line summary file plus the HTML body."""
     report = build_trigger_matrix_report(
         build_results=[BuildResult("gating/a", 7, "SUCCESS"), BuildResult("gating/b", 8, "FAILURE")],
         scylla_version="2025.4.3",
@@ -126,6 +133,7 @@ def test_report_is_saved_with_a_summary(tmp_path):
 
 
 def test_failure_shows_the_links_of_an_html_description():
+    """An HTML build description is reduced to its links in the Failures section, with no escaped markup."""
     description = """
         <div style="margin: 12px 4px;">
             <a

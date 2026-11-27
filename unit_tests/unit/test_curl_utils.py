@@ -75,14 +75,17 @@ from sdcm.utils.curl import RETRY_ALL_ERRORS_PROBE, curl_with_retry
     ],
 )
 def test_curl_with_retry(url, kwargs, expected):
+    """Each combination of retry/timeout options renders the exact expected curl command."""
     assert curl_with_retry(url, **kwargs) == expected
 
 
 def test_starts_with_curl():
+    """The generated command starts with the curl executable."""
     assert curl_with_retry("https://x.com").startswith("curl ")
 
 
 def test_retry_all_errors_probe_pinned():
+    """The --retry-all-errors probe keeps its exact shell form, which checks curl support at runtime."""
     assert RETRY_ALL_ERRORS_PROBE == "$(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors)"
 
 

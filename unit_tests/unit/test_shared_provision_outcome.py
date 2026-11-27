@@ -75,6 +75,7 @@ def _run(pricing_model=PricingModel.SPOT, fallback_on_demand=True, side_effects=
 
 
 def test_spot_success_records_no_downgrade():
+    """A successful spot provision records requested and realized spot with the instance count."""
     error, recorder = _run()
 
     assert error is None
@@ -103,6 +104,7 @@ def test_total_failure_records_before_reraising():
 
 
 def test_failure_without_fallback_configured_is_recorded():
+    """With on-demand fallback disabled, a preempted spot run re-raises and records no realized pricing model."""
     error, recorder = _run(fallback_on_demand=False, side_effects=[OperationPreemptedError("preempted")])
 
     assert isinstance(error, OperationPreemptedError)
@@ -170,6 +172,7 @@ class TestMixedBatchReporting:
     """
 
     def test_each_instance_type_is_reported_separately(self):
+        """A mixed batch emits one record per instance type, each with its own count."""
         provisioner = _provisioner()
         definitions = [
             _definition("db-1", "z3-highmem-8-highlssd"),

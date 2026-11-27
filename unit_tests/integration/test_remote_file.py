@@ -19,6 +19,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture(name="remoter", scope="module")
 def fixture_remoter(ssh_server_container):
+    """Return an SSH remoter connected to the sshd test container as its non-root sudo user."""
     return RemoteCmdRunnerBase.create_remoter(**ssh_server_container)
 
 
@@ -32,10 +33,12 @@ def fixture_scylla_d(remoter):
 
 
 def owner_and_mode(remoter, path):
+    """Return the owner, group and octal mode of a remote path as "user:group mode"."""
     return remoter.sudo(f"stat -c '%U:%G %a' {path}").stdout.strip()
 
 
 def test_missing_file_is_created_with_sudo(remoter, scylla_d):
+    """Writing a missing file with sudo creates it with the content, owned by root:root with mode 644."""
     path = f"{scylla_d}/io_properties.yaml"
     with remote_file(remoter=remoter, remote_path=path, sudo=True) as fobj:
         assert fobj.getvalue() == ""
@@ -45,6 +48,7 @@ def test_missing_file_is_created_with_sudo(remoter, scylla_d):
 
 
 def test_existing_file_keeps_its_owner_and_mode(remoter, scylla_d):
+    """Rewriting an existing file with sudo replaces its content and keeps its owner and mode."""
     path = f"{scylla_d}/io_properties.yaml"
     remoter.sudo(f"sh -c 'echo old > {path}'")
     remoter.sudo(f"chown test:test {path}")
@@ -57,6 +61,7 @@ def test_existing_file_keeps_its_owner_and_mode(remoter, scylla_d):
 
 
 def test_reading_a_missing_file_does_not_create_it(remoter, scylla_d):
+    """Opening a missing file and only reading it leaves the path absent on the host."""
     path = f"{scylla_d}/io_properties.yaml"
     with remote_file(remoter=remoter, remote_path=path, sudo=True) as fobj:
         assert fobj.getvalue() == ""
@@ -64,6 +69,7 @@ def test_reading_a_missing_file_does_not_create_it(remoter, scylla_d):
 
 
 def test_existing_path_with_a_space_is_edited(remoter):
+    """A file whose path has a space is read and rewritten in place."""
     path = f"/home/test/config copy {uuid.uuid4().hex[:8]}.yaml"
     remoter.run(f"echo old > '{path}'")
     with remote_file(remoter=remoter, remote_path=path) as fobj:

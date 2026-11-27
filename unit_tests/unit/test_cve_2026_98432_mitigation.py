@@ -27,6 +27,7 @@ def _boot_script(**kwargs) -> str:
 
 
 def test_the_mitigation_script_is_valid_bash_after_minify():
+    """The minified mitigation script passes a bash syntax check."""
     subprocess.run(["bash", "-n"], input=minify_shell_script(apply_cve_2026_98432_mitigation()), text=True, check=True)
 
 

@@ -9,6 +9,7 @@ MOCK_PARENT_CLUSTER = Mock(params={"simulated_regions": 0})
 
 
 def make_cloud_instance(private_ip="10.0.4.4"):
+    """Return a Mock OCI cloud instance in us-ashburn-1 with the given private IP and no public IP."""
     return Mock(
         name="oci-instance-mock",
         private_ip_address=private_ip,
@@ -31,6 +32,7 @@ def base_node_init(
     rack=0,
     after_config=None,
 ):
+    """Stand-in for BaseNode.__init__ that sets only the name, IP caches, a mock test_config and a mock log."""
     self.name = name
     self.test_config = Mock(IP_SSH_CONNECTIONS="private", INTRA_NODE_COMM_PUBLIC=False)
     self._private_ip_address_cached = None

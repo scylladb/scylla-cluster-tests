@@ -18,10 +18,12 @@ class FakeLoaderMixin(LoaderUtilsMixin):
 
     @property
     def effective_disk_size_bytes(self) -> int:
+        """Return the disk size injected through the constructor."""
         return self.fake_effective_disk_size
 
     @property
     def some_other_template_value(self) -> int:
+        """Return a fixed value to check that arbitrary mixin attributes are exposed to templates."""
         return 17
 
 
@@ -47,6 +49,7 @@ def test_literal_command_passes_through_unchanged(cmd):
     ],
 )
 def test_template_renders_correctly(disk_size, template, expected_substring):
+    """Expressions and set-blocks over effective_disk_size_bytes render fully, leaving no Jinja syntax."""
     result = FakeLoaderMixin(effective_disk_size=disk_size).render_stress_cmd(template)
     assert expected_substring in result
     assert "{{" not in result
@@ -54,16 +57,19 @@ def test_template_renders_correctly(disk_size, template, expected_substring):
 
 
 def test_unknown_variable_raises_runtime_error():
+    """Referencing an undefined template variable raises RuntimeError naming the unknown Jinja variable."""
     with pytest.raises(RuntimeError, match="unknown Jinja variable"):
         FakeLoaderMixin().render_stress_cmd("cassandra-stress write n={{ unknown_variable }}")
 
 
 def test_generic_loader_mixin_has_no_owner_attribute_whitelist_by_default():
+    """Any mixin attribute is available as a template variable when the mixin defines no whitelist."""
     result = FakeLoaderMixin().render_stress_cmd("cassandra-stress write n={{ some_other_template_value }}")
     assert result == "cassandra-stress write n=17"
 
 
 def test_stress_template_context_supports_ordered_reuse_and_scalar_coercion():
+    """Context entries resolve in order, may reference earlier entries, and rendered numbers become ints."""
     instance = FakeLoaderMixin(effective_disk_size=1_000)
     instance.params["stress_template_context"] = {
         "chunk_count": 4,
@@ -89,6 +95,7 @@ def test_stress_template_context_leaves_non_template_strings_unparsed(literal_va
 
 
 def test_stress_template_context_rejects_unknown_variable():
+    """A context entry referencing an undefined variable raises RuntimeError naming that entry."""
     instance = FakeLoaderMixin()
     instance.params["stress_template_context"] = {"rows_per_cmd": "{{ missing_value // 4 }}"}
 
@@ -97,6 +104,7 @@ def test_stress_template_context_rejects_unknown_variable():
 
 
 def test_stress_template_context_must_reference_earlier_keys_only():
+    """A context entry may reference only entries declared before it; a forward reference raises RuntimeError."""
     instance = FakeLoaderMixin()
     instance.params["stress_template_context"] = {
         "rows_per_cmd": "{{ rows_total // 4 }}",
@@ -108,6 +116,7 @@ def test_stress_template_context_must_reference_earlier_keys_only():
 
 
 def test_syntax_error_raises_before_stress_starts():
+    """Malformed Jinja raises TemplateSyntaxError at render time, before any stress thread starts."""
     with pytest.raises(TemplateSyntaxError):
         FakeLoaderMixin().render_stress_cmd("cassandra-stress write n={{ unclosed")
 
@@ -122,6 +131,7 @@ def test_syntax_error_raises_before_stress_starts():
     ],
 )
 def test_multiline_yaml_block_collapsed_to_single_line(cmd, expected):
+    """Multi-line YAML block commands are collapsed into one line with surrounding whitespace stripped."""
     result = FakeLoaderMixin(effective_disk_size=1000).render_stress_cmd(cmd)
     assert "\n" not in result
     assert result == expected

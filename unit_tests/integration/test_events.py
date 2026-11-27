@@ -23,8 +23,11 @@ from unit_tests.lib.real_events import RealEventsTest
 
 
 class TestSctEventsIntegration(RealEventsTest):
+    """Default event filters on the docker backend, checked against real event log files."""
+
     @pytest.mark.integration
     def test_default_filters(self, monkeypatch):
+        """Default filters drop rate-limited backtraces and downgrade benign DB, c-s and raft errors below ERROR."""
         monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
 
         with environment(SCT_CLUSTER_BACKEND="docker"):

@@ -38,11 +38,13 @@ def rest_body(parameters: Any) -> Dict[str, Any]:
 
 
 def snake_case_to_camel_case(string):
+    """Convert a snake_case name to camelCase."""
     temp = string.split("_")
     return temp[0] + "".join(ele.title() for ele in temp[1:])
 
 
 def dict_keys_to_camel_case(dct):
+    """Recursively convert the keys of a dict (or the dicts in a list) from snake_case to camelCase."""
     if isinstance(dct, list):
         return [dict_keys_to_camel_case(i) if isinstance(i, (dict, list)) else i for i in dct]
     return {
@@ -52,24 +54,31 @@ def dict_keys_to_camel_case(dct):
 
 
 class WaitableObject:
+    """Fake Azure long-running operation poller that completes at once with a value or raises a stored error."""
+
     def __init__(self, error: AzureError = None, value: Any = None):
         self.error = error
         self.value = value
 
     def wait(self, timeout=None):
+        """Return at once, raising the stored error if there is one."""
         if self.error:
             raise self.error
 
     def done(self) -> bool:
+        """Report the operation as complete."""
         return True
 
     def result(self, timeout=None):
+        """Return the stored value, or raise the stored error."""
         if self.error:
             raise self.error
         return self.value
 
 
 class ResultableObject:
+    """Fake run-command poller carrying the stdout and stderr of a locally run script."""
+
     def __init__(self, stdout, stderr):
         self.stdout = stdout
         self.stderr = stderr
@@ -77,6 +86,7 @@ class ResultableObject:
     def result(
         self,
     ):
+        """Return a RunCommandResult whose status message embeds the stored stdout and stderr like Azure does."""
         value = InstanceViewStatus(
             code="ProvisioningState/succeeded",
             level="Info",
@@ -88,10 +98,13 @@ class ResultableObject:
 
 
 class FakeResourceGroups:
+    """Fake resource group operations that keep each group as a directory with a resource_group.json file."""
+
     def __init__(self, path: Path):
         self.path = path
 
     def create_or_update(self, resource_group_name: str, parameters: Dict[str, Any]) -> ResourceGroup:
+        """Create the group directory and write its JSON, merged with the given parameters; return the ResourceGroup."""
         res_group = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}",
             "name": resource_group_name,
@@ -105,6 +118,7 @@ class FakeResourceGroups:
         return ResourceGroup(res_group)
 
     def get(self, name) -> ResourceGroup:
+        """Load a resource group from disk, raising ResourceNotFoundError when it is absent."""
         try:
             with open(self.path / name / "resource_group.json", "r", encoding="utf-8") as file:
                 return ResourceGroup(json.load(file))
@@ -112,6 +126,7 @@ class FakeResourceGroups:
             raise ResourceNotFoundError("Resource group not found") from None
 
     def list(self) -> List[ResourceGroup]:
+        """Return every resource group stored under the fake root directory."""
         rgs = []
         for name in os.listdir(self.path):
             try:
@@ -122,15 +137,19 @@ class FakeResourceGroups:
         return rgs
 
     def begin_delete(self, name: str) -> WaitableObject:
+        """Remove the resource group directory with everything in it."""
         shutil.rmtree(self.path / name)
         return WaitableObject()
 
 
 class FakeNetworkSecurityGroup:
+    """Fake network security group operations backed by nsg-*.json files in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list(self, resource_group_name: str) -> List[NetworkSecurityGroup]:
+        """Return all network security groups of a resource group."""
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("nsg-")]
         except FileNotFoundError:
@@ -144,6 +163,7 @@ class FakeNetworkSecurityGroup:
     def begin_create_or_update(
         self, resource_group_name: str, network_security_group_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a network security group with the requested security rules, shaped like the Azure response."""
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/networkSecurityGroups/default",
@@ -184,6 +204,7 @@ class FakeNetworkSecurityGroup:
         return WaitableObject()
 
     def get(self, resource_group_name: str, network_security_group_name: str) -> NetworkSecurityGroup:
+        """Load a network security group, raising ResourceNotFoundError when it is absent."""
         try:
             with open(
                 self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r", encoding="utf-8"
@@ -194,10 +215,13 @@ class FakeNetworkSecurityGroup:
 
 
 class FakeVirtualNetwork:
+    """Fake virtual network operations backed by vnet-*.json files in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list(self, resource_group_name: str) -> List[VirtualNetwork]:
+        """Return all virtual networks of a resource group."""
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("vnet-")]
         except FileNotFoundError:
@@ -211,6 +235,7 @@ class FakeVirtualNetwork:
     def begin_create_or_update(
         self, resource_group_name: str, virtual_network_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a virtual network with the requested location and address space."""
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/virtualNetworks/{virtual_network_name}",
@@ -232,6 +257,7 @@ class FakeVirtualNetwork:
         return WaitableObject()
 
     def get(self, resource_group_name: str, virtual_network_name: str) -> NetworkSecurityGroup:
+        """Load a virtual network, raising ResourceNotFoundError when it is absent."""
         try:
             with open(
                 self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8"
@@ -242,10 +268,13 @@ class FakeVirtualNetwork:
 
 
 class FakeSubnet:
+    """Fake subnet operations backed by subnet-<vnet>-<name>.json files in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list(self, resource_group_name: str, virtual_network_name: str) -> List[Subnet]:
+        """Return all subnets of a virtual network."""
         try:
             files = [
                 file
@@ -263,6 +292,7 @@ class FakeSubnet:
     def begin_create_or_update(
         self, resource_group_name: str, virtual_network_name: str, subnet_name: str, subnet_parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a subnet with the requested properties plus the defaults Azure adds."""
         requested = rest_body(subnet_parameters)["properties"]
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -286,6 +316,7 @@ class FakeSubnet:
         return WaitableObject()
 
     def get(self, resource_group_name: str, virtual_network_name: str, subnet_name: str) -> NetworkSecurityGroup:
+        """Load a subnet, raising ResourceNotFoundError when it is absent."""
         try:
             with open(
                 self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json",
@@ -298,10 +329,13 @@ class FakeSubnet:
 
 
 class FakeIpAddress:
+    """Fake public IP address operations backed by ip-*.json files in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list(self, resource_group_name: str) -> List[PublicIPAddress]:
+        """Return all public IP addresses of a resource group."""
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("ip-")]
         except FileNotFoundError:
@@ -315,6 +349,7 @@ class FakeIpAddress:
     def begin_create_or_update(
         self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a public IP address with the requested SKU, allocation method and IP version."""
         requested = rest_body(parameters)
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -342,6 +377,7 @@ class FakeIpAddress:
         return WaitableObject()
 
     def get(self, resource_group_name: str, public_ip_address_name: str) -> PublicIPAddress:
+        """Load a public IP address, raising ResourceNotFoundError when it is absent."""
         try:
             with open(
                 self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r", encoding="utf-8"
@@ -351,6 +387,7 @@ class FakeIpAddress:
             raise ResourceNotFoundError("Public IP address not found") from None
 
     def begin_delete(self, resource_group_name: str, public_ip_address_name: str) -> WaitableObject:
+        """Delete the public IP address file if it exists."""
         try:
             os.remove(self.path / resource_group_name / f"ip-{public_ip_address_name}.json")
         except FileNotFoundError:
@@ -359,10 +396,13 @@ class FakeIpAddress:
 
 
 class FakeNetworkInterface:
+    """Fake network interface operations backed by nic-*.json files in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list(self, resource_group_name: str) -> List[NetworkInterface]:
+        """Return all network interfaces of a resource group."""
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("nic-")]
         except FileNotFoundError:
@@ -427,6 +467,7 @@ class FakeNetworkInterface:
     def begin_create_or_update(
         self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a NIC with one ipConfiguration per requested one and return a poller holding it."""
         requested = rest_body(parameters)
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -463,6 +504,7 @@ class FakeNetworkInterface:
         return WaitableObject(value=NetworkInterface(base))
 
     def get(self, resource_group_name: str, network_interface_name: str) -> NetworkInterface:
+        """Load a network interface, raising ResourceNotFoundError when it is absent."""
         try:
             with open(
                 self.path / resource_group_name / f"nic-{network_interface_name}.json", "r", encoding="utf-8"
@@ -472,6 +514,7 @@ class FakeNetworkInterface:
             raise ResourceNotFoundError("NIC not found") from None
 
     def begin_delete(self, resource_group_name: str, network_interface_name: str) -> WaitableObject:
+        """Delete the network interface file if it exists."""
         try:
             os.remove(self.path / resource_group_name / f"nic-{network_interface_name}.json")
         except FileNotFoundError:
@@ -480,6 +523,8 @@ class FakeNetworkInterface:
 
 
 class FakeNetwork:
+    """Fake network management client exposing the NSG, vnet, subnet, public IP and NIC operations."""
+
     def __init__(self, path) -> None:
         self.path: Path = path
         self.network_security_groups = FakeNetworkSecurityGroup(self.path)
@@ -509,6 +554,8 @@ class VMCreateBehavior:
 
 
 class FakeVirtualMachines:
+    """Fake VM operations backed by vm-*.json files, with scriptable stuck, eviction and throttling behaviors."""
+
     _scripts: Dict[str, Dict[str, Any]] = {}
 
     def __init__(self, path: Path) -> None:
@@ -623,6 +670,7 @@ class FakeVirtualMachines:
         return raw
 
     def list(self, resource_group_name: str) -> List[VirtualMachine]:
+        """Return all VMs of a resource group, without their simulation state."""
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("vm-")]
         except FileNotFoundError:
@@ -638,6 +686,10 @@ class FakeVirtualMachines:
     def begin_create_or_update(
         self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
+        """Write a VM from the request, applying its scripted create behavior.
+
+        A spot scylla-db VM tagged with the FailSpotDB job tag fails with a 409 OperationPreempted error instead.
+        """
         tags = parameters.pop("tags") if "tags" in parameters else {}
         parameters = dict_keys_to_camel_case(parameters)
         location = parameters.pop("location")
@@ -741,6 +793,7 @@ class FakeVirtualMachines:
         return WaitableObject()
 
     def begin_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]) -> WaitableObject:
+        """Merge the given properties and tags into the stored VM, keeping its simulation state."""
         v_m = self._read_raw(resource_group_name, vm_name)
         tags = parameters.pop("tags") if "tags" in parameters else {}
         v_m["properties"].update(**dict_keys_to_camel_case(parameters))
@@ -753,6 +806,7 @@ class FakeVirtualMachines:
         return WaitableObject()
 
     def begin_delete(self, resource_group_name: str, vm_name: str) -> WaitableObject:
+        """Delete the VM file, and its NIC and public IP when the NIC delete option is Delete."""
         raw = self._read_raw(resource_group_name, vm_name)
         os.remove(self._vm_path(resource_group_name, vm_name))
         nic_ref = (raw["properties"].get("networkProfile") or {}).get("networkInterfaces") or [{}]
@@ -771,6 +825,7 @@ class FakeVirtualMachines:
         return WaitableObject()
 
     def get(self, resource_group_name: str, vm_name: str, expand: str = "") -> VirtualMachine:
+        """Load a VM; with an instanceView expand, advance its simulation by one poll and attach the instance view."""
         raw = self._read_raw(resource_group_name, vm_name)
         if expand and "instanceview" in expand.lower():
             raw = self._advance_simulation(resource_group_name, vm_name, raw)
@@ -780,21 +835,27 @@ class FakeVirtualMachines:
         return VirtualMachine(**raw)
 
     def instance_view(self, resource_group_name: str, vm_name: str):
+        """Return the VM instance view, advancing its simulation by one poll."""
         return self.get(resource_group_name, vm_name, expand="instanceView").instance_view
 
     def begin_restart(self, resource_group_name, vm_name) -> WaitableObject:
+        """Return a completed poller."""
         return WaitableObject()
 
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
+        """Run the first script line locally in a shell and return its output as a run-command result."""
         result = subprocess.run(parameters.script[0], shell=True, capture_output=True, text=True, check=False)
         return ResultableObject(result.stdout, result.stderr)
 
 
 class FakeImages:
+    """Fake image operations that read images from azure_images_list.json in the resource group directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list_by_resource_group(self, resource_group_name) -> List[Image]:
+        """Return the images stored for a resource group."""
         with open(self.path / resource_group_name / "azure_images_list.json", encoding="utf-8") as file:
             return [self._make_image(image) for image in json.load(file)]
 
@@ -808,12 +869,15 @@ class FakeImages:
 
 
 class FakeGalleryImageVersions:
+    """Fake gallery image version operations backed by <gallery>_<image>_gallery_images_list.json files."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def list_by_gallery_image(
         self, resource_group_name: str, gallery_name: str, gallery_image_name: str
     ) -> List[Image]:
+        """Return the stored versions of a gallery image, raising ResourceNotFoundError when there are none."""
         try:
             with open(
                 self.path / resource_group_name / f"{gallery_name}_{gallery_image_name}_gallery_images_list.json",
@@ -842,6 +906,7 @@ class FakeResourceSkus:
         self.path = path
 
     def list(self, filter: str = None) -> List[ResourceSku]:  # noqa: A002
+        """Return a VM ResourceSku with its MaxNetworkInterfaces capability for each known size."""
         return [
             ResourceSku(
                 name=name,
@@ -853,6 +918,8 @@ class FakeResourceSkus:
 
 
 class Compute:
+    """Fake compute management client exposing the VM, image, gallery image version and resource SKU operations."""
+
     def __init__(self, path) -> None:
         self.path: Path = path
         self.virtual_machines = FakeVirtualMachines(self.path)
@@ -862,15 +929,20 @@ class Compute:
 
 
 class FakeResourceManagementClient:
+    """Fake resource management client exposing the resource group operations."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
 
     @property
     def resource_groups(self) -> FakeResourceGroups:
+        """Return the fake resource group operations."""
         return FakeResourceGroups(self.path)
 
 
 class FakeAzureService:
+    """Stand-in for AzureService whose clients keep all resources as JSON files under the given directory."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.mkdir(exist_ok=True)
@@ -880,37 +952,50 @@ class FakeAzureService:
         self.minicloud_endpoint = None
 
     def get_vault_key(self, vault_uri, key_name):
+        """Return None, as for a vault without the key."""
         return None
 
     def create_vault_key(self, vault_uri, key_name):
+        """Return a fake key id made of the vault URI and the key name."""
         return f"{vault_uri}{key_name}"
 
     @property
     def resource(self) -> FakeResourceManagementClient:
+        """Return the fake resource management client."""
         return FakeResourceManagementClient(self.path)
 
     @property
     def network(self) -> FakeNetwork:
+        """Return the fake network management client."""
         return FakeNetwork(self.path)
 
     @property
     def compute(self) -> Compute:
+        """Return the fake compute management client."""
         return Compute(self.path)
 
     @property
     def keyvault(self):
+        """Return the fake Key Vault management client."""
         return FakeKeyVaultClient()
 
 
 class FakeKeyVaultClient:
+    """Fake Key Vault management client whose vault creation always succeeds."""
+
     class vaults:
         @staticmethod
         def begin_create_or_update(*args, **kwargs):
+            """Return a completed vault creation operation."""
             return FakeVaultOperation()
 
 
 class FakeVaultOperation:
+    """Fake vault creation poller."""
+
     def result(self):
+        """Return a vault whose properties carry a fixed fake vault URI."""
+
         class MockVault:
             def __init__(self):
                 class Properties:

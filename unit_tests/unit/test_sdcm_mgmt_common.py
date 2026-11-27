@@ -5,6 +5,8 @@ from sdcm.utils.distro import Distro
 
 
 class TestManagerVersions:
+    """Repo URL resolution for Scylla Manager and its Scylla backend per version and distro."""
+
     @pytest.mark.parametrize(
         "version, distro, expected_url",
         [
@@ -26,6 +28,7 @@ class TestManagerVersions:
         ],
     )
     def test_get_manager_scylla_backend(self, version, distro, expected_url):
+        """The manager's Scylla backend repo URL uses the major.minor release and the distro's deb list or rpm repo."""
         assert get_manager_scylla_backend(version, distro) == expected_url
 
     @pytest.mark.parametrize(
@@ -59,4 +62,5 @@ class TestManagerVersions:
         ],
     )
     def test_get_manager_repo(self, version, distro, expected_url):
+        """The manager repo URL uses the major.minor release, or the unstable master path for master_latest."""
         assert get_manager_repo(version, distro) == expected_url

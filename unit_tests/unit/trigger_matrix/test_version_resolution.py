@@ -48,6 +48,7 @@ AZURE_TARGET = BackendTarget("azure", "eastus")
     ],
 )
 def test_gce_label_converted_back_to_version_tag(label, expected):
+    """A GCE image label of a dev, rc or release build converts back to its version tag; anything else gives ''."""
     assert _gce_label_to_version(label) == expected
 
 
@@ -61,6 +62,7 @@ def test_gce_label_converted_back_to_version_tag(label, expected):
     ],
 )
 def test_partial_version_normalized_to_branch_qualifier(version, expected):
+    """Major.minor versions become branch-X.Y:latest; branch qualifiers and bare branch names are kept."""
     assert _as_branch_qualifier(version) == expected
 
 
@@ -76,10 +78,12 @@ def test_partial_version_normalized_to_branch_qualifier(version, expected):
     ],
 )
 def test_only_open_ended_versions_need_resolution(version, expected):
+    """Only branch qualifiers and major.minor versions are resolvable; full tags, releases and bare names are not."""
     assert is_resolvable_partial_version(version) is expected
 
 
 def test_per_backend_gives_every_backend_its_own_build():
+    """The per-backend strategy resolves the latest build of each backend independently."""
     with patch("sdcm.utils.trigger_matrix.images._resolve_latest_version_for_backend") as mock_resolve:
         mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
         versions, unavailable = resolve_versions_for_targets(
@@ -94,6 +98,7 @@ def test_per_backend_gives_every_backend_its_own_build():
 
 
 def test_per_backend_skips_a_backend_without_images():
+    """Per-backend marks a backend with no image for the request as unavailable and resolves the rest."""
     with patch("sdcm.utils.trigger_matrix.images._resolve_latest_version_for_backend") as mock_resolve:
         mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else ""
         versions, unavailable = resolve_versions_for_targets(
@@ -174,6 +179,7 @@ def test_per_backend_passes_the_request_through_for_backends_without_images():
 
 
 def test_aws_strict_drops_backends_missing_the_aws_build():
+    """aws-strict keeps the AWS build and marks backends lacking it as unavailable."""
     with patch("sdcm.utils.trigger_matrix.images.version_exists_for_backend") as mock_exists:
         mock_exists.side_effect = lambda version, backend, region, arch: backend == "aws"
         versions, unavailable = resolve_versions_for_targets(
@@ -209,6 +215,7 @@ def test_common_picks_the_newest_build_published_everywhere():
 
 
 def test_common_raises_when_no_build_is_shared():
+    """The common strategy raises TriggerMatrixError when no resolved build is published on every backend."""
     with (
         patch("sdcm.utils.trigger_matrix.images._resolve_latest_version_for_backend") as mock_resolve,
         patch("sdcm.utils.trigger_matrix.images.version_exists_for_backend", return_value=False),
@@ -224,6 +231,7 @@ def test_common_raises_when_no_build_is_shared():
 
 
 def test_common_raises_when_nothing_resolves():
+    """The common strategy raises TriggerMatrixError when no backend resolves the request."""
     with patch("sdcm.utils.trigger_matrix.images._resolve_latest_version_for_backend", return_value=""):
         with pytest.raises(TriggerMatrixError, match="Cannot resolve 'master:latest'"):
             resolve_versions_for_targets(
@@ -235,6 +243,7 @@ def test_common_raises_when_nothing_resolves():
 
 
 def test_common_verifies_an_explicit_build_on_every_backend():
+    """The common strategy checks an explicit build on every backend and uses it for all of them."""
     with patch("sdcm.utils.trigger_matrix.images.version_exists_for_backend", return_value=True) as mock_exists:
         versions, unavailable = resolve_versions_for_targets(
             original_version=AWS_BUILD,
@@ -249,6 +258,7 @@ def test_common_verifies_an_explicit_build_on_every_backend():
 
 
 def test_unknown_strategy_is_rejected():
+    """An unknown resolution strategy raises TriggerMatrixError."""
     with pytest.raises(TriggerMatrixError, match="Unknown version resolution strategy"):
         resolve_versions_for_targets(
             original_version="master:latest",
@@ -259,10 +269,12 @@ def test_unknown_strategy_is_rejected():
 
 
 def test_docker_backend_is_always_considered_available():
+    """The docker backend reports any version as available."""
     assert version_exists_for_backend(AWS_BUILD, "docker") is True
 
 
 def test_target_carries_backend_region_and_arch():
+    """A job's target is built from its backend, region param and arch, rendered as backend/region/arch."""
     job = JobConfig(job_name="perf-i8g", backend="aws", params={"region": "eu-west-2"}, arch="aarch64")
     assert target_for_job(job) == BackendTarget("aws", "eu-west-2", "aarch64")
     assert str(target_for_job(job)) == "aws/eu-west-2/aarch64"
@@ -285,6 +297,7 @@ def test_the_job_region_wins_over_the_region_override():
 
 
 def test_target_region_falls_back_to_the_matrix_defaults():
+    """A job with no region of its own takes the region from the matrix defaults."""
     job = JobConfig(job_name="job", backend="aws")
     assert target_for_job(job, {"region": "eu-west-2"}).region == "eu-west-2"
 
@@ -300,10 +313,12 @@ def test_target_region_falls_back_to_the_matrix_defaults():
     ],
 )
 def test_region_values_are_split(region, expected):
+    """Region values split from a single name, a JSON list, or a comma list; broken JSON falls back to whitespace."""
     assert split_regions(region) == expected
 
 
 def test_multi_dc_job_keeps_all_its_regions():
+    """A multi-DC job's target keeps all its regions, comma-joined."""
     job = JobConfig(job_name="multidc", backend="aws", params={"region": '["eu-west-1", "eu-west-2"]'})
     assert target_for_job(job) == BackendTarget("aws", "eu-west-1,eu-west-2")
 
@@ -317,6 +332,7 @@ def test_multi_dc_build_must_exist_in_every_region():
 
 
 def test_multi_dc_latest_resolved_in_the_first_region():
+    """A multi-DC job's branch version is resolved against the AMIs of its first region."""
     with patch(
         "sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami", return_value=AWS_BUILD
     ) as mock_resolve:
@@ -333,6 +349,7 @@ def test_multi_dc_latest_resolved_in_the_first_region():
 
 
 def test_multi_dc_job_skipped_until_the_build_reaches_every_region():
+    """A multi-DC job is unavailable while the resolved build is missing from any of its regions."""
     multi_dc = BackendTarget("aws", "eu-west-1,eu-west-2")
     with (
         patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami", return_value=AWS_BUILD),
@@ -366,6 +383,7 @@ def test_gce_target_has_no_region():
     ],
 )
 def test_jobs_that_dont_install_from_an_image_need_no_version(defaults, params, expected):
+    """Rolling-upgrade and unified_package (PGO) jobs need no scylla_version; regular jobs do."""
     job = JobConfig(job_name="job", backend="aws", params={"region": "eu-west-1"} | params)
     assert job_uses_scylla_version(job, defaults) is expected
 
@@ -407,6 +425,7 @@ def test_trigger_matrix_stamps_each_backend_with_its_own_build(tmp_path):
 
 
 def test_trigger_matrix_aws_strict_skips_backends_without_the_build(tmp_path):
+    """With aws-strict, trigger_matrix triggers the AWS job only and lists the GCE job as skipped."""
     matrix_file = _write_matrix(tmp_path, version_resolution="aws-strict")
 
     with patch("sdcm.utils.trigger_matrix.images.version_exists_for_backend") as mock_exists:
@@ -425,6 +444,7 @@ def test_trigger_matrix_aws_strict_skips_backends_without_the_build(tmp_path):
 
 
 def test_trigger_matrix_common_runs_one_build_everywhere(tmp_path):
+    """With the common strategy, trigger_matrix triggers every job with the one build shared by all backends."""
     matrix_file = _write_matrix(tmp_path, version_resolution="common")
 
     with (
@@ -446,6 +466,7 @@ def test_trigger_matrix_common_runs_one_build_everywhere(tmp_path):
 
 
 def test_cli_strategy_overrides_the_matrix_file(tmp_path):
+    """A version_resolution passed to trigger_matrix replaces the strategy set in the matrix file."""
     matrix_file = _write_matrix(tmp_path, version_resolution="common")
 
     with patch("sdcm.utils.trigger_matrix.images.version_exists_for_backend") as mock_exists:

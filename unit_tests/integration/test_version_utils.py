@@ -13,6 +13,7 @@ from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 @pytest.mark.need_network
 @pytest.mark.integration
 def test_get_specific_tag_of_docker_image():
+    """Resolving the scylla-nightly image returns a concrete tag instead of "latest"."""
     tag = get_specific_tag_of_docker_image(docker_repo="scylladb/scylla-nightly")
     assert tag != "latest"
 
@@ -65,6 +66,7 @@ def _generate_test_params_for_get_branched_repo():
     _generate_test_params_for_get_branched_repo(),
 )
 def test_get_branched_repo(scylla_version, distro, expected_repo):
+    """get_branched_repo builds the S3 repo URL of each live branch on centos and of the first one on ubuntu, debian."""
     expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
     actual_repo = get_branched_repo(scylla_version, distro)
     assert actual_repo == expected_template.format(expected_repo)

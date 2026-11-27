@@ -26,6 +26,7 @@ def _cluster(**attrs) -> mock.Mock:
     ],
 )
 def test_prometheus_operator_config_from_operator_repo(tmp_path, chart_version, git_ref):
+    """The Prometheus operator bundle is downloaded from the scylla-operator repo at the chart's tag or commit."""
     with mock.patch("sdcm.cluster_k8s.create_retry_session") as session:
         session.return_value.get.return_value = mock.Mock(text="kind: Bundle\n")
         path = KubernetesCluster._get_prometheus_operator_config(
@@ -43,6 +44,7 @@ def test_prometheus_operator_config_from_operator_repo(tmp_path, chart_version, 
     ],
 )
 def test_prometheus_operator_config_falls_back_to_sct_bundle(tmp_path, error):
+    """A download HTTP or network error falls back to the bundle shipped with SCT."""
     with mock.patch("sdcm.cluster_k8s.create_retry_session") as session:
         session.return_value.get.return_value.raise_for_status.side_effect = error
         session.return_value.get.side_effect = None if isinstance(error, requests.HTTPError) else error
@@ -54,6 +56,7 @@ def test_prometheus_operator_config_falls_back_to_sct_bundle(tmp_path, error):
 
 @pytest.mark.parametrize("crds_existed,restarted", [(False, True), (True, False)])
 def test_deploy_prometheus_operator_restarts_scylla_operator_only_for_new_crds(crds_existed, restarted):
+    """scylla-operator is restarted after the Prometheus operator deploy only when its CRDs were newly created."""
     cluster = _cluster()
     cluster.kubectl.side_effect = lambda cmd, **_: mock.Mock(ok=crds_existed if cmd.startswith("get crd") else True)
     with mock.patch("sdcm.cluster_k8s.time.sleep"):
@@ -70,6 +73,7 @@ def test_deploy_prometheus_operator_restarts_scylla_operator_only_for_new_crds(c
     ],
 )
 def test_get_grafana_ip_takes_first(backend, stdout):
+    """get_grafana_ip returns the first IP when kubectl lists one or several (e.g. during a rollout)."""
     cluster = _cluster(cluster_backend=backend)
     cluster.kubectl.return_value = mock.Mock(stdout=stdout)
     assert KubernetesCluster.get_grafana_ip(cluster, "sct-cluster", "scylla") == "10.4.0.1"

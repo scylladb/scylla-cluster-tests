@@ -76,6 +76,7 @@ class _Assembled(_AlphaMixin, _BetaMixin):
 
 
 def test_field_validator_declared_on_a_mixin_runs_on_the_assembled_model():
+    """A field validator defined on a mixin rejects invalid values once the mixin is part of the assembled model."""
     with pytest.raises(ValueError, match="alpha must be positive"):
         _Assembled(alpha=-1)
 

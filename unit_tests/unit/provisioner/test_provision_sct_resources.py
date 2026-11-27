@@ -71,6 +71,7 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
 
 
 def test_fallback_on_demand_when_spot_fails(fallback_on_demand, params, test_config, azure_service, fake_remoter):
+    """When spot provisioning of DB nodes fails, they are provisioned on-demand; loaders and monitor stay spot."""
     fake_remoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": Result(stdout="/usr/bin/cloud-init", exited=0),
         r"sudo timeout --kill-after=10s --signal=TERM \d+ cloud-init status --wait": Result(

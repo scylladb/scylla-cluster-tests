@@ -22,10 +22,12 @@ def make_node(store: str, *free_gb: int) -> MagicMock:
 
 
 def sudo_commands(node: MagicMock) -> list[str]:
+    """Return the commands the node ran through remoter.sudo, in order."""
     return [call.args[0] for call in node.remoter.sudo.call_args_list]
 
 
 def test_enough_space_removes_nothing():
+    """With enough free space in the image store, the check measures it with df and leaves images in place."""
     node = make_node("/var/lib/containerd", 48)
 
     ensure_docker_free_space(node, 10)
@@ -35,6 +37,7 @@ def test_enough_space_removes_nothing():
 
 
 def test_unused_images_are_removed_before_failing():
+    """When the image store is short on space, unused images are pruned and the space is measured again."""
     node = make_node("/var/lib/docker", 2, 12)
 
     ensure_docker_free_space(node, 10)
@@ -43,6 +46,7 @@ def test_unused_images_are_removed_before_failing():
 
 
 def test_still_short_fails_naming_the_store_and_both_sizes():
+    """When pruning leaves too little space, NodeSetupFailed names the store, its free space and the requirement."""
     node = make_node("/var/lib/containerd", 2, 4)
 
     with pytest.raises(NodeSetupFailed, match=r"/var/lib/containerd has 4GB free, the run needs 10GB"):
@@ -50,6 +54,7 @@ def test_still_short_fails_naming_the_store_and_both_sizes():
 
 
 def test_zero_turns_the_check_off():
+    """A required size of 0 skips the check, so the node runs no commands."""
     node = MagicMock()
 
     ensure_docker_free_space(node, 0)
@@ -59,6 +64,7 @@ def test_zero_turns_the_check_off():
 
 
 def test_a_store_df_cannot_read_fails_with_dfs_error():
+    """A df failure on the image store propagates as UnexpectedExit."""
     node = make_node("/var/lib/containerd")
     node.remoter.run.side_effect = UnexpectedExit(MagicMock(stderr="df: /var/lib/containerd: No such file"))
 
@@ -93,6 +99,7 @@ def test_a_host_with_two_roles_is_checked_once_against_their_sum(monkeypatch, fi
 
 
 def test_a_host_with_one_role_needs_only_its_space(monkeypatch):
+    """A host with a single role is checked against that role's requirement alone."""
     monkeypatch.setattr("sdcm.cluster.ensure_docker_version", MagicMock())
     node = make_node("/var/lib/containerd", 9)
     node.private_ip_address = "10.0.0.8"

@@ -20,12 +20,14 @@ MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_END
 
 @pytest.fixture(name="no_minicloud_env")
 def no_minicloud_env_fixture(monkeypatch):
+    """Unset the AWS, GCE and SCT minicloud endpoint variables so the code sees a real cloud."""
     for var in MINICLOUD_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture(name="pending_ec2_client")
 def pending_ec2_client_fixture():
+    """Patch boto3 with an EC2 client that lists one pending instance, and pin the random jitter to 0."""
     client = MagicMock()
     client.describe_instances.return_value = {
         "Reservations": [{"Instances": [{"InstanceId": "i-0001", "State": {"Name": "pending"}}]}]
@@ -42,6 +44,7 @@ def _waiter_config(client: MagicMock) -> dict:
 
 
 def test_list_instances_aws_waits_ten_minutes_by_default(pending_ec2_client):
+    """By default the pending-instances waiter polls for PENDING_INSTANCES_TIMEOUT (10 minutes)."""
     list_instances_aws(region_name="eu-west-1", running=True)
 
     assert _waiter_config(pending_ec2_client) == {
@@ -52,6 +55,7 @@ def test_list_instances_aws_waits_ten_minutes_by_default(pending_ec2_client):
 
 
 def test_list_instances_aws_rounds_pending_timeout_up_to_a_whole_poll(pending_ec2_client):
+    """A pending timeout that is not a multiple of the poll interval rounds up to a whole extra attempt."""
     list_instances_aws(region_name="eu-west-1", running=True, pending_timeout=20)
 
     assert _waiter_config(pending_ec2_client)["MaxAttempts"] == 2
@@ -68,6 +72,7 @@ def _fake_aws_cluster(params: dict) -> SimpleNamespace:
 
 @pytest.fixture(name="patched_list_instances")
 def patched_list_instances_fixture():
+    """Patch list_instances_aws to return no instances and the EC2 client wrapper with a mock."""
     with (
         patch("sdcm.cluster_aws.list_instances_aws", return_value={"eu-west-1": []}) as mock_list,
         patch("sdcm.cluster_aws.ec2_client.EC2ClientWrapper"),
@@ -76,12 +81,14 @@ def patched_list_instances_fixture():
 
 
 def test_get_instances_keeps_default_wait_on_real_aws(no_minicloud_env, patched_list_instances):
+    """On real AWS, _get_instances passes the default pending timeout."""
     AWSCluster._get_instances(_fake_aws_cluster({}), dc_idx=0)
 
     assert patched_list_instances.call_args.kwargs["pending_timeout"] == PENDING_INSTANCES_TIMEOUT
 
 
 def test_get_instances_waits_for_cold_image_cache_on_minicloud(no_minicloud_env, patched_list_instances):
+    """On minicloud, _get_instances passes the longer minicloud pending timeout for its cold image cache."""
     AWSCluster._get_instances(_fake_aws_cluster({"minicloud_endpoint_url": "http://localhost:5000"}), dc_idx=0)
 
     assert patched_list_instances.call_args.kwargs["pending_timeout"] == MINICLOUD_PENDING_INSTANCES_TIMEOUT
@@ -98,11 +105,13 @@ class _NeverRunningGCECluster(SimpleNamespace):
 
 @pytest.fixture(name="never_running_gce_cluster")
 def never_running_gce_cluster_fixture():
+    """Provide a factory of GCE clusters whose instances never reach RUNNING, with retry sleeps patched out."""
     with patch("sdcm.utils.decorators.time.sleep"):
         yield lambda params: _NeverRunningGCECluster(params=params)
 
 
 def test_gce_running_wait_keeps_default_on_real_gce(no_minicloud_env, never_running_gce_cluster):
+    """On real GCE, the wait for RUNNING retries for the default pending timeout and then fails."""
     cluster = never_running_gce_cluster({})
 
     with pytest.raises(CreateGCENodeError):
@@ -112,6 +121,7 @@ def test_gce_running_wait_keeps_default_on_real_gce(no_minicloud_env, never_runn
 
 
 def test_gce_running_wait_covers_cold_image_cache_on_minicloud(no_minicloud_env, never_running_gce_cluster):
+    """On minicloud, the wait for RUNNING retries for the longer minicloud pending timeout and then fails."""
     cluster = never_running_gce_cluster({"minicloud_endpoint_url": "http://localhost:5000"})
 
     with pytest.raises(CreateGCENodeError):

@@ -43,7 +43,10 @@ from sdcm.sct_events.loaders import (
 
 
 class TestGeminiEvent:
+    """Begin/end rendering, results and pickling of GeminiStressEvent."""
+
     def test_continuous_event_with_error(self):
+        """A Gemini event renders the command on begin, and the duration at ERROR severity after errors on end."""
         gemini_stress_event = GeminiStressEvent(node="node", cmd="gemini_cmd", publish_event=False)
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
@@ -70,6 +73,7 @@ class TestGeminiEvent:
         assert gemini_stress_event == pickle.loads(pickle.dumps(gemini_stress_event))
 
     def test_continuous_event_with_result(self):
+        """add_result records the exit code and the last two stdout lines as the result, and stderr as an error."""
         gemini_stress_event = GeminiStressEvent(node="node", cmd="cat", publish_event=False)
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
@@ -101,6 +105,7 @@ class TestGeminiEvent:
         assert gemini_stress_event == pickle.loads(pickle.dumps(gemini_stress_event))
 
     def test_continuous_event_without_result(self):
+        """A Gemini event ended without a result has an empty result and renders the full duration."""
         gemini_stress_event = GeminiStressEvent(node="node", cmd="cat", publish_event=False)
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
@@ -126,7 +131,10 @@ class TestGeminiEvent:
 
 
 class TestCassandraStressEvent:
+    """Begin, end and error rendering and pickling of CassandraStressEvent."""
+
     def test_continuous_event_with_errors(self):
+        """A c-s event renders the command on begin, then errors on end, and accumulated errors on event_error."""
         begin_event_timestamp = 1623596860.1202102
         cs_event = CassandraStressEvent(
             node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
@@ -172,6 +180,7 @@ class TestCassandraStressEvent:
         assert cs_event == pickle.loads(pickle.dumps(cs_event))
 
     def test_continuous_event_without_errors(self):
+        """A c-s event ended without errors renders its command and duration at NORMAL severity."""
         begin_event_timestamp = 1623596860.1202102
         cs_event = CassandraStressEvent(
             node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
@@ -201,7 +210,10 @@ class TestCassandraStressEvent:
 
 
 class TestScyllaBenchEvent:
+    """Begin/end rendering and pickling of ScyllaBenchEvent."""
+
     def test_continuous_event_with_error(self):
+        """A scylla-bench event ended after a failure renders at ERROR severity with the error text."""
         begin_event_timestamp = 1623596860.1202102
         scylla_bench_event = ScyllaBenchEvent(
             node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
@@ -236,6 +248,7 @@ class TestScyllaBenchEvent:
         assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
 
     def test_continuous_event_without_error(self):
+        """A scylla-bench event ended without errors renders its command and duration at NORMAL severity."""
         begin_event_timestamp = 1623596860.1202102
         scylla_bench_event = ScyllaBenchEvent(
             node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
@@ -284,6 +297,7 @@ class TestConvertedStressEvents:
         assert begin_event == pickle.loads(pickle.dumps(begin_event))
 
     def test_continuous_event_without_error(self, event_class):
+        """A converted stress event ended without errors renders its command and duration at NORMAL severity."""
         event = self._make_event(event_class)
         self._assert_begin_event(event_class, event.begin_event())
 
@@ -297,6 +311,7 @@ class TestConvertedStressEvents:
         assert event == pickle.loads(pickle.dumps(event))
 
     def test_continuous_event_with_error(self, event_class):
+        """A converted stress event ended after a failure renders at ERROR severity with the error text."""
         event = self._make_event(event_class)
         self._assert_begin_event(event_class, event.begin_event())
 
@@ -315,7 +330,10 @@ class TestConvertedStressEvents:
 
 
 class TestCDCReaderStressEvent:
+    """Subevent types, severities and rendering of CDCReaderStressEvent."""
+
     def test_subevents(self):
+        """CDCReaderStressEvent has failure, error, start and finish subevents and no timeout subevent."""
         assert issubclass(CDCReaderStressEvent.failure, CDCReaderStressEvent)
         assert issubclass(CDCReaderStressEvent.error, CDCReaderStressEvent)
         assert not hasattr(CDCReaderStressEvent, "timeout")
@@ -323,6 +341,7 @@ class TestCDCReaderStressEvent:
         assert issubclass(CDCReaderStressEvent.finish, CDCReaderStressEvent)
 
     def test_without_errors(self):
+        """A CDC reader start event is NORMAL and renders node and stress command."""
         event = CDCReaderStressEvent.start(node=[], stress_cmd="c-s", log_file_name="1.log")
         assert event.severity == Severity.NORMAL
         assert event.node == "[]"
@@ -337,6 +356,7 @@ class TestCDCReaderStressEvent:
         assert event == pickle.loads(pickle.dumps(event))
 
     def test_with_errors(self):
+        """A CDC reader failure event is CRITICAL and renders its errors."""
         event = CDCReaderStressEvent.failure(node="node1", errors=["e1", "e2"])
         assert event.severity == Severity.CRITICAL
         assert event.node == "node1"
@@ -353,7 +373,10 @@ class TestCDCReaderStressEvent:
 
 
 class TestNdBenchStressEvent:
+    """Subevent types, severities and rendering of NdBenchStressEvent."""
+
     def test_subevents(self):
+        """NdBenchStressEvent has failure, error, start and finish subevents and no timeout subevent."""
         assert issubclass(NdBenchStressEvent.failure, NdBenchStressEvent)
         assert issubclass(NdBenchStressEvent.error, NdBenchStressEvent)
         assert not hasattr(NdBenchStressEvent, "timeout")
@@ -361,6 +384,7 @@ class TestNdBenchStressEvent:
         assert issubclass(NdBenchStressEvent.finish, NdBenchStressEvent)
 
     def test_without_errors(self):
+        """An ndbench error event without errors is ERROR and renders node and stress command."""
         event = NdBenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
         assert event.severity == Severity.ERROR
         assert event.node == "[]"
@@ -375,6 +399,7 @@ class TestNdBenchStressEvent:
         assert event == pickle.loads(pickle.dumps(event))
 
     def test_with_errors(self):
+        """An ndbench failure event is CRITICAL and renders its errors."""
         event = NdBenchStressEvent.failure(node="node1", errors=["e1", "e2"])
         assert event.severity == Severity.CRITICAL
         assert event.node == "node1"
@@ -391,7 +416,10 @@ class TestNdBenchStressEvent:
 
 
 class TestKclStressEvent:
+    """Subevent types, severities and rendering of KclStressEvent."""
+
     def test_subevents(self):
+        """KclStressEvent has failure, start and finish subevents only."""
         assert issubclass(KclStressEvent.failure, KclStressEvent)
         assert not hasattr(KclStressEvent, "error")
         assert not hasattr(KclStressEvent, "timeout")
@@ -399,6 +427,7 @@ class TestKclStressEvent:
         assert issubclass(KclStressEvent.finish, KclStressEvent)
 
     def test_without_errors(self):
+        """A KCL failure event without errors is ERROR and renders node and stress command."""
         event = KclStressEvent.failure(node=[], stress_cmd="c-s", log_file_name="1.log")
         assert event.severity == Severity.ERROR
         assert event.node == "[]"
@@ -413,6 +442,7 @@ class TestKclStressEvent:
         assert event == pickle.loads(pickle.dumps(event))
 
     def test_with_errors(self):
+        """A KCL failure event with errors is ERROR and renders them."""
         event = KclStressEvent.failure(node="node1", errors=["e1", "e2"])
         assert event.severity == Severity.ERROR
         assert event.node == "node1"
@@ -428,8 +458,11 @@ class TestKclStressEvent:
 
 
 class TestCassandraStressLogEvent:
+    """Classification of cassandra-stress log lines into CassandraStressLogEvent types."""
+
     @staticmethod
     def get_event(line, expected_type, expected_severity):
+        """Assert that the line matches a c-s log event of the expected type and severity; raise if none matches."""
         if event := find_log_event(chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS), line):
             event = event.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
@@ -445,6 +478,7 @@ class TestCassandraStressLogEvent:
         )
 
     def test_known_cs_errors(self):
+        """CassandraStressLogEvent exposes the known c-s error types."""
         assert issubclass(CassandraStressLogEvent.IOException, CassandraStressLogEvent)
         assert issubclass(CassandraStressLogEvent.ConsistencyError, CassandraStressLogEvent)
         assert issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent)
@@ -452,6 +486,7 @@ class TestCassandraStressLogEvent:
         assert issubclass(CassandraStressLogEvent.SchemaDisagreement, CassandraStressLogEvent)
 
     def test_known_cs_normal(self):
+        """CassandraStressLogEvent exposes the known c-s informational types."""
         assert issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent)
         assert issubclass(CassandraStressLogEvent.RackAwarePolicy, CassandraStressLogEvent)
 
@@ -464,6 +499,7 @@ class TestCassandraStressLogEvent:
         }
 
     def test_cs_hint_in_flight_error(self):
+        """c-s overload, key operation, I/O and consistency lines map to their event types and severities."""
         self.get_event(
             line="java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
             "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many "
@@ -504,6 +540,7 @@ class TestCassandraStressLogEvent:
         )
 
     def test_cs_normal_shared_awarnes_event(self):
+        """The optimized-driver line maps to a NORMAL ShardAwareDriver event."""
         self.get_event(
             line="com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====",
             expected_type="ShardAwareDriver",
@@ -512,8 +549,11 @@ class TestCassandraStressLogEvent:
 
 
 class TestScyllaBenchLogEvent:
+    """Classification of scylla-bench log lines into ScyllaBenchLogEvent types."""
+
     @staticmethod
     def get_event(line, expected_type, expected_severity):
+        """Assert that the line matches a scylla-bench log event of the expected type and severity; raise if none."""
         if event := find_log_event(
             chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS), line
         ):
@@ -531,6 +571,7 @@ class TestScyllaBenchLogEvent:
         )
 
     def test_scylla_bench_normal_rack_awarness_event(self):
+        """The rack-aware policy line maps to a NORMAL RackAwarePolicy event."""
         self.get_event(
             line="[2025-11-01 04:15:03.653] Using provided rack name 'RACK0' for RackAwareRoundRobinPolicy",
             expected_type="RackAwarePolicy",
@@ -538,6 +579,7 @@ class TestScyllaBenchLogEvent:
         )
 
     def test_known_scylla_bench_errors(self):
+        """ScyllaBenchLogEvent exposes the known scylla-bench error and policy types."""
         assert issubclass(ScyllaBenchLogEvent.ConsistencyError, ScyllaBenchLogEvent)
         assert issubclass(ScyllaBenchLogEvent.DataValidationError, ScyllaBenchLogEvent)
         assert issubclass(ScyllaBenchLogEvent.ParseDistributionError, ScyllaBenchLogEvent)
@@ -554,7 +596,10 @@ class TestScyllaBenchLogEvent:
 
 
 class TestGeminiLogEvent:
+    """Parsing of Gemini JSON log lines into GeminiStressLogEvent."""
+
     def test_json_line(self):
+        """A JSON log line sets timestamp, severity and a message line tagged with its source, and readies the event."""
         event = GeminiStressLogEvent.GeminiEvent()
         event.add_info(
             node="node1",
@@ -577,6 +622,7 @@ class TestGeminiLogEvent:
         assert event == pickle.loads(pickle.dumps(event))
 
     def test_non_json_line(self):
+        """A non-JSON line leaves the event CRITICAL, without line info, and not ready to publish."""
         event = GeminiStressLogEvent.GeminiEvent()
         event_timestamp = event.event_timestamp
         event.add_info(node="node1", line="1961-04-12T06:07:00+00:00 Poyekhalee!", line_number=1)

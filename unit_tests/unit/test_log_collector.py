@@ -42,6 +42,7 @@ from unit_tests.lib.fake_resources import prepare_fake_region
 
 @pytest.fixture(scope="session")
 def test_id():
+    """Provide a random test id shared by the whole test session."""
     return f"{uuid.uuid4()!s}"
 
 
@@ -74,6 +75,7 @@ def baremetal_config():
 
 
 def test_create_collecting_nodes(test_id, tmp_path_factory):
+    """create_collecting_nodes builds db, loader and monitor collecting nodes matching the provisioned instances."""
     test_dir = tmp_path_factory.mktemp("log-collector")
     prepare_fake_region(test_id, "region_1", n_db_nodes=3, n_loaders=2, n_monitor_nodes=1)
     collector = Collector(
@@ -532,6 +534,7 @@ def test_remote_dir_archive_log_skips_when_there_is_nothing_to_collect(tmp_path,
 
 
 def test_remote_dir_archive_log_does_not_fetch_a_failed_archive(tmp_path):
+    """A tar run exiting with a fatal status leaves the archive unfetched and collect returns None."""
     node = _remote_dir_node(tar_exit_status=2)
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
@@ -542,6 +545,7 @@ def test_remote_dir_archive_log_does_not_fetch_a_failed_archive(tmp_path):
 
 
 def test_remote_dir_archive_log_does_not_fetch_a_corrupted_archive(tmp_path):
+    """An archive failing the integrity check is left unfetched and collect returns None."""
     node = _remote_dir_node()
     entity = RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
 
@@ -583,6 +587,7 @@ def test_archive_log_remotely_defaults_to_the_source_dir_without_sudo():
 
 
 def test_archive_log_remotely_with_sudo_writes_to_the_given_destination():
+    """With use_sudo, tar runs as root into archive_dst and the archive is made readable by the login user."""
     node = MagicMock()
     node.remoter.sudo.return_value = MagicMock(ok=True, exit_status=0, stdout="")
 
@@ -628,6 +633,7 @@ def test_archive_log_remotely_warns_when_the_archive_cannot_be_made_readable(cap
     ),
 )
 def test_archive_log_remotely_tolerates_files_changing_while_read(exit_status, archived):
+    """Tar exit status 1 (files changed while read) still yields an archive; exit status 2 yields None."""
     node = MagicMock()
     node.remoter.sudo.return_value = MagicMock(ok=exit_status == 0, exit_status=exit_status, stdout="")
 
@@ -664,6 +670,7 @@ def test_collect_log_remotely_falls_back_to_ssm_on_an_aws_node(tmp_path):
 
 
 def test_collect_log_remotely_without_ssh_or_ssm_collects_nothing(tmp_path):
+    """collect_log_remotely returns (None, True) for a node reachable by neither SSH nor SSM."""
     node = SimpleNamespace(remoter=Mock(is_up=Mock(return_value=False)), aws_ssm_runner=None)
 
     assert LogCollector.collect_log_remotely(node, "journalctl", str(tmp_path / "system.log")) == (None, True)
@@ -679,6 +686,7 @@ def test_collect_logs_logs_the_failure_of_a_node(tmp_path, caplog):
 
 
 def test_cluster_log_type_argument_leaves_the_class_alone(tmp_path):
+    """The cluster_log_type argument names the collector's local dir and keeps the class attribute unchanged."""
     collector = ScyllaLogCollector(
         [], test_id="4f7398ef", storage_dir=str(tmp_path), params=None, cluster_log_type="db-node-1"
     )

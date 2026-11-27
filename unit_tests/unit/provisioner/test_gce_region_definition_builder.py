@@ -21,6 +21,7 @@ from sdcm.test_config import TestConfig
 
 @pytest.fixture
 def make_config(monkeypatch, defaults_dir):
+    """Provide a factory that builds a GCE SCTConfiguration and TestConfig from env vars plus the given overrides."""
     gce_config = str(defaults_dir / "gce_config.yaml")
     base_env = {
         "SCT_CLUSTER_BACKEND": "gce",
@@ -45,6 +46,8 @@ def make_config(monkeypatch, defaults_dir):
 
 @pytest.fixture
 def build_region_defs():
+    """Provide a factory that builds all region definitions for a config, with a stub SSH key."""
+
     def _factory(config, test_config):
         fake_ssh_key = MagicMock()
         fake_ssh_key.name = "fake-key"

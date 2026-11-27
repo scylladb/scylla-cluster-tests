@@ -30,6 +30,7 @@ def _node(params: dict) -> tuple[BaseNode, dict]:
 
 
 def test_oci_configures_s3_section_from_object_storage_endpoints():
+    """On OCI the s3 section gets endpoint, region, OCI credentials and the "Other" provider from the scylla yaml."""
     node, agent_yaml = _node(
         {"backup_bucket_backend": "s3", "cluster_backend": "oci", "append_scylla_yaml": OCI_ENDPOINTS_YAML}
     )
@@ -70,6 +71,7 @@ def test_non_oci_s3_keeps_region_override():
 
 
 def test_non_oci_s3_same_region_leaves_section_empty():
+    """An s3 backend in the node's own region leaves the agent's s3 section empty."""
     node, agent_yaml = _node({"backup_bucket_backend": "s3", "cluster_backend": "aws", "append_scylla_yaml": None})
 
     node.update_manager_agent_backup_config(region="us-east-1")
@@ -78,6 +80,7 @@ def test_non_oci_s3_same_region_leaves_section_empty():
 
 
 def test_general_config_is_written_to_rclone_section():
+    """The general_config dict is written as-is into the agent's rclone section."""
     node, agent_yaml = _node(
         {"backup_bucket_backend": "s3", "cluster_backend": "oci", "append_scylla_yaml": OCI_ENDPOINTS_YAML}
     )
@@ -89,6 +92,7 @@ def test_general_config_is_written_to_rclone_section():
 
 
 def test_oci_fills_region_placeholder_from_oci_region_name():
+    """The {region} placeholder in OCI object_storage_endpoints is filled from oci_region_name."""
     node, agent_yaml = _node(
         {
             "backup_bucket_backend": "s3",

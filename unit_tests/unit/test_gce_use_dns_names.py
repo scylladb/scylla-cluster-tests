@@ -15,6 +15,7 @@ def _make_gce_node_mock(
     private_dns="node-1.c.my-project.internal",
     public_dns="34.1.2.3.bc.googleusercontent.com",
 ):
+    """Build a GCENode mock with the given NICs and DNS names, bound to the real device-name resolver."""
     node = MagicMock(spec=GCENode)
     node._instance = MagicMock(network_interfaces=interfaces)
     node.remoter = remoter
@@ -28,6 +29,7 @@ def _make_gce_node_mock(
 
 
 def _make_gce_iface(ip, public_ip=None):
+    """Build a GCE network interface mock with a private IP and an optional NAT public IP."""
     iface = MagicMock()
     iface.network_i_p = ip
     if public_ip:
@@ -38,6 +40,8 @@ def _make_gce_iface(ip, public_ip=None):
 
 
 class FakeRefreshNode:
+    """Minimal node stand-in holding the attributes refresh_network_interfaces_info() reads and writes."""
+
     def __init__(self, scylla_network_configuration=None, network_interfaces=None):
         self.network_configuration = {"old": "data"}
         self.scylla_network_configuration = scylla_network_configuration
@@ -45,6 +49,7 @@ class FakeRefreshNode:
 
 
 def test_gce_node_network_interfaces_with_remoter_and_device_names():
+    """A reachable node reports IPs, DNS names, index and the MAC-mapped device name of its NIC."""
     mock_iface = _make_gce_iface("10.0.0.1", "34.1.2.3")
     remoter = MagicMock()
     node = _make_gce_node_mock([mock_iface], remoter=remoter)
@@ -63,6 +68,7 @@ def test_gce_node_network_interfaces_with_remoter_and_device_names():
 
 
 def test_gce_node_network_interfaces_without_remoter():
+    """Without a remoter the interface carries empty DNS names and an empty device name."""
     mock_iface = _make_gce_iface("10.0.0.1", "34.1.2.3")
     node = _make_gce_node_mock([mock_iface], remoter=None)
 
@@ -74,6 +80,7 @@ def test_gce_node_network_interfaces_without_remoter():
 
 
 def test_gce_node_network_interfaces_no_public_ip():
+    """A NIC built without a NAT IP (no access configs) has a None public address."""
     mock_iface = _make_gce_iface("10.0.0.2", "")
     remoter = MagicMock()
     node = _make_gce_node_mock(
@@ -87,6 +94,7 @@ def test_gce_node_network_interfaces_no_public_ip():
 
 
 def test_gce_node_network_interfaces_no_access_configs():
+    """A NIC without access configs has no public address and an empty device name when unmapped."""
     mock_iface = _make_gce_iface("10.0.0.3")
     remoter = MagicMock()
     node = _make_gce_node_mock(
@@ -101,6 +109,7 @@ def test_gce_node_network_interfaces_no_access_configs():
 
 
 def test_gce_node_network_interfaces_multiple_interfaces():
+    """Each NIC gets its own index and MAC-mapped device name; the NIC without a NAT IP has no public address."""
     iface0 = _make_gce_iface("10.0.0.1", "34.1.2.3")
     iface1 = _make_gce_iface("10.0.1.1")
     remoter = MagicMock()
@@ -118,6 +127,7 @@ def test_gce_node_network_interfaces_multiple_interfaces():
 
 
 def test_gce_network_configuration_parses_ip_json_link():
+    """network_configuration maps MAC addresses to device names from `ip -j link`, skipping loopback."""
     node = MagicMock(spec=GCENode)
     node.remoter = MagicMock()
     node.destroyed = False
@@ -138,6 +148,7 @@ def test_gce_network_configuration_parses_ip_json_link():
 
 
 def test_gce_network_configuration_without_remoter():
+    """network_configuration is an empty mapping when the node has no remoter."""
     node = MagicMock(spec=GCENode)
     node.remoter = None
     node.destroyed = False
@@ -164,6 +175,7 @@ def test_gce_network_configuration_of_a_destroyed_node():
 
 
 def test_gce_refresh_network_interfaces_info():
+    """Refresh keeps the cached MAC mapping and pushes current interfaces into the Scylla network config."""
     # the MAC to device mapping is not dropped here: it only goes stale when the remoter is
     # replaced, and re-running `ip -j link` on every refresh is what makes an unreachable node
     # cost minutes of SSH connect timeouts per access
@@ -175,6 +187,7 @@ def test_gce_refresh_network_interfaces_info():
 
 
 def test_gce_refresh_network_interfaces_info_no_scylla_config():
+    """Refresh completes when the node has no Scylla network configuration yet."""
     node = FakeRefreshNode(scylla_network_configuration=None)
     GCENode.refresh_network_interfaces_info(node)
 
@@ -240,6 +253,7 @@ def test_scylla_network_config_device_empty_string():
 
 
 def test_gce_cql_address_uses_scylla_network_configuration():
+    """With private SSH connections the CQL address is the broadcast RPC address (the private DNS name)."""
     node = MagicMock(spec=GCENode)
     node.scylla_network_configuration = MagicMock()
     node.scylla_network_configuration.broadcast_rpc_address = "node-1.c.my-project.internal"
@@ -254,6 +268,7 @@ def test_gce_cql_address_uses_scylla_network_configuration():
 
 
 def test_gce_cql_address_public_uses_test_communication():
+    """With public SSH connections the CQL address is the test_communication (public) address."""
     node = MagicMock(spec=GCENode)
     node.scylla_network_configuration = MagicMock()
     node.scylla_network_configuration.broadcast_rpc_address = "node-1.c.my-project.internal"
@@ -268,6 +283,7 @@ def test_gce_cql_address_public_uses_test_communication():
 
 @pytest.fixture()
 def gce_base_env(monkeypatch):
+    """Set env vars for a minimal GCE config with use_dns_names enabled and a stubbed image lookup."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_GCE_DATACENTER", "us-east1")
     monkeypatch.setenv(
@@ -283,6 +299,7 @@ def gce_base_env(monkeypatch):
 
 @pytest.fixture()
 def aws_base_env(monkeypatch):
+    """Set env vars for a minimal AWS config with use_dns_names enabled."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
@@ -291,12 +308,14 @@ def aws_base_env(monkeypatch):
 
 @pytest.fixture()
 def azure_base_env(monkeypatch):
+    """Set env vars for a minimal Azure config with use_dns_names enabled."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_AZURE_REGION_NAME", '["eastus"]')
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
 
 
 def test_use_dns_names_gce_does_not_raise(gce_base_env):
+    """use_dns_names passes config validation on the GCE backend."""
     try:
         SCTConfiguration()
     except ValueError as exc:
@@ -305,6 +324,7 @@ def test_use_dns_names_gce_does_not_raise(gce_base_env):
 
 
 def test_use_dns_names_aws_does_not_raise(aws_base_env):
+    """use_dns_names passes config validation on the AWS backend."""
     try:
         SCTConfiguration()
     except ValueError as exc:
@@ -313,6 +333,7 @@ def test_use_dns_names_aws_does_not_raise(aws_base_env):
 
 
 def test_use_dns_names_none_backend_does_not_raise(monkeypatch):
+    """use_dns_names passes config validation when no backend is set."""
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
     monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
     try:
@@ -323,18 +344,21 @@ def test_use_dns_names_none_backend_does_not_raise(monkeypatch):
 
 
 def test_use_dns_names_azure_raises(azure_base_env):
+    """Config validation rejects use_dns_names on the Azure backend."""
     with pytest.raises(ValueError, match="use_dns_names is not supported for azure backend"):
         SCTConfiguration()
 
 
 @pytest.fixture()
 def oci_base_env(monkeypatch):
+    """Set env vars for a minimal OCI config with use_dns_names enabled."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
     monkeypatch.setenv("SCT_OCI_REGION_NAME", '["us-phoenix-1"]')
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
 
 
 def test_use_dns_names_oci_does_not_raise(oci_base_env):
+    """use_dns_names passes config validation on the OCI backend."""
     try:
         SCTConfiguration()
     except ValueError as exc:

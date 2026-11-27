@@ -5,6 +5,7 @@ from sdcm.test_config import TestConfig
 
 
 def test_can_generate_valid_scylla_machine_image_payload():
+    """With data disks configured, the payload uses the attached data device and a cluster name of prefix+test id."""
     test_config = TestConfig()
     test_config.set_test_id("12345678-87654321")
     test_id_short = test_config.test_id()[:8]
@@ -26,6 +27,7 @@ def test_can_generate_valid_scylla_machine_image_payload():
 
 
 def test_can_generate_valid_scylla_machine_image_payload_with_minimum_params():
+    """With only user_prefix set, the payload defaults to the instance_store data device."""
     test_config = TestConfig()
     test_config.set_test_id("12345678-87654321")
     test_id_short = test_config.test_id()[:8]

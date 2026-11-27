@@ -75,6 +75,7 @@ def fixture_cql_session(docker_scylla):
 
 
 def load_statement_ratios(gemini_schemas_dir: Path) -> str:
+    """Return the no-delete gemini statement ratios JSON as a compact one-line string."""
     ratios_path = gemini_schemas_dir / "no_delete_statement_ratios.json"
     return json.dumps(json.loads(ratios_path.read_text(encoding="utf-8")), separators=(",", ":"))
 

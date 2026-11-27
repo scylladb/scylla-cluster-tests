@@ -47,6 +47,7 @@ VERSION = "2025.4.1-0.20250601.abc123def456-1"
     [("aarch64", VmArch.ARM), ("x86_64", VmArch.X86), ("sparc", VmArch.X86)],  # unknown falls back to x86
 )
 def test_vm_arch_translation(arch, expected):
+    """aarch64 maps to VmArch.ARM; x86_64 and any unknown arch map to VmArch.X86."""
     assert _vm_arch(arch) == expected
 
 
@@ -62,24 +63,28 @@ def test_aws_names_arm_arm64(arch, expected):
 
 
 def test_aws_lookup_gets_the_aws_arch_spelling():
+    """The AWS AMI lookup receives the arch as arm64 along with the version and region."""
     with patch("sdcm.utils.common.get_scylla_ami_versions", return_value=["ami-1"]) as lookup:
         assert _version_exists_in_region(VERSION, "aws", "eu-west-1", "aarch64") is True
     lookup.assert_called_once_with(version=VERSION, region_name="eu-west-1", arch="arm64")
 
 
 def test_gce_lookup_is_region_less_and_uses_vmarch():
+    """The GCE image lookup is called with the version and a VmArch, without a region."""
     with patch("sdcm.utils.common.get_scylla_gce_images_versions", return_value=["img"]) as lookup:
         assert _version_exists_in_region(VERSION, "gce", "", "aarch64") is True
     lookup.assert_called_once_with(version=VERSION, arch=VmArch.ARM)
 
 
 def test_azure_lookup_passes_region_and_vmarch():
+    """The Azure image lookup receives the version, the region and a VmArch."""
     with patch("sdcm.provision.azure.utils.get_scylla_images", return_value=["img"]) as lookup:
         assert _version_exists_in_region(VERSION, "azure", "eastus", "x86_64") is True
     lookup.assert_called_once_with(scylla_version=VERSION, region_name="eastus", arch=VmArch.X86)
 
 
 def test_oci_lookup_maps_empty_region_to_none():
+    """The OCI image lookup receives region=None when the job has no region."""
     with patch("sdcm.utils.oci_utils.get_scylla_images_by_version", return_value=["img"]) as lookup:
         assert _version_exists_in_region(VERSION, "oci", "", "x86_64") is True
     lookup.assert_called_once_with(version=VERSION, region=None, arch=VmArch.X86)
@@ -91,6 +96,7 @@ def test_backend_without_an_image_lookup_is_always_available():
 
 
 def test_empty_lookup_result_means_not_published():
+    """An empty image list from the cloud lookup reports the version as unpublished."""
     with patch("sdcm.utils.common.get_scylla_ami_versions", return_value=[]):
         assert _version_exists_in_region(VERSION, "aws", "eu-west-1", "x86_64") is False
 
@@ -114,17 +120,20 @@ def test_multi_dc_job_needs_the_build_in_every_region():
 
 
 def test_all_regions_present_is_available():
+    """A multi-DC job is available when the build exists in every one of its regions."""
     with patch("sdcm.utils.trigger_matrix.images._version_exists_in_region", return_value=True):
         assert version_exists_for_backend(VERSION, "aws", '["eu-west-1", "eu-west-2"]') is True
 
 
 def test_region_less_backend_is_checked_once_with_no_region():
+    """A backend without regions (GCE) is checked a single time with an empty region."""
     with patch("sdcm.utils.trigger_matrix.images._version_exists_in_region", return_value=True) as exists:
         assert version_exists_for_backend(VERSION, "gce") is True
     exists.assert_called_once_with(VERSION, "gce", "", "x86_64")
 
 
 def test_aws_without_a_region_falls_back_to_the_default():
+    """An AWS job with no region is checked in the default eu-west-1."""
     with patch("sdcm.utils.trigger_matrix.images._version_exists_in_region", return_value=True) as exists:
         version_exists_for_backend(VERSION, "aws")
     exists.assert_called_once_with(VERSION, "aws", "eu-west-1", "x86_64")
@@ -147,4 +156,5 @@ def test_aws_without_a_region_falls_back_to_the_default():
     ],
 )
 def test_extract_version_from_tags(tags, expected):
+    """The version comes from scylla_version or ScyllaVersion (first wins); empty or missing tags give ''."""
     assert _extract_version_from_tags(tags) == expected
