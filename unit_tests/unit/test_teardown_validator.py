@@ -6,6 +6,7 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 from sdcm.teardown_validators.events import ErrorEventsValidator, Severity
 from sdcm.teardown_validators.rackaware import RackawareValidator
+from sdcm.teardown_validators.sstables import WAIT_DB_UP_TIMEOUT, WAIT_SCRUB_LOGS_TIMEOUT, SstablesValidator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -149,3 +150,32 @@ def test_rackaware_validator_skips_when_cluster_was_not_created(tester_mock):
     RackawareValidator(params, tester_mock).validate()
     # reaching the traffic comparison would have replaced get_test_status
     tester_mock.get_test_status.assert_not_called()
+
+
+@pytest.fixture
+def scrub_validator(tester_mock):
+    params = Mock()
+    params.get.return_value = {"enabled": True, "keyspace": "ks", "table": "tbl", "timeout": 100}
+    return SstablesValidator(params, tester_mock)
+
+
+@patch("sdcm.teardown_validators.sstables.wait.wait_for", return_value=["Finished scrubbing in validate mode"])
+def test_scrub_validator_does_not_retry_nodetool(_, scrub_validator):
+    """A retry after a timeout restarts the scrub from the first sstable."""
+    node = Mock()
+
+    scrub_validator._run_nodetool_scrub(node, keyspace="ks", table="tbl", timeout=100)
+
+    node.run_nodetool.assert_called_once()
+    assert node.run_nodetool.call_args.kwargs["retry"] == 0
+    assert node.run_nodetool.call_args.kwargs["timeout"] == 100
+
+
+@patch("sdcm.teardown_validators.sstables.severity_change_context")
+@patch("sdcm.teardown_validators.sstables.ParallelObject")
+def test_scrub_validator_parallel_timeout_exceeds_node_worst_case(parallel_object_mock, _, scrub_validator):
+    """The nodetool timeout must fire before the ParallelObject one."""
+    scrub_validator.validate()
+
+    node_worst_case = WAIT_DB_UP_TIMEOUT + 100 + WAIT_SCRUB_LOGS_TIMEOUT
+    assert parallel_object_mock.call_args.kwargs["timeout"] > node_worst_case
