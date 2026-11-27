@@ -2115,7 +2115,7 @@ class NemesisRunner:
         if is_tablets_feature_enabled(target_node):
             args = f"--incremental-mode {incremental_mode}" if incremental_mode else ""
             with (
-                temporarily_disable_auto_repair(self.cluster),
+                temporarily_disable_auto_repair(target_node),
                 adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as repair_timeout,
                 self.action_log_scope("nodetool cluster repair", target=target_node.name),
             ):
@@ -2140,7 +2140,11 @@ class NemesisRunner:
         ignore_down_hosts: If True, consider only nodes that are up and normal.
         """
         mgr_cluster = self.cluster.get_cluster_manager()
-        with temporarily_disable_auto_repair(self.cluster), self.action_log_scope("Scylla Manager repair task"):
+        with (
+            self.node_allocator.run_nemesis(nemesis_label="ManagerRepair") as verification_node,
+            temporarily_disable_auto_repair(verification_node),
+            self.action_log_scope("Scylla Manager repair task"),
+        ):
             mgr_task = mgr_cluster.create_repair_task(
                 ignore_down_hosts=ignore_down_hosts, incremental_mode=incremental_mode
             )
@@ -2363,7 +2367,7 @@ class NemesisRunner:
 
         # Auto-repair sessions would false-positive the active-repair poll below and get aborted
         # by force_terminate_repair instead of the nemesis repair (SCT-905)
-        with temporarily_disable_auto_repair(self.cluster):
+        with temporarily_disable_auto_repair(self.target_node):
             with ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool:
                 thread = thread_pool.submit(silenced_nodetool_repair_to_fail)
                 wait.wait_for(
@@ -2946,7 +2950,7 @@ class NemesisRunner:
         destroy_data_and_restart_scylla(self, skip_sstables_with_tombstones=True)
         # Auto-repair session log lines would match the "Repair 1 out of" watcher below and
         # reboot the node before the nemesis repair even starts (SCT-905)
-        with temporarily_disable_auto_repair(self.cluster):
+        with temporarily_disable_auto_repair(self.target_node):
             trigger = partial(
                 self.target_node.run_nodetool,
                 sub_cmd="repair",
