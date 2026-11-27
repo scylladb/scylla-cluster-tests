@@ -64,6 +64,10 @@ AZURE_SUPPORTED_NETWORK_INTERFACES = 8
 class AzureProvisioner(Provisioner):
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA."""
 
+    # Run Command returns the last 4096 bytes of stdout, and one call takes 20-40 seconds
+    oob_chunk_size = 3000
+    oob_max_chunks = 24
+
     def __init__(
         self, test_id: str, region: str, availability_zone: str, azure_service: AzureService = AzureService(), **config
     ):

@@ -16,6 +16,7 @@ from sdcm.provision.aws.utils import (
     network_config_ipv6_workaround_script,
 )
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.provision.common.utils import forward_boot_journal_to_console
 
 
 class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
@@ -29,6 +30,8 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
 
     def _script_body(self) -> str:
         script = enable_ssm_agent_script()
+        # boot-only, unlike the base script that configure_remote_logging() re-runs on live nodes
+        script += forward_boot_journal_to_console()
         script += super()._script_body()
         if self.aws_ipv6_workaround:
             script += network_config_ipv6_workaround_script()

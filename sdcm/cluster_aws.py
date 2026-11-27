@@ -853,7 +853,7 @@ class AWSNode(cluster.BaseNode):
         )
 
     @cached_property
-    def aws_ssm_runner(self) -> SSMCommandRunner:
+    def oob_runner(self) -> SSMCommandRunner:
         """Run commands through the SSM agent, for log collection when SSH is down."""
         return SSMCommandRunner(
             region_name=self._ec2_service.meta.client.meta.region_name, instance_id=self._instance.id
