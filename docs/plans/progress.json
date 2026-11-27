@@ -329,6 +329,16 @@
       "created": "2026-09-04",
       "phases_total": 9,
       "phases_done": 9
+    },
+    {
+      "id": "hermes-support",
+      "title": "Hermes Support",
+      "file": "stress-tools/hermes-support.md",
+      "domain": "stress-tools",
+      "status": "blocked",
+      "created": "2026-11-27",
+      "phases_total": 4,
+      "phases_done": 0
     }
   ]
 }
