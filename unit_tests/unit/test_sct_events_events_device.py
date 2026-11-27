@@ -68,7 +68,7 @@ def test_publish_subscribe(events_device):
         with pytest.raises(StopIteration):
             next(events_generator)
     finally:
-        events_device.stop(timeout=1)
+        events_device.stop(timeout=5)
 
     assert events_device.events_counter == counter.value
     assert counter.value == 2
@@ -85,4 +85,4 @@ def test_start_get_events_main_device(events_processes_registry):
         assert events_device.is_alive()
         assert events_device.subscribe_address
     finally:
-        events_device.stop(timeout=1)
+        events_device.stop(timeout=5)

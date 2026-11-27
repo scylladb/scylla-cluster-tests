@@ -42,8 +42,10 @@ from sdcm.utils.action_logger import get_action_logger
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
 EVENTS_DEVICE_START_TIMEOUT: float = 30  # seconds
-SUB_POLLING_TIMEOUT: int = 1000  # milliseconds
-PUB_QUEUE_WAIT_TIMEOUT: float = 1  # seconds
+SUB_POLLING_TIMEOUT: int = 1000  # milliseconds, patience for the delivery check of one event
+SUB_IDLE_POLLING_TIMEOUT: int = 100  # milliseconds, how often an idle subscriber checks its stop event
+PUB_QUEUE_WAIT_TIMEOUT: float = 0.1  # seconds, how often an idle device checks it is still running
+PUB_QUEUE_DRAIN_TIMEOUT: float = 1  # seconds, a stopping device exits after the queue is empty this long
 PUB_QUEUE_EVENTS_RATE: float = 0  # seconds
 PUBLISH_EVENT_TIMEOUT: float = 5  # seconds
 FILTERS_GC_PERIOD: float = 60  # Cleanup old filters once in a while
@@ -59,7 +61,9 @@ class EventsDevice(multiprocessing.Process):
     start_delay = EVENTS_DEVICE_START_DELAY
     start_timeout = EVENTS_DEVICE_START_TIMEOUT
     sub_polling_timeout = SUB_POLLING_TIMEOUT
+    sub_idle_polling_timeout = SUB_IDLE_POLLING_TIMEOUT
     pub_queue_wait_timeout = PUB_QUEUE_WAIT_TIMEOUT
+    pub_queue_drain_timeout = PUB_QUEUE_DRAIN_TIMEOUT
     pub_queue_events_rate = PUB_QUEUE_EVENTS_RATE
 
     def __init__(self, _registry: EventsProcessesRegistry):
@@ -121,13 +125,18 @@ class EventsDevice(multiprocessing.Process):
 
                 drain_deadline = None
                 while True:
-                    if not self._running.is_set():
+                    if running := self._running.is_set():
+                        wait_timeout = self.pub_queue_wait_timeout
+                    else:
                         if drain_deadline is None:
                             drain_deadline = time.monotonic() + 5.0
                         if time.monotonic() >= drain_deadline:
                             break
+                        # only a get() that waited the whole drain timeout proves the queue is drained,
+                        # events put by other processes reach the queue with a lag
+                        wait_timeout = self.pub_queue_drain_timeout
                     try:
-                        event = self._queue.get(timeout=self.pub_queue_wait_timeout)
+                        event = self._queue.get(timeout=wait_timeout)
                         try:
                             pub.send(event)
                         except zmq.ZMQError:
@@ -141,7 +150,7 @@ class EventsDevice(multiprocessing.Process):
                             LOGGER.error("EventsDevice failed to verify delivery of %s", pickle.loads(event))
                         time.sleep(self.pub_queue_events_rate)
                     except queue.Empty:
-                        if not self._running.is_set():
+                        if not running:
                             break
                         continue
 
@@ -164,7 +173,7 @@ class EventsDevice(multiprocessing.Process):
     def inbound_events(self, stop_event: StopEvent) -> Generator[Any, None, None]:
         with zmq.Context() as ctx, self._sub_socket(ctx) as sub:
             while not stop_event.is_set():
-                if sub.poll(timeout=self.sub_polling_timeout):
+                if sub.poll(timeout=self.sub_idle_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
     def outbound_events(
