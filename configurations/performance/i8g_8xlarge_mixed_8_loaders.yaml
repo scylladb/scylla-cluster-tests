@@ -1,0 +1,29 @@
+# One-off for test_mixed_gradual_increase_load on i8g.8xlarge: 8 loaders instead of 4, the
+# original 3,800 threads per command and the original steps. The test runs one stress command
+# per loader and divides each step's rate by the loader count, so the mixed and warm-up commands
+# are split from 4 to 8: the same 20M-row hot set (1..20,000,000), 2.5M rows per loader.
+# Preload stays at 4 commands (650M rows); round-robin puts them on 4 of the 8 loaders.
+# Use with cassandra_stress_gradual_load_steps_i8g_8xlarge.yaml.
+n_loaders: 8
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..2500000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=2500001..5000000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..7500000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=7500001..10000000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..12500000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=12500001..15000000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..17500000",
+  "cassandra-stress read  cl=ALL n=2500000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=17500001..20000000"
+]
+
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..2500000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=2500001..5000000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..7500000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=7500001..10000000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..12500000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=12500001..15000000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..17500000",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=17500001..20000000"
+]
