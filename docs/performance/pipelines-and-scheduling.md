@@ -71,7 +71,7 @@ jenkins-pipelines/master-triggers/sct_triggers/perf-regression-trigger.jenkinsfi
                 |
                 |  triggerMatrixPipeline
                 v
-jenkins-pipelines/performance/branch-perf-v17/.../<job>.jenkinsfile
+jenkins-pipelines/performance/branch-perf-vN/.../<job>.jenkinsfile   (see section 5)
                 |
                 |  perfRegressionParallelPipeline
                 v
@@ -125,3 +125,43 @@ as latency noise. Rules and the current allocation:
 
 When you add a job, pick a region free at its cadence, record it in that document, and set
 `job_throttle_category` to match (region, instance family).
+
+## 5. Perf branches and the job creator
+
+Perf jobs do not run from master. Each job runs from a perf branch, `branch-perf-vN`, so its
+SCT code stays the same between runs and its results stay comparable. A new perf branch is
+cut from master when a new baseline is needed.
+
+| Branch | Holds |
+|---|---|
+| `branch-perf-v17` | The cassandra-stress jobs, and the other jobs that have not moved yet |
+| `branch-perf-v18` | The latte jobs. Each c-s job gets a latte twin named `<c-s job>-latte` ([SCT-1029](https://scylladb.atlassian.net/browse/SCT-1029)) |
+
+**The tree selects the branch.** A Jenkins job path, such as
+`/scylla-enterprise/perf-regression/<job>`, has no branch in it. The job runs from the branch
+whose tree holds its file: `jenkins-pipelines/performance/branch-perf-vN/<jenkins path>/<job>.jenkinsfile`.
+Add a new perf job under the newest perf branch tree.
+
+**The job creator** is `QA-tools/create-sct-test-jobs-for-branch`
+(`vars/createTestJobPipeline.groovy`). Each Sunday it runs once for each perf branch: it
+checks out that branch and runs `hydra create-performance-jobs --sct_branch branch-perf-vN`,
+which creates or updates the jobs in `jenkins-pipelines/performance/branch-perf-vN/`.
+
+- When two perf trees hold the same job file, the last run owns the job. To move a job to a
+  new perf branch under the same name, remove it from the old tree and add it to the new one,
+  on both branches (labels `backport/perf-v<old>` and `backport/perf-v<new>`).
+- The creator never deletes a Jenkins job. To disable a renamed or retired job, list it in a
+  `_deprecated_jobs.yaml` in the tree.
+
+**Land a change on a perf branch** with the `backport/perf-vN` label on the master PR. The job
+files and configs of a perf branch are edited on master first, like any other change.
+
+### Starting a new perf branch
+
+1. On master: add a `H 01 * * 0 %sct_branch=branch-perf-vN` line to the job creator cron, and
+   add `jenkins-pipelines/performance/branch-perf-vN/` with the `_display_name` of each folder.
+2. Create the labels `backport/perf-vN`, `backport/perf-vN-done` and
+   `promoted-to-branch-perf-vN`.
+3. Cut `branch-perf-vN` from master, and backport step 1 to it with the new label.
+4. Move the jobs one at a time (see SCT-1029 for the current move), then remove the old branch
+   from the job creator cron.

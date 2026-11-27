@@ -47,7 +47,9 @@ scylla-enterprise-perf-regression-predefined-throughput-steps-tablets.jenkinsfil
   -> scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets.jenkinsfile
 ```
 
-Naming convention in `branch-perf-v17/scylla-enterprise/perf-regression/` is
+Put the new jobs in the newest perf branch tree, `branch-perf-v18/scylla-enterprise/perf-regression/`
+(see [pipelines-and-scheduling.md](pipelines-and-scheduling.md#5-perf-branches-and-the-job-creator)).
+The naming convention is
 `<family>-<hardware>-<topology>`, e.g. `-i8g-tablets`, `-z4d-highlssd-tablets`,
 `-azure-vnodes`.
 
