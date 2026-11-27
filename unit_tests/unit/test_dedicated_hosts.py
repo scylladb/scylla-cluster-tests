@@ -20,8 +20,9 @@ from unit_tests.lib.dot_dict import DotDict
 
 
 @pytest.fixture(autouse=True)
-def reset_hosts():
-    SCTDedicatedHosts.hosts = {}
+def reset_hosts(monkeypatch):
+    """Give each test an empty host map and restore the class-level one afterwards, so no host leaks into later tests."""
+    monkeypatch.setattr(SCTDedicatedHosts, "hosts", {})
 
 
 @pytest.fixture(name="params")
