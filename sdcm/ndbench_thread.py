@@ -151,13 +151,16 @@ class NdBenchStressThread(DockerBasedStressThread):
 
         node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}"
 
-        NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
+        ndbench_start_event = NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd)
+        ndbench_start_event.publish()
 
         result = {}
         ndbench_failure_event = ndbench_finish_event = None
         with (
             NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name),
-            NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name),
+            NdBenchStressEventsPublisher(
+                node=loader, ndbench_log_filename=log_file_name, event_id=ndbench_start_event.event_id
+            ),
             cleanup_context,
         ):
             try:
