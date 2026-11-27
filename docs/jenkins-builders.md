@@ -8,6 +8,7 @@ creates them from code:
 | AWS | `sdcm/utils/aws_builder.py` | launch template + ASG per region | EC2 Fleet | `aws-sct-builders-<region>-<VERSION>-asg` |
 | GCE | `sdcm/utils/gce_builder.py` | instance template per project and region | Compute Engine | `<project>-builders-<region>-template-<VERSION>` |
 | OCI | `sdcm/utils/oci_builder.py`, `builder_setup_groovy/oci_jenkind_plugin_config.groovy.tmpl` | nothing | OCI Compute | `oci-sct-builders-<region>-<VERSION>` |
+| Azure | `sdcm/utils/azure_builder.py`, `builder_setup_groovy/azure_vm_agents_config.groovy.tmpl` | builder subnet, NSG and resource group `SCT-builders-<region>` | Azure VM Agents | `azure-sct-builders-<region>-<VERSION>` |
 
 Pipelines pick a label through `vars/getJenkinsLabels.groovy`. Each branch loads `vars/` from its
 own checkout, but all branches share the builders. That one fact drives the procedure below: the
@@ -45,7 +46,7 @@ configure on an existing version changes the builders of every branch at once, i
 branches that never got the change.
 
 1. **Bump `VERSION`** of each builder class you change (`AwsBuilder`, `AwsFipsCiBuilder`,
-   `GceBuilder`, `OciBuilder`). Names, launch templates, ASGs, instance templates and Jenkins
+   `GceBuilder`, `OciBuilder`, `AzureBuilder`). Names, launch templates, ASGs, instance templates and Jenkins
    clouds all include the version, so the new ones are created next to the old ones.
 2. **Point `vars/getJenkinsLabels.groovy` at the new labels** in the same PR. An `AwsBuilder`
    bump also moves the CI label, used by `Jenkinsfile`, `vars/triggerMatrixPipeline.groovy` and
@@ -56,6 +57,7 @@ branches that never got the change.
    hydra configure-jenkins-builders -c aws   # also creates the CI and FIPS ASGs
    hydra configure-jenkins-builders -c gce
    hydra configure-jenkins-builders -c oci
+   hydra configure-jenkins-builders -c azure
    ```
    This only adds resources. Nothing requests the new labels yet except the PR branch itself.
    Then run `hydra check-jenkins-builder-labels`: it fails on any label of
@@ -179,6 +181,12 @@ Per cloud:
   priority 100, so the deny rule also overrides every untagged `qa-vpc-allow-*` rule.
 - OCI: builder subnet `SCT-2-subnet-regional-builder` with security list
   `SCT-2-sl-builder` (TCP 22 from the allowed sources, everything from inside the VCN).
+- Azure: subnet `builders` of `SCT_IMAGES-<region>-vnet` with NSG `SCT-builder-nsg`:
+  TCP 22 from the allowed sources, plus the Azure default rules (everything from inside the
+  VNet, nothing else from the internet). Builders don't use `SCT_IMAGES-<region>-nsg`, which
+  allows SSH from anywhere. The builder resource group is tagged `keep=alive`, so the Azure
+  cleanup never deletes it; inside it, the cleanup deletes only VMs tagged `NodeType=builder`
+  whose `keep` ran out, with their NIC, public IP and OS disk.
 
 Other ports are closed to the internet too. This does not affect `hydra-show-monitor`: it
 runs Grafana on a new SCT runner, not on the builder.
@@ -210,6 +218,7 @@ hydra configure-jenkins-builders -c aws -r eu-west-1
 hydra configure-jenkins-builders -c aws
 hydra configure-jenkins-builders -c gce
 hydra configure-jenkins-builders -c oci
+hydra configure-jenkins-builders -c azure
 
 # a new region: the same pieces, as part of the region setup
 hydra prepare-regions -c <cloud> -r <region>
@@ -244,6 +253,9 @@ gcloud compute instances list --project <project> \
 # OCI: no 0.0.0.0/0 or ::/0 ingress
 oci network security-list list --compartment-id <compartment> --vcn-id <vcn> \
     --display-name SCT-2-sl-builder --query 'data[0]."ingress-security-rules"'
+
+# Azure: TCP 22 from the allowed sources only
+az network nsg rule list -g SCT_IMAGES-<region> --nsg-name SCT-builder-nsg -o table
 ```
 
 The commands above show the configuration. Also check that it has an effect: from a

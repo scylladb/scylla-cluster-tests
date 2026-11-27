@@ -24,8 +24,6 @@ from utils.cloud_cleanup import DEFAULT_KEEP_HOURS, get_keep_hours_from_tags, sh
 
 LOGGER = setup_stdout_logger()
 azure_service = AzureService()
-resource_client = azure_service.resource
-compute_client = azure_service.compute
 
 
 def get_vm_creation_time(v_m, resource_group_name):
@@ -39,7 +37,7 @@ def get_vm_creation_time(v_m, resource_group_name):
         tags = v_m.tags or {}
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         try:
-            compute_client.virtual_machines.begin_update(
+            azure_service.compute.virtual_machines.begin_update(
                 resource_group_name,
                 v_m.name,
                 parameters={
@@ -67,7 +65,7 @@ def get_rg_creation_time(resource_group):
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         resource_group.tags = tags
         try:
-            resource_client.resource_groups.create_or_update(resource_group.name, resource_group)
+            azure_service.resource.resource_groups.create_or_update(resource_group.name, resource_group)
         except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to update RG tags: %s with exception: %s", resource_group.name, exc)
     return creation_time
@@ -86,7 +84,7 @@ def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False,
     else:
         LOGGER.info("Deleting VM: %s in resource group: %s", vm_name, resource_group_name)
         try:
-            compute_client.virtual_machines.begin_delete(resource_group_name, vm_name)
+            azure_service.compute.virtual_machines.begin_delete(resource_group_name, vm_name)
         except Exception as exc:  # noqa: BLE001
             LOGGER.info(
                 "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
@@ -103,7 +101,7 @@ def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False, t
     else:
         LOGGER.info("Stopping VM: %s in resource group: %s", vm_name, resource_group_name)
         try:
-            compute_client.virtual_machines.begin_deallocate(resource_group_name, vm_name, test_id)
+            azure_service.compute.virtual_machines.begin_deallocate(resource_group_name, vm_name, test_id)
         except Exception as exc:  # noqa: BLE001
             LOGGER.info(
                 "Failed to stop VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
@@ -120,17 +118,61 @@ def delete_resource_group(resource_group_name, dry_run=False):
     else:
         LOGGER.info("Deleting resource group: %s", resource_group_name)
         try:
-            resource_client.resource_groups.begin_delete(resource_group_name)
+            azure_service.resource.resource_groups.begin_delete(resource_group_name)
         except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to delete resource group: %s with exception: %s", resource_group_name, exc)
 
 
-def clean_azure_instances(dry_run=False):
-    resource_groups = [
-        resource_group
-        for resource_group in resource_client.resource_groups.list()
-        if (resource_group.tags.get("keep", "") != "alive" if resource_group.tags else True)
+def resource_name(resource_id):
+    return resource_id.rsplit("/", 1)[-1]
+
+
+def delete_builder_vm(resource_group_name, v_m, dry_run=False, tags=None, launch_time=None):
+    """Delete a builder VM with its NICs, their public IPs, and its OS disk; the group isn't deleted with them."""
+    nics = [resource_name(nic.id) for nic in v_m.network_profile.network_interfaces]
+    if dry_run:
+        LOGGER.info("[DRY RUN] Would delete builder VM: %s, NICs %s and its disk", v_m.name, nics)
+        return
+    public_ips = [
+        resource_name(ip_config.public_ip_address.id)
+        for nic in nics
+        for ip_config in azure_service.network.network_interfaces.get(resource_group_name, nic).ip_configurations
+        if ip_config.public_ip_address
     ]
+    LOGGER.info("Deleting builder VM: %s in resource group: %s", v_m.name, resource_group_name)
+    try:
+        azure_service.compute.virtual_machines.begin_delete(resource_group_name, v_m.name).wait()
+        for nic in nics:
+            azure_service.network.network_interfaces.begin_delete(resource_group_name, nic).wait()
+        for public_ip in public_ips:
+            azure_service.network.public_ip_addresses.begin_delete(resource_group_name, public_ip).wait()
+        azure_service.compute.disks.begin_delete(resource_group_name, v_m.storage_profile.os_disk.name).wait()
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.info("Failed to delete builder VM: %s with exception: %s", v_m.name, exc)
+        return
+    update_argus_resource_status(
+        test_id="", resource_name=v_m.name, action="terminate", tags=tags, launch_time=launch_time
+    )
+
+
+def clean_builder_vms(resource_group_name, dry_run=False):
+    """Delete the Jenkins builders whose keep ran out; the plugin missed them. Their group is keep=alive."""
+    for v_m in azure_service.compute.virtual_machines.list(resource_group_name):
+        tags = v_m.tags or {}
+        if tags.get("NodeType") != "builder":
+            continue
+        vm_creation_time = get_vm_creation_time(v_m, resource_group_name)
+        if not should_keep(creation_time=vm_creation_time, keep_hours=get_keep_hours_from_tags(tags)):
+            delete_builder_vm(resource_group_name, v_m, dry_run=dry_run, tags=tags, launch_time=vm_creation_time)
+
+
+def clean_azure_instances(dry_run=False):
+    resource_groups = []
+    for resource_group in azure_service.resource.resource_groups.list():
+        if (resource_group.tags or {}).get("keep", "") == "alive":
+            clean_builder_vms(resource_group.name, dry_run=dry_run)
+        else:
+            resource_groups.append(resource_group)
     for resource_group in resource_groups:
         LOGGER.info("Checking resource group: %s", resource_group.name)
         rg_creation_time = get_rg_creation_time(resource_group)
@@ -140,7 +182,7 @@ def clean_azure_instances(dry_run=False):
             continue
         clean_group = True
         vms_to_process = []
-        for v_m in compute_client.virtual_machines.list(resource_group.name):
+        for v_m in azure_service.compute.virtual_machines.list(resource_group.name):
             test_id = v_m.tags.get("TestId", "").lower() if v_m.tags else ""
             vm_creation_time = get_vm_creation_time(v_m, resource_group.name)
             if should_keep(

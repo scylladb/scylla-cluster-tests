@@ -1,0 +1,90 @@
+// Configures the Azure VM Agents plugin (azure-vm-agents 1124+) for SCT builders.
+// Credentials are created only when missing; the cloud is removed and added again.
+import com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey
+import com.cloudbees.plugins.credentials.CredentialsProvider
+import com.cloudbees.plugins.credentials.CredentialsScope
+import com.cloudbees.plugins.credentials.SystemCredentialsProvider
+import com.cloudbees.plugins.credentials.common.StandardCredentials
+import com.cloudbees.plugins.credentials.domains.Domain
+import com.microsoft.azure.util.AzureCredentials
+import com.microsoft.azure.vmagent.AzureTagPair
+import com.microsoft.azure.vmagent.AzureVMCloudOnceRetentionStrategy
+import com.microsoft.azure.vmagent.builders.AdvancedImageBuilder
+import com.microsoft.azure.vmagent.builders.AzureVMCloudBuilder
+import com.microsoft.azure.vmagent.builders.AzureVMTemplateBuilder
+import hudson.model.Node
+import hudson.util.Secret
+import jenkins.model.Jenkins
+
+def jenkins = Jenkins.get()
+def store = SystemCredentialsProvider.getInstance().getStore()
+def credentialExists = { id -> CredentialsProvider.lookupCredentials(StandardCredentials, jenkins, null, null).any { it.id == id } }
+
+if (!credentialExists(${sp_credentials_id})) {
+    def sp = new AzureCredentials(CredentialsScope.GLOBAL, ${sp_credentials_id}, 'SCT service principal (created by SCT configure-jenkins-builders)',
+        ${subscription_id}, ${client_id}, Secret.fromString(${client_secret}))
+    sp.setTenant(${tenant_id})
+    sp.setAzureEnvironmentName('Azure')
+    store.addCredentials(Domain.global(), sp)
+    println 'created credential ' + ${sp_credentials_id}
+}
+
+if (!credentialExists(${ssh_credentials_id})) {
+    def key = new BasicSSHUserPrivateKey(CredentialsScope.GLOBAL, ${ssh_credentials_id}, 'jenkins',
+        new BasicSSHUserPrivateKey.DirectEntryPrivateKeySource(${ssh_private_key}), null,
+        'SCT builders SSH key (created by SCT configure-jenkins-builders)')
+    store.addCredentials(Domain.global(), key)
+    println 'created credential ' + ${ssh_credentials_id}
+}
+
+def image = new AdvancedImageBuilder()
+    .withGalleryImage(${gallery_name}, ${gallery_image_definition}, ${gallery_image_version}, true, ${subscription_id}, ${gallery_resource_group})
+    .withOsType('Linux')
+    .withLaunchMethod('SSH')
+    .withPreInstallSsh(false)
+    .withVirtualNetworkName(${virtual_network_name})
+    .withVirtualNetworkResourceGroupName(${virtual_network_resource_group})
+    .withSubnetName(${subnet_name})
+    .withUsePrivateIP(false)
+    .withNumberOfExecutors('1')
+    .withDoNotUseMachineIfInitFails(true)
+    .build()
+
+def template = new AzureVMTemplateBuilder()
+    .withName(${template_name})
+    .withDescription('SCT builder from the SCT runner image')
+    .withLabels(${jenkins_labels})
+    .withLocation(${location})
+    .withVirtualMachineSize(${vm_size})
+    .withDiskType('managed')
+    .withStorageAccountType('Standard_LRS')
+    .withOSDiskStorageAccountType('Standard_LRS')
+    .withUsageMode(Node.Mode.EXCLUSIVE)
+    .withWorkspace('/home/jenkins')
+    .withAdminCredential(${ssh_credentials_id})
+    // One build per builder; the keep tags let clean_azure delete a builder Jenkins lost track of
+    .withRetentionStrategy(new AzureVMCloudOnceRetentionStrategy())
+    .withTags([
+        new AzureTagPair('NodeType', 'builder'),
+        new AzureTagPair('keep', ${keep_hours}),
+        new AzureTagPair('keep_action', 'terminate'),
+    ])
+    .withAdvancedImage(image)
+    .build()
+
+def cloud = new AzureVMCloudBuilder()
+    .withCloudName(${cloud_name})
+    .withAzureCredentialsId(${sp_credentials_id})
+    .withExistingResourceGroupName(${builder_resource_group})
+    .withMaxVirtualMachinesLimit(${max_vms})
+    .withDeploymentTimeout('1200')
+    .addToTemplates(template)
+    .build()
+
+def existing = jenkins.clouds.getByName(${cloud_name})
+if (existing) {
+    jenkins.clouds.remove(existing)
+}
+jenkins.clouds.add(cloud)
+jenkins.save()
+println 'Azure cloud configured programmatically: ' + ${cloud_name}
