@@ -138,7 +138,7 @@ def test_each_secondary_nic_gets_its_own_routing_table(run_script):
 
 
 def test_incomplete_metadata_fails_loudly(run_script):
-    """A half-configured NIC breaks much later as a confusing connectivity error, so fail here."""
+    """A NIC with incomplete IMDS metadata fails the run with a 'metadata is incomplete' error."""
     result, _ = run_script(
         [imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"), {"macAddress": SECONDARY_MAC, "ipv4": {}}],
         expected_nics=2,

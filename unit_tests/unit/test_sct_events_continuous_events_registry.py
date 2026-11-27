@@ -56,7 +56,6 @@ class TestContinuousEventsRegistry:
 
     def test_add_event(self, registry: ContinuousEventsRegistry):
         """Beginning a continuous event adds it to the registry."""
-        # continuous events are added to the registry on event instantiation
         event = NodetoolEvent(nodetool_command="mock cmd").begin_event(publish=False)
 
         assert event in registry.continuous_events
