@@ -126,3 +126,7 @@ state the reason.
 
 [REVIEW.md](../REVIEW.md) holds the review guide. When the pull request
 carries a flow directory, the reviewer checks the code against its spec.
+
+During a review, the author folds each fix into its commit and
+force-pushes. The `pr-range-diff` workflow posts the changes of each
+force-push as a comment on the pull request.
