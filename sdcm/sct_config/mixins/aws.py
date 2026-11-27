@@ -13,7 +13,7 @@
 
 """AWS backend configuration options."""
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 
@@ -107,4 +107,10 @@ class AwsConfigMixin(BaseModel):
     use_placement_group: Boolean = SctField(
         description="if true, create 'cluster' placement group for test case "
         "for low-latency network performance achievement",
+    )
+    aws_placement_group_strategy: Literal["cluster", "spread"] = SctField(
+        description="""Strategy of the placement group created when use_placement_group is true.
+         'cluster' (default): DB and loader nodes are packed close together, for the lowest network latency.
+         'spread': each DB node goes on separate hardware (its own rack), so DB nodes never share a host;
+         loader nodes stay out of the group. AWS allows at most 7 instances per spread group per AZ.""",
     )
