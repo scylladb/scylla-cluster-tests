@@ -104,7 +104,7 @@ def test_parse_cfstats_partitions():
     }
 
 
-def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
+def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES, tables_with_rows=()):
     # system_schema.columns returns a row per column, MVs and index views included
     rows = [
         SimpleNamespace(keyspace_name=ks, table_name=table, type=col_type)
@@ -113,6 +113,10 @@ def _get_any_ks_cf_list(db_node, tables=CFSTATS_TABLES):
     ]
     db_cluster = DummyScyllaCluster([])
     db_cluster.cql_connection_patient = unittest.mock.MagicMock()
+    session = db_cluster.cql_connection_patient.return_value.__enter__.return_value
+    session.execute.side_effect = lambda query: unittest.mock.MagicMock(
+        one=unittest.mock.MagicMock(return_value=("row",) if any(t in query for t in tables_with_rows) else None)
+    )
     with unittest.mock.patch("sdcm.cluster.PageFetcher") as page_fetcher:
         page_fetcher.return_value.request_all.return_value.all_data.return_value = rows
         return sorted(db_cluster.get_any_ks_cf_list(db_node))
@@ -159,3 +163,18 @@ def test_get_any_ks_cf_list_cfstats_timeout_scales_with_tables():
 
     _get_any_ks_cf_list(db_node, [(f"ks{i}", "t") for i in range(5000)])
     assert db_node.run_nodetool.call_args.kwargs["timeout"] == 500
+
+
+def test_get_any_ks_cf_list_keeps_table_with_rows_but_no_sstable_partitions():
+    """SCT-1380: a logstor table has no sstables, so cfstats estimates 0 partitions; a CQL read must decide."""
+    db_node = unittest.mock.MagicMock()
+    db_node.run_nodetool.return_value = Result(stdout=CFSTATS_ALL)
+
+    assert _get_any_ks_cf_list(db_node, tables_with_rows=['"empty_t2"']) == [
+        'ks1."MixedCase"',
+        "ks1.mv1",
+        "ks1.t1",
+        "ks1.t1_v_idx_index",
+        "ks2.empty_t2",
+        "ks2.t2",
+    ]

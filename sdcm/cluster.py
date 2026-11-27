@@ -5730,6 +5730,17 @@ class BaseCluster:
                 partitions[f"{keyspace}.{table}"] = int(match.group(1))
         return partitions
 
+    def _table_has_rows(self, cql_session, table_name: str) -> bool:
+        """SCT-1380: the cfstats estimate counts sstable partitions only, it is 0 for a logstor table (no sstables)
+        and for data still in memtables, so ask CQL directly.
+        """
+        keyspace, table = table_name.split(".", 1)
+        try:
+            return bool(cql_session.execute(f'SELECT * FROM "{keyspace}"."{table}" LIMIT 1').one())
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(f"Failed to read a row from {table_name} table. Error: {exc}")
+            return False
+
     def get_non_system_ks_cf_with_tablets_list(
         self,
         db_node,
@@ -5867,7 +5878,11 @@ class BaseCluster:
                     partitions = self._parse_cfstats_partitions(res.stdout)
                     if not partitions:
                         raise ValueError("no partition estimates in cfstats output")
-                    result = {table_name for table_name in result if partitions.get(table_name)}
+                    result = {
+                        table_name
+                        for table_name in result
+                        if partitions.get(table_name) or self._table_has_rows(cql_session, table_name)
+                    }
                 except Exception as exc:  # noqa: BLE001
                     # the filter is best-effort: an empty list would skip or break the callers
                     self.log.warning(
