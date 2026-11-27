@@ -12,11 +12,11 @@
 # Copyright (c) 2024 ScyllaDB
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.gemini_thread import GeminiStressThread
+from sdcm.gemini_thread import GeminiStressThread, GeminiWorkerFiles
 from sdcm.sct_events import Severity
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
@@ -33,6 +33,7 @@ class MockCluster:
 
 
 STRESS_CMD = "--duration=1m --mode=write --concurrency=5 --warmup=0"
+WORKER_FILES = GeminiWorkerFiles.for_worker("worker")
 
 
 @pytest.fixture(name="gemini_thread_unit")
@@ -93,7 +94,7 @@ def test_generate_gemini_command_oracle_flag(params, oracle_ips, expect_oracle_f
             params=params,
         )
 
-    cmd = thread.generate_gemini_command()
+    cmd = thread.generate_gemini_command(WORKER_FILES)
     if expect_oracle_flag:
         assert "--oracle-cluster=" in cmd, f"Expected --oracle-cluster in command: {cmd}"
     else:
@@ -102,7 +103,7 @@ def test_generate_gemini_command_oracle_flag(params, oracle_ips, expect_oracle_f
 
 def test_generate_gemini_command_required_flags(gemini_thread_unit):
     """generate_gemini_command must include the essential gemini flags."""
-    cmd = gemini_thread_unit.generate_gemini_command()
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES)
 
     assert "--test-cluster=" in cmd, f"Missing --test-cluster in: {cmd}"
     assert "--outfile=/" in cmd, f"Missing --outfile in: {cmd}"
@@ -112,7 +113,7 @@ def test_generate_gemini_command_required_flags(gemini_thread_unit):
 
 def test_generate_gemini_command_stress_cmd_flags_forwarded(gemini_thread_unit):
     """Flags from stress_cmd must appear verbatim in the generated command."""
-    cmd = gemini_thread_unit.generate_gemini_command()
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES)
 
     assert "--duration=1m" in cmd, f"--duration not forwarded: {cmd}"
     assert "--mode=write" in cmd, f"--mode not forwarded: {cmd}"
@@ -134,13 +135,13 @@ def test_generate_gemini_command_schema_path_injected(params):
             params=params,
         )
 
-    cmd = thread.generate_gemini_command(schema_path="/tmp/my_schema.json")
+    cmd = thread.generate_gemini_command(WORKER_FILES, schema_path="/tmp/my_schema.json")
     assert '--schema="/tmp/my_schema.json"' in cmd, f"--schema flag not injected: {cmd}"
 
 
 def test_generate_gemini_command_no_schema_by_default(gemini_thread_unit):
     """Without schema_path, --schema must not appear in the generated command."""
-    cmd = gemini_thread_unit.generate_gemini_command()
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES)
     assert "--schema=" not in cmd, f"--schema should not appear by default: {cmd}"
 
 
@@ -197,3 +198,63 @@ def test_parse_results_reports_an_unparsable_summary(gemini_thread_unit, tmp_pat
 
     assert not results
     assert "could not parse gemini summary" in errors["loader-1"][0][1]
+
+
+def test_generate_gemini_command_keeps_the_gemini_defaults(gemini_thread_unit):
+    """Only stress_cmd sets the gemini tuning flags. Gemini uses its own default for each flag it omits."""
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES)
+
+    for flag in ("--level=", "--request-timeout=", "--max-errors-to-store=", "--partition-count=", "--max-columns="):
+        assert flag not in cmd, f"{flag} is not in stress_cmd, so it must not be in the command: {cmd}"
+    assert cmd.endswith(STRESS_CMD)
+
+
+class _ContainerStarted(Exception):
+    """Stops _run_stress once RemoteDocker gets its options."""
+
+
+@pytest.mark.parametrize("stress_num", [1, 2])
+def test_run_stress_container_gets_every_docker_option(gemini_thread_unit, stress_num):
+    """The gemini container gets the host network, the shell marker and the output file mounts,
+    also when stress_num > 1 pins it to one CPU.
+    """
+    gemini_thread_unit.stress_num = stress_num
+    with patch("sdcm.gemini_thread.RemoteDocker", side_effect=_ContainerStarted) as remote_docker:
+        with pytest.raises(_ContainerStarted):
+            gemini_thread_unit._run_stress(MagicMock(), loader_idx=0, cpu_idx=1)
+
+    docker_opts = remote_docker.call_args.kwargs["extra_docker_opts"]
+    assert ('--cpuset-cpus="1"' in docker_opts) == (stress_num > 1)
+    assert "--network=host" in docker_opts
+    assert f"--label shell_marker={gemini_thread_unit.shell_marker}" in docker_opts
+    for file_name in gemini_thread_unit.worker_files(loader_idx=0, cpu_idx=1):
+        assert f"/{file_name}:/{file_name}:z" in docker_opts
+
+
+def test_worker_files_are_unique_per_worker(gemini_thread_unit):
+    """The workers of one loader share its home, so each worker writes its own output files."""
+    workers = [(0, 0), (0, 1), (1, 0)]
+    files = [set(gemini_thread_unit.worker_files(loader_idx, cpu_idx)) for loader_idx, cpu_idx in workers]
+
+    assert all(len(worker_files) == len(GeminiWorkerFiles._fields) for worker_files in files)
+    assert len(set.union(*files)) == len(workers) * len(GeminiWorkerFiles._fields)
+
+
+def test_generate_gemini_command_writes_to_the_worker_files(gemini_thread_unit):
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES)
+
+    assert f"--outfile=/{WORKER_FILES.result}" in cmd
+    assert f"--summary-file=/{WORKER_FILES.summary}" in cmd
+    assert f"--test-statement-log-file=/{WORKER_FILES.test_statements}" in cmd
+    assert f"--oracle-statement-log-file=/{WORKER_FILES.oracle_statements}" in cmd
+
+
+@pytest.mark.parametrize(("cpu_idx", "metrics_port", "profiling_port"), [(0, 2112, 6060), (1, 2113, 6061)])
+def test_generate_gemini_command_gives_each_worker_its_own_ports(
+    gemini_thread_unit, cpu_idx, metrics_port, profiling_port
+):
+    """The workers of one loader share the host network, so each worker binds its own ports."""
+    cmd = gemini_thread_unit.generate_gemini_command(WORKER_FILES, cpu_idx=cpu_idx)
+
+    assert f"--bind=0.0.0.0:{metrics_port}" in cmd
+    assert f"--profiling-port={profiling_port}" in cmd

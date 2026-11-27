@@ -152,9 +152,8 @@ def build_gemini_thread(
         # certain within a 30-second run.  10 000 partitions drops that rate to ~0.05%.
         "--partition-count=10000",
         "--max-errors-to-store=1",
-        # Override the aggressive SCT default (3 s) with a more generous value.  On a local
-        # Docker host the latency is sub-millisecond, but under CPU/memory pressure a 3-second
-        # deadline causes write timeouts.  A timed-out write that actually committed on the test
+        # On a local Docker host the latency is sub-millisecond, but under CPU/memory pressure
+        # a 3-second deadline causes write timeouts.  A timed-out write that actually committed on the test
         # cluster but not the oracle (or vice versa) is the primary source of "different
         # clustering-key values" divergence errors because gemini retries with new data.
         "--request-timeout=10s",
@@ -271,8 +270,10 @@ def _format_debug_report(thread: GeminiStressThread) -> str:
     raw_results = thread.get_results()
     sections = []
 
-    for loader_idx, (_docker, _result, local_result_file) in enumerate(raw_results):
+    for loader_idx, (docker, _result, local_result_file) in enumerate(raw_results):
         logdir = Path(local_result_file).parent
+        # These tests run one worker per loader, on CPU 0.
+        files = thread.worker_files(docker.node.node_index, cpu_idx=0)
         section = [
             f"\n{'=' * 70}",
             f"Loader #{loader_idx}  logdir={logdir}",
@@ -291,7 +292,7 @@ def _format_debug_report(thread: GeminiStressThread) -> str:
             section.append(f"(not found: {local_result_file})")
 
         # ── Summary ───────────────────────────────────────────────────────────
-        summary_path = logdir / Path(thread.gemini_summary_file).name
+        summary_path = logdir / files.summary
         section.append("\n[Summary File]")
         try:
             section.append(summary_path.read_text(encoding="utf-8") or "(empty)")
@@ -299,7 +300,7 @@ def _format_debug_report(thread: GeminiStressThread) -> str:
             section.append(f"(not found: {summary_path})")
 
         # ── Test statement log ────────────────────────────────────────────────
-        test_stmts_path = logdir / Path(thread.gemini_test_statements_file).name
+        test_stmts_path = logdir / files.test_statements
         section.append("\n[Test Statement Log]")
         try:
             section.append(test_stmts_path.read_text(encoding="utf-8") or "(empty)")
@@ -307,7 +308,7 @@ def _format_debug_report(thread: GeminiStressThread) -> str:
             section.append(f"(not found: {test_stmts_path})")
 
         # ── Oracle statement log ──────────────────────────────────────────────
-        oracle_stmts_path = logdir / Path(thread.gemini_oracle_statements_file).name
+        oracle_stmts_path = logdir / files.oracle_statements
         section.append("\n[Oracle Statement Log]")
         try:
             section.append(oracle_stmts_path.read_text(encoding="utf-8") or "(empty)")
@@ -407,7 +408,7 @@ def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_se
     request.addfinalizer(thread.kill)
 
     # Verify the schema path is correctly injected into the gemini command
-    gemini_cmd = thread.generate_gemini_command(schema_path="/tmp/schema.json")
+    gemini_cmd = thread.generate_gemini_command(thread.worker_files(0, 0), schema_path="/tmp/schema.json")
     assert '--schema="/tmp/schema.json"' in gemini_cmd, "Schema path must appear in the generated command"
     assert "--partition-count=10000" in gemini_cmd, "partition-count must be forwarded from stress_cmd"
     assert "--duration=30s" in gemini_cmd, "duration must appear in the generated command"
@@ -457,7 +458,7 @@ def test_gemini_without_oracle(request, docker_scylla, params, gemini_schemas_di
     request.addfinalizer(thread.kill)
 
     # Confirm --oracle-cluster is absent from the generated command
-    gemini_cmd = thread.generate_gemini_command()
+    gemini_cmd = thread.generate_gemini_command(thread.worker_files(0, 0))
     assert "--oracle-cluster" not in gemini_cmd, "oracle-cluster flag must not appear when oracle_cluster is None"
 
     thread.run()
