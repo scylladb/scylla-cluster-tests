@@ -77,18 +77,24 @@ def restore_singletons():
 
 @pytest.fixture(autouse=True)
 def restore_test_config():
-    """Restore the class attributes of TestConfig after every unit test.
+    """Restore the class attributes of TestConfig, and the attributes of its instance, after every unit test.
 
-    TestConfig keeps its state on the class: the test id, name, tester object, decoding queue, syslog-ng address
-    and the like. ``restore_singletons`` drops the TestConfig instance, but not these.
+    TestConfig keeps most of its state on the class: the test id, name, tester object, decoding queue, syslog-ng
+    address and the like. Its instance exists before the first test, so ``restore_singletons`` keeps it, and the
+    values tests set on it, such as ``BACKTRACE_DECODING``, are restored here as well.
     """
     saved_class_attrs = dict(vars(TestConfig))
+    instance = Singleton._instances.get(TestConfig)
+    saved_instance_attrs = dict(vars(instance)) if instance is not None else {}
     yield
     for name in set(vars(TestConfig)) - set(saved_class_attrs):
         delattr(TestConfig, name)
     for name, value in saved_class_attrs.items():
         if vars(TestConfig).get(name) is not value:
             setattr(TestConfig, name, value)
+    if instance is not None:
+        vars(instance).clear()
+        vars(instance).update(saved_instance_attrs)
 
 
 @pytest.fixture
