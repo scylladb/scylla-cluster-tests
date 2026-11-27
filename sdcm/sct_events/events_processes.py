@@ -163,6 +163,13 @@ class EventsProcessesRegistry:
             # LOGGER.debug("Get process `%s' from %s", name, self)
             return self._registry_dict.get(name)
 
+    def count_subscribers_of(self, name: str) -> int:
+        """Count the registered processes that take their inbound events from the process `name`."""
+        with self._registry_dict_lock:
+            return sum(
+                getattr(process, "inbound_events_process", None) == name for process in self._registry_dict.values()
+            )
+
     def __str__(self):
         return f"{type(self).__name__}[log_dir={self.log_dir},id=0x{id(self):x},default={self.default}]"
 

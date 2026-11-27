@@ -10,13 +10,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-import time
 import unittest.mock
 
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_processes import EVENTS_HANDLER_ID, get_events_process
 from sdcm.sct_events.loaders import CassandraStressLogEvent
-from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT
 from sdcm.test_config import TestConfig
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -34,12 +33,11 @@ class TestEventsHandler(EventsUtilsMixin):
         with unittest.mock.patch(
             "sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True
         ) as mock:
-            start_events_handler(_registry=self.events_processes_registry)
+            with self.wait_for_new_subscribers():
+                start_events_handler(_registry=self.events_processes_registry)
             events_handler = get_events_process(name=EVENTS_HANDLER_ID, _registry=self.events_processes_registry)
-            time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
             TestConfig().set_tester_obj("abc")
-            time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
             try:
                 assert events_handler.is_alive()

@@ -42,6 +42,7 @@ from sdcm.utils.action_logger import get_action_logger
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
 EVENTS_DEVICE_START_TIMEOUT: float = 30  # seconds
+SUBSCRIBERS_START_TIMEOUT: float = 10  # seconds
 SUB_POLLING_TIMEOUT: int = 1000  # milliseconds, patience for the delivery check of one event
 SUB_IDLE_POLLING_TIMEOUT: int = 100  # milliseconds, how often an idle subscriber checks its stop event
 PUB_QUEUE_WAIT_TIMEOUT: float = 0.1  # seconds, how often an idle device checks it is still running
@@ -72,6 +73,7 @@ class EventsDevice(multiprocessing.Process):
 
         self._running = multiprocessing.Event()
         self._sub_port = multiprocessing.Value(ctypes.c_uint16, 0)
+        self._subscribers = multiprocessing.Value(ctypes.c_uint32, 0)
         self._queue = multiprocessing.Queue()
         self._raw_events_lock = multiprocessing.RLock()
         self.events_log_base_dir.mkdir(parents=True, exist_ok=True)
@@ -101,6 +103,34 @@ class EventsDevice(multiprocessing.Process):
         self._queue.close()
 
     @property
+    def subscribers(self) -> int:
+        """Count the subscriptions the device has received since it started, without its own delivery check."""
+        return self._subscribers.value
+
+    def wait_for_subscribers(self, count: int, timeout: float = SUBSCRIBERS_START_TIMEOUT) -> None:
+        """Wait until the device has received `count` subscriptions, so the events published from now on reach them.
+
+        A PUB socket drops the events for a subscriber whose subscription it has not received yet.
+        """
+        end_time = time.monotonic() + timeout
+        while self._subscribers.value < count:
+            if time.monotonic() >= end_time:
+                LOGGER.warning(
+                    "EventsDevice has %d of %d subscribers after %ss, events published now can miss the others",
+                    self._subscribers.value,
+                    count,
+                    timeout,
+                )
+                return
+            time.sleep(0.01)
+
+    def _count_subscriptions(self, pub: zmq.Socket) -> None:
+        while pub.poll(timeout=0):
+            # XPUB_VERBOSE passes every subscription message: b"\x01" + topic. Unsubscriptions are not counted.
+            if pub.recv()[:1] == b"\x01":
+                self._subscribers.value += 1
+
+    @property
     def subscribe_address(self) -> str:
         if self._running.wait(timeout=self.start_timeout):
             return f"tcp://localhost:{self._sub_port.value}"
@@ -111,20 +141,28 @@ class EventsDevice(multiprocessing.Process):
         # triggers _running.clear(), letting the loop drain and exit gracefully.
         signal.signal(signal.SIGTERM, lambda *_: self._running.clear())
         with verbose_suppress("EventsDevice failed"):
-            with zmq.Context() as ctx, ctx.socket(zmq.PUB) as pub, ctx.socket(zmq.SUB) as sub:
+            with zmq.Context() as ctx, ctx.socket(zmq.XPUB) as pub, ctx.socket(zmq.SUB) as sub:
+                # XPUB hands the device every subscription, so it knows which subscribers receive its events
+                pub.setsockopt(zmq.XPUB_VERBOSE, 1)
                 self._sub_port.value = pub.bind_to_random_port("tcp://*")
+
+                # Delivery verification subscriber. The device is ready once it receives its subscription;
+                # the other subscribers wait in subscribe_address, so this is the first one.
+                sub.connect(f"tcp://localhost:{self._sub_port.value}")
+                sub.subscribe(b"")
+                if pub.poll(timeout=self.start_timeout * 1000):
+                    pub.recv()
+                else:
+                    LOGGER.warning("EventsDevice got no subscription of its delivery check in %ss", self.start_timeout)
                 self._running.set()
 
                 LOGGER.debug("EventsDevice listen on %s", self.subscribe_address)
-
-                # Delivery verification subscriber.
-                sub.connect(self.subscribe_address)
-                sub.subscribe(b"")
 
                 time.sleep(self.start_delay)
 
                 drain_deadline = None
                 while True:
+                    self._count_subscriptions(pub)
                     if running := self._running.is_set():
                         wait_timeout = self.pub_queue_wait_timeout
                     else:

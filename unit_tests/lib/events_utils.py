@@ -28,9 +28,10 @@ class EventsUtilsMixin:
     """Mixin that starts the **real** events infrastructure (multiprocessing, ZMQ, file I/O).
 
     ``setup_events_processes`` launches ``EventsDevice`` plus up to six subscriber
-    processes and sleeps ~4 s for them to initialise.  This is correct for tests
-    that exercise the events subsystem itself, but far too expensive for tests
-    that merely need events to be captured so their side-effects can be asserted.
+    processes and waits until they subscribe.  This is correct for tests that
+    exercise the events subsystem itself, but too heavy for tests that merely
+    need events to be captured so their side-effects can be asserted: every event
+    crosses processes and ZMQ, so the tests wait for its delivery.
 
     For the latter category, prefer the ``events`` / ``events_function_scope``
     pytest fixtures (defined in ``unit_tests/conftest.py``), which inject a
@@ -64,6 +65,13 @@ class EventsUtilsMixin:
         if cls.events_processes_registry_patcher:
             cls.events_processes_registry_patcher.stop()
         shutil.rmtree(cls.temp_dir)
+
+    @contextmanager
+    def wait_for_new_subscribers(self, count: int = 1):
+        """Wait, after the block, until the main device has received `count` more subscriptions."""
+        expected = self.events_main_device.subscribers + count
+        yield
+        self.events_main_device.wait_for_subscribers(expected)
 
     @contextmanager
     def wait_for_n_events(self, subscriber, count: int, timeout: float = 1, last_event_processing_delay: float = 0.5):

@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.file_logger import (
@@ -21,7 +20,6 @@ from sdcm.sct_events.file_logger import (
     get_logger_event_summary,
     start_events_logger,
 )
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.system import SpotTerminationEvent
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -29,10 +27,9 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 class TestFileLogger(EventsUtilsMixin):
     def setup_method(self) -> None:
         self.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
-        start_events_logger(_registry=self.events_processes_registry)
+        with self.wait_for_new_subscribers():
+            start_events_logger(_registry=self.events_processes_registry)
         self.file_logger = get_events_logger(_registry=self.events_processes_registry)
-
-        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         assert isinstance(self.file_logger, EventsFileLogger)
         assert self.file_logger.is_alive()
