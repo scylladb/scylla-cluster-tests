@@ -13,6 +13,7 @@
 
 """Unit test to verify provision_resources sends error events to Argus."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,6 +22,13 @@ from ssh2.exceptions import AuthenticationError
 
 from sdcm.remote.base import RetryableNetworkException
 from sdcm.remote.libssh2_client.exceptions import ConnectTimeout, FailedToRunCommand
+
+
+@pytest.fixture(autouse=True)
+def restore_environ():
+    """Restore os.environ after each test: provision-resources exports SCT_CLUSTER_BACKEND for its --backend."""
+    with patch.dict(os.environ):
+        yield
 
 
 def _remoter_error(ssh_error: Exception) -> RetryableNetworkException:
