@@ -33,6 +33,7 @@ from sdcm.cluster import _DOCKER_HOST_CHECKS
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.test_config import TestConfig
+from sdcm.utils.metaclasses import Singleton
 from unit_tests.lib.fake_remoter import FakeRemoter
 
 
@@ -51,29 +52,43 @@ def drain_spot_provision_outcomes():
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
 
 
-@pytest.fixture
-def restore_test_config():
-    """Restore the class and singleton-instance attributes of TestConfig, and ``_SCT_TEST_LOGDIR``, after the test.
+@pytest.fixture(autouse=True)
+def restore_environ():
+    """Restore os.environ after every unit test.
 
-    For tests that set up a ClusterTester or set TestConfig values directly: the test id, name, tester object,
-    decoding queue, syslog-ng address and the like otherwise stay on the process-wide TestConfig.
+    SCT code exports values it resolves into the environment (``SCT_CLUSTER_BACKEND``, ``SCT_REGION_NAME``,
+    ``SCT_GCE_DATACENTER``, ``SCT_AVAILABILITY_ZONE``, ``_SCT_TEST_LOGDIR``, ...), and monkeypatch only restores
+    what a test set through it.
+    """
+    with patch.dict(os.environ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def restore_singletons():
+    """Restore the registry of ``Singleton`` instances after every unit test.
+
+    The instances a test creates are dropped, so the next test builds its own. Instances that wider-scoped
+    fixtures created before the test stay.
+    """
+    with patch.dict(Singleton._instances):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def restore_test_config():
+    """Restore the class attributes of TestConfig after every unit test.
+
+    TestConfig keeps its state on the class: the test id, name, tester object, decoding queue, syslog-ng address
+    and the like. ``restore_singletons`` drops the TestConfig instance, but not these.
     """
     saved_class_attrs = dict(vars(TestConfig))
-    instance = TestConfig()
-    saved_instance_attrs = dict(vars(instance))
-    saved_logdir_env = os.environ.get("_SCT_TEST_LOGDIR")
     yield
     for name in set(vars(TestConfig)) - set(saved_class_attrs):
         delattr(TestConfig, name)
     for name, value in saved_class_attrs.items():
         if vars(TestConfig).get(name) is not value:
             setattr(TestConfig, name, value)
-    vars(instance).clear()
-    vars(instance).update(saved_instance_attrs)
-    if saved_logdir_env is None:
-        os.environ.pop("_SCT_TEST_LOGDIR", None)
-    else:
-        os.environ["_SCT_TEST_LOGDIR"] = saved_logdir_env
 
 
 @pytest.fixture

@@ -39,9 +39,6 @@ from sdcm.provision import provisioner_factory
 from sdcm.utils import common
 from unit_tests.lib.fake_resources import prepare_fake_region
 
-# the tests set values on the process-wide TestConfig
-pytestmark = pytest.mark.usefixtures("restore_test_config")
-
 
 @pytest.fixture(scope="session")
 def test_id():

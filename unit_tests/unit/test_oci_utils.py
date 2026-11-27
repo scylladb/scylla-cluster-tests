@@ -312,7 +312,7 @@ def test_wait_for_instance_state_unexpected_termination():
 
 
 @patch("sdcm.utils.oci_utils.KeyStore")
-def test_oci_service_compartment_id(mock_keystore_class):
+def test_oci_service_compartment_id(mock_keystore_class, monkeypatch):
     """Test getting compartment_id."""
     mock_keystore = MagicMock()
     mock_keystore.get_oci_credentials.return_value = {
@@ -325,10 +325,8 @@ def test_oci_service_compartment_id(mock_keystore_class):
     }
     mock_keystore_class.return_value = mock_keystore
 
-    # build a fresh OciService on the mocked KeyStore, and restore the singleton registry afterwards
-    with patch.dict(Singleton._instances):
-        Singleton._instances.pop(OciService, None)
-        service = OciService()
+    monkeypatch.delitem(Singleton._instances, OciService, raising=False)  # the OCI VM provider builds one at import
+    service = OciService()
     assert service.compartment_id == "ocid1.compartment.oc1..test"
     assert service.tenancy_id == "ocid1.tenancy.oc1..test"
 

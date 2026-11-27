@@ -1105,14 +1105,9 @@ def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
 
 @pytest.fixture(name="placement_logdir")
 def fixture_placement_logdir(monkeypatch, tmp_path):
-    """Point base_logdir at a tmp dir to not touch ~/sct-results, and restore the env the placement overlay exports.
-
-    Applying the overlay exports the resolved region and availability zone (``SCT_AVAILABILITY_ZONE`` among them)
-    into os.environ.
-    """
-    with patch.dict(os.environ):
-        monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
-        yield tmp_path
+    """Point base_logdir at a tmp dir to not touch ~/sct-results."""
+    monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
+    return tmp_path
 
 
 def test_write_then_read_resolved_placement_round_trips(placement_logdir):  # noqa: ARG001
@@ -2205,16 +2200,13 @@ def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_c
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("SCT_SCYLLA_VERSION")
     monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
-    Singleton._instances.pop(AzureService, None)
-    try:
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-        conf.verify_configuration_urls_validity()
-        scylla_version, _ = conf.get_version_based_on_conf()
-        conf.update_config_based_on_version()
-        azure_service_built = AzureService in Singleton._instances
-    finally:
-        Singleton._instances.pop(AzureService, None)
+    monkeypatch.delitem(Singleton._instances, AzureService, raising=False)  # the Azure providers build one at import
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+    conf.verify_configuration_urls_validity()
+    scylla_version, _ = conf.get_version_based_on_conf()
+    conf.update_config_based_on_version()
+    azure_service_built = AzureService in Singleton._instances
 
     assert conf.get("azure_instance_type_db") == "Standard_L8s_v3"
     assert not conf.get("intra_node_comm_public")

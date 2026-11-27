@@ -52,13 +52,6 @@ class _GceParams(DotDict):
         return raw.split() if isinstance(raw, str) else list(raw)
 
 
-@pytest.fixture(autouse=True)
-def restore_environ():
-    """Restore os.environ after each test: region fallback exports the GCE datacenter it switches to."""
-    with patch.dict(os.environ):
-        yield
-
-
 def _make_params(**overrides):
     """Build a minimal single-DC GCE params object with region fallback enabled by default."""
     return _GceParams(

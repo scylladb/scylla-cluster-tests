@@ -79,13 +79,6 @@ def _no_retry_sleep():
         yield
 
 
-@pytest.fixture(autouse=True)
-def restore_environ():
-    """Restore os.environ after each test: region fallback exports the GCE datacenter it switches to."""
-    with patch.dict(os.environ):
-        yield
-
-
 def _create(vm_provider):
     return vm_provider.get_or_create(definitions=[_definition("node-1")], pricing_model=PricingModel.ON_DEMAND)
 

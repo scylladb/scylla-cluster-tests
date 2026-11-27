@@ -36,7 +36,6 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     AdaptiveTimeoutStore,
     ArgusAdaptiveTimeoutStore,
     NodeLoadInfoService,
-    NodeLoadInfoServices,
     nodetool_size_to_mb,
 )
 from unit_tests.lib.fake_cluster import DummyDbCluster
@@ -166,13 +165,6 @@ def mock_tablets_feature():
     with mock.patch("sdcm.utils.adaptive_timeouts.is_tablets_feature_enabled") as mock_feature:
         mock_feature.return_value = False
         yield mock_feature
-
-
-@pytest.fixture(autouse=True)
-def clear_node_load_info_services_singleton():
-    """Clear the NodeLoadInfoServices Singleton cache after each test to prevent cross-test pollution."""
-    yield
-    NodeLoadInfoServices()._services.clear()
 
 
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")

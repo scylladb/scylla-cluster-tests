@@ -20,14 +20,6 @@ from sdcm.nemesis.utils.node_allocator import (
 )
 
 
-@pytest.fixture(autouse=True)
-def reset_node_allocator_singleton():
-    """Reset NemesisNodeAllocator singleton state before each test"""
-    if hasattr(NemesisNodeAllocator.__class__, "_instances"):
-        NemesisNodeAllocator.__class__._instances.clear()
-    yield
-
-
 class MockNode(BaseNode):
     def __init__(self, name, node_type="data_nodes", is_seed=False, dc_idx=0, rack=0):
         self.name = name

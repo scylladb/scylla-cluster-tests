@@ -13,7 +13,6 @@
 
 """collect-logs on a local run: no sct-runner, and usually no Argus registration."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,13 +33,6 @@ MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_UR
 def no_minicloud_env(monkeypatch):
     for env_var in MINICLOUD_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)
-
-
-@pytest.fixture(autouse=True)
-def restore_environ():
-    """Restore os.environ after each test: collect-logs exports SCT_CLUSTER_BACKEND for the backend it collects."""
-    with patch.dict(os.environ):
-        yield
 
 
 @pytest.fixture

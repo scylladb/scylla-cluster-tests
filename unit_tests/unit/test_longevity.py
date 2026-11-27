@@ -38,7 +38,7 @@ class DummyLongevityTest(LongevityTest):
         self.kafka_cluster = None
 
     @pytest.fixture(name="configure_logging_fixture")
-    def fixture_configure_logging(self, restore_logging_config, restore_test_config):
+    def fixture_configure_logging(self, restore_logging_config):
         """Configure logging like ClusterTester, per test: the logging and TestConfig state is restored after each."""
         configure_logging(exception_handler=handle_exception, variables={"log_dir": TestConfig().logdir()})
 

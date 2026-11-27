@@ -12,16 +12,11 @@
 # Copyright (c) 2022 ScyllaDB
 from collections import namedtuple
 
-import pytest
-
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
-
-# the tests set values on the process-wide TestConfig
-pytestmark = pytest.mark.usefixtures("restore_test_config")
 
 
 def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch, provisioner_dir):
