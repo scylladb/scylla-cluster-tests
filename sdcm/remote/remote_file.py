@@ -13,6 +13,7 @@
 
 import os
 import logging
+import shlex
 import stat
 import tempfile
 import contextlib
@@ -45,21 +46,31 @@ def remote_file(
 ):
     filename = os.path.basename(remote_path)
     local_tempfile = os.path.join(tempfile.mkdtemp(prefix="sct"), filename)
-    if preserve_ownership and sudo:
+    # A missing file starts empty and is created on write, with the default owner and mode.
+    # The probe exits 0 either way, so a remoter failure raises instead of reading as a missing file.
+    run = remoter.sudo if sudo else remoter.run
+    exists = run(f"test -e {shlex.quote(str(remote_path))} && echo exists || true").stdout.strip() == "exists"
+    preserve_ownership = preserve_ownership and sudo and exists
+    preserve_permissions = preserve_permissions and sudo and exists
+    if preserve_ownership:
         ownership = remoter.sudo(cmd=f'stat -c "%U:%G" {remote_path}').stdout.strip()
-    if preserve_permissions and sudo:
+    if preserve_permissions:
         permissions = remoter.sudo(cmd=f'stat -c "%a" {remote_path}').stdout.strip()
 
-    wait.wait_for(
-        remoter.receive_files,
-        step=10,
-        text=f"Waiting for copying `{remote_path}' from {remoter.hostname}",
-        timeout=300,
-        throw_exc=True,
-        src=str(remote_path),
-        dst=local_tempfile,
-        sudo=sudo,
-    )
+    if exists:
+        wait.wait_for(
+            remoter.receive_files,
+            step=10,
+            text=f"Waiting for copying `{remote_path}' from {remoter.hostname}",
+            timeout=300,
+            throw_exc=True,
+            src=str(remote_path),
+            dst=local_tempfile,
+            sudo=sudo,
+        )
+    else:
+        LOGGER.debug("'%s' doesn't exist on %s, it will be created", remote_path, remoter.hostname)
+        Path(local_tempfile).touch()
     with open(local_tempfile, encoding="utf-8") as fobj:
         parsed_data = deserializer(fobj)
         original_content = serializer(parsed_data)
@@ -101,9 +112,9 @@ def remote_file(
         else:
             remoter.run(remote_tempfile_move_cmd)
 
-        if preserve_ownership and sudo:
+        if preserve_ownership:
             remoter.sudo(f"chown {ownership} {remote_path}")
-        if preserve_permissions and sudo:
+        if preserve_permissions:
             remoter.sudo(f"chmod {permissions} {remote_path}")
 
     os.unlink(local_tempfile)
