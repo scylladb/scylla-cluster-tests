@@ -262,6 +262,7 @@ DB_LOG_PATTERN_RESHARDING_START = "(?i)database - Resharding"
 DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in NORMAL"
 
 SPOT_TERMINATION_CHECK_DELAY = 5
+DECODING_QUEUE_POLL_SECONDS = 0.1
 
 MINUTE_IN_SEC: int = 60
 HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
@@ -2113,11 +2114,8 @@ class BaseNode(AutoSshContainerMixin):
         if self._decoding_backtraces_thread and self._decoding_backtraces_thread.is_alive():
             await_bucket.append(self._decoding_backtraces_thread)
         end_time = time.perf_counter() + timeout
-        while await_bucket and end_time > time.perf_counter():
-            for thread in await_bucket.copy():
-                if not thread.is_alive():
-                    await_bucket.remove(thread)
-            time.sleep(1)
+        for thread in await_bucket:
+            thread.join(max(0, end_time - time.perf_counter()))
 
         if self._coredump_thread:
             self._coredump_thread.join(300)
@@ -2650,15 +2648,14 @@ class BaseNode(AutoSshContainerMixin):
         while True:
             event = None
             try:
-                obj = self.test_config.DECODING_QUEUE.get(timeout=5)
-                if obj is None:
-                    break
+                obj = self.test_config.DECODING_QUEUE.get(timeout=DECODING_QUEUE_POLL_SECONDS)
                 event = obj["event"]
                 self.log.debug("Event origin severity: %s", event.severity)
                 event.build_id = obj["build_id"]
                 if decoded := self._decode_backtrace_via_service(event.build_id, event.raw_backtrace):
                     event.backtrace = decoded
             except queue.Empty:
+                # each decoder stops on its own termination_event, the queue is shared by all monitors.
                 # only a timed-out get() proves the queue is drained, empty() lags put() on a multiprocessing queue
                 if self.termination_event.is_set():
                     break
