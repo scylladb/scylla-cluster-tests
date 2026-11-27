@@ -21,8 +21,9 @@ from unit_tests.lib.dot_dict import DotDict
 
 
 @pytest.fixture(autouse=True)
-def reset_reservations():
-    SCTCapacityReservation.reservations = {}
+def reset_reservations(monkeypatch):
+    """Give each test an empty reservation map and restore the class-level one afterwards, so no reservation leaks into later tests."""
+    monkeypatch.setattr(SCTCapacityReservation, "reservations", {})
 
 
 @pytest.fixture(name="params")
