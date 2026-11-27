@@ -116,6 +116,14 @@ class PerformanceConfigMixin(BaseModel):
     use_hdrhistogram: Boolean = SctField(
         description="Enable hdr histogram logging for cs",
     )
+    perf_steps_metrics_warmup_sec: int = SctField(
+        ge=0,
+        description="Perf steps tests (performance_regression_gradual_grow_throughput): the first seconds of "
+        "every step left out of its per-step resource usage in Argus (DB and loader CPU, reactor utilization, "
+        "averaged from the monitor's Prometheus). Counted from the step start, which comes before the loaders "
+        "launch their load; the last 60 seconds of the step are left out too. A step no longer than twice "
+        "this plus 60 seconds is used whole. 0 disables the cut.",
+    )
     workload_name: String = SctField(
         description="Workload name, can be: write|read|mixed|unset. "
         "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "

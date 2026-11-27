@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**19 options.**
+**20 options.**
 
 
 <a id="max_deviation"></a>
@@ -204,6 +204,17 @@ Enable hdr histogram logging for cs
 **default:** False
 
 **type:** bool
+
+
+<a id="perf_steps_metrics_warmup_sec"></a>
+
+## **perf_steps_metrics_warmup_sec** / SCT_PERF_STEPS_METRICS_WARMUP_SEC
+
+Perf steps tests (performance_regression_gradual_grow_throughput): the first seconds of every step left out of its per-step resource usage in Argus (DB and loader CPU, reactor utilization, averaged from the monitor's Prometheus). Counted from the step start, which comes before the loaders launch their load; the last 60 seconds of the step are left out too. A step no longer than twice this plus 60 seconds is used whole. 0 disables the cut.
+
+**default:** 180
+
+**type:** int
 
 
 <a id="workload_name"></a>

@@ -192,10 +192,12 @@ def get_cdcreader_cmd_params(cmd):
 
 
 class PrometheusDBStats:
-    def __init__(self, host, port=9090, protocol="http", alternator=None):
+    def __init__(self, host, port=9090, protocol="http", alternator=None, request_timeout: float | None = None):
+        """'request_timeout' bounds each request, in seconds: the connect and every read. None waits without limit."""
         self.host = host
         self.port = port
         self.protocol = protocol
+        self.request_timeout = request_timeout
         self.range_query_url = f"{protocol}://{normalize_ipv6_url(host)}:{port}/api/v1/query_range?query="
         self._session = self._create_session()
         self.config = self.get_configuration()
@@ -211,7 +213,7 @@ class PrometheusDBStats:
 
     @retrying(n=5, sleep_time=7, allowed_exceptions=(requests.ConnectionError, requests.HTTPError))
     def request(self, url, post=False):
-        kwargs = {}
+        kwargs = {"timeout": self.request_timeout}
         if self.protocol == "https":
             kwargs["verify"] = False
         if post:
