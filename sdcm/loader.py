@@ -362,6 +362,8 @@ class ScyllaBenchHDRExporter(CassandraStressHDRExporter):
 class CqlStressCassandraStressExporter(StressExporter):
     # Lines containing any of these should be skipped. These are the logs emitted by the `tracing` crate.
     TRACING_LOGS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+    # The total ops count, after the optional "[2026-11-24 10:42:13.076] " prefix of TimestampedLogWriteWatcher.
+    STATS_ROW_REGEX = re.compile(r"^(?:\[[^\]]*\])?\s*\d+\s*,")
 
     def __init__(
         self,
@@ -423,7 +425,7 @@ class CqlStressCassandraStressExporter(StressExporter):
             self.do_skip = True
 
         # A stats row starts with the total ops count; anything else (e.g. an error message with commas) is not one.
-        return self.do_skip or not line.split(",", 1)[0].strip().isdigit()
+        return self.do_skip or not self.STATS_ROW_REGEX.match(line)
 
     @staticmethod
     def split_line(line: str) -> list:
