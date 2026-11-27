@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**22 options.**
+**23 options.**
 
 
 <a id="ami_db_scylla_user"></a>
@@ -166,6 +166,17 @@ List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
 ## **aws_fallback_to_next_availability_zone** / SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
 
 Deprecated alias of [`fallback_to_next_availability_zone`](general-and-provisioning.md#fallback_to_next_availability_zone). Kept for backward compatibility.
+
+**default:** False
+
+**type:** bool
+
+
+<a id="aws_fleet_db_use_alternatives"></a>
+
+## **aws_fleet_db_use_alternatives** / SCT_AWS_FLEET_DB_USE_ALTERNATIVES
+
+Offer EC2 Fleet spot provisioning interchangeable alternatives to [`instance_type_db`](general-and-provisioning.md#instance_type_db), so a large spot request can still be fulfilled when the preferred pool is exhausted. The alternatives are every catalog type matching [`sizing_db`](general-and-provisioning.md#sizing_db) with the same vCPU count and memory as [`instance_type_db`](general-and-provisioning.md#instance_type_db) - including families outside the sizing preference list, ranked after it - so local disk size and CPU generation may differ, and a fleet can produce a heterogeneous cluster; add constraints to [`sizing_db`](general-and-provisioning.md#sizing_db) (e.g. `disk`) to narrow them. [`instance_type_db`](general-and-provisioning.md#instance_type_db) stays the preferred type: EC2 Fleet prefers it (best effort), and every other code path uses it alone. Needs [`instance_type_db`](general-and-provisioning.md#instance_type_db) sized from [`sizing_db`](general-and-provisioning.md#sizing_db) - with an explicit [`instance_type_db`](general-and-provisioning.md#instance_type_db), EC2 Fleet uses that type only. EC2 Fleet is used for every DB spot request with `instance_provision: spot_fleet` - including nodes added mid-test - and, with `spot`, only for the upfront provisioning of more than 10 nodes per AZ. Alternatives AWS doesn't offer in the target AZ are skipped at launch. AWS only.
 
 **default:** False
 

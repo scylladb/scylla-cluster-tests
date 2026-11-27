@@ -89,11 +89,12 @@ arch: x86            # force x86_64 (shorthand accepted)
 
 ### Spot Runs Prefer Less-Interrupted Types
 
-When the run ends up on AWS spot (`spot`, `spot_fleet`, or `auto`/unset that the duration policy turns into
-spot), the pick above is swapped for the candidate of the same vCPU count with the lowest spot interruption
+When the run ends up on AWS spot (`spot`, or `auto`/unset that the duration policy turns into spot), the pick
+above is swapped for the candidate of the same vCPU count with the lowest spot interruption
 bucket in the test's first region, for example `i8ge.xlarge` over `i8g.xlarge`. The size never changes, and
 candidates without a bucket rank after those with one; on equal buckets the order above decides.
-On-demand runs are unaffected.
+On-demand runs are unaffected, and so are `spot_fleet` runs: EC2 Fleet chooses among the instance type
+alternatives (`aws_fleet_db_use_alternatives`) by available capacity itself.
 
 AWS updates the advisor file irregularly (last on 2026-03-20), so a spot pick can change when it does, and a
 process that cannot fetch it uses the normal order. Types newer than the file can lack a bucket in some

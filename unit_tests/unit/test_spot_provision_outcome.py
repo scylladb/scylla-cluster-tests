@@ -265,3 +265,63 @@ def test_missing_placement_fields_render_as_unknown():
     assert event.availability_zone == "unknown"
     assert event.instance_type == "unknown"
     assert "None" not in str(event)
+
+
+class _CountingProvisioner(_StubProvisioner):
+    """Also reports which instance types the launched instances turned out to be."""
+
+    type_counts: dict = {}
+    count_calls: int = 0
+
+    def count_instance_types(self, provision_parameters, instances):  # noqa: ARG002
+        self.count_calls += 1
+        return self.type_counts
+
+
+def _instance_params(*instance_types):
+    return [MagicMock(InstanceType=instance_type) for instance_type in instance_types]
+
+
+def test_fleet_outcome_is_recorded_per_launched_instance_type():
+    """With interchangeable types EC2 Fleet picks among them, so one record per type it actually launched."""
+    provisioner = _CountingProvisioner(results=[["i-1"] * 6], type_counts={"i7i.large": 4, "i3en.large": 2})
+    plan = ProvisionPlan(provision_steps=_steps("Spot Fleet"), provisioner=provisioner)
+    with patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event:
+        plan.provision_instances(
+            instance_parameters=_instance_params("i7i.large", "i3en.large"),
+            node_count=6,
+            node_tags=[{}] * 6,
+            node_names=["n"] * 6,
+        )
+
+    reported = {call.kwargs["instance_type"]: call.kwargs["count"] for call in mock_event.call_args_list}
+    assert reported == {"i7i.large": 4, "i3en.large": 2}
+
+
+def test_single_instance_type_needs_no_type_lookup():
+    provisioner = _CountingProvisioner(results=[["i-1"] * 6])
+    plan = ProvisionPlan(provision_steps=_steps("Spot"), provisioner=provisioner)
+    with patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event:
+        plan.provision_instances(
+            instance_parameters=_instance_params("i7i.large"), node_count=6, node_tags=[{}] * 6, node_names=["n"] * 6
+        )
+
+    assert provisioner.count_calls == 0
+    mock_event.assert_called_once()
+    assert (mock_event.call_args.kwargs["instance_type"], mock_event.call_args.kwargs["count"]) == ("i7i.large", 6)
+
+
+def test_failed_type_lookup_falls_back_to_the_preferred_type():
+    """Reporting must never get in the way: an empty lookup still records the batch, under the preferred type."""
+    provisioner = _CountingProvisioner(results=[["i-1"] * 6], type_counts={})
+    plan = ProvisionPlan(provision_steps=_steps("Spot Fleet"), provisioner=provisioner)
+    with patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event:
+        plan.provision_instances(
+            instance_parameters=_instance_params("i7i.large", "i3en.large"),
+            node_count=6,
+            node_tags=[{}] * 6,
+            node_names=["n"] * 6,
+        )
+
+    mock_event.assert_called_once()
+    assert (mock_event.call_args.kwargs["instance_type"], mock_event.call_args.kwargs["count"]) == ("i7i.large", 6)

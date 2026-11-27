@@ -542,7 +542,10 @@ class TestSpotPlacementScoreOrdering:
 
     def test_enabled_for_aws_spot(self):
         assert is_spot_placement_scoring_enabled(self._spot_params()) is True
-        assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is True
+
+    def test_skipped_for_spot_fleet(self):
+        """The score covers `instance_type_db` alone, while an EC2 Fleet run also offers the alternatives."""
+        assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is False
 
     def test_target_capacity_counts_db_nodes_only(self):
         """Capacity must match `scored_instance_types()`, which is DB-only - see that method for why."""

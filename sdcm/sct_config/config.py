@@ -78,7 +78,12 @@ from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
-from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.cloud_catalog.instance_matcher import (
+    ARCH_ALIASES,
+    NoMatchingInstanceError,
+    rank_instances,
+    select_instance,
+)
 from sdcm.utils.common import (
     ami_built_by_scylla,
     convert_name_to_ami_if_needed,
@@ -487,6 +492,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
     log: ClassVar = logging.getLogger("sdcm.sct_config")
 
     multi_region_params: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
+    # filled from sizing_db when aws_fleet_db_use_alternatives is set - see _resolve_fleet_db_alternatives
+    aws_fleet_db_alternative_types: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
     regions_data: Annotated[dict[str, dict[str, str]], IgnoredType] = Field(default={}, exclude=True)
 
     # computed values, user can't fill those from configuration,
@@ -1001,6 +1008,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # 10.5) derive instance_provision from test duration when it was not chosen explicitly
         self._apply_duration_based_provision_policy()
         self._rerank_sizing_for_final_provision()
+        self._resolve_fleet_db_alternatives()
 
         # 11) validate that supported instance_provision selected
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
@@ -1680,8 +1688,52 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     @staticmethod
     def _spot_sizing_region(cloud: str, provision: str | None, region: str | None) -> str | None:
-        """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None."""
-        return region if provision in ("spot", "spot_fleet") and cloud == "aws" else None
+        """Region whose spot interruption data ranks the sizing (SCT-707): `region` for AWS spot, else None.
+
+        Not for `spot_fleet`: EC2 Fleet chooses among the alternatives by available capacity itself
+        (`capacity-optimized-prioritized`), so the sizing keeps its normal order there.
+        """
+        return region if provision == "spot" and cloud == "aws" else None
+
+    def _resolve_fleet_db_alternatives(self) -> None:
+        """Fill `aws_fleet_db_alternative_types` from `sizing_db`, when `aws_fleet_db_use_alternatives` is set.
+
+        The alternatives are every catalog type matching the constraints that sized `instance_type_db` - also
+        outside the role's preferred families, ranked after them - with the same vCPU count and memory as
+        `instance_type_db` (the constraints already pin the architecture). They are offered to EC2 Fleet at a
+        lower priority than `instance_type_db`; local disk size and CPU generation may differ. Runs after
+        `_rerank_sizing_for_final_provision`, so it ranks with the same spot data that picked `instance_type_db`.
+        """
+        self["aws_fleet_db_alternative_types"] = []
+        if not self.get("aws_fleet_db_use_alternatives") or self.get("cluster_backend") != "aws":
+            return
+        primary = self.get("instance_type_db")
+        sized = next(
+            (entry for entry in getattr(self, "_sized_constraints", []) if entry[0] == "instance_type_db"), None
+        )
+        if not sized:
+            self.log.warning(
+                "aws_fleet_db_use_alternatives is set, but instance_type_db (%s) was set explicitly rather than "
+                "sized from sizing_db, so there are no alternatives to offer: EC2 Fleet uses %s only",
+                primary,
+                primary,
+            )
+            return
+        _, role, cloud, constraints, sizing_region, _ = sized
+        # the same spot ranking `_rerank_sizing_for_final_provision` used for the final instance_type_db
+        spot_region = self._spot_sizing_region(cloud, self.get("instance_provision"), sizing_region)
+        catalog = InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
+        size = catalog.get_instance(cloud, primary)
+        ranked = rank_instances(
+            catalog, role, cloud, constraints, spot_region=spot_region, preferred_families_only=False
+        )
+        alternatives = [
+            inst.instance_type
+            for inst in ranked
+            if size and inst.instance_type != primary and (inst.vcpus, inst.memory_gb) == (size.vcpus, size.memory_gb)
+        ]
+        self["aws_fleet_db_alternative_types"] = alternatives
+        self.log.info("EC2 Fleet alternatives to instance_type_db %s, from sizing_db: %s", primary, alternatives)
 
     def _rerank_sizing_for_final_provision(self) -> None:
         """Re-rank the sized instance types once the duration policy has settled `instance_provision`.

@@ -36,7 +36,7 @@ all encoded in `sdcm/provision/aws/spot_placement_score.py`:
 |---|---|
 | "We recommend ... at least three instance types. If you specify one or two ... the returned placement score will always be low" | Scores are a **relative ranking only**, never an absolute verdict. `spot_placement_score_min` defaults to `0` (drop nothing) and a warning is logged below 3 types. |
 | "a recommendation only. No score guarantees that your Spot request will be fully or partially fulfilled" | The existing AZ/region capacity fallback stays the safety net. |
-| A high per-AZ score assumes a single AZ + `capacity-optimized` allocation strategy | `SPOT_FLEET_ALLOCATION_STRATEGY` is now set on fleet requests. |
+| A high per-AZ score assumes a single AZ + `capacity-optimized` allocation strategy | EC2 Fleet requests are single-AZ and use `EC2_FLEET_ALLOCATION_STRATEGY`, a capacity-optimized strategy. |
 | `RegionName.N` max 10 entries | Region lists are chunked (`_chunk_regions`). |
 | Response is the top 10 placements | Unscored AZs/regions keep their order and go **last** — absent ≠ bad. |
 | Response reports `AvailabilityZoneId` (`euw1-az3`), not names | Translated per-account via `describe_availability_zones`; the mapping is shuffled per account and must never be hardcoded. |

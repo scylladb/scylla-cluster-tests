@@ -53,7 +53,7 @@ class ProvisionPlan(BaseModel):
                     provision_parameters.name,
                     instances,
                 )
-                self._publish_outcome(requested, provision_parameters, instance_parameters, node_count)
+                self._publish_outcome(requested, provision_parameters, instance_parameters, node_count, instances)
                 return instances
             else:
                 LOGGER.error('%s: Failed to provision instances using "%s"', self.name, provision_parameters.name)
@@ -67,15 +67,25 @@ class ProvisionPlan(BaseModel):
         realized_parameters: ProvisionParameters | None,
         instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
         node_count: int,
+        instances: List | None = None,
     ) -> None:
-        """Record requested vs realized provision type, so silent spot->on-demand downgrades are visible."""
+        """Record requested vs realized provision type, so silent spot->on-demand downgrades are visible.
+
+        One record per instance type actually launched: with several interchangeable types (EC2 Fleet), AWS picks
+        among them, so reporting the preferred type for the whole batch would mislabel the rest.
+        """
         location = realized_parameters or self.provision_steps[0]
-        first_params = instance_parameters[0] if isinstance(instance_parameters, list) else instance_parameters
-        record_spot_provision_outcome(
-            requested=requested,
-            realized=realized_parameters.name if realized_parameters else None,
-            region=location.region_name,
-            availability_zone=location.availability_zone,
-            instance_type=getattr(first_params, "InstanceType", None),
-            count=node_count,
-        )
+        params_list = instance_parameters if isinstance(instance_parameters, list) else [instance_parameters]
+        requested_types = list(dict.fromkeys(getattr(params, "InstanceType", None) for params in params_list))
+        type_counts = {}
+        if realized_parameters and instances and len(requested_types) > 1:
+            type_counts = self.provisioner.count_instance_types(realized_parameters, instances)
+        for instance_type, count in (type_counts or {requested_types[0]: node_count}).items():
+            record_spot_provision_outcome(
+                requested=requested,
+                realized=realized_parameters.name if realized_parameters else None,
+                region=location.region_name,
+                availability_zone=location.availability_zone,
+                instance_type=instance_type,
+                count=count,
+            )
