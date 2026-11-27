@@ -365,3 +365,16 @@ def test_wait_for_log_reraises_timeout_error_with_error_context(tmp_path):
     ):
         t.start()
         raise ValueError("dummy error")
+
+
+def test_wait_for_log_end_line_after_call_outlasts_timeouts(tmp_path):
+    """The wrapped call outlasts both timeouts, and its end line reaches the log copy just after the call returns."""
+    file_path = tmp_path / "wait_for_log_lines_1.log"
+    node = DummyNode(log_path=file_path)
+    file_path.touch()
+    with wait_for_log_lines(
+        node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=1, end_timeout=1
+    ):
+        write_to_file(file_path, ["start"])
+        time.sleep(1.2)
+        threading.Timer(0.2, write_to_file, args=(file_path, ["end"])).start()

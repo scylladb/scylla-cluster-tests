@@ -149,6 +149,7 @@ class SstableLoadUtils:
         table_name: str = "standard1",
         start_timeout=60,
         end_timeout=600,
+        timeout: int = 3600,
     ):
         """Runs load and stream using API request and waits for it to finish"""
         with wait_for_log_lines(
@@ -164,7 +165,9 @@ class SstableLoadUtils:
             # https://github.com/scylladb/scylla-tools-java/issues/253
             path = f"/storage_service/sstables/{keyspace_name}?cf={table_name}&load_and_stream=true"
             load_api_cmd = build_node_api_command(path_url=path, request_method=RequestMethods.POST, silent=False)
-            node.remoter.run(load_api_cmd)
+            # On tablets, it waits for the topology to quiesce, which may never happen. Like run_refresh, don't retry.
+            with adaptive_timeout(Operations.REFRESH, node, timeout=timeout) as load_timeout:
+                node.remoter.run(load_api_cmd, timeout=load_timeout)
 
     @staticmethod
     def run_refresh(

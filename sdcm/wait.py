@@ -24,6 +24,7 @@ import tenacity
 from sdcm.exceptions import ExitByEventError, WaitForTimeoutError
 
 LOGGER = logging.getLogger("sdcm.wait")
+LOG_LINE_GRACE = 30  # seconds to wait for a log line after the wrapped call returned
 
 R = TypeVar("R")
 
@@ -169,15 +170,19 @@ def wait_for_log_lines(
     try:
         yield
     finally:
+        # The wrapped call can outlast the timeouts, and the lines it logged reach the local log copy with a delay
+        exit_time = time.time()
+        start_deadline = max(start_time + start_timeout, exit_time + min(LOG_LINE_GRACE, start_timeout))
+        end_deadline = max(start_time + end_timeout, exit_time + min(LOG_LINE_GRACE, end_timeout))
         started = any(start_follower)
-        while not started and (time.time() - start_time < start_timeout):
+        while not started and time.time() < start_deadline:
             started = any(start_follower)
             time.sleep(0.1)
         if not started:
             raise TimeoutError(start_ctx)
         LOGGER.debug("Start line patterns %s were found.%s", start_line_patterns, error_msg_ctx)
         ended = any(end_follower)
-        while not ended and (time.time() - start_time < end_timeout):
+        while not ended and time.time() < end_deadline:
             ended = any(end_follower)
             time.sleep(0.1)
         if not ended:

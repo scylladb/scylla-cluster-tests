@@ -14,6 +14,7 @@
 import logging
 import os
 import shutil
+import threading
 import time
 import unittest.mock
 from pathlib import Path
@@ -95,6 +96,15 @@ class TestDownloadDir:
         sct_update_db_packages = None
         update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         assert update_db_packages is None
+
+
+class SlowSstableRemoter(FakeSstableRemoter):
+    """Returns after 1.2 s, and its log lines reach the local log copy 0.2 s after that."""
+
+    def run(self, *args, **kwargs):
+        self.run_kwargs = kwargs
+        time.sleep(1.2)
+        threading.Timer(0.2, super().run).start()
 
 
 class TestSstableLoadUtils:
@@ -215,9 +225,25 @@ class TestSstableLoadUtils:
                 f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
             )
 
-    def test_load_and_stream_waits_for_log_lines(self):
+    @unittest.mock.patch("sdcm.utils.sstable.load_utils.adaptive_timeout")
+    def test_load_and_stream_waits_for_log_lines(self, _adaptive_timeout_mock):
         self.node.remoter = FakeSstableRemoter(self.node.system_log)
         SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
+
+    def test_load_and_stream_passes_when_call_outlasts_end_timeout(self):
+        """The REST call outlasts end_timeout, and its log lines reach the local log copy just after it returns.
+
+        The call must use the adaptive timeout, since a load-and-stream on tablets can wait forever for the topology
+        to quiesce.
+        """
+        remoter = SlowSstableRemoter(self.node.system_log)
+        self.node.remoter = remoter
+        with unittest.mock.patch("sdcm.utils.sstable.load_utils.adaptive_timeout") as adaptive_timeout_mock:
+            adaptive_timeout_mock.return_value.__enter__.return_value = 7200
+            SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=1, timeout=120)
+
+        adaptive_timeout_mock.assert_called_once_with(Operations.REFRESH, self.node, timeout=120)
+        assert remoter.run_kwargs == {"timeout": 7200}
 
 
 def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
