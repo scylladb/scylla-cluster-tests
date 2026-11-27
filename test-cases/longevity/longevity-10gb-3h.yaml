@@ -16,7 +16,7 @@ test_metadata:
   workload: write
   nemesis_labels:
     - SisyphusMonkey
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=500 -pop seq=1..10000000 -log interval=5"
              ]
 
 n_db_nodes: 6
@@ -24,16 +24,18 @@ n_loaders: 2
 argus_use_ssh_tunnel: true
 
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
-  vcpu: 8
-  memory: '>=64'
+  vcpu: 4
+  memory: '>=32'
   # arch pinned: this config backs the AWS sanity trigger job, whose AMI is supplied by id (x86_64)
   arch: x86_64
+# GCE: the sizing resolver picks n2d. c4 is the current generation, and c4d/c4a have no 4 vCPU
+# shape with local SSD. Use the -lssd shape: c4 takes only Hyperdisk, which SCT cannot attach as a data disk.
+gce_instance_type_db: 'c4-highmem-4-lssd'
 sizing_loader:
   vcpu: 4
   memory: '>=16'
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 111
 nemesis_interval: 2
 
 user_prefix: 'longevity-10gb-3h'
