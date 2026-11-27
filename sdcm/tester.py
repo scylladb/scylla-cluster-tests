@@ -1368,6 +1368,7 @@ class ClusterTester(unittest.TestCase):
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = None
+        self.resolve_nemesis_seeds()
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
@@ -1632,6 +1633,20 @@ class ClusterTester(unittest.TestCase):
             if is_ttl_in_workload:
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.TABLE_NAME)
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.NO_LWT_TABLE_NAME)
+
+    def resolve_nemesis_seeds(self):
+        """Fill ``nemesis_seed`` when the job left it unset, before the configuration goes to Argus.
+
+        One seed per ``nemesis_class_name`` entry, and at least one, since the operations threads
+        and runners built outside ``add_nemesis`` read the first entry. Resolving here, once, makes
+        the "SCT Configuration" of the run in Argus show the seeds the nemesis threads use, so an
+        unseeded run can be replayed from it.
+        """
+        if self.params.get("nemesis_seed"):
+            return
+        seeds = [random.randint(0, 1000) for _ in range(max(1, len(self.params.get("nemesis_class_name") or [])))]
+        self.params["nemesis_seed"] = seeds
+        self.log.info("nemesis_seed is not set, using %s", seeds)
 
     def get_nemesis_class(self):
         """

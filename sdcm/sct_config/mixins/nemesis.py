@@ -71,7 +71,8 @@ class NemesisConfigMixin(BaseModel):
         description="""Seed for the per-runner random generator (NemesisRunner.random) that drives the
         disruption order, target node choice and every other random decision a nemesis makes, so a run
         can be replayed. A single value is broadcast to all nemesis threads, a list maps one seed per
-        entry of nemesis_class_name. 0 is a valid seed. Unset: a seed is picked per thread and logged.""",
+        entry of nemesis_class_name. 0 is a valid seed. Unset: SCT picks one per thread in setUp and
+        writes the list back, so the run configuration in Argus always shows the seeds used.""",
     )
     nemesis_selector: StringOrList = SctField(
         description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
