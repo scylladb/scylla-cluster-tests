@@ -2857,7 +2857,7 @@ class NemesisRunner:
         2. Stop the decommission with a hard reboot once unbootstrapping starts.
         3. Verify that the node was not decommissioned completely or add
         a new node in its place in case it was.
-        4. Trigger a rebuild on the decommissioned node.
+        4. Trigger a rebuild on the target node, or on the new node when one was added.
         """
 
         def decommission_post_action():
@@ -2865,7 +2865,8 @@ class NemesisRunner:
             Verify that the decommission ocurred, was interrupted and
             is still in the cluster ip list. If that is not the case,
             add a new node to the cluster (to keep the desired number
-            of nodes) and raise a DecommissionNotStopped exception.
+            of nodes) and return it. Return None when the decommission
+            was interrupted.
             """
             target_is_seed = self.target_node.is_seed
             try:
@@ -2930,9 +2931,10 @@ class NemesisRunner:
                 self.action_log_scope(f"Reboot {self.target_node.name} node during decommission streaming"),
             ):
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
-            target_node = decommission_post_action() or self.target_node
-            target_node.wait_node_fully_start()
-            self.rebuild_or_repair(target_node, "After decomission streaming")
+            if new_node := decommission_post_action():
+                self.switch_target_node(new_node)
+            self.target_node.wait_node_fully_start()
+            self.rebuild_or_repair(self.target_node, "After decomission streaming")
 
     def start_and_interrupt_repair_streaming(self):
         """
