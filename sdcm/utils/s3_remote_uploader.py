@@ -79,7 +79,14 @@ def upload_remote_files_directly_to_s3(
     sock = socket.create_connection((ssh_info.get("hostname"), ssh_info.get("port", 22)))
     session = Session()
     session.handshake(sock)
-    session.userauth_publickey_fromfile(username=ssh_info.get("user"), privatekey=expanduser(ssh_info.get("key_file")))
+    user = ssh_info.get("user")
+    if key_file := ssh_info.get("key_file"):
+        session.userauth_publickey_fromfile(username=user, privatekey=expanduser(key_file))
+    else:
+        # A host reached through the lab access service has no key: it takes "none" auth, as RemoteLibSSH2CmdRunner does
+        session.userauth_list(user)
+        if not session.userauth_authenticated():
+            raise ConnectionError(f"SSH 'none' auth as {user} to {ssh_info.get('hostname')} failed, and no key is set")
     size = get_dir_size_kb(session, files)
     LOGGER.info("Size to upload (before compression): %s", size)
     if size > min(max_size_gb, 80):  # ~80 GB is the maximum size of a single file in S3 with current transport settings
