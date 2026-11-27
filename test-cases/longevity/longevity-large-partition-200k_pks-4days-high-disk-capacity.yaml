@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Large partitions (200K PKs) 4-day longevity, sized for a high-capacity disk.
 #
 # Standalone variant of longevity-large-partition-200k_pks-4days.yaml that keeps the
@@ -33,6 +34,47 @@
 # 3.22 TB node, and a larger disk resolved by the sizing constraint yields a lower one.
 # The sizing constraint caps local_disk_gb at 5000, so the utilization cannot fall below
 # ~3/5 of the figures above (~24% instead of ~40%) whatever the catalog resolves to.
+||||||| parent of d9bc271cf (fix(longevity-large-partition-200k-pks): set the team ownership to scylladb/storage-qa)
+test_metadata:
+  description: >-
+    4-day large-partition longevity test: scylla-bench writes and reads 200k-row partitions
+    sized to fill ~50% of a >=3 TB node disk on a 6-node cluster under SisyphusMonkey, with
+    partition fullscan data validation and tombstone-GC verification on a materialized view
+    whose tombstone_gc mode is set to 'repair'. The high-disk-capacity variant of the
+    200k-pks 4-day test, run by the GCE tier1 pipeline.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - gce
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  features:
+    - large-partitions
+    - tombstone-gc
+  team_ownership: storage-qa
+=======
+test_metadata:
+  description: >-
+    4-day large-partition longevity test: scylla-bench writes and reads 200k-row partitions
+    sized to fill ~50% of a >=3 TB node disk on a 6-node cluster under SisyphusMonkey, with
+    partition fullscan data validation and tombstone-GC verification on a materialized view
+    whose tombstone_gc mode is set to 'repair'. The high-disk-capacity variant of the
+    200k-pks 4-day test, run by the GCE tier1 pipeline.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - gce
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  features:
+    - large-partitions
+    - tombstone-gc
+  team_ownership: scylladb/storage-qa
+>>>>>>> d9bc271cf (fix(longevity-large-partition-200k-pks): set the team ownership to scylladb/storage-qa)
 
 test_duration: 6480
 
