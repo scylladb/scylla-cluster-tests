@@ -50,6 +50,7 @@ from urllib.parse import urljoin, urlparse
 
 import boto3
 import requests
+from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from google.cloud.compute_v1 import Image as GceImage
@@ -1319,13 +1320,51 @@ def get_latest_scylla_ami_release(region: str = "eu-west-1", product: ScyllaProd
     return str(max(versions))
 
 
+SCYLLA_DOWNLOADS_BUCKET = "downloads.scylladb.com"
+RELOCATABLE_RELEASES_PREFIX = "downloads/scylla/relocatable"
+
+
+def _list_relocatable_releases(prefix: str, verify: bool) -> tuple[list[str], list[str]]:
+    """List the downloads bucket under `prefix`, all pages: (sub-prefixes, keys).
+
+    botocore retries throttling, 5xx and connection errors by itself.
+    """
+    s3_client: S3Client = boto3.client(
+        "s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED), verify=verify
+    )
+    prefixes, keys = [], []
+    for page in s3_client.get_paginator("list_objects_v2").paginate(
+        Bucket=SCYLLA_DOWNLOADS_BUCKET, Prefix=prefix, Delimiter="/"
+    ):
+        prefixes.extend(item["Prefix"] for item in page.get("CommonPrefixes", []))
+        keys.extend(item["Key"] for item in page.get("Contents", []))
+    return prefixes, keys
+
+
 @lru_cache
-def get_latest_scylla_release(product: Literal["scylla", "scylla-enterprise"], verify: bool = True) -> str:
-    """Get latest advertised scylla version from the same service scylla_setup is getting it"""
-    product = product.lstrip("scylla-")
-    url = "https://repositories.scylladb.com/scylla/check_version?system={}"
-    version = requests.get(url.format(product), verify=verify).json()
-    return version["version"]
+def get_latest_scylla_release(verify: bool = True) -> str:
+    """Get the latest GA scylla release, the same way the web installer (get.scylladb.com/server) does.
+
+    It is the newest GA patch of the newest release series published to the downloads bucket: each
+    promoted build leaves a `relocatable/scylladb-<series>/00-Build-<version>-<build>.txt` marker.
+    """
+    series_prefixes, _ = _list_relocatable_releases(f"{RELOCATABLE_RELEASES_PREFIX}/scylladb-", verify)
+    series_re = re.compile(rf"{re.escape(RELOCATABLE_RELEASES_PREFIX)}/scylladb-(20\d{{2}}\.\d+)/")
+    series_list = sorted(
+        {match.group(1) for prefix in series_prefixes if (match := series_re.fullmatch(prefix))},
+        key=Version,
+        reverse=True,
+    )
+    for series in series_list:
+        _, keys = _list_relocatable_releases(
+            f"{RELOCATABLE_RELEASES_PREFIX}/scylladb-{series}/00-Build-{series}.", verify
+        )
+        # GA markers only: an RC marker is 00-Build-<series>.<patch>~rc<N>-<build>.txt
+        marker_re = re.compile(rf"/00-Build-{re.escape(series)}\.(\d+)-")
+        patches = [match.group(1) for key in keys if (match := marker_re.search(key))]
+        if patches:
+            return f"{series}.{max(patches, key=int)}"
+    raise ValueError(f"No GA scylla release found under s3://{SCYLLA_DOWNLOADS_BUCKET}/{RELOCATABLE_RELEASES_PREFIX}")
 
 
 def pid_exists(pid):

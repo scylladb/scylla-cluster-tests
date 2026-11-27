@@ -178,7 +178,7 @@ class ArtifactsTest(ClusterTester):
             )
 
     def verify_docker_latest_match_release(self) -> None:
-        latest_version = get_latest_scylla_release(product="scylla")
+        latest_version = get_latest_scylla_release()
 
         url = "https://hub.docker.com/v2/repositories/scylladb/{}/tags/{}"
         docker_latest = requests.get(url.format("scylla", "latest")).json()

@@ -26,7 +26,7 @@ pytestmark = [
 
 
 def _get_latest_branch() -> str:
-    full_version = get_latest_scylla_release("scylla-enterprise")
+    full_version = get_latest_scylla_release()
     return ".".join(full_version.split(".")[:2])
 
 

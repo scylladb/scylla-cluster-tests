@@ -33,8 +33,8 @@ from sdcm.utils.vm_arch import VmArch
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_latest_scylla_release(product="scylla"):
-    return get_latest_scylla_release(product=product, verify=False)
+def _get_latest_scylla_release():
+    return get_latest_scylla_release(verify=False)
 
 
 def _set_gce_instance_types(monkeypatch):
