@@ -47,7 +47,6 @@ from sdcm.sct_events.grafana import start_grafana_pipeline
 from sdcm.sct_events.loaders import CassandraStressEvent, CassandraStressLogEvent
 from sdcm.utils.issues import SkipPerIssues
 
-EVENTS_DEVICE_START_DELAY = 1  # seconds
 EVENTS_SUBSCRIBERS_START_DELAY = 3  # seconds
 EVENTS_PROCESS_STOP_TIMEOUT = 10  # seconds
 
@@ -62,10 +61,8 @@ def start_events_device(
             raise RuntimeError("Should provide log_dir or instance of EventsProcessesRegistry")
         _registry = create_default_events_process_registry(log_dir=log_dir)
 
+    # the subscribers wait in EventsDevice.subscribe_address until the device is ready
     start_events_main_device(_registry=_registry)
-
-    time.sleep(EVENTS_DEVICE_START_DELAY)
-
     start_events_logger(_registry=_registry)
     start_grafana_pipeline(_registry=_registry)
     start_argus_pipeline(_registry=_registry)

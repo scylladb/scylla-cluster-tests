@@ -21,7 +21,7 @@ from sdcm.sct_events.event_counter import get_events_counter
 from sdcm.sct_events.events_device import SUB_POLLING_TIMEOUT, get_events_main_device, start_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.file_logger import get_events_logger
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 
 class EventsUtilsMixin:
@@ -56,7 +56,6 @@ class EventsUtilsMixin:
             start_events_device(_registry=cls.events_processes_registry)
         elif events_main_device:
             start_events_main_device(_registry=cls.events_processes_registry)
-            time.sleep(EVENTS_DEVICE_START_DELAY)
         cls.events_main_device = get_events_main_device(_registry=cls.events_processes_registry)
 
     @classmethod

@@ -37,7 +37,7 @@ from sdcm.sct_events.argus import (
 from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_processes import EVENTS_ARGUS_AGGREGATOR_ID, EventsProcessesRegistry, get_events_process
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, stop_events_device
+from sdcm.sct_events.setup import stop_events_device
 from sdcm.test_config import TestConfig
 from sdcm.utils.argus import Argus, ArgusError, ReplayOnlyArgusSCTClient
 
@@ -75,7 +75,6 @@ def argus_pipeline(tmp_path):
     registry = EventsProcessesRegistry(log_dir=tmp_path)
     # Start the main device first so the collector has a valid upstream to consume from.
     start_events_main_device(_registry=registry)
-    time.sleep(EVENTS_DEVICE_START_DELAY)
     start_argus_pipeline(_registry=registry)
     postman = get_argus_postman(_registry=registry)
     aggregator = get_events_process(EVENTS_ARGUS_AGGREGATOR_ID, _registry=registry)
