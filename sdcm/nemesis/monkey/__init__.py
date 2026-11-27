@@ -148,6 +148,7 @@ class CorruptThenRepairMonkey(NemesisBaseClass):
 
     disruptive = True
     kubernetes = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         """Destroy node data, then repair."""
@@ -160,6 +161,7 @@ class CorruptThenRebuildMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
     xcloud = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         """Destroy node data, then rebuild."""
@@ -217,6 +219,7 @@ class MajorCompactionMonkey(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     limited = True
+    supports_logstor = False  # nodetool compact does nothing on logstor (own compaction)
 
     def disrupt(self):
         """Run major compaction."""
@@ -230,6 +233,7 @@ class RefreshMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
     limited = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         """Run nodetool refresh with regular-size sstables."""
@@ -243,6 +247,7 @@ class LoadAndStreamMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
     limited = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         """Run load-and-stream refresh."""
@@ -255,6 +260,7 @@ class RefreshBigMonkey(NemesisBaseClass):
 
     disruptive = False
     kubernetes = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         """Run nodetool refresh with a big sstable."""
@@ -270,6 +276,7 @@ class EnospcMonkey(NemesisBaseClass):
     xcloud = True
     limited = True
     enospc = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         """Trigger ENOSPC on one node."""
@@ -284,6 +291,7 @@ class EnospcAllNodesMonkey(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     enospc = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         """Trigger ENOSPC on all nodes."""
@@ -311,6 +319,7 @@ class ToggleTableIcsMonkey(NemesisBaseClass):
     xcloud = True
     schema_changes = True
     free_tier_set = True
+    supports_logstor = False  # logstor has its own compaction, sstable compaction does not apply
 
     def disrupt(self):
         """Toggle the table compaction strategy to ICS and back."""
@@ -462,6 +471,7 @@ class SnapshotOperations(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     limited = True
+    supports_logstor = False  # snapshots sstables, logstor backup/snapshot is SCYLLADB-3588
 
     def disrupt(self):
         """Run snapshot operations."""
@@ -564,6 +574,7 @@ class ToggleCDCMonkey(NemesisBaseClass):
     schema_changes = True
     config_changes = True
     free_tier_set = True
+    supports_logstor = False  # CDC on logstor is not committed or verified for 2027.1 (logstor devs)
 
     def disrupt(self):
         """Toggle CDC feature properties on a table."""
@@ -575,6 +586,7 @@ class CDCStressorMonkey(NemesisBaseClass):
 
     disruptive = False
     free_tier_set = True
+    supports_logstor = False  # CDC on logstor is not committed or verified for 2027.1 (logstor devs)
 
     def disrupt(self):
         """Run the cdcstressor tool."""
@@ -618,6 +630,7 @@ class CorruptThenScrubMonkey(NemesisBaseClass):
 
     disruptive = False
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
+    supports_logstor = False  # corrupts and scrubs sstable files, logstor has none
 
     def disrupt(self):
         """Corrupt data, then scrub."""
@@ -640,6 +653,7 @@ class StartStopMajorCompaction(NemesisBaseClass):
     """Start a major compaction on a non-system table and stop it with nodetool stop COMPACTION once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         """Start and stop a major compaction."""
@@ -650,6 +664,7 @@ class StartStopScrubCompaction(NemesisBaseClass):
     """Start a scrub compaction on a non-system table and stop it with nodetool stop SCRUB once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         """Start and stop a scrub compaction."""
@@ -660,6 +675,7 @@ class StartStopCleanupCompaction(NemesisBaseClass):
     """Start a cleanup compaction on a non-system table and stop it with nodetool stop CLEANUP once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         """Start and stop a cleanup compaction."""
@@ -671,6 +687,7 @@ class StartStopValidationCompaction(NemesisBaseClass):
 
     disruptive = False
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         """Start and stop a validation compaction."""
@@ -722,6 +739,7 @@ class DisableBinaryGossipExecuteMajorCompaction(NemesisBaseClass):
     disruptive = True
     kubernetes = True
     xcloud = True
+    supports_logstor = False  # nodetool compact does nothing on logstor (own compaction)
 
     def disrupt(self):
         """Disable binary and gossip, then run major compaction."""
@@ -734,6 +752,7 @@ class EndOfQuotaNemesis(NemesisBaseClass):
 
     disruptive = True
     config_changes = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         """Run the end-of-quota disruption."""
@@ -757,6 +776,9 @@ class SplitMergeTabletsWithAlter(NemesisBaseClass):
     """Alter min_tablet_count on every tablets-enabled table and view to trigger a tablet split or merge."""
 
     schema_changes = True
+    # TODO: re-enable once SCYLLADB-5866 is fixed: after a logstor tablet merge the node aborts and
+    # then fails to start ("Storage wasn't found for tablet N")
+    supports_logstor = False
 
     def disrupt(self):
         """Trigger tablet split and merge with ALTER."""
