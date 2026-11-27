@@ -1,6 +1,7 @@
 import time
 
 import prometheus_client
+import pytest
 
 from sdcm.loader import CqlStressCassandraStressExporter
 
@@ -11,6 +12,11 @@ total ops ,    op/s,    mean,     med,     .95,     .99,    .999,     max,   tim
 Operation failed, consistency: One, required: 1, alive: 0
     62965,   32336,     0.4,     0.3,     0.6,     0.7,     0.9,     1.3,    2.0,      0
 """
+
+# The stress threads write the log with TimestampedLogWriteWatcher, which prefixes every non-empty line.
+TIMESTAMPED_CQL_STRESS_LOG = "".join(
+    f"[2026-11-24 10:42:{second:02d}.076] {line}\n" for second, line in enumerate(CQL_STRESS_LOG.splitlines())
+)
 
 
 class RegistryMetrics:
@@ -23,12 +29,13 @@ class RegistryMetrics:
         return prometheus_client.Gauge(name, desc, param_list, registry=self.registry)
 
 
-def test_cql_stress_exporter_skips_error_line_between_stats_rows(tmp_path, monkeypatch):
+@pytest.mark.parametrize("log", [CQL_STRESS_LOG, TIMESTAMPED_CQL_STRESS_LOG], ids=["plain", "timestamped"])
+def test_cql_stress_exporter_skips_error_line_between_stats_rows(tmp_path, monkeypatch, log):
     """An error line with commas after the stats header must not be parsed as a stats row (SCT-1511)."""
     # The gauge cache is class-level; a cached gauge would live in another test's registry.
     monkeypatch.setattr(CqlStressCassandraStressExporter, "METRICS_GAUGES", {})
     log_file = tmp_path / "cql-stress.log"
-    log_file.write_text(CQL_STRESS_LOG)
+    log_file.write_text(log)
     metrics = RegistryMetrics()
     exporter = CqlStressCassandraStressExporter(
         instance_name="loader-1",
