@@ -21,6 +21,7 @@ these loggers per node, so a leak here is a leak per node. See SCT-803.
 """
 
 import threading
+from concurrent import futures
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call
 
@@ -93,8 +94,8 @@ def test_start_after_stop_still_works(logger):
     logger.stop()
 
 
-def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, caplog):
-    """A missing pid file must not turn into `kill -9 -`; it leaves the follower running, so say so."""
+def test_stop_without_remote_pid_runs_no_bare_kill(tmp_path, caplog):
+    """A missing pid file must not turn into `kill -9 -`; a worker that returns anyway needs no warning."""
     logger = SSHGeneralSystemdLogger(node=_node(remote_pid=""), target_log_file=str(tmp_path / "target.log"))
     journal = _stub_journal_task(logger)
 
@@ -103,9 +104,124 @@ def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, ca
     with caplog.at_level("WARNING"):
         logger.stop()
 
-    remote_calls = logger._remoter.run.call_args_list + logger._remoter.sudo.call_args_list
-    assert not any("kill" in str(call) for call in remote_calls)
-    assert "No remote pid file" in caplog.text
+    assert not _kill_calls(logger._remoter.run)
+    assert not _kill_calls(logger._remoter.sudo)
+    assert "still running after stop()" not in caplog.text
+
+
+def _follower_stuck_until(logger, release: threading.Event) -> SimpleNamespace:
+    """Replace the journal task with one that ignores termination, like a _retrieve() blocked on a live follower."""
+    state = SimpleNamespace(entered=threading.Event())
+
+    def journal_task():
+        state.entered.set()
+        release.wait(timeout=30)
+
+    logger._journal_thread = journal_task
+    return state
+
+
+def test_stop_warns_when_the_follower_outlives_both_kills(tmp_path, caplog):
+    """If the worker is still blocked after the second kill, say so: it is what hangs interpreter shutdown."""
+    logger = SSHGeneralSystemdLogger(node=_node(remote_pid=""), target_log_file=str(tmp_path / "target.log"))
+    logger.STOP_GRACE_PERIOD = 0.2
+    release = threading.Event()
+    journal = _follower_stuck_until(logger, release)
+
+    logger.start()
+    assert journal.entered.wait(timeout=10)
+    try:
+        with caplog.at_level("WARNING"):
+            logger.stop()
+    finally:
+        release.set()
+
+    assert "still running after stop()" in caplog.text
+
+
+@pytest.fixture(params=["ssh", "hdr"])
+def real_loop_logger(request, tmp_path):
+    """A logger of each kind whose remoter has no pid file, for tests that run the real journal loop."""
+    node = _node(remote_pid="")
+    if request.param == "hdr":
+        return HDRHistogramFileLogger(
+            node=node, remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+        )
+    node.journal_since = None
+    return SSHGeneralSystemdLogger(node=node, target_log_file=str(tmp_path / "target.log"))
+
+
+def test_follower_is_not_launched_when_stop_comes_during_the_readiness_check(real_loop_logger):
+    """stop() right after start() lands while the worker checks the SSH connection; it must not launch then.
+
+    Seen on minicloud: a cassandra-stress that failed at once stopped its HDR logger 0.5s after start, and the
+    tail it launched afterwards held the pool worker, and with it the interpreter exit, forever.
+    """
+    logger = real_loop_logger
+    in_readiness_check = threading.Event()
+
+    def is_up(*_args, **_kwargs):
+        in_readiness_check.set()
+        logger._termination_event.wait(timeout=10)
+        return True
+
+    logger._remoter.is_up.side_effect = is_up
+
+    logger.start()
+    assert in_readiness_check.wait(timeout=10)
+    worker_task = logger._thread
+    logger.stop()
+    # Let the worker finish first: whatever it would launch, it launches after stop() returned
+    futures.wait([worker_task], timeout=10)
+
+    assert not any("setsid" in str(call) for call in logger._remoter.run.call_args_list)
+
+
+def test_second_kill_gets_a_follower_launched_after_the_first(real_loop_logger, caplog):
+    """The follower can still launch between the loop's last check and the first kill; the second kill gets it."""
+    logger = real_loop_logger
+    logger.STOP_GRACE_PERIOD = 1
+    first_kill_done, follower_killed = threading.Event(), threading.Event()
+    state = SimpleNamespace(launched=False)
+
+    original_kill = logger._kill_remote_follower
+
+    def kill_remote_follower():
+        original_kill()
+        first_kill_done.set()
+
+    logger._kill_remote_follower = kill_remote_follower
+
+    def journal_task():
+        logger._termination_event.wait(timeout=10)
+        first_kill_done.wait(timeout=10)
+        state.launched = True  # launched just after the first kill, which found no pid file
+        follower_killed.wait(timeout=10)
+
+    logger._journal_thread = journal_task
+
+    def run(cmd=None, *_args, **_kwargs):
+        if cmd.startswith("test -f"):
+            return SimpleNamespace(ok=state.launched, stdout="")
+        return SimpleNamespace(ok=True, stdout="4321" if cmd.startswith("cat ") else "")
+
+    def sudo(cmd, **_kwargs):
+        if "/cmdline" in cmd:
+            return SimpleNamespace(ok=True, stdout=f"bash {logger._remote_cmd_file} ")
+        if cmd == "kill -9 -4321":
+            follower_killed.set()
+        return SimpleNamespace(ok=True, stdout="")
+
+    logger._remoter.run.side_effect = run
+    logger._remoter.sudo.side_effect = sudo
+
+    logger.start()
+    with caplog.at_level("WARNING"):
+        logger.stop()
+
+    assert follower_killed.is_set(), "the follower launched after the first kill was never killed"
+    assert _kill_calls(logger._remoter.sudo) == [call("kill -9 -4321", ignore_status=True)]
+    assert "still running after stop()" not in caplog.text
 
 
 def test_k8s_client_logger_reads_multibyte_char_split_across_chunks():
