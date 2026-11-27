@@ -1,0 +1,225 @@
+"""Tests for sdcm.nemesis.monkey.audit module."""
+
+import copy
+from datetime import date, datetime
+from unittest.mock import MagicMock, call, patch
+
+import pytest
+
+from sdcm.audit import AuditConfiguration, AuditLogRow
+from sdcm.exceptions import AuditLogTestFailure, UnsupportedNemesis
+from sdcm.nemesis.monkey.audit import ToggleAuditNemesisSyslog, ToggleAuditRulesNemesisSyslog
+
+MODULE = "sdcm.nemesis.monkey.audit"
+
+pytestmark = pytest.mark.usefixtures("events")
+
+
+@pytest.fixture()
+def runner(base_runner):
+    """``base_runner`` on a non-k8s Scylla 2026.2 cluster with no audit in scylla.yaml, and a CQL session that records calls only."""
+    base_runner.target_node.scylla_version = "2026.2.0"
+    base_runner.target_node.remote_scylla_yaml.return_value.__enter__.return_value.audit = None
+    base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
+    base_runner._nemesis_stress_failure_handler = MagicMock()
+    base_runner.tester.reliable_replication_factor = 3
+    base_runner.cluster.cql_session.execute.side_effect = None
+    return base_runner
+
+
+@pytest.fixture()
+def audit_log():
+    """Audit log rows ``Audit.get_audit_log`` returns per category: 1000 writes, 1000 reads, and the DDL statement."""
+    return {
+        "DML": audit_log_rows(1000, "DML", "INSERT INTO audit_keyspace.standard1"),
+        "QUERY": audit_log_rows(1000, "QUERY", "SELECT * FROM audit_keyspace.standard1"),
+        "DDL": audit_log_rows(1, "DDL", "CREATE TABLE IF NOT EXISTS audit_keyspace.audit_cf"),
+    }
+
+
+@pytest.fixture()
+def configured_audits():
+    """Copies of the configurations passed to ``Audit.configure``, in call order."""
+    return []
+
+
+@pytest.fixture(autouse=True)
+def audit(audit_log, configured_audits):
+    """Autospecced ``Audit``: disabled at first, serving ``audit_log`` and recording ``configure`` calls."""
+    with patch(f"{MODULE}.Audit", autospec=True) as audit_cls:
+        audit = audit_cls.return_value
+        audit.is_enabled.return_value = False
+        audit.get_audit_log.side_effect = lambda category, **kwargs: audit_log[category]
+        audit.configure.side_effect = lambda config: configured_audits.append(copy.deepcopy(config))
+        yield audit
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(ToggleAuditNemesisSyslog, id="categories"),
+        pytest.param(ToggleAuditRulesNemesisSyslog, id="audit_rules"),
+    ]
+)
+def monkey_class(request):
+    """Each audit nemesis: one configures audit categories and keyspaces, the other audit_rules."""
+    return request.param
+
+
+@pytest.fixture()
+def expected_configs(monkey_class):
+    """Configurations ``monkey_class`` applies: all categories on audit_keyspace, then all but DML and QUERY."""
+    all_categories = ["DCL", "DDL", "AUTH", "ADMIN", "DML", "QUERY"]
+    reduced_categories = ["DCL", "DDL", "AUTH", "ADMIN"]
+    return {
+        ToggleAuditNemesisSyslog: [
+            AuditConfiguration(store="syslog", categories=categories, tables=[], keyspaces=["audit_keyspace"])
+            for categories in (all_categories, reduced_categories)
+        ],
+        ToggleAuditRulesNemesisSyslog: [
+            AuditConfiguration(
+                store="syslog",
+                categories=[],
+                tables=[],
+                keyspaces=[],
+                rules=[
+                    {
+                        "sinks": ["syslog"],
+                        "categories": categories,
+                        "qualified_table_names": ["audit_keyspace.*"],
+                        "roles": ["*"],
+                    }
+                ],
+            )
+            for categories in (all_categories, reduced_categories)
+        ],
+    }[monkey_class]
+
+
+def audit_log_rows(count, category, operation):
+    """``count`` syslog audit rows of one category and operation."""
+    row = AuditLogRow(
+        date=date(2026, 11, 12),
+        node="10.0.0.1",
+        event_time=datetime(2026, 11, 12, 10, 0),
+        category=category,
+        consistency="ONE",
+        error=False,
+        keyspace_name="audit_keyspace",
+        operation=operation,
+        source="10.0.0.2",
+        table_name="standard1",
+        username="anonymous",
+    )
+    return [row] * count
+
+
+def test_precheck_excludes_kubernetes(runner, monkey_class):
+    """Both nemesis use the syslog store, which is not supported on Kubernetes."""
+    runner._is_it_on_kubernetes.return_value = True
+
+    assert (
+        monkey_class(runner).precheck(node=runner.target_node)
+        == "syslog store is not supported on Kubernetes scylladb/scylla-operator#1299"
+    )
+
+
+def test_precheck_keeps_supported_setup(runner, monkey_class):
+    """Both nemesis run on Scylla 2026.2 off Kubernetes."""
+    assert monkey_class(runner).precheck(node=runner.target_node) is None
+
+
+@pytest.mark.parametrize(
+    "version,reason",
+    [
+        pytest.param("2026.1.0", "audit_rules are supported by Scylla 2026.2.0-dev and later", id="2026.1"),
+        pytest.param("2026.2.0-dev", None, id="2026.2-dev"),
+    ],
+)
+def test_audit_rules_precheck_needs_2026_2(runner, version, reason):
+    """The audit_rules nemesis also needs Scylla 2026.2+, including its dev builds."""
+    runner.target_node.scylla_version = version
+
+    assert ToggleAuditRulesNemesisSyslog(runner).precheck(node=runner.target_node) == reason
+
+
+def test_audit_rules_skip_when_audit_configured(runner, audit):
+    """The audit_rules nemesis skips, without touching the audit config, if scylla.yaml already configures audit."""
+    runner.target_node.remote_scylla_yaml.return_value.__enter__.return_value.audit = "table"
+
+    with pytest.raises(UnsupportedNemesis, match="requires audit to be initially disabled"):
+        ToggleAuditRulesNemesisSyslog(runner).disrupt()
+    audit.configure.assert_not_called()
+
+
+def test_enabled_audit_is_disabled_and_skipped(runner, audit):
+    """Audit already enabled: the nemesis disables it and skips the run."""
+    audit.is_enabled.return_value = True
+
+    with pytest.raises(UnsupportedNemesis, match="Audit was enabled -> disabling it"):
+        ToggleAuditNemesisSyslog(runner).disrupt()
+
+    audit.disable.assert_called_once_with()
+    audit.configure.assert_not_called()
+
+
+def test_full_flow_audits_stress_then_ddl(runner, monkey_class, configured_audits, expected_configs):
+    """Full audit covers a c-s write and read; reduced audit covers CREATE, ALTER and DROP TABLE."""
+    monkey_class(runner).disrupt()
+
+    assert configured_audits == expected_configs
+    schema = "'replication(strategy=NetworkTopologyStrategy,replication_factor=3) keyspace=audit_keyspace'"
+    load = "-mode cql3 native -rate 'threads=1 throttle=1000/s' -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)'"
+
+    def c_s_cmd(mode):
+        return f"cassandra-stress {mode} no-warmup cl=ONE n=1000 -schema {schema} {load} -log interval=5"
+
+    assert runner.tester.run_stress_thread.call_args_list == [
+        call(stress_cmd=c_s_cmd("write"), round_robin=True, stop_test_on_failure=False),
+        call(stress_cmd=c_s_cmd("read"), round_robin=True, stop_test_on_failure=False),
+    ]
+    assert (
+        runner.tester.verify_stress_thread.call_args_list
+        == [call(runner.tester.run_stress_thread.return_value, error_handler=runner._nemesis_stress_failure_handler)]
+        * 2
+    )
+    assert runner.cluster.cql_session.execute.call_args_list == [
+        call("CREATE TABLE IF NOT EXISTS audit_keyspace.audit_cf (id int PRIMARY KEY, value timestamp)", timeout=300),
+        call("ALTER TABLE audit_keyspace.audit_cf WITH read_repair_chance = 0.0", timeout=300),
+        call("DROP TABLE audit_keyspace.audit_cf", timeout=300),
+    ]
+
+
+def test_missing_audit_rows_reported_together(runner, monkey_class, audit_log, configured_audits, expected_configs):
+    """All missing DML, QUERY and DDL rows are reported in one error, raised after audit is reduced.
+
+    The DML log also holds USE statements, which are not counted (scylladb/scylla-enterprise#3169).
+    """
+    audit_log.update(
+        DML=audit_log_rows(999, "DML", "INSERT INTO audit_keyspace.standard1")
+        + audit_log_rows(5, "DML", "USE audit_keyspace"),
+        QUERY=[],
+        DDL=[],
+    )
+
+    with pytest.raises(AuditLogTestFailure) as exc_info:
+        monkey_class(runner).disrupt()
+
+    assert str(exc_info.value).splitlines() == [
+        "Audit log for DML contains 999 rows while should contain 1000 rows",
+        "Audit log for QUERY contains 0 rows while should contain 1000 rows",
+        "Audit log is empty while should contain executed DDL (create table) operation",
+        "Audit log is empty while should contain executed DDL (alter table) operation",
+        "Audit log is empty while should contain executed DDL (drop table) operation",
+    ]
+    assert configured_audits == expected_configs
+
+
+def test_stress_failure_reduces_audit_and_reraises(runner, monkey_class, configured_audits, expected_configs):
+    """A failure under full audit still reduces the categories, then re-raises before any DDL runs."""
+    runner.tester.verify_stress_thread.side_effect = RuntimeError("stress failed")
+
+    with pytest.raises(RuntimeError, match="stress failed"):
+        monkey_class(runner).disrupt()
+
+    assert configured_audits == expected_configs
+    runner.cluster.cql_session.execute.assert_not_called()
