@@ -15,8 +15,8 @@
 
 Extracted from test_events.py to break cross-test imports.
 Tests that only need to capture events should prefer FakeEventsDevice / make_fake_events()
-from unit_tests.lib.fake_events — the real multiprocessing events system started here
-incurs ~4 seconds of startup overhead.
+from unit_tests.lib.fake_events — they publish synchronously, while the real multiprocessing events
+system started here delivers every event across processes and ZMQ.
 """
 
 from pathlib import Path

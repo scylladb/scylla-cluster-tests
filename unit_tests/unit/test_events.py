@@ -455,17 +455,16 @@ class TestSctEvents(RealEventsTest):
     def test_count_reactor_stall(self):
         count_condition_name = "test_method"
         statistics = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
-            with EventCounterContextManager(
-                DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=self.events_processes_registry
-            ) as counter_manager:
-                assert counter_manager._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
+        with EventCounterContextManager(
+            DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=self.events_processes_registry
+        ) as counter_manager:
+            assert counter_manager._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
+            with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
-                time.sleep(1)
-                statistics = counter_manager.get_stats().copy()
+            statistics = counter_manager.get_stats().copy()
 
         assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
@@ -494,7 +493,6 @@ class TestSctEvents(RealEventsTest):
             DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
-            time.sleep(1)
 
         counter.stop_event_counter()
         statistics = counter.get_stats()
@@ -515,17 +513,16 @@ class TestSctEvents(RealEventsTest):
     def test_count_reactor_stall_not_matched_by_regexp(self):
         count_condition_name = "test_method1"
         statistics = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
-            with EventCounterContextManager(
-                DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=self.events_processes_registry
-            ) as counter_manager:
-                assert counter_manager._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
+        with EventCounterContextManager(
+            DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=self.events_processes_registry
+        ) as counter_manager:
+            assert counter_manager._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
+            with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for33000ms", 111).publish()
-                time.sleep(1)
-                statistics = counter_manager.get_stats().copy()
+            statistics = counter_manager.get_stats().copy()
         assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {0: 4}
@@ -533,24 +530,23 @@ class TestSctEvents(RealEventsTest):
     def test_count_several_events(self):
         count_condition_name = "test_method2"
         statistics = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
-            with EventCounterContextManager(
-                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
-                name=count_condition_name,
-                _registry=self.events_processes_registry,
-            ) as counter_manager:
-                assert counter_manager._event_type == (
-                    DatabaseLogEvent.REACTOR_STALLED,
-                    DatabaseLogEvent.KERNEL_CALLSTACK,
-                )
+        with EventCounterContextManager(
+            (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+            name=count_condition_name,
+            _registry=self.events_processes_registry,
+        ) as counter_manager:
+            assert counter_manager._event_type == (
+                DatabaseLogEvent.REACTOR_STALLED,
+                DatabaseLogEvent.KERNEL_CALLSTACK,
+            )
 
+            with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 25 ms", 111).publish()
                 DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node1", "Kernel Stack: some backtraces", 112).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
-                time.sleep(1)
-                # assert not counter_manager._counter_device._cm_register, f"{dict(counter_manager._counter_device._cm_register)}"
-                statistics = counter_manager.get_stats().copy()
+            # assert not counter_manager._counter_device._cm_register, f"{dict(counter_manager._counter_device._cm_register)}"
+            statistics = counter_manager.get_stats().copy()
 
         assert len(statistics.keys()) == 2, "Number of events in statistics is wrong"
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 3
@@ -568,17 +564,17 @@ class TestSctEvents(RealEventsTest):
     def test_skip_not_required_count_required_events(self):
         count_condition_name = "test_method3"
         statistics = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
-            with EventCounterContextManager(
-                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
-                name=count_condition_name,
-                _registry=self.events_processes_registry,
-            ) as counter_manager:
-                assert counter_manager._event_type == (
-                    DatabaseLogEvent.REACTOR_STALLED,
-                    DatabaseLogEvent.KERNEL_CALLSTACK,
-                )
+        with EventCounterContextManager(
+            (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+            name=count_condition_name,
+            _registry=self.events_processes_registry,
+        ) as counter_manager:
+            assert counter_manager._event_type == (
+                DatabaseLogEvent.REACTOR_STALLED,
+                DatabaseLogEvent.KERNEL_CALLSTACK,
+            )
 
+            with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.BACKTRACE().add_info(
                     node="node1", line_number=22, line="other back trace that shouldn't be filtered"
@@ -593,8 +589,7 @@ class TestSctEvents(RealEventsTest):
                 DatabaseLogEvent.BACKTRACE().add_info(
                     node="node3", line_number=22, line="other back trace that shouldn't be filtered"
                 ).publish()
-                time.sleep(1)
-                statistics = counter_manager.get_stats().copy()
+            statistics = counter_manager.get_stats().copy()
 
         assert len(statistics.keys()) == 2, "Number of events in statistics is wrong"
         assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
@@ -614,25 +609,25 @@ class TestSctEvents(RealEventsTest):
         count_condition_name2 = "test_method5"
         statistics1 = {}
         statistics2 = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
-            with (
-                EventCounterContextManager(
-                    (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
-                    name=count_condition_name1,
-                    _registry=self.events_processes_registry,
-                ) as counter_manager1,
-                EventCounterContextManager(
-                    (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
-                    name=count_condition_name2,
-                    _registry=self.events_processes_registry,
-                ) as counter_manager2,
-            ):
-                assert counter_manager1._event_type == (
-                    DatabaseLogEvent.REACTOR_STALLED,
-                    DatabaseLogEvent.KERNEL_CALLSTACK,
-                )
-                assert counter_manager2._event_type == (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
+        with (
+            EventCounterContextManager(
+                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+                name=count_condition_name1,
+                _registry=self.events_processes_registry,
+            ) as counter_manager1,
+            EventCounterContextManager(
+                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
+                name=count_condition_name2,
+                _registry=self.events_processes_registry,
+            ) as counter_manager2,
+        ):
+            assert counter_manager1._event_type == (
+                DatabaseLogEvent.REACTOR_STALLED,
+                DatabaseLogEvent.KERNEL_CALLSTACK,
+            )
+            assert counter_manager2._event_type == (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
 
+            with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.BACKTRACE().add_info(
                     node="node1", line_number=22, line="other back trace that shouldn't be filtered"
@@ -647,9 +642,8 @@ class TestSctEvents(RealEventsTest):
                 DatabaseLogEvent.BACKTRACE().add_info(
                     node="node3", line_number=22, line="other back trace that shouldn't be filtered"
                 ).publish()
-                time.sleep(1)
-                statistics1 = counter_manager1.get_stats().copy()
-                statistics2 = counter_manager2.get_stats().copy()
+            statistics1 = counter_manager1.get_stats().copy()
+            statistics2 = counter_manager2.get_stats().copy()
 
         assert len(statistics1.keys()) == 2, "Number of events in statistics is wrong"
         assert len(statistics2.keys()) == 2, "Number of events in statistics is wrong"
@@ -681,36 +675,36 @@ class TestSctEvents(RealEventsTest):
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
     def test_count_with_several_nested_count_managers(self):
-        time.sleep(5)
         count_condition_name1 = "test_method6"
         count_condition_name2 = "test_method7"
         statistics1 = {}
         statistics2 = {}
-        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
-            with EventCounterContextManager(
-                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
-                name=count_condition_name1,
-                _registry=self.events_processes_registry,
-            ) as counter_manager1:
-                assert counter_manager1._event_type == (
-                    DatabaseLogEvent.REACTOR_STALLED,
-                    DatabaseLogEvent.KERNEL_CALLSTACK,
-                )
+        with EventCounterContextManager(
+            (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+            name=count_condition_name1,
+            _registry=self.events_processes_registry,
+        ) as counter_manager1:
+            assert counter_manager1._event_type == (
+                DatabaseLogEvent.REACTOR_STALLED,
+                DatabaseLogEvent.KERNEL_CALLSTACK,
+            )
+            # the second counter starts after these events are counted, so it does not see them
+            with self.wait_for_n_events(self.get_events_counter(), count=2, timeout=5):
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.BACKTRACE().add_info(
                     node="node1", line_number=22, line="other back trace that shouldn't be filtered"
                 ).publish()
-                time.sleep(1)
-                with EventCounterContextManager(
-                    (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
-                    name=count_condition_name2,
-                    _registry=self.events_processes_registry,
-                ) as counter_manager2:
-                    assert counter_manager2._event_type == (
-                        DatabaseLogEvent.REACTOR_STALLED,
-                        DatabaseLogEvent.BACKTRACE,
-                    )
+            with EventCounterContextManager(
+                (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
+                name=count_condition_name2,
+                _registry=self.events_processes_registry,
+            ) as counter_manager2:
+                assert counter_manager2._event_type == (
+                    DatabaseLogEvent.REACTOR_STALLED,
+                    DatabaseLogEvent.BACKTRACE,
+                )
 
+                with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
                     DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 499 ms", 111).publish()
                     DatabaseLogEvent.BACKTRACE().add_info(
                         node="node2", line_number=22, line="other back trace that shouldn't be filtered"
@@ -722,10 +716,9 @@ class TestSctEvents(RealEventsTest):
                     DatabaseLogEvent.BACKTRACE().add_info(
                         node="node3", line_number=22, line="other back trace that shouldn't be filtered"
                     ).publish()
-                    time.sleep(1)
-                    statistics2 = counter_manager2.get_stats().copy()
+                statistics2 = counter_manager2.get_stats().copy()
 
-                statistics1 = counter_manager1.get_stats().copy()
+            statistics1 = counter_manager1.get_stats().copy()
 
         assert len(statistics1.keys()) == 2, "Number of events in statistics is wrong"
         assert len(statistics2.keys()) == 2, "Number of events in statistics is wrong"

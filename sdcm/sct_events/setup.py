@@ -13,7 +13,6 @@
 
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Optional, Union
 
@@ -24,7 +23,7 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import start_events_counter
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_analyzer import start_events_analyzer
-from sdcm.sct_events.events_device import start_events_main_device
+from sdcm.sct_events.events_device import get_events_main_device, start_events_main_device
 from sdcm.sct_events.events_processes import (
     EVENTS_ANALYZER_ID,
     EVENTS_ARGUS_AGGREGATOR_ID,
@@ -47,8 +46,6 @@ from sdcm.sct_events.grafana import start_grafana_pipeline
 from sdcm.sct_events.loaders import CassandraStressEvent, CassandraStressLogEvent
 from sdcm.utils.issues import SkipPerIssues
 
-EVENTS_DEVICE_START_DELAY = 1  # seconds
-EVENTS_SUBSCRIBERS_START_DELAY = 3  # seconds
 EVENTS_PROCESS_STOP_TIMEOUT = 10  # seconds
 
 LOGGER = logging.getLogger(__name__)
@@ -62,10 +59,8 @@ def start_events_device(
             raise RuntimeError("Should provide log_dir or instance of EventsProcessesRegistry")
         _registry = create_default_events_process_registry(log_dir=log_dir)
 
+    # the subscribers wait in EventsDevice.subscribe_address until the device is ready
     start_events_main_device(_registry=_registry)
-
-    time.sleep(EVENTS_DEVICE_START_DELAY)
-
     start_events_logger(_registry=_registry)
     start_grafana_pipeline(_registry=_registry)
     start_argus_pipeline(_registry=_registry)
@@ -73,7 +68,9 @@ def start_events_device(
     start_events_handler(_registry=_registry)
     start_events_counter(_registry=_registry)
 
-    time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+    get_events_main_device(_registry=_registry).wait_for_subscribers(
+        _registry.count_subscribers_of(EVENTS_MAIN_DEVICE_ID)
+    )
 
 
 def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> None:

@@ -30,7 +30,7 @@ from sdcm.sct_events.grafana import (
     start_posting_grafana_annotations,
 )
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT
 from sdcm.wait import wait_for
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -45,12 +45,11 @@ class TestGrafana(EventsUtilsMixin):
         cls.teardown_events_processes()
 
     def test_grafana(self):
-        start_grafana_pipeline(_registry=self.events_processes_registry)
+        with self.wait_for_new_subscribers():
+            start_grafana_pipeline(_registry=self.events_processes_registry)
         grafana_annotator = get_events_process(EVENTS_GRAFANA_ANNOTATOR_ID, _registry=self.events_processes_registry)
         grafana_aggregator = get_events_process(EVENTS_GRAFANA_AGGREGATOR_ID, _registry=self.events_processes_registry)
         grafana_postman = get_grafana_postman(_registry=self.events_processes_registry)
-
-        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         try:
             assert isinstance(grafana_annotator, GrafanaAnnotator)
@@ -132,12 +131,11 @@ class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
         cls.teardown_events_processes()
 
     def test_duplicate_in_the_next_time_window_is_posted_again(self):
-        start_grafana_pipeline(_registry=self.events_processes_registry)
+        with self.wait_for_new_subscribers():
+            start_grafana_pipeline(_registry=self.events_processes_registry)
         grafana_annotator = get_events_process(EVENTS_GRAFANA_ANNOTATOR_ID, _registry=self.events_processes_registry)
         grafana_aggregator = get_events_process(EVENTS_GRAFANA_AGGREGATOR_ID, _registry=self.events_processes_registry)
         grafana_postman = get_grafana_postman(_registry=self.events_processes_registry)
-
-        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         try:
             # A single event fills a window, so no assertion here depends on a batch of events
@@ -155,7 +153,6 @@ class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
                             ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL)
                         )
                     # Outlast the window, so the next duplicate is counted against a fresh one.
-                    # `wait_for_n_events` already waited out `last_event_processing_delay` on top.
                     time.sleep(self.time_window * 5)
 
                 wait_for(lambda: mock.call_count == 2, timeout=10, step=0.1, throw_exc=False)

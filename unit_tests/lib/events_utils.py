@@ -21,16 +21,17 @@ from sdcm.sct_events.event_counter import get_events_counter
 from sdcm.sct_events.events_device import SUB_POLLING_TIMEOUT, get_events_main_device, start_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.file_logger import get_events_logger
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 
 class EventsUtilsMixin:
     """Mixin that starts the **real** events infrastructure (multiprocessing, ZMQ, file I/O).
 
     ``setup_events_processes`` launches ``EventsDevice`` plus up to six subscriber
-    processes and sleeps ~4 s for them to initialise.  This is correct for tests
-    that exercise the events subsystem itself, but far too expensive for tests
-    that merely need events to be captured so their side-effects can be asserted.
+    processes and waits until they subscribe.  This is correct for tests that
+    exercise the events subsystem itself, but too heavy for tests that merely
+    need events to be captured so their side-effects can be asserted: every event
+    crosses processes and ZMQ, so the tests wait for its delivery.
 
     For the latter category, prefer the ``events`` / ``events_function_scope``
     pytest fixtures (defined in ``unit_tests/conftest.py``), which inject a
@@ -56,7 +57,6 @@ class EventsUtilsMixin:
             start_events_device(_registry=cls.events_processes_registry)
         elif events_main_device:
             start_events_main_device(_registry=cls.events_processes_registry)
-            time.sleep(EVENTS_DEVICE_START_DELAY)
         cls.events_main_device = get_events_main_device(_registry=cls.events_processes_registry)
 
     @classmethod
@@ -67,8 +67,15 @@ class EventsUtilsMixin:
         shutil.rmtree(cls.temp_dir)
 
     @contextmanager
-    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1, last_event_processing_delay: float = 0.5):
-        """Wait for `subscriber` to receive `count` more events, tolerating a stalled publisher.
+    def wait_for_new_subscribers(self, count: int = 1):
+        """Wait, after the block, until the main device has received `count` more subscriptions."""
+        expected = self.events_main_device.subscribers + count
+        yield
+        self.events_main_device.wait_for_subscribers(expected)
+
+    @contextmanager
+    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1):
+        """Wait for `subscriber` to process `count` more events, tolerating a stalled publisher.
 
         `timeout` is the patience for a *single* event rather than for the whole batch:
         `EventsDevice` sends one event at a time and waits for a delivery confirmation on its own
@@ -80,15 +87,34 @@ class EventsUtilsMixin:
         that delivers nothing failing fast, while no longer failing one that is merely slow.
         """
         events_before = subscriber.events_counter
-        last_event_n = events_before + count
-        per_event_timeout = max(timeout, 2 * SUB_POLLING_TIMEOUT / 1000)
 
         yield
 
+        self.wait_for_events_processed(subscriber, events_before=events_before, count=count, timeout=timeout)
+
+    @contextmanager
+    def wait_for_published_events(self, subscriber, timeout: float = 1):
+        """Wait, after the block, until `subscriber` has processed every event the block published.
+
+        For blocks that publish an unknown number of events, such as `enable_default_filters()`.
+        """
+        events_before = subscriber.events_counter
+        published_before = self.events_main_device.events_counter
+
+        yield
+
+        published = self.events_main_device.events_counter - published_before
+        self.wait_for_events_processed(subscriber, events_before=events_before, count=published, timeout=timeout)
+
+    @staticmethod
+    def wait_for_events_processed(subscriber, events_before: int, count: int, timeout: float) -> None:
+        """Wait until `subscriber` has processed `count` events after `events_before`, see `wait_for_n_events`."""
+        last_event_n = events_before + count
+        per_event_timeout = max(timeout, 2 * SUB_POLLING_TIMEOUT / 1000)
         end_time = time.perf_counter() + per_event_timeout
         events_seen = subscriber.events_counter
         while events_seen < last_event_n and time.perf_counter() < end_time:
-            time.sleep(0.1)
+            time.sleep(0.01)
             if (events_now := subscriber.events_counter) > events_seen:
                 events_seen = events_now
                 end_time = time.perf_counter() + per_event_timeout
@@ -97,9 +123,6 @@ class EventsUtilsMixin:
             f"Subscriber {subscriber} received {subscriber.events_counter - events_before} of {count} events "
             f"and then stalled for {per_event_timeout} seconds"
         )
-
-        # Give a chance to the subscriber to handle last event received.
-        time.sleep(last_event_processing_delay)
 
     @classmethod
     def get_events_logger(cls):
