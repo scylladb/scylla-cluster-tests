@@ -1,3 +1,7 @@
+# Quarantined: has no known user and cannot run. With one AZ per DC (simulated_racks: 0)
+# each DC has 1 rack, so rf_rack_valid_keyspaces rejects the RF=3 keyspace of the user
+# profile. More AZs need n_db_nodes divisible by the AZ count, which 4/3/2 is not.
+# Its pipelines have been removed. See jenkins-pipelines/quarantined/README.md.
 test_duration: 1560
 prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml n=10000000 ops'(insert_query=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL -mode native cql3 -rate threads=1000" ]
 stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL duration=1350m -mode native cql3 -rate threads=800" ]
