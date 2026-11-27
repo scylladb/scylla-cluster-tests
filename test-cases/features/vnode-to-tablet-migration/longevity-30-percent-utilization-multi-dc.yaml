@@ -1,6 +1,6 @@
 test_metadata:
   description: >-
-    Multi-DC variant of longevity-30-percent-utilization-4h: 2 DCs x 3 i8g.xlarge nodes with RF=3 in
+    Multi-DC variant of longevity-30-percent-utilization: 2 DCs x 3 i8g.xlarge nodes with RF=3 in
     each DC, filled to ~30% disk per node. A region-aware loader in each DC runs cassandra-stress at
     LOCAL_QUORUM: prepare, then a 600m mixed workload under SisyphusMonkey.
   test_type: longevity
@@ -14,6 +14,7 @@ test_metadata:
   features:
     - multi-dc
     - tablets
+    - vnode-to-tablet-migration
     - tls-ssl
   team_ownership: scylladb/storage-qa
 

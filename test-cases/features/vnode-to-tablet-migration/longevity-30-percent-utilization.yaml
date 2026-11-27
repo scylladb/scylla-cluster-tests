@@ -1,25 +1,24 @@
-# Cluster:
-#   6 DB nodes (i8g.xlarge, ARM64), 3 simulated racks, 2 loaders
-#   RF=3, ICS compaction, server + client TLS
-#
-# Dataset:
-#   ~30% disk utilization on i8g.xlarge after prepare
-#   Sized from the available disk via stress_template_context
-#   2x write streams, each writing half of the rows
-#   512B x 4 columns
-#
-# Stress (stress_cmd, mixed):
-#   Reused across all three migration phases:
-#     - Pre-migration benchmark (60m)
-#     - Migration (killed when the migration ends; the 600m duration only has to outlast it,
-#       a run with three node replaces took ~6h)
-#     - Post-migration benchmark (60m)
+test_metadata:
+  description: >-
+    Shared setup of the vnode-to-tablet migration tests. A 6-node cluster in 3 racks (RF=3, TLS)
+    is filled to ~30% disk. A mixed cassandra-stress load runs before, during and after the
+    migration, with SisyphusMonkey nemesis.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - tablets
+    - vnode-to-tablet-migration
+    - tls-ssl
+  team_ownership: scylladb/storage-qa
 
 test_duration: 840
 
-# 6 DB nodes across 3 simulated racks (2 nodes per rack). With migration running
-# concurrently with disruptive nemesis, at least 2 nodes per rack are required to
-# keep quorum (RF=3) available while one node per rack is unavailable.
 n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
@@ -34,7 +33,7 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
 nemesis_interval: 15
 
-user_prefix: 'longevity-30-percent-utilization-4h'
+user_prefix: 'longevity-30-percent-utilization'
 
 pre_create_schema: true
 
@@ -46,9 +45,7 @@ parallel_node_operations: true
 
 nemesis_during_prepare: false
 
-# Dataset is sized from the available disk.
 # fill_percent is the share of the usable /var/lib/scylla disk (per node, after RF) the prepare phase writes.
-# 30% fills ~30% of the disk on each node after prepare.
 stress_template_context:
   fill_percent: 30
   replication_factor: 3
