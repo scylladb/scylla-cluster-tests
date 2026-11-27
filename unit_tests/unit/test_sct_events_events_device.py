@@ -16,6 +16,7 @@ import multiprocessing
 import threading
 
 import pytest
+import zmq
 
 from sdcm.sct_events.events_device import EventsDevice, get_events_main_device, start_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
@@ -84,5 +85,55 @@ def test_start_get_events_main_device(events_processes_registry):
         assert events_device.events_counter == 0
         assert events_device.is_alive()
         assert events_device.subscribe_address
+    finally:
+        events_device.stop(timeout=5)
+
+
+def test_event_is_counted_when_subscriber_asks_for_next_one(events_device):
+    """The device counts an event once the subscriber asks for the next one, after it has processed the event."""
+    events_device.publish_event(ClusterHealthValidatorEvent.NodeStatus())
+    events_device.publish_event(ClusterHealthValidatorEvent.NodePeersNulls())
+
+    stop_event = threading.Event()
+    counter = multiprocessing.Value(ctypes.c_uint32, 0)
+    events_device.start_delay = 0.5
+    events_device.start()
+
+    try:
+        events_generator = events_device.outbound_events(stop_event=stop_event, events_counter=counter)
+        next(events_generator)
+        assert counter.value == 0
+        next(events_generator)
+        assert counter.value == 1
+        stop_event.set()
+        with pytest.raises(StopIteration):
+            next(events_generator)
+        assert counter.value == 2
+    finally:
+        events_device.stop(timeout=5)
+
+
+def test_wait_for_subscribers_returns_once_subscribed(events_device):
+    """wait_for_subscribers() returns once the device has received the subscription of a new SUB socket."""
+    events_device.start()
+
+    try:
+        with zmq.Context() as ctx, ctx.socket(zmq.SUB) as sub:
+            sub.connect(events_device.subscribe_address)
+            sub.subscribe(b"")
+            events_device.wait_for_subscribers(1, timeout=5)
+            assert events_device.subscribers == 1
+    finally:
+        events_device.stop(timeout=5)
+
+
+def test_wait_for_subscribers_warns_on_timeout(events_device, caplog):
+    """wait_for_subscribers() logs a warning and returns when the subscribers do not come in time."""
+    events_device.start()
+
+    try:
+        events_device.wait_for_subscribers(1, timeout=0.2)
+        assert events_device.subscribers == 0
+        assert "EventsDevice has 0 of 1 subscribers after 0.2s" in caplog.text
     finally:
         events_device.stop(timeout=5)

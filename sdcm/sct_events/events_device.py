@@ -73,7 +73,7 @@ class EventsDevice(multiprocessing.Process):
 
         self._running = multiprocessing.Event()
         self._sub_port = multiprocessing.Value(ctypes.c_uint16, 0)
-        self._subscribers = multiprocessing.Value(ctypes.c_uint32, 0)
+        self.subscribers_counter = multiprocessing.Value(ctypes.c_uint32, 0)
         self._queue = multiprocessing.Queue()
         self._raw_events_lock = multiprocessing.RLock()
         self.events_log_base_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ class EventsDevice(multiprocessing.Process):
     @property
     def subscribers(self) -> int:
         """Count the subscriptions the device has received since it started, without its own delivery check."""
-        return self._subscribers.value
+        return self.subscribers_counter.value
 
     def wait_for_subscribers(self, count: int, timeout: float = SUBSCRIBERS_START_TIMEOUT) -> None:
         """Wait until the device has received `count` subscriptions, so the events published from now on reach them.
@@ -113,22 +113,23 @@ class EventsDevice(multiprocessing.Process):
         A PUB socket drops the events for a subscriber whose subscription it has not received yet.
         """
         end_time = time.monotonic() + timeout
-        while self._subscribers.value < count:
+        while self.subscribers_counter.value < count:
             if time.monotonic() >= end_time:
                 LOGGER.warning(
                     "EventsDevice has %d of %d subscribers after %ss, events published now can miss the others",
-                    self._subscribers.value,
+                    self.subscribers_counter.value,
                     count,
                     timeout,
                 )
                 return
             time.sleep(0.01)
 
-    def _count_subscriptions(self, pub: zmq.Socket) -> None:
+    def count_subscriptions(self, pub: zmq.Socket) -> None:
+        """Add the subscriptions waiting on the XPUB socket to the subscribers count."""
         while pub.poll(timeout=0):
-            # XPUB_VERBOSE passes every subscription message: b"\x01" + topic. Unsubscriptions are not counted.
+            # XPUB_VERBOSE passes every subscription message, b"\x01" + topic; each one adds to the count
             if pub.recv()[:1] == b"\x01":
-                self._subscribers.value += 1
+                self.subscribers_counter.value += 1
 
     @property
     def subscribe_address(self) -> str:
@@ -162,7 +163,7 @@ class EventsDevice(multiprocessing.Process):
 
                 drain_deadline = None
                 while True:
-                    self._count_subscriptions(pub)
+                    self.count_subscriptions(pub)
                     if running := self._running.is_set():
                         wait_timeout = self.pub_queue_wait_timeout
                     else:
