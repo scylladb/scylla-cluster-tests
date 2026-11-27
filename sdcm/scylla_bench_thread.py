@@ -33,7 +33,7 @@ from sdcm.sct_events.loaders import (
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 from sdcm.wait import wait_for
 
@@ -282,7 +282,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
         extra_docker_opts = (
             f"{cpu_options} --label shell_marker={self.shell_marker} "
             '--network=host --entrypoint="" --security-opt seccomp=unconfined '
-            f"-v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+            f"{bind_mount(remote_hdr_file_name_full_path, f'/{remote_hdr_file_name}')}"
         )
 
         if "k8s" in self.params.get("cluster_backend"):

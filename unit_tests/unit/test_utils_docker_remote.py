@@ -12,7 +12,7 @@ import pytest
 from invoke.exceptions import UnexpectedExit
 
 from sdcm.remote.base import RetryableNetworkException
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 
 
 @pytest.fixture(name="remote_docker")
@@ -245,3 +245,18 @@ def test_kill_uses_sudo_when_the_host_needs_it(remote_docker):
     remote_docker.node.remoter.run.assert_called_once_with(
         "sudo  docker rm -f dummy-container-id", verbose=False, ignore_status=True, timeout=120
     )
+
+
+@pytest.mark.parametrize(
+    ("read_only", "expected"),
+    [
+        pytest.param(False, "-v /home/loader/hdr.hdr:/hdr.hdr:z", id="read-write"),
+        pytest.param(True, "-v /home/loader/hdr.hdr:/hdr.hdr:ro,z", id="read-only"),
+    ],
+)
+def test_bind_mount_sets_the_shared_selinux_label(read_only, expected):
+    assert bind_mount("/home/loader/hdr.hdr", "/hdr.hdr", read_only=read_only) == expected
+
+
+def test_bind_mount_quotes_a_path_that_needs_it():
+    assert bind_mount("/home/loader/loader 1/hdr.hdr", "/hdr.hdr") == "-v '/home/loader/loader 1/hdr.hdr:/hdr.hdr:z'"

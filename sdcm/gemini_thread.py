@@ -28,7 +28,7 @@ from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.curl import curl_with_retry
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 
 LOGGER = logging.getLogger(__name__)
 
@@ -186,11 +186,15 @@ class GeminiStressThread(DockerBasedStressThread):
         self.gemini_commands.append(cmd)
         return cmd
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
-        schema_url = self.params.get("gemini_schema_url")
-        schema_mount = ""
+    def _stage_files(self, loader):
+        """Put the gemini files in the home of *loader* and return the schema path and the options that mount them.
+
+        The schema path is None when 'gemini_schema_url' is not set.
+        """
+        home = loader.remoter.run("echo $HOME", verbose=False).stdout.strip()
+        mounts = []
         schema_path = None
-        if schema_url:
+        if schema_url := self.params.get("gemini_schema_url"):
             if schema_url.startswith(("http://", "https://")):
                 LOGGER.info("gemini_schema_url %r is a remote URL; downloading to loader.", schema_url)
                 loader.remoter.run(
@@ -210,16 +214,20 @@ class GeminiStressThread(DockerBasedStressThread):
                     )
                 loader.remoter.send_files(src=schema_url, dst=f"$HOME/{self.gemini_schema_file}")
             schema_path = f"/{self.gemini_schema_file}"
-            schema_mount = f"-v $HOME/{self.gemini_schema_file}:/{self.gemini_schema_file}:z "
+            mounts.append(bind_mount(f"{home}/{self.gemini_schema_file}", schema_path))
 
-        for file_name in [
+        for file_name in (
             self.gemini_result_file,
             self.gemini_test_statements_file,
             self.gemini_oracle_statements_file,
             self.gemini_summary_file,
-        ]:
+        ):
             loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
+            mounts.append(bind_mount(f"{home}/{file_name}", f"/{file_name}"))
+        return schema_path, " ".join(mounts)
 
+    def _run_stress(self, loader, loader_idx, cpu_idx):
+        schema_path, mounts = self._stage_files(loader)
         docker = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
@@ -230,11 +238,7 @@ class GeminiStressThread(DockerBasedStressThread):
             "--security-opt seccomp=unconfined "
             '--entrypoint="" '
             f"--label shell_marker={self.shell_marker} "
-            f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file}:z "
-            f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file}:z "
-            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file}:z "
-            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file}:z "
-            f"{schema_mount}",
+            f"{mounts}",
         )
 
         if not os.path.exists(loader.logdir):

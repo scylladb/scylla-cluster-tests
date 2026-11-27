@@ -15,6 +15,20 @@ from sdcm.utils.net import resolve_ip_to_dns
 LOGGER = logging.getLogger(__name__)
 
 
+def bind_mount(src: str, dst: str, *, read_only: bool = False) -> str:
+    """Return the 'docker run' option that mounts the host path *src* at the container path *dst*.
+
+    Every mount gets the SELinux 'z' label, so a container on an enforcing loader can use the file.
+    The label is 'z' (shared) and not 'Z' (private), because the gemini and HDR files can mount
+    into more than one container.
+
+    The option is shell-quoted, so *src* must be a resolved path and not hold a shell variable
+    such as '$HOME'.
+    """
+    options = "ro,z" if read_only else "z"
+    return "-v " + shlex.quote(f"{src}:{dst}:{options}")
+
+
 class RemoteDocker(BaseNode):
     def __init__(
         self,

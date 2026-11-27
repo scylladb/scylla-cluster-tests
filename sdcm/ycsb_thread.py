@@ -30,7 +30,7 @@ from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils import alternator
 from sdcm.utils.common import FileFollowerThread, generate_random_string
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
@@ -434,7 +434,8 @@ class YcsbStressThread(DockerBasedStressThread):
             )
             if self.params["use_hdrhistogram"]:
                 hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
-                extra_docker_opts += f" -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z"
+                container_hdr_directory = self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)
+                extra_docker_opts += f" {bind_mount(hdr_files_directory, container_hdr_directory)}"
 
             cmd_runner = RemoteDocker(
                 loader,

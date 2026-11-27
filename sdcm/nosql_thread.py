@@ -21,6 +21,7 @@ from sdcm.cluster import BaseNode
 from sdcm.sct_events.loaders import NOSQLBENCH_EVENT_PATTERNS, NoSQLBenchStressEvent
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.docker_remote import bind_mount
 
 LOGGER = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):
                 create_network_cmd = "docker network create --driver bridge nosql"
                 graphite_run_cmd = (
                     "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp "
-                    "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf:z "
+                    f"{bind_mount('/tmp/graphite_mapping.conf', '/tmp/graphite_mapping.conf')} "
                     "--name=graphite-exporter "
                     "--network=nosql "
                     "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"

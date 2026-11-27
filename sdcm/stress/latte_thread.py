@@ -35,7 +35,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import get_sct_root_path
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker, bind_mount
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LATTE_FN_NAME_RE = r"(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)"
@@ -230,9 +230,8 @@ class LatteStressThread(DockerBasedStressThread):
         files = [(local, staged_file_path(loader, container)) for local, container in self.extra_files_to_stage]
         try:
             send_to_loader(loader, files)
-            # 'z' relabels the file for SELinux loaders, like every other stress tool mount.
             yield "".join(
-                " -v " + shlex.quote(f"{host_path}:{container_path}:ro,z")
+                f" {bind_mount(host_path, container_path, read_only=True)}"
                 for (_, host_path), (_, container_path) in zip(files, self.extra_files_to_stage)
             )
         finally:
@@ -300,7 +299,7 @@ class LatteStressThread(DockerBasedStressThread):
         host_dir = loader_path(loader, f"scripts/{script_dir}")
         files = sorted(path for path in (Path(get_sct_root_path()) / script_dir).iterdir() if path.is_file())
         send_to_loader(loader, [(str(path), f"{host_dir}/{path.name}") for path in files])
-        return "-v " + shlex.quote(f"{host_dir}:/{str(script_dir).lstrip('/')}:ro,z")
+        return bind_mount(host_dir, f"/{str(script_dir).lstrip('/')}", read_only=True)
 
     def build_stress_cmd(self, cmd_runner, loader, hosts):
         script_name = self._script_name()
@@ -447,7 +446,7 @@ class LatteStressThread(DockerBasedStressThread):
                 "--network=host "
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+                f" {bind_mount(remote_hdr_file_name_full_path, f'/{remote_hdr_file_name}')}"
                 # The script path in the command is relative, so it resolves against the workdir.
                 f" --workdir / {mounts}"
             ),
