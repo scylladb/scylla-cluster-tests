@@ -20,14 +20,16 @@ class TaskManagerClient(RemoteCurlClient):
     def __init__(self, node: "BaseNode"):  # noqa: F821
         super().__init__(host="localhost:10000", endpoint="task_manager", node=node)
 
-    def list_module_tasks(self, module: str) -> list[dict]:
-        result = self.run_remoter_curl(method="GET", path=f"list_module_tasks/{module}", params={})
+    def list_module_tasks(self, module: str, internal: bool = False) -> list[dict]:
+        params = {"internal": "true"} if internal else {}
+        result = self.run_remoter_curl(method="GET", path=f"list_module_tasks/{module}", params=params)
         return json.loads(result.stdout)
 
-    def get_active_repair_tasks(self) -> list[dict]:
+    def get_active_repair_tasks(self, internal: bool = False) -> list[dict]:
         """Return repair-module tasks in an active state on the node.
 
-        This is the same listing Scylla Manager's "ensure no active repairs" guard checks
-        before starting a repair, so an empty result means that guard will pass.
+        Without internal, this is the listing Scylla Manager's "ensure no active repairs" guard
+        checks. Scylla lists automatic tablet repair tasks only with internal=True.
         """
-        return [task for task in self.list_module_tasks("repair") if task.get("state") in ("created", "running")]
+        tasks = self.list_module_tasks("repair", internal=internal)
+        return [task for task in tasks if task.get("state") in ("created", "running")]

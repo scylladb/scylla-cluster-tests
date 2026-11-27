@@ -11,12 +11,17 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import json
 from functools import partial
 from unittest.mock import MagicMock, call
 
 import pytest
 
-from sdcm.utils.tablets.common import AUTO_REPAIR_PARAM, temporarily_disable_auto_repair
+from sdcm.utils.tablets.common import (
+    AUTO_REPAIR_PARAM,
+    temporarily_disable_auto_repair,
+    wait_no_active_repair_tasks,
+)
 
 MODULE = "sdcm.utils.tablets.common"
 
@@ -112,3 +117,21 @@ def test_temporarily_disable_auto_repair_skips_unreachable_node(db_cluster):
             call(AUTO_REPAIR_PARAM, "false"),
             call(AUTO_REPAIR_PARAM, "true"),
         ]
+
+
+def test_wait_no_active_repair_tasks_lists_internal_tasks(monkeypatch):
+    """The drain must list internal repair tasks: newer Scylla marks automatic tablet repair tasks
+    internal, and a drain that misses them lets force_terminate_repair abort an auto repair (SCT-905).
+    """
+    node = MagicMock(name="node-0")
+    remoter_calls = []
+
+    def run_remoter_curl(self, method, path, params, **kwargs):
+        remoter_calls.append((path, params))
+        tasks = [{"state": "running"}] if len(remoter_calls) == 1 else [{"state": "done"}]
+        return MagicMock(stdout=json.dumps(tasks))
+
+    monkeypatch.setattr("sdcm.rest.remote_curl_client.RemoteCurlClient.run_remoter_curl", run_remoter_curl)
+    assert wait_no_active_repair_tasks([node], timeout=5, step=0.1)
+    assert len(remoter_calls) == 2
+    assert all(call_args == ("list_module_tasks/repair", {"internal": "true"}) for call_args in remoter_calls)
