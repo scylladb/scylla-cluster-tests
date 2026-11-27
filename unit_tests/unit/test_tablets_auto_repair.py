@@ -11,104 +11,90 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-from functools import partial
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
+from cassandra import InvalidRequest
 
-from sdcm.utils.tablets.common import AUTO_REPAIR_PARAM, temporarily_disable_auto_repair
+from sdcm.exceptions import KillNemesis
+from sdcm.utils.tablets.common import temporarily_disable_auto_repair
 
 MODULE = "sdcm.utils.tablets.common"
-
-
-def live_update(node, name, value):
-    """Mimic Scylla's live config update: what gets set is what gets read back afterwards."""
-    node.get_scylla_config_param.return_value = value
-    return True
+DISABLE_STATEMENT = "ALTER CLUSTER WITH auto_repair_enabled = false"
+RESTORE_STATEMENT = "ALTER CLUSTER WITH auto_repair_enabled = 'true'"
 
 
 @pytest.fixture()
-def db_cluster(monkeypatch):
-    """Three-node cluster with auto-repair enabled; drain-wait is patched out (not under test here)."""
-    cluster = MagicMock()
-    cluster.data_nodes = [MagicMock(name=f"node-{i}") for i in range(3)]
-    for node in cluster.data_nodes:
-        node.get_scylla_config_param.return_value = "true"
-        node.set_scylla_config_param.side_effect = partial(live_update, node)
+def cql_session():
+    """CQL session that reads auto-repair as enabled at CLUSTER scope and records the statements sent."""
+    session = MagicMock()
+    session.execute.return_value.one.return_value = ("true",)
+    return session
+
+
+@pytest.fixture()
+def node(cql_session, monkeypatch):
+    """Node whose cluster hands out the CQL session; drain-wait is patched out (not under test here)."""
+    node = MagicMock()
+    node.parent_cluster.cql_connection_patient.return_value.__enter__.return_value = cql_session
     monkeypatch.setattr(f"{MODULE}.wait_no_active_repair_tasks", lambda *args, **kwargs: True)
-    return cluster
+    return node
 
 
-def test_temporarily_disable_auto_repair_disables_then_restores(db_cluster):
-    """Auto-repair must be off while the block runs and back on afterwards, on every node —
-    a missed restore would leave the whole test running without auto-repair (SCT-905).
-    The value must also be persisted to scylla.yaml, or a node restart/config reload inside
-    the block would silently re-enable auto-repair.
+def test_temporarily_disable_auto_repair_disables_then_restores(node, cql_session):
+    """Auto-repair must be off while the block runs and back on afterwards.
+
+    A missed restore would leave the whole test running without auto-repair (SCT-905).
     """
-    with temporarily_disable_auto_repair(db_cluster):
-        for node in db_cluster.data_nodes:
-            node.set_scylla_config_param.assert_called_once_with(AUTO_REPAIR_PARAM, "false")
-            assert node.remote_scylla_yaml().__enter__().auto_repair_enabled_default is False
-    for node in db_cluster.data_nodes:
-        assert node.set_scylla_config_param.call_args_list == [
-            call(AUTO_REPAIR_PARAM, "false"),
-            call(AUTO_REPAIR_PARAM, "true"),
-        ]
-        assert node.remote_scylla_yaml().__enter__().auto_repair_enabled_default is True
+    with temporarily_disable_auto_repair(node):
+        cql_session.execute.assert_called_with(DISABLE_STATEMENT)
+    cql_session.execute.assert_called_with(RESTORE_STATEMENT)
 
 
-def test_temporarily_disable_auto_repair_restores_when_body_raises(db_cluster):
+def test_temporarily_disable_auto_repair_restores_when_body_raises(node, cql_session):
     """A failing repair must not leave auto-repair disabled for the rest of the test."""
-    with pytest.raises(ValueError, match="repair failed"), temporarily_disable_auto_repair(db_cluster):
+    with pytest.raises(ValueError, match="repair failed"), temporarily_disable_auto_repair(node):
         raise ValueError("repair failed")
-    for node in db_cluster.data_nodes:
-        node.set_scylla_config_param.assert_called_with(AUTO_REPAIR_PARAM, "true")
+    cql_session.execute.assert_called_with(RESTORE_STATEMENT)
+
+
+def test_temporarily_disable_auto_repair_restores_when_killed_during_drain(node, cql_session, monkeypatch):
+    """A nemesis killed while it waits for in-flight repairs must still restore auto-repair.
+
+    The end of a test stops the nemesis thread with KillNemesis wherever it is, and the cluster
+    would otherwise stay with auto-repair off.
+    """
+    monkeypatch.setattr(f"{MODULE}.wait_no_active_repair_tasks", MagicMock(side_effect=KillNemesis))
+    with pytest.raises(KillNemesis):
+        with temporarily_disable_auto_repair(node):
+            pytest.fail("the repair must not start after a kill")
+    cql_session.execute.assert_called_with(RESTORE_STATEMENT)
 
 
 @pytest.mark.parametrize(
-    "config_value",
+    "row",
     [
-        pytest.param(None, id="option-absent-on-old-scylla"),
-        pytest.param("false", id="already-disabled"),
+        pytest.param(None, id="nothing-stored"),
+        pytest.param(("false",), id="already-disabled-or-nested-use"),
     ],
 )
-def test_temporarily_disable_auto_repair_noop(db_cluster, config_value):
-    """Nothing may be written when auto-repair is off or unsupported — a blind write would fail
-    on pre-2026.1 Scylla and would wrongly enable auto-repair on exit.
+def test_temporarily_disable_auto_repair_noop(node, cql_session, row):
+    """Nothing may be written when auto-repair is not enabled.
+
+    A nested use would otherwise re-enable auto-repair on exit, under the outer repair.
     """
-    for node in db_cluster.data_nodes:
-        node.get_scylla_config_param.return_value = config_value
-    with temporarily_disable_auto_repair(db_cluster):
+    cql_session.execute.return_value.one.return_value = row
+    with temporarily_disable_auto_repair(node):
         pass
-    for node in db_cluster.data_nodes:
-        node.set_scylla_config_param.assert_not_called()
+    cql_session.execute.assert_called_once()
 
 
-def test_temporarily_disable_auto_repair_nested_toggles_once(db_cluster):
-    """The repair choke points nest (e.g. disrupt_abort_repair -> run_repair -> run_repair_manager):
-    the inner use must see auto-repair already off and neither disable nor restore anything,
-    so only the outermost use toggles it.
+def test_temporarily_disable_auto_repair_noop_without_cluster_config(node, cql_session):
+    """The repair must run with auto-repair left as is on releases without CQL cluster configuration.
+
+    Master SCT still runs Manager jobs against such releases.
     """
-    with temporarily_disable_auto_repair(db_cluster), temporarily_disable_auto_repair(db_cluster):
+    cql_session.execute.side_effect = InvalidRequest("unconfigured table scylla_clusters")
+    with temporarily_disable_auto_repair(node):
         pass
-    for node in db_cluster.data_nodes:
-        assert node.set_scylla_config_param.call_args_list == [
-            call(AUTO_REPAIR_PARAM, "false"),
-            call(AUTO_REPAIR_PARAM, "true"),
-        ]
-
-
-def test_temporarily_disable_auto_repair_skips_unreachable_node(db_cluster):
-    """A down/isolated node (remove-node and isolation nemeses) must not fail the repair, and
-    no restore may be attempted on it.
-    """
-    down_node, *up_nodes = db_cluster.data_nodes
-    down_node.get_scylla_config_param.return_value = None
-    with temporarily_disable_auto_repair(db_cluster):
-        pass
-    down_node.set_scylla_config_param.assert_not_called()
-    for node in up_nodes:
-        assert node.set_scylla_config_param.call_args_list == [
-            call(AUTO_REPAIR_PARAM, "false"),
-            call(AUTO_REPAIR_PARAM, "true"),
-        ]
+    cql_session.execute.assert_called_once()
