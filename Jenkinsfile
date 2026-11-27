@@ -29,12 +29,12 @@ def createRunConfiguration(String backend) {
     } else if (backend == 'oci') {
         configuration.oci_region_name = 'us-ashburn-1'
         configuration.availability_zone = 'a,b,c'
-        configuration.test_config = '["test-cases/PR-provision-test.yaml", "configurations/oci/provision-spot-in-any-availability-domain.yaml"]'
+        configuration.test_config = '["test-cases/PR-provision-test.yaml", "configurations/oci/provision-in-any-availability-domain.yaml"]'
         configuration.oci_instance_type_db = 'VM.Standard3.Flex:4:32'
         configuration.data_volume_disk_num = 2
         configuration.data_volume_disk_type = 'ultra'
         configuration.data_volume_disk_size = 50
-        configuration.provision_type = 'spot'
+        configuration.provision_type = 'on_demand'
         configuration.scylla_version = 'master:latest'
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
