@@ -7,18 +7,21 @@
 ## Overview
 
 Jenkins is only the resource manager. A perf sub-test in lab mode runs on a
-lab runner agent. It asks SCT how many hosts each role needs, and holds that
-many lab agents: one parallel branch per host sits in `node(<label>)` and
-runs nothing, so the single executor of the agent stays busy. The runner
-resolves the addresses of the held agents, checks them over SSH, and writes
+lab runner agent. It asks SCT how many hosts each role needs, and holds those
+lab agents: one parallel branch per host sits in `node(<label>)`, so the
+single executor of the agent stays busy. A host can take several roles, and
+the runner's own agent can take roles too. Each host is held once, however
+many roles it takes, and the runner's agent is never held again. Each holder
+reports its host's address. The runner checks the hosts over SSH and writes
 a baremetal hosts file. The SCT baremetal backend then reaches the hosts over
 SSH, as it does any baremetal host. When the sub-test ends for any reason,
 the holder branches end and Jenkins frees the agents.
 
 ## Constraints
 
-- Jenkins runs no test code on a held host. Only the runner touches it, and
-  only over SSH.
+- Jenkins runs no test code on a held host. The holder branch runs one
+  read-only command there, which reports the host's address. Everything else
+  reaches the host from the runner, over SSH.
 - The hold needs no script approval and no new Jenkins plugin.
 - The library runs sandboxed through `legacySCM`. A call into Jenkins
   internals needs script approval, so the design avoids them.
@@ -36,9 +39,9 @@ sequenceDiagram
     participant H as Held lab hosts
     J->>R: start the sub-test on the runner label
     R->>R: sct.py get-node-counts gives the count per role
-    R->>J: one holder branch per needed host
+    R->>J: one holder branch per distinct host (not the runner)
     J-->>R: executors taken, node names known
-    R->>R: resolve the addresses (DNS for lab hostnames)
+    H-->>R: each holder reports its host's address
     R->>H: preflight over SSH (key, sudo, SELinux)
     R->>R: write lab-<test_id>.json, set SCT_S3_BAREMETAL_CONFIG
     R->>H: SCT test over SSH (outside Jenkins)
@@ -50,10 +53,10 @@ sequenceDiagram
 flowchart LR
     cfg["test config<br/>n_db_nodes / n_loaders / n_monitor_nodes"] --> counts["count per role"]
     map["role to Jenkins label map"] --> hold
-    counts --> hold["hold N agents per role"]
+    counts --> hold["hold each distinct host once"]
     hold --> db["db: lab-baremetal hosts"]
-    hold --> ld["loader: lab-baremetal hosts"]
-    hold --> mon["monitor: minipc host"]
+    hold --> ld["loader: lab-baremetal hosts, or the runner"]
+    hold --> mon["monitor: the runner, or a minipc host"]
     db & ld & mon --> json["BareMetalCredentials hosts file"]
     json --> sct["SCT baremetal backend"]
 ```
@@ -61,25 +64,33 @@ flowchart LR
 | Component | Role |
 |---|---|
 | `sct.py get-node-counts` | Prints the count per role from the merged test configuration |
-| Role map (library) | Maps each role to a Jenkins label and an SSH username |
-| Hold step (library) | Holds N agents per role, runs a body with the held hosts, ends the holders on every exit |
+| Role map (library) | Maps each role to Jenkins labels or node names, or to the runner's own agent, and an SSH username |
+| Hold step (library) | Holds each distinct host of the role map once, collects the addresses the holders report, runs a body with the held hosts, ends the holders on every exit |
 | Preflight step (library) | Probes every held host over SSH, fails once with a table of all problems |
 | Hosts file step (library) | Writes and archives the hosts file, exports its name |
 | `perfRegressionParallelPipeline` lab mode | Runs the sub-test on the runner label, skips the SCT runner and cloud provisioning, as `local_agent` does in `longevityPipeline` |
 | Lab overlay | Switches the test-case to the `baremetal` backend and sets `simulated_racks` to match the RF |
-| Lab host runbook | The one-time setup of a host: test user, key, passwordless sudo, Docker Engine 20.10 or newer that the test user can run on loader and monitor hosts, the monitoring stack's ports free on the monitor host, SELinux on loader hosts, the `lab-baremetal` label on the eligible hosts |
+| Lab host runbook | The one-time setup of a host, and of the runner when it takes a role: test user, key, passwordless sudo, the data NIC as the default route, Docker Engine 20.10 or newer that the test user can run on loader and monitor hosts, the monitoring stack's ports free on the monitor host, SELinux on loader hosts, the `lab-baremetal` label on the eligible hosts |
 
 The sub-test runs these stages in order: sizing, hold, preflight, hosts
 file, test, log collection, host cleanup, release. Lab mode runs the
 sub-tests one after another.
 
-The runner resolves each address itself, without a step on the held agent.
-A lab agent is usually named by its hostname, so the runner uses DNS. Not
-every agent name resolves: `mini-spider1` is not a `*.cloudius-systems.com`
-name. Such an agent gets an address entry in the role map, and preflight
-reports a name that neither resolves nor has an entry. An AWS builder agent,
-used for staging checks, is named by its instance id, so the runner uses the
-EC2 API.
+Each holder reports its host's address: the source address of the host's
+default route, from `ip -4 route get`. The runner can't resolve the
+addresses itself. The lab DNS doesn't know Jenkins node names such as
+`minipc5` and `mini-spider1` (proof-of-concept build #8), and DHCP moved
+minipc5 between three addresses in one month, so a static address table
+would go stale. The same command works on AWS builder agents, so no EC2 API
+lookup is needed. The runner's own address is its source address on the
+route to the held hosts. Preflight reports a host that reported no address.
+
+A host takes one or more roles. The runner's agent takes the roles that the
+role map gives it, and it is not held a second time: a single-executor agent
+would wait for itself until the acquire time limit. A host that two roles
+name is held once and listed under both roles in the hosts file. The
+proof-of-concept `lab-10g` layout runs the runner as a loader and the
+monitor, with one more held loader and one held DB host.
 
 Preflight checks every host for the key and passwordless sudo. On loader
 hosts it also checks that SELinux is not enforcing. It leaves Docker to SCT:
@@ -129,10 +140,13 @@ The role map is static in the library first:
 
 | Role | Jenkins label | SSH username |
 |---|---|---|
-| `runner` | a minipc label | not used |
+| `runner` | a minipc label | the lab test user, when it takes a role |
 | `db` | `lab-baremetal` | the lab test user |
-| `loader` | `lab-baremetal` | the lab test user |
-| `monitor` | a minipc label | the lab test user |
+| `loader` | `lab-baremetal`, or the runner | the lab test user |
+| `monitor` | the runner, or a minipc label | the lab test user |
+
+A role can name the runner, and two roles can name the same host. The hold
+step counts each host once.
 
 `lab-baremetal` is a dedicated label. It is set only on the hosts allocated
 to this work and prepared per the runbook. The role map doesn't use
@@ -188,6 +202,7 @@ The build description lists the runner and the held hosts.
 | A host is set up wrong | Preflight fails the run in minutes with one report |
 | A test changes the host for its other users: the disk setup, `SELINUX=disabled`, and a prune of unused Docker images when the image store is short of space (#16538) | Tell the host owners before the first run, and record it in the runbook |
 | The baremetal backend cannot reboot a node | The throughput-steps test does not reboot nodes |
+| A host's data NIC isn't its default route, so the host reports its management address and the test traffic takes the slower link | The runbook sets the data NIC as the default route. A role map entry that names the interface is deferred work |
 
 ## Deferred work
 
@@ -199,6 +214,8 @@ The build description lists the runner and the held hosts.
   rebooted agent drops its Jenkins connection, so the hold then marks the
   host temporarily offline and waits for the agent to reconnect. That needs
   script approval for the node APIs.
+- A role map entry that names the interface whose address a host reports,
+  for hosts whose data NIC isn't the default route.
 - lockable-resources, for an atomic "N agents with label X" and a view of
   who holds what, if a limit of one lab run at a time is too coarse.
 
@@ -210,7 +227,11 @@ The build description lists the runner and the held hosts.
   cloud perf category. (spec)
 - The hosts file goes through a local file and an environment variable, not
   S3. Staging run #2 showed that hydra reads it from the checkout. (build)
-- The runner resolves the addresses, so no step runs on a held agent. (build)
+- Each holder reports its host's address with one read-only command. The lab
+  DNS doesn't know the Jenkins node names, and DHCP changes the addresses.
+  (build)
+- A host can take several roles and is held once. The runner's own agent
+  takes roles without being held again. (build)
 - The pipeline gets the node counts from SCT, so overlays and per-DC values
   count. (spec)
 - DB and loader hosts come from a dedicated `lab-baremetal` label, not from
@@ -221,6 +242,7 @@ The build description lists the runner and the held hosts.
   already checks it on every loader and monitor, with the disk and the
   ports. (series)
 - The monitoring stack runs on the runner agent instead of on one more held
-  host. (open)
+  host. The proof-of-concept `lab-10g` runs (builds #10, #12-#14) did this,
+  with the runner also a loader. (build)
 - One large lab host does the work of the 4 `c7i.8xlarge` loaders, with
   `round_robin`, without the loader CPU saturating before the DB. (open)

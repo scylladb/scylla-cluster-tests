@@ -1,0 +1,377 @@
+#!groovy
+
+// Proof of concept for docs/plans/jenkins/lab-builders-baremetal/ (SCT-900).
+// Throwaway: it checks that the approach is feasible on the live Jenkins and gets deleted once
+// the plan's hold helper lands.
+//
+// The `target` parameter picks the agents:
+//   aws-asg     - step 1: runner and held agents are AWS ASG builders, plentiful and disposable.
+//   lab         - step 2: the runner is a minipc and the held agents are one spider and one minipc,
+//                 all chosen by label, so it also proves the lab network path. Run it when the lab is
+//                 quiet (weekend; not Friday night, when the weekly-minicloud cron uses the minipcs).
+//   lab-monster - step 2 on the least used lab hosts: the runner is monster (only it carries
+//                 minicloud-kvm-builders-artifacts) and the held agent is spider4, which carries no
+//                 label, so it is picked by node name and no other build is scheduled on it.
+//   lab-10g     - the SCT-1215 10GbE perf layout: DB minipc5, loaders monster and mini-spider1,
+//                 monitor monster. The runner is monster, so it is a loader and the monitor; minipc5
+//                 and mini-spider1 are held by node name. Running jobs on them are waited for, not
+//                 interrupted: the holders queue until each agent is free (up to acquire_minutes).
+// Every target parameter (runner_label, layout, acquire_minutes, sct_branch,
+// test_name, test_config, sct_minutes) overrides the target's default when set.
+//
+// Layout: `role=agent,agent;role=...` for the roles db, loader and monitor. Each agent is a node
+// name or a label. `@runner` (or the runner_label itself) is the runner's own agent: it's already
+// taken by this build, so it is used as it is and never held a second time. Every other distinct
+// entry is held once, however many roles name it. Two agents from one label need two entries, told
+// apart by a `#n` suffix (`builders_x86#1,builders_x86#2`).
+//
+// Jenkins is only the resource manager here. Each held agent is a branch that sits in
+// node(<label>) and runs nothing, which keeps that agent's single executor busy so Jenkins
+// schedules no other build on it. The runner branch, on another agent, then:
+//   1. gets the held agents' names and addresses; each holder reports its own address on its
+//      default route, the only command run on a held agent (node names aren't all in the lab DNS),
+//   2. writes and archives a BareMetalCredentials-shaped hosts file from the layout. On the lab
+//      targets every host carries `access`, its name in the lab access service (the short node
+//      name), so no SSH key has to be on any lab host: the access
+//      service holds the hosts' credentials,
+//   3. checks that every host in the file can be logged into with passwordless sudo, reading the
+//      file back inside hydra the way the baremetal backend does (local <name>.json before S3):
+//      lab targets through the lab access service (needs the SCT branch below and the
+//      scylla-qa-internal lookup), aws-asg with the SCT key synced from the KeyStore,
+//   4. with run_sct, runs the SCT test against those hosts on the baremetal backend, then
+//      collects its logs and cleans the hosts up; without it, waits for "Release" (or hold_minutes).
+// Whatever ends the build (Release, failure, abort, timeout), the holder branches end with it
+// and the executors are freed.
+//
+// While the agents are held, queue any job on the held label: it must wait for, or get, a
+// different agent.
+
+def provisionTest = '["test-cases/PR-provision-test.yaml", "configurations/baremetal/loader-monitor-shared-host.yaml", "configurations/baremetal/lab-hold-poc.yaml"]'
+def targets = [
+    'aws-asg': [
+        runner: 'aws-sct-builders-eu-west-1-v4-asg',
+        layout: 'db=aws-sct-builders-eu-west-1-v4-asg#1,aws-sct-builders-eu-west-1-v4-asg#2;loader=@runner;monitor=@runner',
+        acquireMinutes: '20',
+    ],
+    // spiders carry builders_x86, minipcs carry minicloud-kvm-builders-rolling-upgrades. Lab hosts
+    // are taken only when idle, so acquiring can wait for running dtest/minicloud builds to end.
+    'lab': [
+        runner: 'minicloud-kvm-builders-rolling-upgrades',
+        layout: 'db=builders_x86,minicloud-kvm-builders-rolling-upgrades#held;loader=@runner;monitor=@runner',
+        acquireMinutes: '120',
+        access: true,
+    ],
+    'lab-monster': [
+        runner: 'minicloud-kvm-builders-artifacts',
+        layout: 'db=spider4.cloudius-systems.com;loader=@runner;monitor=@runner',
+        acquireMinutes: '60',
+        access: true,
+    ],
+    'lab-10g': [
+        runner: 'monster',
+        layout: 'db=minipc5;loader=@runner,mini-spider1;monitor=@runner',
+        // A minicloud run on minipc5 can take 2-3 hours.
+        acquireMinutes: '360',
+        access: true,
+        sctBranch: 'baremetal/sct1215-experiment',
+        testName: 'performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest.test_mixed_gradual_increase_load',
+        testConfig: '["test-cases/performance/perf-regression-predefined-throughput-steps-1-node.yaml", ' +
+                    '"configurations/performance/single-node/i7i.4xlarge.yaml", "configurations/disable_kms.yaml", ' +
+                    '"configurations/disable_speculative_retry.yaml", "configurations/baremetal/perf-1-node-lab.yaml", ' +
+                    '"configurations/baremetal/perf-1-node-lab-10g.yaml", "configurations/baremetal/perf-lab-mixed-3x30.yaml"]',
+        // 3 x 30 min mixed rounds took 147 min on the 1GbE layout, plus log collection and cleanup.
+        sctMinutes: '210',
+    ],
+]
+
+properties([
+    // One run at a time, as the spec's lab throttle category (limit 1): two runs could each hold part
+    // of the hosts and wait on each other until acquire_minutes runs out.
+    disableConcurrentBuilds(),
+    parameters([
+        choice(name: 'target', choices: ['none', 'aws-asg', 'lab', 'lab-monster', 'lab-10g'],
+               description: 'Which agents to use: none (only registers the parameters), aws-asg (step 1), lab spider/minipc hosts, monster holding spider4 (step 2), or the SCT-1215 10GbE perf layout'),
+        string(name: 'runner_label', defaultValue: '',
+               description: 'Node name or label of the runner agent; empty = the target default'),
+        string(name: 'layout', defaultValue: '',
+               description: 'Agents per role, e.g. db=minipc5;loader=@runner,mini-spider1;monitor=@runner (@runner = the runner agent, not held again); empty = the target default'),
+        string(name: 'ssh_user', defaultValue: 'jenkins',
+               description: 'User the runner logs in as on the held agents and on itself'),
+        string(name: 'acquire_minutes', defaultValue: '',
+               description: 'Fail if not every held agent is acquired by then; empty = the target default'),
+        string(name: 'hold_minutes', defaultValue: '30',
+               description: 'Without run_sct: release automatically after this long if nobody presses Release'),
+        booleanParam(name: 'run_sct', defaultValue: false,
+                     description: 'After the checks, run the SCT test (test_name / test_config) on the held hosts'),
+        string(name: 'sct_repo', defaultValue: 'https://github.com/fruch/scylla-cluster-tests.git',
+               description: 'Lab targets and run_sct: SCT clone for the access check and the test (anonymous HTTPS)'),
+        string(name: 'sct_branch', defaultValue: '',
+               description: 'Lab targets and run_sct: branch with the baremetal fixes, incl. lab host access; empty = the target default, else baremetal/sct1215-collect'),
+        string(name: 'qa_internal_repo', defaultValue: 'git@github.com:fruch/scylla-qa-internal.git',
+               description: 'Lab targets: scylla-qa-internal clone with the lab access lookup'),
+        string(name: 'qa_internal_branch', defaultValue: 'sct1215-baremetal-lab-access',
+               description: 'Lab targets: scylla-qa-internal branch with the lab access lookup (scylla-qa-internal#75)'),
+        string(name: 'test_name', defaultValue: '',
+               description: 'run_sct: the test to run; empty = the target default, else a short longevity test_custom_time'),
+        string(name: 'test_config', defaultValue: '',
+               description: 'run_sct: SCT_CONFIG_FILES as a JSON list; empty = the target default, else PR-provision-test'),
+        string(name: 'email_recipients', defaultValue: '',
+               description: 'run_sct: required, so the test never mails the default qa@ list'),
+        string(name: 'sct_minutes', defaultValue: '',
+               description: 'run_sct: time budget for the test, log collection and cleanup; empty = the target default, else 150'),
+    ])
+])
+
+if (params.target in [null, 'none']) {
+    // First build after a parameter change: Jenkins only learns the parameters above by running it
+    // once, and gives a new choice parameter its first value, so 'none' comes first.
+    currentBuild.result = 'NOT_BUILT'
+    currentBuild.description = 'parameters registered, nothing held'
+    return
+}
+
+def target = targets[params.target]
+def runnerLabel = params.runner_label?.trim() ?: target.runner
+
+// role -> agent entries; the runner's own agent is '@runner'
+def layout = [:]
+(params.layout?.trim() ?: target.layout).split(';').each { part ->
+    def kv = part.split('=', 2)
+    def entries = kv.size() == 2 ? kv[1].split(',').collect { it.trim() }.findAll { it } : []
+    layout[kv[0].trim()] = entries.collect { it == runnerLabel ? '@runner' : it }
+}
+if (layout.keySet().sort() != ['db', 'loader', 'monitor'] || layout.values().any { !it }) {
+    error("layout needs agents for exactly db, loader and monitor, got: ${layout}")
+}
+// Each distinct agent entry is held once, whichever roles name it.
+def wanted = layout.values().flatten().findAll { it != '@runner' }.unique()
+
+def acquireMinutes = (params.acquire_minutes?.trim() ?: target.acquireMinutes) as int
+def holdMinutes = params.hold_minutes as int
+def sctMinutes = (params.sct_minutes?.trim() ?: target.sctMinutes ?: '150') as int
+def workMinutes = params.run_sct ? sctMinutes : holdMinutes
+def sctBranch = params.sct_branch?.trim() ?: target.sctBranch ?: 'baremetal/sct1215-collect'
+def testName = params.test_name?.trim() ?: target.testName ?: 'longevity_test.LongevityTest.test_custom_time'
+def testConfig = params.test_config?.trim() ?: target.testConfig ?: provisionTest
+if (params.run_sct && !params.email_recipients?.trim()) {
+    error('run_sct needs email_recipients, else the test mails the default qa@ list')
+}
+def useAccess = target.access as boolean
+def sshKey = '~/.ssh/scylla_test_id_ed25519'
+def heldByEntry = [:]
+def released = false
+// A host's own address on its route to `to`. Jenkins node names (minipc5, mini-spider1) are not in
+// the lab DNS, so each agent reports its own address instead of the runner resolving it.
+def srcAddress = { to -> "ip -4 route get ${to} | awk '{for (i = 1; i < NF; i++) if (\$i == \"src\") print \$(i + 1)}'" }
+
+timeout(time: acquireMinutes + workMinutes + 20, unit: 'MINUTES') {
+    def branches = [:]
+
+    for (int i = 0; i < wanted.size(); i++) {
+        def entry = wanted[i]
+        def label = entry.replaceFirst(/#[^#]*$/, '')
+        branches["hold ${entry}"] = {
+            node(label) {
+                // The held agent only reports its address on its default route, then the branch just
+                // keeps its executor busy.
+                heldByEntry[entry] = [host: env.NODE_NAME, ip: sh(returnStdout: true, script: srcAddress('1.1.1.1')).trim()]
+                echo "Holding ${env.NODE_NAME}"
+                waitUntil(initialRecurrencePeriod: 5000, quiet: true) { released }
+                echo "Releasing ${env.NODE_NAME}"
+            }
+        }
+    }
+
+    branches['runner'] = {
+        node(runnerLabel) {
+            try {
+                timeout(time: acquireMinutes, unit: 'MINUTES') {
+                    waitUntil(initialRecurrencePeriod: 5000, quiet: true) { heldByEntry.size() == wanted.size() }
+                }
+                def nodeList = wanted.collect { heldByEntry[it] }
+                def hosts = nodeList.collect { it.host }
+                currentBuild.description = "${params.target}: runner ${env.NODE_NAME}, holding ${hosts.join(', ')}"
+
+                checkout scm
+                def findings = []
+                def testId = UUID.randomUUID().toString()
+                def configName = "lab-${testId}"
+
+                withCredentials([string(credentialsId: 'qa-aws-secret-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                                 string(credentialsId: 'qa-aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    // 1. Addresses: each held agent reported its own; the runner's is its address on the
+                    //    route to the held hosts ('@runner' in the layout).
+                    nodeList.findAll { !it.ip }.each { findings << "${it.host}: reported no address" }
+                    def routeTo = nodeList.find { it.ip }?.ip ?: '1.1.1.1'
+                    def runnerIp = sh(returnStdout: true, script: srcAddress(routeTo)).trim()
+                    if (!runnerIp) {
+                        findings << "${env.NODE_NAME}: no source address on the route to ${routeTo}"
+                    }
+                    def byEntry = heldByEntry + ['@runner': [host: env.NODE_NAME, ip: runnerIp]]
+
+                    // 2. Hosts file, in the shape sdcm/cluster_baremetal.py:BareMetalCredentials expects. Every
+                    //    role is on the runner's network, so each one is reached directly (`private`), no tunnels.
+                    //    Lab hosts are named in the lab access service by their short node name.
+                    def asEntries = { entries ->
+                        entries.collect { byEntry[it] }.findAll { it.ip }.collect { n ->
+                            useAccess ? [public_ip: n.ip, private_ip: n.ip, access: n.host.tokenize('.')[0]]
+                                      : [public_ip: n.ip, private_ip: n.ip]
+                        }
+                    }
+                    def role = { entries -> [username: params.ssh_user, ip_ssh_connections: 'private', node_list: asEntries(entries)] }
+                    writeJSON file: "${configName}.json", pretty: 2, json: [
+                        db_nodes: role(layout.db),
+                        loader_nodes: role(layout.loader),
+                        monitor_nodes: role(layout.monitor),
+                    ]
+                    archiveArtifacts artifacts: "${configName}.json"
+
+                    if (findings) {
+                        error("POC findings:\n  - " + findings.join('\n  - '))
+                    }
+
+                    if (useAccess) {
+                        // 3. (lab) Every host in the file, the runner included, through the lab access service and
+                        //    with no SSH key, the way the baremetal backend reaches `access` hosts. That code isn't
+                        //    on master yet, so the check runs from the SCT branch, with the scylla-qa-internal
+                        //    lookup next to it where sdcm/utils/internal_modules.py looks for it.
+                        sh """
+                            # The last run's logs under sct/ include files hydra's container wrote as root;
+                            # collect-logs already uploaded them.
+                            sudo -n rm -rf sct
+                            git clone --depth 1 --branch '${sctBranch}' '${params.sct_repo}' sct
+                            cp '${configName}.json' sct/
+                            cp configurations/baremetal/lab-hold-poc.yaml sct/configurations/baremetal/
+                        """
+                        dir('sct/scylla-qa-internal') {
+                            git(url: params.qa_internal_repo, branch: params.qa_internal_branch,
+                                credentialsId: 'b8a774da-0e46-4c91-9f74-09caebaea261')
+                        }
+                        writeFile file: 'sct/lab_poc_access_check.py', text: '''
+import sys
+from sdcm.keystore import KeyStore
+from sdcm.localhost import LocalHost
+from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils.baremetal_hosts import host_ssh_address
+
+config_name, test_id = sys.argv[1:3]
+localhost = LocalHost(user_prefix="lab-hold-poc", test_id=test_id)
+checked, failed = set(), []
+try:
+    for section in KeyStore().get_baremetal_config(config_name).values():
+        for host in section["node_list"]:
+            if host["access"] in checked:
+                continue
+            checked.add(host["access"])
+            try:
+                login = {"user": section["username"]} | host_ssh_address(host, "private", localhost)
+                result = RemoteCmdRunnerBase.create_remoter(**login).run(
+                    "hostname && sudo -n true && echo SUDO_OK", ignore_status=True, timeout=120)
+                ok = result.ok and "SUDO_OK" in result.stdout
+            except Exception as exc:  # noqa: BLE001
+                print(f"{host['access']}: {exc!r}")
+                ok = False
+            print(f"{host['access']} ({host['private_ip']}): {'login + sudo OK' if ok else 'FAILED'}")
+            if not ok:
+                failed.append(host["access"])
+finally:
+    localhost.destroy()
+if failed:
+    sys.exit(f"no login with passwordless sudo through the lab access service: {failed}")
+'''
+                        dir('sct') {
+                            if (sh(returnStatus: true,
+                                   script: "./docker/env/hydra.sh python3 lab_poc_access_check.py ${configName} ${testId}") != 0) {
+                                findings << "hydra could not read ${configName}.json or log into every host through the lab access service"
+                            }
+                        }
+                    } else {
+                        // 3. (aws-asg) hydra runs with the checkout as its working dir and the home dir mounted:
+                        //    sync the SSH key the way sct.py does, read the hosts file back, then SSH to the
+                        //    held hosts out of band.
+                        writeFile file: 'lab_poc_hydra_check.py', text: '''
+import sys
+from pathlib import Path
+from sdcm.keystore import KeyStore
+KeyStore().sync(keys=["scylla_test_id_ed25519"], local_path=Path.home() / ".ssh", permissions=0o600)
+config = KeyStore().get_baremetal_config(sys.argv[1])
+print("hosts file read by hydra:", [n["public_ip"] for section in config.values() for n in section["node_list"]])
+'''
+                        if (sh(returnStatus: true,
+                               script: "./docker/env/hydra.sh python3 lab_poc_hydra_check.py ${configName}") != 0) {
+                            findings << "hydra could not sync the SSH key or read ${configName}.json from its working directory"
+                        }
+                        nodeList.findAll { it.ip }.each { n ->
+                            def rc = sh(returnStatus: true, script: """
+                                ssh -i ${sshKey} -o BatchMode=yes -o StrictHostKeyChecking=no \
+                                    -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                                    ${params.ssh_user}@${n.ip} 'hostname && sudo -n true && echo SUDO_OK'
+                            """)
+                            if (rc != 0) {
+                                findings << "${n.host}: ssh ${params.ssh_user}@${n.ip} with sudo -n failed (rc=${rc})"
+                            }
+                        }
+                    }
+
+                    if (findings) {
+                        error("POC findings:\n  - " + findings.join('\n  - '))
+                    }
+
+                    if (params.run_sct) {
+                        // 4. The SCT test on the held hosts, from the same SCT branch (the baremetal fixes
+                        //    are not on master yet), with this job's hosts file and overlay copied in. The held
+                        //    agents stay held until the cleanup is done.
+                        if (!useAccess) {
+                            error('run_sct is for the lab targets: aws-asg builders are not set up as SCT hosts')
+                        }
+                        echo "All checks passed. Running ${testName} on ${hosts.join(', ')} from ${sctBranch}."
+                        // The same Argus link createArgusTestRun adds; the tester creates the run itself.
+                        // lab-hold-poc.yaml turns Argus off, so a test with it gets no link.
+                        if (!testConfig.contains('lab-hold-poc.yaml')) {
+                            currentBuild.description += """
+                                <div style="margin: 12px 4px;">
+                                    <a href='https://argus.scylladb.com/tests/scylla-cluster-tests/${testId}'>
+                                        Argus: <span style='font-weight: 500'>${testId}</span>
+                                    </a>
+                                </div>
+                            """
+                        }
+                        def sctEnv = [
+                            "SCT_TEST_ID=${testId}",
+                            'SCT_CLUSTER_BACKEND=baremetal',
+                            "SCT_CONFIG_FILES=${testConfig}",
+                            "SCT_S3_BAREMETAL_CONFIG=${configName}",
+                            "SCT_EMAIL_RECIPIENTS=${params.email_recipients.trim()}",
+                        ]
+                        dir('sct') {
+                            withEnv(sctEnv) {
+                                try {
+                                    sh "./docker/env/hydra.sh run-test ${testName} --backend baremetal --logdir \"\$(pwd)\""
+                                } finally {
+                                    // The same steps runCollectLogs / runCleanupResource run for a local agent.
+                                    sh(returnStatus: true, script: './docker/env/hydra.sh collect-logs --backend baremetal --logdir "$(pwd)"')
+                                    sh './docker/env/hydra.sh clean-resources --backend baremetal --post-behavior --logdir "$(pwd)"'
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!params.run_sct) {
+                    // 4. Hold until someone presses Release; running out of hold_minutes aborts the
+                    //    build, which releases the agents the same way.
+                    echo "All checks passed. Holding ${hosts.join(', ')} for up to ${holdMinutes} minutes."
+                    timeout(time: holdMinutes, unit: 'MINUTES') {
+                        input id: 'Release', message: "Release ${hosts.join(', ')}?"
+                    }
+                }
+            } finally {
+                released = true
+            }
+        }
+    }
+
+    // failFast: if the runner fails, holders still queued for an agent are cancelled too.
+    branches.failFast = true
+    parallel branches
+}
