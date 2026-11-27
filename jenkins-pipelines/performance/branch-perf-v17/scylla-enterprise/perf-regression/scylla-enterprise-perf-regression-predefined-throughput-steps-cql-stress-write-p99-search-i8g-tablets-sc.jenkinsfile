@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Manual only: searches the highest write rate with P99 <= 10 ms (SC, batch commitlog)
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/arm_instance_types/i8g_4xlarge.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/latency-decorator-error-thresholds-steps-ent-tablets.yaml", "configurations/strong_consistency/enable_experimental_sc.yaml", "configurations/stress_images/cql-stress-leader-aware.yaml", "configurations/performance/write_steps_p99_ladder_sc.yaml", "configurations/strong_consistency/enable_commitlog_sync_batch.yaml", "configurations/strong_consistency/prepare_cql_stress_ks_with_sc_1kpershard.yaml"]''',
+    sub_tests: ["test_write_max_throughput_under_p99"],
+)

@@ -70,8 +70,17 @@ class ScyllaConfigMixin(BaseModel):
     client_encrypt_mtls: Boolean = SctField(
         description="when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled",
     )
+    clockbound_version: String = SctField(
+        description="""Install and run this version of the AWS ClockBound daemon on the db nodes, in place of chrony,
+            before Scylla starts (e.g. '3.0.0-alpha.1'). Needed when scylla.yaml sets
+            strongly_consistent_raft_leader_lease_clock_source: clockbound; the version must match the
+            clock-bound library Scylla is built with.""",
+    )
     db_type: String = SctField(
         description="Db type to install into db nodes, scylla/cassandra",
+    )
+    disable_tablet_balancing: Boolean = SctField(
+        description="Disable tablet load balancing once the cluster is up, so tablets are not migrated during the test",
     )
     enable_kms_key_rotation: Boolean = SctField(
         description="Allows to disable KMS keys rotation. Applicable to AWS, GCP, and Azure backends.",

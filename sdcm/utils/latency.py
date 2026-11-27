@@ -149,6 +149,10 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_90": "red"})
                 else:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_90": ""})
+                if results["percentile_95"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_95"]:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_95": "red"})
+                else:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_95": ""})
                 if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_99": "red"})
                 else:
@@ -161,6 +165,10 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
                         results["color"].update({"percentile_90": "red"})
                     else:
                         results["color"].update({"percentile_90": ""})
+                    if results["percentile_95"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_95"]:
+                        results["color"].update({"percentile_95": "red"})
+                    else:
+                        results["color"].update({"percentile_95": ""})
                     if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
                         results["color"].update({"percentile_99": "red"})
                     else:
