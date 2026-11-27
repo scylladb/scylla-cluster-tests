@@ -52,8 +52,9 @@ def image_type(backend):
     return "test-image-type"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def test_id():
+    """Give each test its own test id, so the resources it provisions are its own."""
     return f"{uuid.uuid4()!s}"
 
 
@@ -78,39 +79,48 @@ def definition(image_id, image_type):
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def provisioner_params(test_id, region, azure_service):
     return {"test_id": test_id, "region": region, "availability_zone": "a", "azure_service": azure_service}
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def provisioner(backend, provisioner_params):
-    return provisioner_factory.create_provisioner(backend, **provisioner_params)
+    """Create the provisioner of the test and clean up whatever the test provisioned with it."""
+    provisioner = provisioner_factory.create_provisioner(backend, **provisioner_params)
+    yield provisioner
+    if provisioner.list_instances():  # tests of termination and cleanup leave nothing behind
+        provisioner.cleanup(wait=True)
+
+
+@pytest.fixture
+def vm(provisioner, definition):
+    """Provision the test VM for tests that act on an existing instance."""
+    return provisioner.get_or_create_instance(definition)
 
 
 def test_can_provision_scylla_vm(region, definition, provisioner, backend, provisioner_params):
     creation_time = datetime.now(timezone.utc).replace(microsecond=0)
-    v_m = provisioner.get_or_create_instances(definitions=[definition])[0]
-    assert v_m.name == definition.name
-    assert v_m.region == region
-    assert v_m.user_name == definition.user_name
-    assert v_m.public_ip_address
-    assert v_m.private_ip_address
-    assert v_m.tags == definition.tags
-    assert v_m.creation_time >= creation_time
+    vm = provisioner.get_or_create_instances(definitions=[definition])[0]
+    assert vm.name == definition.name
+    assert vm.region == region
+    assert vm.user_name == definition.user_name
+    assert vm.public_ip_address
+    assert vm.private_ip_address
+    assert vm.tags == definition.tags
+    assert vm.creation_time >= creation_time
 
-    assert v_m == provisioner.list_instances()[0]
+    assert vm == provisioner.list_instances()[0]
 
-    v_m_2 = provisioner.get_or_create_instance(definition)
-    assert v_m is v_m_2, "provisioner should not not recreate vm with the same name"
+    vm_2 = provisioner.get_or_create_instance(definition)
+    assert vm is vm_2, "provisioner should not not recreate vm with the same name"
 
     provisioner = provisioner_factory.create_provisioner(backend=backend, **provisioner_params)
-    v_m._provisioner = provisioner
-    assert v_m == provisioner.list_instances()[0], (
-        "provisioner with the same params should rediscover created resources"
-    )
+    vm._provisioner = provisioner
+    assert vm == provisioner.list_instances()[0], "provisioner with the same params should rediscover created resources"
 
 
+@pytest.mark.usefixtures("vm")
 def test_can_discover_regions(test_id, region, backend, provisioner_params):
     provisioner = provisioner_factory.discover_provisioners(backend=backend, **provisioner_params)[0]
     assert provisioner.region == region
@@ -124,6 +134,7 @@ def test_discover_provisioners_wrong_backend(provisioner_params):
         provisioner_factory.discover_provisioners(backend=wrong_backend, **provisioner_params)
 
 
+@pytest.mark.usefixtures("vm")
 def test_can_add_tags(provisioner, definition, backend, provisioner_params):
     provisioner.add_instance_tags(definition.name, {"tag_key": "tag_value"})
     assert provisioner.get_or_create_instance(definition).tags.get("tag_key") == "tag_value"
@@ -133,15 +144,14 @@ def test_can_add_tags(provisioner, definition, backend, provisioner_params):
     assert provisioner.get_or_create_instance(definition).tags.get("tag_key") == "tag_value"
 
 
+@pytest.mark.usefixtures("vm")
 def test_can_run_command(provisioner, definition, backend, provisioner_params):
     assert (
         provisioner.get_or_create_instance(definition).run_command('echo "hello instance"').stdout == "hello instance\n"
     )
 
-    # validate real tags change
-    assert provisioner.get_or_create_instance(definition).tags.get("tag_key") == "tag_value"
 
-
+@pytest.mark.usefixtures("vm")
 def test_null_tag_value_is_replaced_with_empty_string(provisioner, definition, backend, provisioner_params):
     if backend != "azure":
         pytest.skip("Only Azure does not support null tags")
@@ -153,6 +163,7 @@ def test_null_tag_value_is_replaced_with_empty_string(provisioner, definition, b
     assert provisioner.get_or_create_instance(definition).tags.get("tag_key") == ""
 
 
+@pytest.mark.usefixtures("vm")
 def test_can_terminate_vm_instance(provisioner, definition, backend, provisioner_params):
     """Should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
     provisioner.terminate_instance(definition.name, wait=True)

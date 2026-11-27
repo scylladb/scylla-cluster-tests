@@ -1,6 +1,5 @@
 """Shared fixtures and helpers for the minicloud unit-test package."""
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -23,12 +22,8 @@ def container_mode(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    # MinicloudManager.set_env_overrides() writes straight into os.environ (that is its
-    # job - it configures the SCT process). monkeypatch cannot undo what it never saw, so
-    # snapshot and restore the whole environment: a leaked AWS_ENDPOINT_URL makes
-    # is_minicloud_active() true for every test that runs afterwards in this process,
-    # which silently disables AZ/region fallback and reds the provisioner suite.
-    original_env = os.environ.copy()
+    # MinicloudManager.set_env_overrides() writes straight into os.environ; the restore_environ
+    # fixture of the unit conftest undoes it after each test.
     monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
     monkeypatch.delenv("GCE_ENDPOINT_URL", raising=False)
     monkeypatch.delenv("SCT_MINICLOUD_ENDPOINT_URL", raising=False)
@@ -37,9 +32,6 @@ def clean_env(monkeypatch):
     # region resolution reads this; a developer's exported value must not decide what
     # these tests assert
     monkeypatch.delenv("SCT_REGION_NAME", raising=False)
-    yield
-    os.environ.clear()
-    os.environ.update(original_env)
 
 
 @pytest.fixture(autouse=True)

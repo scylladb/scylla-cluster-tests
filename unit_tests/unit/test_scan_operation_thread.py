@@ -110,8 +110,9 @@ def new_cluster(node):
 
         return Monitors()
 
-    db_cluster.test_config.tester_obj = tester_obj
-    return db_cluster
+    # the TestConfig singleton outlives this module: patch.object removes the instance attribute again
+    with patch.object(db_cluster.test_config, "tester_obj", tester_obj):
+        yield db_cluster
 
 
 @pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])

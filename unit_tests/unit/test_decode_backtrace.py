@@ -49,9 +49,7 @@ def test_config_fixture():
     config.set_decoding_queue()
     config.BACKTRACE_DECODING = True
     config.DECODING_QUEUE = Queue()
-    yield config
-    TestConfig.BACKTRACE_DECODING = False
-    TestConfig.DECODING_QUEUE = None
+    return config
 
 
 @pytest.fixture(name="dummy_node")

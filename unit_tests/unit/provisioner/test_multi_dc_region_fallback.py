@@ -96,16 +96,6 @@ def _fake_convert_name_to_ami_if_needed(name, regions):
     return f"ami-{name}@{regions[0]}"
 
 
-@pytest.fixture(name="restore_region_env")
-def restore_region_env_fixture():
-    saved = os.environ.get("SCT_REGION_NAME")
-    yield
-    if saved is None:
-        os.environ.pop("SCT_REGION_NAME", None)
-    else:
-        os.environ["SCT_REGION_NAME"] = saved
-
-
 def _db_cluster(**param_overrides) -> DBCluster:
     """Build a DBCluster without pydantic validation so a stub params is enough for region/node mapping."""
     params = _StubParams(
@@ -251,7 +241,7 @@ def test_remap_dc_ami_reresolves_named_param_by_name_not_tags():
     assert params["ami_id_loader"] == expected_loader
 
 
-def test_switch_dc_region_splices_index_keeps_global_az_and_invalidates(restore_region_env):  # noqa: ARG001
+def test_switch_dc_region_splices_index_keeps_global_az_and_invalidates():
     """Switching DC 0 rewrites only region_names[0] + its AMI, leaves availability_zone global/unchanged."""
     params = _AmiParams(
         {
@@ -287,7 +277,7 @@ def test_enforce_multi_dc_fallback_supported_rejects_region_scoped_reservations(
         enforce_multi_dc_fallback_supported(params)
 
 
-def test_multi_dc_fallback_relocates_failed_db_dc_then_provisions_support_clusters(restore_region_env):  # noqa: ARG001
+def test_multi_dc_fallback_relocates_failed_db_dc_then_provisions_support_clusters():
     """One DB DC exhausts -> relocate only it (skip the healthy DC on retry), then provision monitor/loader once."""
     params = _make_multi_dc_layout_params()
     layout = SCTProvisionAWSLayout(params)

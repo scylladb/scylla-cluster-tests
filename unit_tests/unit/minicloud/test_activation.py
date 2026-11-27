@@ -180,12 +180,10 @@ def test_set_endpoint_env_exports_azure_vars_for_azure_backend():
 
 @pytest.fixture
 def fresh_azure_service(monkeypatch):
-    """AzureService is a process-wide singleton: start each test from a new one"""
-    Singleton._instances.pop(AzureService, None)
+    """Start each test from a new AzureService: the provider classes build one at import time"""
+    monkeypatch.delitem(Singleton._instances, AzureService, raising=False)
     monkeypatch.setattr(AzureService, "_real_cloud_instance", None, raising=False)
     monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
-    yield
-    Singleton._instances.pop(AzureService, None)
 
 
 @pytest.mark.parametrize(

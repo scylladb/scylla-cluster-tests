@@ -374,20 +374,7 @@ def _make_region_params(**overrides):
     )
 
 
-@pytest.fixture(name="restore_region_env")
-def restore_region_env_fixture():
-    saved = {k: os.environ.get(k) for k in ("SCT_REGION_NAME", "SCT_AVAILABILITY_ZONE")}
-
-    yield
-
-    for key, value in saved.items():
-        if value is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = value
-
-
-def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reservation):
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
     seen_regions = []
@@ -412,7 +399,7 @@ def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reser
     mock_cleanup.assert_called_once()
 
 
-def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capacity_reservation):
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
     auth_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "denied"}}, "RunInstances")
@@ -430,7 +417,7 @@ def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capa
     assert params["region_name"] == "us-east-1"  # original region restored
 
 
-def test_legacy_region_fallback_gate_rejects_multi_region(restore_region_env):  # noqa: ARG001
+def test_legacy_region_fallback_gate_rejects_multi_region():
     """The modern path now supports multi-DC fallback; the legacy path still refuses it via the gate."""
     stub = _make_region_tester_stub(region_name="us-east-1 eu-west-1")
     with pytest.raises(ValueError, match="single configured region"):
@@ -444,7 +431,7 @@ def test_legacy_region_fallback_gate_rejects_multi_region(restore_region_env):  
         pytest.param("us-east-1", False, True, id="single_region_uses_region_fallback"),
     ],
 )
-def test_get_cluster_aws_routing_by_region_count(region_name, expect_once, expect_fallback, restore_region_env):  # noqa: ARG001
+def test_get_cluster_aws_routing_by_region_count(region_name, expect_once, expect_fallback):
     """`get_cluster_aws` routes multi-region to once-path, and single-region to legacy region-fallback path."""
     stub = _make_region_tester_stub(region_name=region_name)
     stub._get_cluster_aws_once = MagicMock()
@@ -456,7 +443,7 @@ def test_get_cluster_aws_routing_by_region_count(region_name, expect_once, expec
     assert stub._get_cluster_aws_with_region_fallback.called is expect_fallback
 
 
-def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capacity_reservation):
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
 
@@ -473,7 +460,7 @@ def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capac
     assert os.environ.get("SCT_REGION_NAME") is None
 
 
-def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capacity_reservation):
     patched_capacity_reservation.is_capacity_reservation_enabled.return_value = True
     params = _make_region_params(use_capacity_reservation=True)
     layout = SCTProvisionAWSLayout(params)
@@ -496,7 +483,7 @@ def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capac
     assert params["region_name"] == "eu-west-1"
 
 
-def test_region_fallback_skips_region_without_equivalent_ami(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+def test_region_fallback_skips_region_without_equivalent_ami(patched_capacity_reservation):
     params = _make_region_params()
     layout = SCTProvisionAWSLayout(params)
 
@@ -539,7 +526,7 @@ def _make_region_tester_stub(**param_overrides):
     return stub
 
 
-def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # noqa: ARG001
+def test_legacy_region_fallback_relocates_on_exhaustion():
     stub = _make_region_tester_stub()
     seen_regions = []
 
@@ -561,7 +548,7 @@ def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # 
     stub.prepare_kms_host.assert_called_once_with()
 
 
-def test_switch_region_legacy_re_preps_kms_host_for_target_region(restore_region_env):  # noqa: ARG001
+def test_switch_region_legacy_re_preps_kms_host_for_target_region():
     stub = _make_region_tester_stub()
 
     stub._switch_region_legacy("eu-west-1", ["a"], "us-east-1", {}, {}, {})
@@ -570,7 +557,7 @@ def test_switch_region_legacy_re_preps_kms_host_for_target_region(restore_region
     stub.prepare_kms_host.assert_called_once_with()
 
 
-def test_legacy_region_fallback_restores_region_when_switch_region_kms_prep_fails(restore_region_env):  # noqa: ARG001
+def test_legacy_region_fallback_restores_region_when_switch_region_kms_prep_fails():
     stub = _make_region_tester_stub()
     stub.prepare_kms_host.side_effect = RuntimeError("KMS alias creation throttled")
     stub._attempt_region_legacy = MagicMock(return_value=(True, _capacity_error(), [["a"]]))
@@ -628,7 +615,7 @@ def test_cleanup_region_skips_kms_cleanup_without_region():
     mock_aws_kms.assert_not_called()
 
 
-def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_region_env):  # noqa: ARG001
+def test_switch_region_sets_placement_resolves_amis_and_invalidates():
     params = DotDict({"region_name": "us-east-1", "availability_zone": "a"})
     params.region_names = ["us-east-1"]
     params.resolve_amis = MagicMock()

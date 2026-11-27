@@ -89,7 +89,7 @@ def test_helm_values_get_by_list_index():
 
 
 def test_helm_delete_from_list():
-    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    helm_values = HelmValues(BASE_HELM_VALUES)
     match = deepcopy(BASE_HELM_VALUES)
     del match["nested_list"][0]
     helm_values.delete("nested_list.[0]")
@@ -97,7 +97,7 @@ def test_helm_delete_from_list():
 
 
 def test_helm_delete_from_dict():
-    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    helm_values = HelmValues(BASE_HELM_VALUES)
     match = deepcopy(BASE_HELM_VALUES)
     del match["nested_dict"]["first_nested_dict_key"]
     helm_values.delete("nested_dict.first_nested_dict_key")

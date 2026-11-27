@@ -23,6 +23,7 @@ import re
 import shlex
 import threading
 import time
+from copy import deepcopy
 from functools import cached_property, partialmethod
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -1327,11 +1328,15 @@ def get_pool_affinity_modifiers(pool_label_name, pool_name):
 
 
 class HelmValues:
+    """Helm chart values, read and changed by dotted paths.
+
+    Keeps a deep copy of the values it is built from, so changing the values never changes the caller's dicts.
+    ``as_dict()`` returns a deep copy; ``get()`` returns a reference into the stored values.
+    """
+
     def __init__(self, *args, **kwargs):
-        if len(args) == 1 and isinstance(args[0], dict):
-            self._data = args[0]
-        else:
-            self._data = dict(**kwargs)
+        data = args[0] if len(args) == 1 and isinstance(args[0], dict) else kwargs
+        self._data = deepcopy(data)
 
     def get(self, path):
         return walk_thru_data(data=self._data, path=path, separator=".")
@@ -1374,15 +1379,11 @@ class HelmValues:
             pass
 
     def as_dict(self):
-        return self._data
+        return deepcopy(self._data)
 
-    def __hash__(self):
-        return hash(frozenset(self._data.items()))
+    __hash__ = None  # mutable, so unhashable like a dict
 
     def __eq__(self, other: Union["HelmValues", dict]):
         if isinstance(other, HelmValues):
             return self._data == other._data
         return self._data == other
-
-    def __ne__(self, other):
-        return not self.__eq__(other)

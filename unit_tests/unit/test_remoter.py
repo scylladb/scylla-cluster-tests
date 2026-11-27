@@ -751,7 +751,7 @@ def test_copy_error_retryable_on_connection_refusal(stderr, expected):
 
 
 @pytest.mark.parametrize("remoter_type", [RemoteCmdRunner, RemoteLibSSH2CmdRunner])
-def test_receive_files_retries_when_sshd_refuses_the_connection(remoter_type, tmp_path):
+def test_receive_files_retries_when_sshd_refuses_the_connection(remoter_type, tmp_path, request):
     """A refused rsync falls back to scp, and a refused scp retries the copy, with either SSH transport.
 
     rsync and scp run through LocalCmdRunner, which raises invoke's exceptions, not the libssh2 ones.
@@ -759,6 +759,8 @@ def test_receive_files_retries_when_sshd_refuses_the_connection(remoter_type, tm
     refused = UnexpectedExit(Result(command="copy", exited=255, stderr="Connection closed by 10.0.0.1 port 22"))
     copied = Result(command="scp", exited=0)
     runner = remoter_type(hostname="10.0.0.1", user="scylla-test", key_file="/dev/null")
+    # the runner pings its host from a background thread, which would keep dialing 10.0.0.1 during later tests
+    request.addfinalizer(runner.stop)
 
     with (
         patch("sdcm.remote.remote_base.LocalCmdRunner") as local_runner,

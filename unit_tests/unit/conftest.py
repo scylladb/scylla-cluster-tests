@@ -22,7 +22,9 @@
 """
 
 import json
+import logging
 import os
+import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -31,6 +33,7 @@ from sdcm.cluster import _DOCKER_HOST_CHECKS
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.test_config import TestConfig
+from sdcm.utils.metaclasses import Singleton
 from unit_tests.lib.fake_remoter import FakeRemoter
 
 
@@ -47,6 +50,79 @@ def drain_spot_provision_outcomes():
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
     yield
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+
+@pytest.fixture(autouse=True)
+def restore_environ():
+    """Restore os.environ after every unit test.
+
+    SCT code exports values it resolves into the environment (``SCT_CLUSTER_BACKEND``, ``SCT_REGION_NAME``,
+    ``SCT_GCE_DATACENTER``, ``SCT_AVAILABILITY_ZONE``, ``_SCT_TEST_LOGDIR``, ...), and monkeypatch only restores
+    what a test set through it.
+    """
+    with patch.dict(os.environ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def restore_singletons():
+    """Restore the registry of ``Singleton`` instances after every unit test.
+
+    The instances a test creates are dropped, so the next test builds its own. Instances that wider-scoped
+    fixtures created before the test stay.
+    """
+    with patch.dict(Singleton._instances):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def restore_test_config():
+    """Restore the class attributes of TestConfig, and the attributes of its instance, after every unit test.
+
+    TestConfig keeps most of its state on the class: the test id, name, tester object, decoding queue, syslog-ng
+    address and the like. Its instance exists before the first test, so ``restore_singletons`` keeps it, and the
+    values tests set on it, such as ``BACKTRACE_DECODING``, are restored here as well.
+    """
+    saved_class_attrs = dict(vars(TestConfig))
+    instance = Singleton._instances.get(TestConfig)
+    saved_instance_attrs = dict(vars(instance)) if instance is not None else {}
+    yield
+    for name in set(vars(TestConfig)) - set(saved_class_attrs):
+        delattr(TestConfig, name)
+    for name, value in saved_class_attrs.items():
+        if vars(TestConfig).get(name) is not value:
+            setattr(TestConfig, name, value)
+    if instance is not None:
+        vars(instance).clear()
+        vars(instance).update(saved_instance_attrs)
+
+
+@pytest.fixture
+def restore_logging_config():
+    """Restore the handlers, levels and flags of all loggers, and sys.excepthook, after the test.
+
+    For tests that run ClusterTester's session-wide logging setup: a root console handler on a stream that
+    may be closed once the test ends, file handlers in the test logdir, and a new sys.excepthook.
+    """
+
+    def all_loggers():
+        return [logging.getLogger()] + [
+            logger for logger in logging.Logger.manager.loggerDict.values() if isinstance(logger, logging.Logger)
+        ]
+
+    saved = {logger: (logger.handlers[:], logger.level, logger.propagate, logger.disabled) for logger in all_loggers()}
+    excepthook = sys.excepthook
+    yield
+    sys.excepthook = excepthook
+    for logger in all_loggers():
+        handlers, level, propagate, disabled = saved.get(logger, ([], logging.NOTSET, True, False))
+        for handler in logger.handlers:
+            if handler not in handlers:
+                handler.close()
+        logger.handlers[:] = handlers
+        logger.setLevel(level)
+        logger.propagate = propagate
+        logger.disabled = disabled
 
 
 @pytest.fixture(autouse=True)
