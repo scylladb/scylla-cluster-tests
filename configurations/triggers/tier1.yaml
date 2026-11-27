@@ -180,6 +180,21 @@ jobs:
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
+  # Runs i8ge (Graviton). The jenkinsfile explains the region and the AZ.
+  # The empty 'stress_duration' keeps the 6h main load and the durations of the test config,
+  # instead of the 24h of the default.
+  - job_name: "tier1/longevity-aws-custom-s1-workload1-test"
+    backend: "aws"
+    arch: "aarch64"
+    params:
+      region: "eu-central-1"
+      availability_zone: "a"
+      stress_duration: ""
+    labels:
+      - "weekly"
+      - "week-b"
+    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2", "2026.3"]
+
   # ==================== GCE ====================
 
   - job_name: "tier1/longevity-asymmetric-cluster-12h-test"
