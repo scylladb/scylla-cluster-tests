@@ -19,8 +19,8 @@ from sdcm import sct_config
 from sdcm.utils.common import get_latest_scylla_release
 
 
-def _get_latest_scylla_release(product="scylla"):
-    return get_latest_scylla_release(product=product, verify=False)
+def _get_latest_scylla_release():
+    return get_latest_scylla_release(verify=False)
 
 
 @pytest.fixture(scope="module")

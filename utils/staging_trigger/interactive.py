@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def _fetch_latest_release() -> str | None:
     """Fetch the latest Scylla release version, cached for the session."""
     try:
-        return get_latest_scylla_release("scylla")
+        return get_latest_scylla_release()
     except Exception:  # noqa: BLE001
         logger.debug("Could not fetch latest scylla release", exc_info=True)
         return None

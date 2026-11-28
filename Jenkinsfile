@@ -9,7 +9,7 @@ def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 
 def artifacts_backends = ['artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
 
 def createRunConfiguration(String backend) {
-	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
+	def scylla_version = params.scylla_version ?: getLatestScyllaRelease()
 
     def configuration = [
         backend: backend,
