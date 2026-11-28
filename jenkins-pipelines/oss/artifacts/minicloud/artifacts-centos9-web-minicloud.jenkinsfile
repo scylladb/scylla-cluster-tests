@@ -1,0 +1,22 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    test_config: '''["test-cases/artifacts/centos9.yaml", "configurations/web_install.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]''',
+    backend: 'gce',
+    gce_datacenter: 'us-east1',
+    scylla_mgmt_repo: '',
+    minicloud: true,
+    local_agent: true,
+    jenkins_label: 'minicloud-kvm-builders-pkg-artifacts',
+    minicloud_lightweight_vcpus: '2',
+    minicloud_lightweight_memory: '8GiB',
+    host_wait_limit_minutes: 720,
+    provision_type: 'on_demand',
+    email_recipients: 'dmytro.kruglov@scylladb.com',
+
+    timeout: [time: 90, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy'
+)

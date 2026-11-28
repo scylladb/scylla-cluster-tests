@@ -42,8 +42,11 @@ def call(Map args = [:]) {
     def keepDays = args.get('keepDays', 3)
     def keepImageDays = args.get('keepImageDays', 14)
     // ...and a size cap on top, least recently used first: the TTL alone lets a burst of daily
-    // master images fill the disk well inside the TTL.
-    def maxImageCacheGiB = args.get('maxImageCacheGiB', 10)
+    // master images fill the disk well inside the TTL. 50 GiB keeps the eight distro images of the
+    // daily artifacts lab jobs. It is the default, not a job option: every minicloud build
+    // on the agent applies it, the upgrade builds too, so a smaller value in one job would evict
+    // the images of the others.
+    def maxImageCacheGiB = args.get('maxImageCacheGiB', 50)
     def atEnd = args.get('atEnd', false)
 
     if (!atEnd) {

@@ -26,6 +26,9 @@ def call(Map pipelineParams) {
                                           ? params.local_agent.toString().toBoolean()
                                           : pipelineParams.get('local_agent', false))
     def useRunner = minicloudEnabled && !localAgent
+    // limit on the wait for a free agent, see vars/nodeWithWaitLimit.groovy; 0 waits without limit.
+    // build #1 has no params yet, so it takes the jenkinsfile value
+    def hostWaitLimitMinutes = ((params.host_wait_limit_minutes ?: pipelineParams.get('host_wait_limit_minutes', '')) ?: '0').toString().toInteger()
 
     // On a local agent minicloud runs its guests on the agent itself, so it needs the KVM-capable
     // label rather than a region builder. In the default runner topology the build runs on the
@@ -135,6 +138,10 @@ def call(Map pipelineParams) {
                                 'or the minicloud label when local_agent is set. A single label, ' +
                                 'not a label expression',
                    name: 'jenkins_label')
+            string(defaultValue: "${pipelineParams.get('host_wait_limit_minutes', '')}",
+                   description: 'Minutes to wait for a free agent with the label. After that the build ' +
+                                'ends NOT_BUILT. Empty takes the jenkinsfile value, 0 waits without limit',
+                   name: 'host_wait_limit_minutes')
             string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
                    description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
                                 'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
@@ -214,7 +221,7 @@ def call(Map pipelineParams) {
                         params.instance_type.split(' ').each {
                             def instance_type = it
                             tasks["${instance_type}"] = {
-                                node(builder.label) {
+                                def ran = nodeWithWaitLimit(builder.label, hostWaitLimitMinutes) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {

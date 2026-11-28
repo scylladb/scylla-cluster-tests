@@ -162,6 +162,8 @@ NON_ENV_PARAMS = frozenset(
         "local_agent",
         # jenkins_label pins the build to a Jenkins agent (getJenkinsLabels.groovy) - not an SCT setting
         "jenkins_label",
+        # host_wait_limit_minutes limits the wait for an agent with that label - not an SCT setting
+        "host_wait_limit_minutes",
     }
 )
 
